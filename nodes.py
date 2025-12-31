@@ -7,18 +7,20 @@ import torch
 
 
 _ASPECT_RATIOS = {
-    "1x1": (1, 1),
-    "16x9": (16, 9),
-    "9x16": (9, 16),
-    "2x3": (2, 3),
-    "3x2": (3, 2),
-    "4x3": (4, 3),
-    "3x4": (3, 4),
+    "as_is": None,  # Сохранить исходные пропорции
+    "1x1": (1328, 1328),
+    "16x9": (1664, 928),
+    "9x16": (928, 1664),
+    "4x3": (1472, 1104),
+    "3x4": (1104, 1472),
+    "3x2": (1584, 1056),
+    "2x3": (1056, 1584),
 }
 
-_TARGET_AREA = 1024 * 1024
-_SIZE_MULTIPLE = 32
-_LATENT_CHANNELS = 16
+# Целевая площадь для масштабирования (при as_is)
+_TARGET_AREA = 1328 * 1328
+_LATENT_CHANNELS = 4  # Стандартный VAE использует 4 канала
+
 
 _LOGGER = logging.getLogger("ImagePrepare_for_QwenEdit_outpaint")
 
@@ -27,23 +29,13 @@ def _round_to_multiple(value, multiple):
     return max(multiple, int(round(value / multiple)) * multiple)
 
 
-def _target_size(aspect_ratio):
-    ratio_w, ratio_h = _ASPECT_RATIOS[aspect_ratio]
-    ratio = ratio_w / ratio_h
-    width = math.sqrt(_TARGET_AREA * ratio)
-    height = width / ratio
-    width = _round_to_multiple(width, _SIZE_MULTIPLE)
-    height = _round_to_multiple(height, _SIZE_MULTIPLE)
-    return int(width), int(height)
-
-
 class ImagePrepareForQwenEditOutpaint:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "aspect_ratio": (list(_ASPECT_RATIOS.keys()), {"default": "1x1"}),
+                "aspect_ratio": (list(_ASPECT_RATIOS.keys()), {"default": "as_is"}),
             },
         }
 
@@ -53,35 +45,38 @@ class ImagePrepareForQwenEditOutpaint:
     CATEGORY = "image/qwen"
 
     def prepare(self, image, aspect_ratio):
-        target_width, target_height = _target_size(aspect_ratio)
-
         samples = image.movedim(-1, 1)
         in_height = samples.shape[2]
         in_width = samples.shape[3]
-        scale = min(target_width / in_width, target_height / in_height)
 
-        new_width = max(1, int(round(in_width * scale)))
-        new_height = max(1, int(round(in_height * scale)))
+        if aspect_ratio == "as_is":
+            # Масштабируем по площади, сохраняя пропорции
+            current_area = in_width * in_height
+            scale = math.sqrt(_TARGET_AREA / current_area)
+            
+            new_width = max(1, int(round(in_width * scale)))
+            new_height = max(1, int(round(in_height * scale)))
+            
+            latent_width = new_width // 8
+            latent_height = new_height // 8
+        else:
+            # Вписываем в целевой размер
+            target_width, target_height = _ASPECT_RATIOS[aspect_ratio]
+            scale = min(target_width / in_width, target_height / in_height)
+            
+            new_width = max(1, int(round(in_width * scale)))
+            new_height = max(1, int(round(in_height * scale)))
+            
+            latent_width = target_width // 8
+            latent_height = target_height // 8
 
         resized = comfy.utils.common_upscale(samples, new_width, new_height, "lanczos", "disabled")
         resized = resized.movedim(1, -1)
 
-        canvas = torch.full(
-            (image.shape[0], target_height, target_width, image.shape[-1]),
-            0.5,
-            device=image.device,
-            dtype=image.dtype,
-        )
-        y0 = max(0, (target_height - new_height) // 2)
-        x0 = max(0, (target_width - new_width) // 2)
-        canvas[:, y0:y0 + new_height, x0:x0 + new_width, :] = resized
-
-        latent = torch.zeros(
-            (image.shape[0], _LATENT_CHANNELS, target_height // 8, target_width // 8),
+        return (resized, {"samples": torch.zeros(
+            (image.shape[0], _LATENT_CHANNELS, latent_height, latent_width),
             device=comfy.model_management.intermediate_device(),
-        )
-
-        return (canvas, {"samples": latent})
+        )})
 
 
 NODE_CLASS_MAPPINGS = {
