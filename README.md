@@ -6,8 +6,8 @@ then outputs an empty latent with matching resolution for KSampler. Target
 pixel area is ~1024x1024, rounded to multiples of 32.
 
 ## Node
-- Display name: ComfyUI-QWen_Edit_outpaint
-- Type name: QWen_Edit_outpaint
+- Display name: ImagePrepare_for_QwenEdit_outpaint
+- Type name: ImagePrepare_for_QwenEdit_outpaint
 - Category: QWen
 
 ## Install

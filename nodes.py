@@ -34,7 +34,7 @@ def _target_size(aspect_ratio):
     return int(width), int(height)
 
 
-class QWenEditOutpaint:
+class ImagePrepareForQwenEditOutpaint:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -82,9 +82,9 @@ class QWenEditOutpaint:
 
 
 NODE_CLASS_MAPPINGS = {
-    "QWen_Edit_outpaint": QWenEditOutpaint,
+    "ImagePrepare_for_QwenEdit_outpaint": ImagePrepareForQwenEditOutpaint,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "QWen_Edit_outpaint": "ComfyUI-QWen_Edit_outpaint",
+    "ImagePrepare_for_QwenEdit_outpaint": "ImagePrepare_for_QwenEdit_outpaint",
 }

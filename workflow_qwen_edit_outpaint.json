@@ -44,7 +44,7 @@
     },
     {
       "id": 2,
-      "type": "ComfyUI-QWen_Edit_outpaint",
+      "type": "ImagePrepare_for_QwenEdit_outpaint",
       "pos": [
         430,
         0
@@ -82,7 +82,7 @@
         }
       ],
       "properties": {
-        "Node name for S&R": "ComfyUI-QWen_Edit_outpaint"
+        "Node name for S&R": "ImagePrepare_for_QwenEdit_outpaint"
       },
       "widgets_values": [
         "1x1"
