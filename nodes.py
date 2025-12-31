@@ -50,7 +50,7 @@ class ImagePrepareForQwenEditOutpaint:
     RETURN_TYPES = ("IMAGE", "LATENT")
     RETURN_NAMES = ("image", "latent")
     FUNCTION = "prepare"
-    CATEGORY = "QWen"
+    CATEGORY = "image/qwen"
 
     def prepare(self, image, aspect_ratio):
         target_width, target_height = _target_size(aspect_ratio)
@@ -89,7 +89,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ImagePrepare_for_QwenEdit_outpaint": "ImagePrepare_for_QwenEdit_outpaint",
+    "ImagePrepare_for_QwenEdit_outpaint": "Image Prepare for QwenEdit Outpaint",
 }
 
 _LOGGER.warning(
