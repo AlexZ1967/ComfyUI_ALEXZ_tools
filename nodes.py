@@ -1,3 +1,4 @@
+import logging
 import math
 
 import comfy.model_management
@@ -18,6 +19,8 @@ _ASPECT_RATIOS = {
 _TARGET_AREA = 1024 * 1024
 _SIZE_MULTIPLE = 32
 _LATENT_CHANNELS = 16
+
+_LOGGER = logging.getLogger("ImagePrepare_for_QwenEdit_outpaint")
 
 
 def _round_to_multiple(value, multiple):
@@ -88,3 +91,8 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ImagePrepare_for_QwenEdit_outpaint": "ImagePrepare_for_QwenEdit_outpaint",
 }
+
+_LOGGER.warning(
+    "Loaded ImagePrepare_for_QwenEdit_outpaint. NODE_CLASS_MAPPINGS=%s",
+    list(NODE_CLASS_MAPPINGS.keys()),
+)
