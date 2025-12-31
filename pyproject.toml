@@ -1,0 +1,9 @@
+[project]
+name = "imageprepare-for-qwenedit-outpaint"
+version = "0.1.0"
+description = "Prepare image/latent for Qwen Image Edit outpaint."
+
+[tool.comfy]
+PublisherId = "ALEXZ"
+DisplayName = "ALEXZ_tools"
+Icon = ""
