@@ -47,6 +47,7 @@ def align_overlay_to_background(
             ransac_thresh,
             bg_mask_np,
             ov_mask_np,
+            matcher_type,
         )
         if aligned_np is None:
             logger.warning("Alignment failed: %s", status)
@@ -78,6 +79,7 @@ def _align_overlay_to_background(
     ransac_thresh,
     bg_mask_np,
     ov_mask_np,
+    matcher_type,
 ):
     if cv2 is None:
         raise RuntimeError("opencv-python is required for feature alignment. Please install opencv-python.")
