@@ -1,3 +1,5 @@
+import json
+import math
 import numpy as np
 import torch
 try:
@@ -27,6 +29,8 @@ def align_overlay_to_background(
     batch_size = max(background.shape[0], overlay.shape[0])
     aligned_results = []
     composite_results = []
+    difference_results = []
+    transform_results = []
 
     for index in range(batch_size):
         bg_tensor = select_batch_item(background, index)
@@ -39,7 +43,7 @@ def align_overlay_to_background(
         bg_mask_np = mask_to_uint8(bg_mask_tensor, bg_np.shape[:2])
         ov_mask_np = mask_to_uint8(ov_mask_tensor, ov_np.shape[:2])
 
-        aligned_np, status = _align_overlay_to_background(
+        aligned_np, matrix, status = _align_overlay_to_background(
             bg_np,
             ov_np,
             feature_count,
@@ -52,9 +56,12 @@ def align_overlay_to_background(
         if aligned_np is None:
             logger.warning("Alignment failed: %s", status)
             aligned_np = cv2.resize(ov_np, (bg_np.shape[1], bg_np.shape[0]), interpolation=cv2.INTER_LINEAR)
+            matrix = None
 
         if aligned_np.shape[2] == 4:
             alpha = aligned_np[:, :, 3:4].astype(np.float32) / 255.0
+            if opacity < 1.0:
+                alpha = np.clip(alpha * opacity, 0.0, 1.0)
             aligned_rgb_uint8 = aligned_np[:, :, :3]
             aligned_rgb = aligned_rgb_uint8.astype(np.float32)
             bg_rgb = bg_np[:, :, :3].astype(np.float32)
@@ -63,12 +70,42 @@ def align_overlay_to_background(
             aligned_rgb_uint8 = aligned_np[:, :, :3]
             aligned_rgb = aligned_rgb_uint8.astype(np.float32)
             bg_rgb = bg_np[:, :, :3].astype(np.float32)
-            composite_np = aligned_rgb * opacity + bg_rgb * (1.0 - opacity)
+            if matrix is not None:
+                ov_alpha = np.ones(ov_np.shape[:2], dtype=np.uint8) * 255
+                aligned_mask = cv2.warpAffine(
+                    ov_alpha,
+                    matrix,
+                    (bg_np.shape[1], bg_np.shape[0]),
+                    flags=cv2.INTER_NEAREST,
+                    borderMode=cv2.BORDER_CONSTANT,
+                    borderValue=0,
+                )
+                alpha = (aligned_mask.astype(np.float32) / 255.0) * opacity
+                alpha = np.clip(alpha, 0.0, 1.0)[:, :, None]
+                composite_np = aligned_rgb * alpha + bg_rgb * (1.0 - alpha)
+            else:
+                composite_np = aligned_rgb * opacity + bg_rgb * (1.0 - opacity)
 
         aligned_results.append(to_torch_image(aligned_rgb_uint8))
         composite_results.append(to_torch_image(np.clip(composite_np, 0, 255).astype(np.uint8)))
+        diff_np = np.abs(aligned_rgb - bg_rgb)
+        difference_results.append(to_torch_image(np.clip(diff_np, 0, 255).astype(np.uint8)))
+        transform_json = _format_transform_json(
+            matrix,
+            ov_np.shape[1],
+            ov_np.shape[0],
+            bg_np.shape[1],
+            bg_np.shape[0],
+        )
+        transform_results.append(transform_json)
+        logger.info("Transform JSON: %s", transform_json)
 
-    return (torch.stack(aligned_results, dim=0), torch.stack(composite_results, dim=0))
+    return (
+        torch.stack(aligned_results, dim=0),
+        torch.stack(composite_results, dim=0),
+        torch.stack(difference_results, dim=0),
+        transform_results,
+    )
 
 
 def _align_overlay_to_background(
@@ -94,11 +131,11 @@ def _align_overlay_to_background(
         matcher_type,
     )
     if ov_points is None:
-        return None, status
+        return None, None, status
 
     matrix, status = estimate_affine(ov_points, bg_points, ransac_thresh)
     if matrix is None:
-        return None, status
+        return None, None, status
 
     height, width = background_np.shape[:2]
     aligned = cv2.warpAffine(
@@ -109,4 +146,40 @@ def _align_overlay_to_background(
         borderMode=cv2.BORDER_CONSTANT,
         borderValue=0,
     )
-    return aligned, "ok"
+    return aligned, matrix, "ok"
+
+
+def _format_transform_json(matrix, overlay_width, overlay_height, background_width, background_height):
+    if matrix is None:
+        payload = {
+            "overlay_scale": {"x": None, "y": None},
+            "overlay_position": {"x": None, "y": None},
+            "overlay_rotation_angle": None,
+            "overlay_position_pixels": {"x": None, "y": None},
+        }
+        return json.dumps(payload, ensure_ascii=True)
+
+    a, b, tx = matrix[0]
+    c, d, ty = matrix[1]
+    scale_x = math.sqrt(a * a + c * c)
+    scale_y = math.sqrt(b * b + d * d)
+    rotation_rad = math.atan2(c, a)
+    rotation_deg = math.degrees(rotation_rad)
+
+    center_x = overlay_width * 0.5
+    center_y = overlay_height * 0.5
+    pos_x = a * center_x + b * center_y + tx
+    pos_y = c * center_x + d * center_y + ty
+    bg_w = max(1.0, background_width - 1.0)
+    bg_h = max(1.0, background_height - 1.0)
+    norm_x = pos_x / bg_w
+    norm_y = 1.0 - (pos_y / bg_h)
+    resolve_rotation = -rotation_deg
+
+    payload = {
+        "overlay_scale": {"x": round(scale_x, 3), "y": round(scale_y, 3)},
+        "overlay_position": {"x": round(norm_x, 6), "y": round(norm_y, 6)},
+        "overlay_rotation_angle": round(resolve_rotation, 3),
+        "overlay_position_pixels": {"x": round(pos_x, 3), "y": round(pos_y, 3)},
+    }
+    return json.dumps(payload, ensure_ascii=True)

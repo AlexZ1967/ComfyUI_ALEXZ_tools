@@ -56,8 +56,8 @@ class ImageAlignOverlayToBackground:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE")
-    RETURN_NAMES = ("aligned_overlay", "composite")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "STRING")
+    RETURN_NAMES = ("aligned_overlay", "composite", "difference", "transform_json")
     FUNCTION = "align"
     CATEGORY = "image/alignment"
 
