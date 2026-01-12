@@ -198,14 +198,37 @@ def _format_transform_json(matrix, overlay_width, overlay_height, background_wid
     pos_y = c * center_x + d * center_y + ty
     bg_w = max(1.0, background_width - 1.0)
     bg_h = max(1.0, background_height - 1.0)
-    norm_x = pos_x / bg_w
-    norm_y = 1.0 - (pos_y / bg_h)
+    norm_x = float(pos_x / bg_w)
+    norm_y = float(1.0 - (pos_y / bg_h))
     resolve_rotation = -rotation_deg
 
     payload = {
-        "overlay_scale": {"x": round(scale_x, 3), "y": round(scale_y, 3)},
-        "overlay_position": {"x": round(norm_x, 6), "y": round(norm_y, 6)},
-        "overlay_rotation_angle": round(resolve_rotation, 3),
-        "overlay_position_pixels": {"x": round(pos_x, 3), "y": round(pos_y, 3)},
+        "overlay_scale": {"x": round(float(scale_x), 3), "y": round(float(scale_y), 3)},
+        "overlay_rotation_angle": round(float(resolve_rotation), 3),
+        "overlay_position_pixels": {"x": round(float(pos_x), 3), "y": round(float(pos_y), 3)},
+        "fusion_position": {"x": round(norm_x, 6), "y": round(norm_y, 6)},
+        "resolve_position_edit": _format_resolve_edit_position(
+            norm_x,
+            norm_y,
+            background_width,
+            background_height,
+            overlay_width,
+            overlay_height,
+        ),
     }
     return json.dumps(payload, ensure_ascii=True)
+
+
+def _format_resolve_edit_position(
+    norm_x,
+    norm_y,
+    background_width,
+    background_height,
+    overlay_width,
+    overlay_height,
+):
+    scale_x = (background_width * background_width) / max(1.0, float(overlay_width))
+    scale_y = (background_height * background_height) / max(1.0, float(overlay_height))
+    pos_x = (norm_x - 0.5) * scale_x
+    pos_y = (norm_y - 0.5) * scale_y
+    return {"x": round(float(pos_x), 3), "y": round(float(pos_y), 3)}
