@@ -73,14 +73,22 @@ def detect_and_match(
     return ov_points, bg_points, "ok"
 
 
-def estimate_affine(ov_points, bg_points, ransac_thresh):
+def estimate_affine(ov_points, bg_points, ransac_thresh, scale_mode):
     _ensure_cv2()
-    matrix, _inliers = cv2.estimateAffinePartial2D(
-        ov_points,
-        bg_points,
-        method=cv2.RANSAC,
-        ransacReprojThreshold=ransac_thresh,
-    )
+    if scale_mode == "preserve_aspect":
+        matrix, _inliers = cv2.estimateAffinePartial2D(
+            ov_points,
+            bg_points,
+            method=cv2.RANSAC,
+            ransacReprojThreshold=ransac_thresh,
+        )
+    else:
+        matrix, _inliers = cv2.estimateAffine2D(
+            ov_points,
+            bg_points,
+            method=cv2.RANSAC,
+            ransacReprojThreshold=ransac_thresh,
+        )
     if matrix is None:
         return None, "Could not estimate affine transform."
     return matrix, "ok"

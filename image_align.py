@@ -49,6 +49,8 @@ class ImageAlignOverlayToBackground:
                     "tooltip": "Прозрачность оверлея в композите (0..1).",
                 }),
                 "matcher_type": (MATCHER_TYPES, {"default": "orb", "tooltip": "Алгоритм детектора/дескриптора."}),
+                "scale_mode": (["preserve_aspect", "independent_xy"], {"default": "preserve_aspect", "tooltip": "Масштабирование: с сохранением пропорций или отдельно по X/Y."}),
+                "allow_rotation": ("BOOLEAN", {"default": True, "tooltip": "Разрешить поворот оверлея."}),
             },
             "optional": {
                 "background_mask": ("MASK", {"tooltip": "Маска области совпадений на фоне (белое=использовать)."}),
@@ -70,9 +72,18 @@ class ImageAlignOverlayToBackground:
         ransac_thresh,
         opacity,
         matcher_type,
+        scale_mode,
+        allow_rotation,
         background_mask=None,
         overlay_mask=None,
     ):
+        if scale_mode == "uniform":
+            _LOGGER.warning("scale_mode 'uniform' is deprecated; using 'preserve_aspect'.")
+            scale_mode = "preserve_aspect"
+        elif scale_mode == "free":
+            _LOGGER.warning("scale_mode 'free' is deprecated; using 'independent_xy'.")
+            scale_mode = "independent_xy"
+
         return align_overlay_to_background(
             background=background,
             overlay=overlay,
@@ -83,6 +94,8 @@ class ImageAlignOverlayToBackground:
             ransac_thresh=ransac_thresh,
             opacity=opacity,
             matcher_type=matcher_type,
+            scale_mode=scale_mode,
+            allow_rotation=allow_rotation,
             logger=_LOGGER,
         )
 

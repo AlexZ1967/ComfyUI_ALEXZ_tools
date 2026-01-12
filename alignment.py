@@ -21,6 +21,8 @@ def align_overlay_to_background(
     ransac_thresh,
     opacity,
     matcher_type,
+    scale_mode,
+    allow_rotation,
     logger,
 ):
     if cv2 is None:
@@ -52,6 +54,8 @@ def align_overlay_to_background(
             bg_mask_np,
             ov_mask_np,
             matcher_type,
+            scale_mode,
+            allow_rotation,
         )
         if aligned_np is None:
             logger.warning("Alignment failed: %s", status)
@@ -117,6 +121,8 @@ def _align_overlay_to_background(
     bg_mask_np,
     ov_mask_np,
     matcher_type,
+    scale_mode,
+    allow_rotation,
 ):
     if cv2 is None:
         raise RuntimeError("opencv-python is required for feature alignment. Please install opencv-python.")
@@ -133,9 +139,11 @@ def _align_overlay_to_background(
     if ov_points is None:
         return None, None, status
 
-    matrix, status = estimate_affine(ov_points, bg_points, ransac_thresh)
+    matrix, status = estimate_affine(ov_points, bg_points, ransac_thresh, scale_mode)
     if matrix is None:
         return None, None, status
+    if not allow_rotation:
+        matrix = _remove_rotation(matrix, overlay_np.shape[1], overlay_np.shape[0], scale_mode)
 
     height, width = background_np.shape[:2]
     aligned = cv2.warpAffine(
@@ -147,6 +155,24 @@ def _align_overlay_to_background(
         borderValue=0,
     )
     return aligned, matrix, "ok"
+
+
+def _remove_rotation(matrix, overlay_width, overlay_height, scale_mode):
+    a, b, tx = matrix[0]
+    c, d, ty = matrix[1]
+    scale_x = math.sqrt(a * a + c * c)
+    scale_y = math.sqrt(b * b + d * d)
+    if scale_mode == "preserve_aspect":
+        scale_x = scale_y = (scale_x + scale_y) * 0.5
+
+    center_x = overlay_width * 0.5
+    center_y = overlay_height * 0.5
+    pos_x = a * center_x + b * center_y + tx
+    pos_y = c * center_x + d * center_y + ty
+
+    tx = pos_x - scale_x * center_x
+    ty = pos_y - scale_y * center_y
+    return np.array([[scale_x, 0.0, tx], [0.0, scale_y, ty]], dtype=np.float32)
 
 
 def _format_transform_json(matrix, overlay_width, overlay_height, background_width, background_height):
