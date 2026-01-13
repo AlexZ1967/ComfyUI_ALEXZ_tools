@@ -1,5 +1,7 @@
 # ComfyUI-QWen_Edit_outpaint
 
+Version: 0.2.0
+
 Custom node for preparing Qwen Image Edit outpaint inputs. It resizes and
 centers the input image onto a canvas sized to the selected aspect ratio,
 then outputs an empty latent with matching resolution for KSampler. Target

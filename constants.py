@@ -3,4 +3,4 @@ DEFAULT_GOOD_MATCH_PERCENT = 0.2
 DEFAULT_RANSAC_THRESH = 5.0
 DEFAULT_OPACITY = 1.0
 MIN_MATCHES = 4
-MATCHER_TYPES = ["orb", "akaze", "sift", "surf"]
+MATCHER_TYPES = ["orb", "akaze", "sift"]

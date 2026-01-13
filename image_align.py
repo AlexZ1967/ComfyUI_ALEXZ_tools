@@ -83,7 +83,6 @@ class ImageAlignOverlayToBackground:
         elif scale_mode == "free":
             _LOGGER.warning("scale_mode 'free' is deprecated; using 'independent_xy'.")
             scale_mode = "independent_xy"
-
         return align_overlay_to_background(
             background=background,
             overlay=overlay,

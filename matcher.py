@@ -21,10 +21,6 @@ def _create_detector(matcher_type, feature_count):
         if not hasattr(cv2, "SIFT_create"):
             return None, None
         return cv2.SIFT_create(nfeatures=feature_count), cv2.NORM_L2
-    if matcher_type == "surf":
-        if not hasattr(cv2, "xfeatures2d") or not hasattr(cv2.xfeatures2d, "SURF_create"):
-            return None, None
-        return cv2.xfeatures2d.SURF_create(hessianThreshold=400), cv2.NORM_L2
     return None, None
 
 
@@ -58,10 +54,18 @@ def detect_and_match(
     if ov_desc is None or bg_desc is None or len(ov_keypoints) < MIN_MATCHES or len(bg_keypoints) < MIN_MATCHES:
         return None, None, "Not enough keypoints for alignment."
 
-    matcher = cv2.BFMatcher(norm_type, crossCheck=True)
-    matches = matcher.match(ov_desc, bg_desc)
-    if len(matches) < MIN_MATCHES:
-        return None, None, "Not enough matches for alignment."
+    if matcher_type in ("sift",):
+        matcher = cv2.BFMatcher(norm_type)
+        knn_matches = matcher.knnMatch(ov_desc, bg_desc, k=2)
+        ratio = 0.75
+        matches = [m for m, n in knn_matches if m.distance < ratio * n.distance]
+        if len(matches) < MIN_MATCHES:
+            return None, None, "Not enough matches for alignment."
+    else:
+        matcher = cv2.BFMatcher(norm_type, crossCheck=True)
+        matches = matcher.match(ov_desc, bg_desc)
+        if len(matches) < MIN_MATCHES:
+            return None, None, "Not enough matches for alignment."
 
     matches = sorted(matches, key=lambda match: match.distance)
     keep = max(MIN_MATCHES, int(len(matches) * good_match_percent))
