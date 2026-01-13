@@ -73,11 +73,11 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - transform_json (STRING)
 
 Поля transform_json:
-- overlay_scale (x/y)
-- overlay_rotation_angle
-- overlay_position_pixels (x/y, пиксели бэкграунда)
-- fusion_position (x/y, 0..1)
-- resolve_position_edit (x/y, Inspector Edit)
+- overlay_scale: масштаб по X/Y.
+- overlay_rotation_angle: угол поворота в градусах (плюс = против часовой).
+- overlay_position_pixels: позиция центра оверлея в пикселях бэкграунда.
+- fusion_position: позиция центра в координатах Fusion (0..1, 0/0 = левый нижний).
+- resolve_position_edit: позиция для Inspector → Edit (на основе размеров бэкграунда и оверлея).
 
 ## English
 A set of custom nodes for ComfyUI. Includes image preparation for Qwen
@@ -149,8 +149,8 @@ Outputs:
 - transform_json (STRING)
 
 transform_json fields:
-- overlay_scale (x/y)
-- overlay_rotation_angle
-- overlay_position_pixels (x/y, background pixels)
-- fusion_position (x/y, 0..1)
-- resolve_position_edit (x/y, Edit Inspector)
+- overlay_scale: scale X/Y.
+- overlay_rotation_angle: rotation angle in degrees (positive = counter-clockwise).
+- overlay_position_pixels: overlay center in background pixels.
+- fusion_position: center in Fusion coordinates (0..1, 0/0 = bottom-left).
+- resolve_position_edit: position for Inspector → Edit (based on background/overlay sizes).
