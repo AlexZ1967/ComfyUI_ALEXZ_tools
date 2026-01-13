@@ -8,19 +8,19 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
-- Добавлена нода выравнивания с матчингом (ORB/AKAZE/SIFT), масками и композитом.
-- Добавлен JSON с трансформациями для Fusion (0..1) и Resolve Edit Inspector.
-- Добавлены опции запрета поворота и независимого масштаба по X/Y.
+- 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: матчинг ORB/AKAZE/SIFT, маски, композит, difference и JSON трансформации (Fusion/Resolve).
+- 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: опции запрета поворота и независимого масштаба по X/Y.
 
 ### Установка
-1. Поместите папку в `ComfyUI/custom_nodes/`.
+1. Склонируйте репозиторий в `ComfyUI/custom_nodes/`:
+   `git clone https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools.git`
 2. Перезапустите ComfyUI.
 
 ### Ноды
 #### Image Prepare for QwenEdit Outpaint
 Нода подготовки для Qwen Image Edit Outpaint. Масштабирует и центрирует
 изображение под выбранное соотношение сторон, затем возвращает пустой латент
-нужного размера для KSampler. Целевая площадь ~1024x1024, округление до кратных 32.
+нужного размера для KSampler. Целевая площадь ~1328x1328, округление до кратных 32.
 
 - Display name: Image Prepare for QwenEdit Outpaint
 - Type name: ImagePrepare_for_QwenEdit_outpaint
@@ -29,6 +29,15 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 Входы:
 - image (IMAGE)
 - aspect_ratio (1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
+
+Разрешения (image):
+- 1x1: 1328x1328
+- 16x9: 1664x928
+- 9x16: 928x1664
+- 4x3: 1472x1104
+- 3x4: 1104x1472
+- 3x2: 1584x1056
+- 2x3: 1056x1584
 
 Выходы:
 - image (IMAGE, подготовленное изображение)
@@ -67,19 +76,19 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
-- Added alignment node with feature matching (ORB/AKAZE/SIFT), masks, and compositing.
-- Added transform JSON output for Fusion (normalized 0..1) and Resolve Edit Inspector.
-- Added options for rotation lock and independent X/Y scaling.
+- 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: ORB/AKAZE/SIFT matching, masks, composite, difference, transform JSON (Fusion/Resolve).
+- 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: rotation lock and independent X/Y scaling options.
 
 ### Install
-1. Place this folder under `ComfyUI/custom_nodes/`.
+1. Clone the repo into `ComfyUI/custom_nodes/`:
+   `git clone https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools.git`
 2. Restart ComfyUI.
 
 ### Nodes
 #### Image Prepare for QwenEdit Outpaint
 Prepares inputs for Qwen Image Edit Outpaint. Resizes and centers the image to
 the selected aspect ratio, then outputs an empty latent for KSampler. Target
-area is ~1024x1024, rounded to multiples of 32.
+area is ~1328x1328, rounded to multiples of 32.
 
 - Display name: Image Prepare for QwenEdit Outpaint
 - Type name: ImagePrepare_for_QwenEdit_outpaint
@@ -88,6 +97,15 @@ area is ~1024x1024, rounded to multiples of 32.
 Inputs:
 - image (IMAGE)
 - aspect_ratio (1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
+
+Resolutions (image):
+- 1x1: 1328x1328
+- 16x9: 1664x928
+- 9x16: 928x1664
+- 4x3: 1472x1104
+- 3x4: 1104x1472
+- 3x2: 1584x1056
+- 2x3: 1056x1584
 
 Outputs:
 - image (IMAGE, prepared)
