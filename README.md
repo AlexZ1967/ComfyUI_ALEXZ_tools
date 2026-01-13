@@ -2,6 +2,11 @@
 
 Version: 0.2.0
 
+## Changelog
+- Added alignment node with feature matching (ORB/AKAZE/SIFT), masks, and compositing outputs.
+- Added transform JSON output for Fusion (normalized 0..1) and Resolve Edit Inspector.
+- Added options for rotation lock and independent X/Y scaling.
+
 Custom node for preparing Qwen Image Edit outpaint inputs. It resizes and
 centers the input image onto a canvas sized to the selected aspect ratio,
 then outputs an empty latent with matching resolution for KSampler. Target
