@@ -77,7 +77,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - overlay_rotation_angle: угол поворота в градусах (плюс = против часовой).
 - overlay_position_pixels: позиция центра оверлея в пикселях бэкграунда.
 - fusion_position: позиция центра в координатах Fusion (0..1, 0/0 = левый нижний).
-- resolve_position_edit: позиция для Inspector → Edit (на основе размеров бэкграунда и оверлея).
+- resolve_position_edit: значения Position X/Y для Inspector → Edit в DaVinci Resolve (центр = 0/0; расчет зависит от размеров бэкграунда/овэрлея).
 
 ## English
 A set of custom nodes for ComfyUI. Includes image preparation for Qwen
@@ -153,4 +153,4 @@ transform_json fields:
 - overlay_rotation_angle: rotation angle in degrees (positive = counter-clockwise).
 - overlay_position_pixels: overlay center in background pixels.
 - fusion_position: center in Fusion coordinates (0..1, 0/0 = bottom-left).
-- resolve_position_edit: position for Inspector → Edit (based on background/overlay sizes).
+- resolve_position_edit: Position X/Y for DaVinci Resolve Inspector → Edit (center = 0/0; computed from background/overlay sizes).
