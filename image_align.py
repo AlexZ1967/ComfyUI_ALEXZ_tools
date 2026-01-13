@@ -51,6 +51,7 @@ class ImageAlignOverlayToBackground:
                 "matcher_type": (MATCHER_TYPES, {"default": "orb", "tooltip": "Алгоритм детектора/дескриптора."}),
                 "scale_mode": (["preserve_aspect", "independent_xy"], {"default": "preserve_aspect", "tooltip": "Масштабирование: с сохранением пропорций или отдельно по X/Y."}),
                 "allow_rotation": ("BOOLEAN", {"default": True, "tooltip": "Разрешить поворот оверлея."}),
+                "use_color": ("BOOLEAN", {"default": False, "tooltip": "Использовать цветовую информацию при поиске фич."}),
             },
             "optional": {
                 "background_mask": ("MASK", {"tooltip": "Маска области совпадений на фоне (белое=использовать)."}),
@@ -74,6 +75,7 @@ class ImageAlignOverlayToBackground:
         matcher_type,
         scale_mode,
         allow_rotation,
+        use_color,
         background_mask=None,
         overlay_mask=None,
     ):
@@ -95,6 +97,7 @@ class ImageAlignOverlayToBackground:
             matcher_type=matcher_type,
             scale_mode=scale_mode,
             allow_rotation=allow_rotation,
+            use_color=use_color,
             logger=_LOGGER,
         )
 

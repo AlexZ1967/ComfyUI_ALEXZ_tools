@@ -32,6 +32,7 @@ def detect_and_match(
     feature_count,
     good_match_percent,
     matcher_type,
+    use_color,
 ):
     _ensure_cv2()
 
@@ -41,8 +42,12 @@ def detect_and_match(
     if background_np.shape[2] != 3 or overlay_np.shape[2] not in (3, 4):
         return None, None, "Only 3-channel background and 3/4-channel overlay images are supported."
 
-    bg_gray = cv2.cvtColor(background_np[:, :, :3], cv2.COLOR_RGB2GRAY)
-    ov_gray = cv2.cvtColor(overlay_np[:, :, :3], cv2.COLOR_RGB2GRAY)
+    if use_color:
+        bg_gray = cv2.cvtColor(background_np[:, :, :3], cv2.COLOR_RGB2LAB)
+        ov_gray = cv2.cvtColor(overlay_np[:, :, :3], cv2.COLOR_RGB2LAB)
+    else:
+        bg_gray = cv2.cvtColor(background_np[:, :, :3], cv2.COLOR_RGB2GRAY)
+        ov_gray = cv2.cvtColor(overlay_np[:, :, :3], cv2.COLOR_RGB2GRAY)
 
     detector, norm_type = _create_detector(matcher_type, feature_count)
     if detector is None:

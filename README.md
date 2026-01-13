@@ -10,6 +10,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 ### Изменения
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: матчинг ORB/AKAZE/SIFT, маски, композит, difference и JSON трансформации (Fusion/Resolve).
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: опции запрета поворота и независимого масштаба по X/Y.
+- 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: опция use_color для поиска фич по цвету.
 
 ### Установка
 1. Склонируйте репозиторий в `ComfyUI/custom_nodes/`:
@@ -65,6 +66,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - matcher_type (orb/akaze/sift)
 - scale_mode (preserve_aspect/independent_xy)
 - allow_rotation (BOOLEAN)
+- use_color (BOOLEAN)
 
 Выходы:
 - aligned_overlay (IMAGE)
@@ -79,6 +81,20 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - fusion_position: позиция центра в координатах Fusion (0..1, 0/0 = левый нижний).
 - resolve_position_edit: значения Position X/Y для Inspector → Edit в DaVinci Resolve (центр = 0/0; расчет зависит от размеров бэкграунда/овэрлея).
 
+#### Show/Save JSON
+Нода для аккуратного отображения JSON и записи в файл по заданному пути.
+
+- Display name: Show/Save JSON
+- Type name: JsonDisplayAndSave
+- Category: utils/json
+
+Входы:
+- json_text (STRING)
+- output_path (STRING)
+
+Выходы:
+- json_pretty (STRING)
+
 ## English
 A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
@@ -86,6 +102,7 @@ Outpaint and an overlay alignment node with transformation export.
 ### Changelog
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: ORB/AKAZE/SIFT matching, masks, composite, difference, transform JSON (Fusion/Resolve).
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: rotation lock and independent X/Y scaling options.
+- 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: use_color option for color-based feature detection.
 
 ### Install
 1. Clone the repo into `ComfyUI/custom_nodes/`:
@@ -141,6 +158,7 @@ Inputs:
 - matcher_type (orb/akaze/sift)
 - scale_mode (preserve_aspect/independent_xy)
 - allow_rotation (BOOLEAN)
+- use_color (BOOLEAN)
 
 Outputs:
 - aligned_overlay (IMAGE)
@@ -154,3 +172,17 @@ transform_json fields:
 - overlay_position_pixels: overlay center in background pixels.
 - fusion_position: center in Fusion coordinates (0..1, 0/0 = bottom-left).
 - resolve_position_edit: Position X/Y for DaVinci Resolve Inspector → Edit (center = 0/0; computed from background/overlay sizes).
+
+#### Show/Save JSON
+Node to display JSON neatly and save it to a file path.
+
+- Display name: Show/Save JSON
+- Type name: JsonDisplayAndSave
+- Category: utils/json
+
+Inputs:
+- json_text (STRING)
+- output_path (STRING)
+
+Outputs:
+- json_pretty (STRING)

@@ -23,6 +23,7 @@ def align_overlay_to_background(
     matcher_type,
     scale_mode,
     allow_rotation,
+    use_color,
     logger,
 ):
     if cv2 is None:
@@ -56,6 +57,7 @@ def align_overlay_to_background(
             matcher_type,
             scale_mode,
             allow_rotation,
+            use_color,
         )
         if aligned_np is None:
             logger.warning("Alignment failed: %s", status)
@@ -123,6 +125,7 @@ def _align_overlay_to_background(
     matcher_type,
     scale_mode,
     allow_rotation,
+    use_color,
 ):
     if cv2 is None:
         raise RuntimeError("opencv-python is required for feature alignment. Please install opencv-python.")
@@ -135,6 +138,7 @@ def _align_overlay_to_background(
         feature_count,
         good_match_percent,
         matcher_type,
+        use_color,
     )
     if ov_points is None:
         return None, None, status
