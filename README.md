@@ -28,9 +28,10 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 
 Входы:
 - image (IMAGE)
-- aspect_ratio (1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
+- aspect_ratio (as_is, 1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
 
 Разрешения (image):
+- as_is: сохраняет пропорции, масштабирование по площади ~1328x1328
 - 1x1: 1328x1328
 - 16x9: 1664x928
 - 9x16: 928x1664
@@ -71,6 +72,13 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - difference (IMAGE)
 - transform_json (STRING)
 
+Поля transform_json:
+- overlay_scale (x/y)
+- overlay_rotation_angle
+- overlay_position_pixels (x/y, пиксели бэкграунда)
+- fusion_position (x/y, 0..1)
+- resolve_position_edit (x/y, Inspector Edit)
+
 ## English
 A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
@@ -96,9 +104,10 @@ area is ~1328x1328, rounded to multiples of 32.
 
 Inputs:
 - image (IMAGE)
-- aspect_ratio (1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
+- aspect_ratio (as_is, 1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
 
 Resolutions (image):
+- as_is: keeps aspect ratio, scales to ~1328x1328 area
 - 1x1: 1328x1328
 - 16x9: 1664x928
 - 9x16: 928x1664
@@ -138,3 +147,10 @@ Outputs:
 - composite (IMAGE)
 - difference (IMAGE)
 - transform_json (STRING)
+
+transform_json fields:
+- overlay_scale (x/y)
+- overlay_rotation_angle
+- overlay_position_pixels (x/y, background pixels)
+- fusion_position (x/y, 0..1)
+- resolve_position_edit (x/y, Edit Inspector)
