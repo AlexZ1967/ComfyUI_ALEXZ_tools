@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.2.0
+Version: 0.3.0
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,9 +8,11 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-13 | v0.3.0 | JsonDisplayAndSave: вывод JSON на экран и сохранение в файл.
+- 2026-01-13 | v0.3.0 | ImageAlignOverlayToBackground: опция use_color для поиска фич по цвету.
+- 2026-01-13 | v0.3.0 | Example workflow: восстановление фото + Align Overlay.
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: матчинг ORB/AKAZE/SIFT, маски, композит, difference и JSON трансформации (Fusion/Resolve).
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: опции запрета поворота и независимого масштаба по X/Y.
-- 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: опция use_color для поиска фич по цвету.
 
 ### Установка
 1. Склонируйте репозиторий в `ComfyUI/custom_nodes/`:
@@ -100,9 +102,11 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-13 | v0.3.0 | JsonDisplayAndSave: display JSON and save to file.
+- 2026-01-13 | v0.3.0 | ImageAlignOverlayToBackground: use_color option for color-based feature detection.
+- 2026-01-13 | v0.3.0 | Example workflow: photo restoration + Align Overlay.
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: ORB/AKAZE/SIFT matching, masks, composite, difference, transform JSON (Fusion/Resolve).
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: rotation lock and independent X/Y scaling options.
-- 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: use_color option for color-based feature detection.
 
 ### Install
 1. Clone the repo into `ComfyUI/custom_nodes/`:
