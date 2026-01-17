@@ -59,7 +59,27 @@ class JsonDisplayAndSave:
         return {"ui": {"text": [pretty]}, "result": (pretty,)}
 
 
+class JsonPreview:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "json_text": ("STRING", {"multiline": True, "tooltip": "JSON строка для отображения."}),
+            },
+        }
+
+    RETURN_TYPES = ()
+    FUNCTION = "preview"
+    CATEGORY = "utils/json"
+    OUTPUT_NODE = True
+
+    def preview(self, json_text):
+        data = _normalize_json_input(json_text)
+        pretty = json.dumps(data, ensure_ascii=True, indent=2)
+        return {"ui": {"text": [pretty]}}
+
+
 _LOGGER.warning(
     "Loaded JsonDisplayAndSave. NODE_CLASS_MAPPINGS=%s",
-    ["JsonDisplayAndSave"],
+    ["JsonDisplayAndSave", "JsonPreview"],
 )
