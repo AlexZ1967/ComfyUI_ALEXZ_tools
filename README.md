@@ -8,9 +8,9 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
-- 2026-01-13 | v0.4.0 | JsonDisplayAndSave: сохранение в файл стало опциональным; поддержка пути к директории.
-- 2026-01-13 | v0.4.0 | JsonDisplayAndSave: исправлено отображение JSON без экранирования.
-- 2026-01-13 | v0.4.0 | pyproject.toml: обновлены name/description проекта.
+- 2026-01-19 | v0.4.0 | JsonDisplayAndSave: сохранение в файл стало опциональным; поддержка пути к директории.
+- 2026-01-19 | v0.4.0 | JsonDisplayAndSave: исправлено отображение JSON без экранирования.
+- 2026-01-19 | v0.4.0 | pyproject.toml: обновлены name/description проекта.
 - 2026-01-13 | v0.3.1 | JsonDisplayAndSave: объединено отображение и сохранение, output_path стал опциональным (JsonPreview удалена).
 - 2026-01-13 | v0.3.0 | JsonDisplayAndSave: вывод JSON на экран и сохранение в файл.
 - 2026-01-13 | v0.3.0 | ImageAlignOverlayToBackground: опция use_color для поиска фич по цвету.
@@ -107,9 +107,9 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
-- 2026-01-13 | v0.4.0 | JsonDisplayAndSave: optional file save; directory paths are supported.
-- 2026-01-13 | v0.4.0 | JsonDisplayAndSave: JSON display fixed (no escaped slashes).
-- 2026-01-13 | v0.4.0 | pyproject.toml: updated project name/description.
+- 2026-01-19 | v0.4.0 | JsonDisplayAndSave: optional file save; directory paths are supported.
+- 2026-01-19 | v0.4.0 | JsonDisplayAndSave: JSON display fixed (no escaped slashes).
+- 2026-01-19 | v0.4.0 | pyproject.toml: updated project name/description.
 - 2026-01-13 | v0.3.1 | JsonDisplayAndSave: merged preview/save, output_path is optional (JsonPreview removed).
 - 2026-01-13 | v0.3.0 | JsonDisplayAndSave: display JSON and save to file.
 - 2026-01-13 | v0.3.0 | ImageAlignOverlayToBackground: use_color option for color-based feature detection.
