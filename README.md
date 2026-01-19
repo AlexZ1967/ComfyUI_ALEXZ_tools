@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.3.0
+Version: 0.4.0
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,8 +8,11 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-13 | v0.4.0 | JsonDisplayAndSave: сохранение в файл стало опциональным; поддержка пути к директории.
+- 2026-01-13 | v0.4.0 | JsonDisplayAndSave: исправлено отображение JSON без экранирования.
+- 2026-01-13 | v0.4.0 | pyproject.toml: обновлены name/description проекта.
+- 2026-01-13 | v0.3.1 | JsonDisplayAndSave: объединено отображение и сохранение, output_path стал опциональным (JsonPreview удалена).
 - 2026-01-13 | v0.3.0 | JsonDisplayAndSave: вывод JSON на экран и сохранение в файл.
-- 2026-01-13 | v0.3.0 | JsonPreview: отображение JSON в интерфейсе.
 - 2026-01-13 | v0.3.0 | ImageAlignOverlayToBackground: опция use_color для поиска фич по цвету.
 - 2026-01-13 | v0.3.0 | Example workflow: восстановление фото + Align Overlay.
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: матчинг ORB/AKAZE/SIFT, маски, композит, difference и JSON трансформации (Fusion/Resolve).
@@ -85,39 +88,30 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - resolve_position_edit: значения Position X/Y для Inspector → Edit в DaVinci Resolve (центр = 0/0; расчет зависит от размеров бэкграунда/овэрлея).
 
 #### Show/Save JSON
-Нода для аккуратного отображения JSON и записи в файл по заданному пути.
+Нода для аккуратного отображения JSON и записи в файл по заданному пути
+(если путь указан).
 
 - Display name: Show/Save JSON
 - Type name: JsonDisplayAndSave
 - Category: utils/json
 
 Входы:
-- json_text (STRING)
-- output_path (STRING)
+- json_text (ANY)
+- output_path (STRING, optional, пусто = без сохранения)
 
 Выходы:
 - json_pretty (STRING)
-
-#### Show JSON
-Нода для отображения JSON в интерфейсе без сохранения в файл.
-
-- Display name: Show JSON
-- Type name: JsonPreview
-- Category: utils/json
-
-Входы:
-- json_text (STRING)
-
-Выходы:
-- нет
 
 ## English
 A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-13 | v0.4.0 | JsonDisplayAndSave: optional file save; directory paths are supported.
+- 2026-01-13 | v0.4.0 | JsonDisplayAndSave: JSON display fixed (no escaped slashes).
+- 2026-01-13 | v0.4.0 | pyproject.toml: updated project name/description.
+- 2026-01-13 | v0.3.1 | JsonDisplayAndSave: merged preview/save, output_path is optional (JsonPreview removed).
 - 2026-01-13 | v0.3.0 | JsonDisplayAndSave: display JSON and save to file.
-- 2026-01-13 | v0.3.0 | JsonPreview: display JSON in the UI.
 - 2026-01-13 | v0.3.0 | ImageAlignOverlayToBackground: use_color option for color-based feature detection.
 - 2026-01-13 | v0.3.0 | Example workflow: photo restoration + Align Overlay.
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: ORB/AKAZE/SIFT matching, masks, composite, difference, transform JSON (Fusion/Resolve).
@@ -193,28 +187,15 @@ transform_json fields:
 - resolve_position_edit: Position X/Y for DaVinci Resolve Inspector → Edit (center = 0/0; computed from background/overlay sizes).
 
 #### Show/Save JSON
-Node to display JSON neatly and save it to a file path.
+Node to display JSON neatly and save it to a file path (if provided).
 
 - Display name: Show/Save JSON
 - Type name: JsonDisplayAndSave
 - Category: utils/json
 
 Inputs:
-- json_text (STRING)
-- output_path (STRING)
+- json_text (ANY)
+- output_path (STRING, optional, empty = no save)
 
 Outputs:
 - json_pretty (STRING)
-
-#### Show JSON
-Node to display JSON in the UI without saving.
-
-- Display name: Show JSON
-- Type name: JsonPreview
-- Category: utils/json
-
-Inputs:
-- json_text (STRING)
-
-Outputs:
-- none
