@@ -9,6 +9,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 
 ### Изменения
 - 2026-01-13 | v0.3.0 | JsonDisplayAndSave: вывод JSON на экран и сохранение в файл.
+- 2026-01-13 | v0.3.0 | JsonPreview: отображение JSON в интерфейсе.
 - 2026-01-13 | v0.3.0 | ImageAlignOverlayToBackground: опция use_color для поиска фич по цвету.
 - 2026-01-13 | v0.3.0 | Example workflow: восстановление фото + Align Overlay.
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: матчинг ORB/AKAZE/SIFT, маски, композит, difference и JSON трансформации (Fusion/Resolve).
@@ -97,12 +98,26 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 Выходы:
 - json_pretty (STRING)
 
+#### Show JSON
+Нода для отображения JSON в интерфейсе без сохранения в файл.
+
+- Display name: Show JSON
+- Type name: JsonPreview
+- Category: utils/json
+
+Входы:
+- json_text (STRING)
+
+Выходы:
+- нет
+
 ## English
 A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
 - 2026-01-13 | v0.3.0 | JsonDisplayAndSave: display JSON and save to file.
+- 2026-01-13 | v0.3.0 | JsonPreview: display JSON in the UI.
 - 2026-01-13 | v0.3.0 | ImageAlignOverlayToBackground: use_color option for color-based feature detection.
 - 2026-01-13 | v0.3.0 | Example workflow: photo restoration + Align Overlay.
 - 2026-01-13 | v0.2.0 | ImageAlignOverlayToBackground: ORB/AKAZE/SIFT matching, masks, composite, difference, transform JSON (Fusion/Resolve).
@@ -190,3 +205,16 @@ Inputs:
 
 Outputs:
 - json_pretty (STRING)
+
+#### Show JSON
+Node to display JSON in the UI without saving.
+
+- Display name: Show JSON
+- Type name: JsonPreview
+- Category: utils/json
+
+Inputs:
+- json_text (STRING)
+
+Outputs:
+- none
