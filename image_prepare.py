@@ -5,6 +5,8 @@ import comfy.model_management
 import comfy.utils
 import torch
 
+from .utils import round_to_multiple
+
 
 _ASPECT_RATIOS = {
     "as_is": None,  # Сохранить исходные пропорции
@@ -19,6 +21,7 @@ _ASPECT_RATIOS = {
 
 # Целевая площадь для масштабирования (при as_is)
 _TARGET_AREA = 1328 * 1328
+_SIZE_MULTIPLE = 32
 _LATENT_CHANNELS = 4  # Стандартный VAE использует 4 канала
 
 
@@ -55,6 +58,9 @@ class ImagePrepareForQwenEditOutpaint:
 
             new_width = max(1, int(round(in_width * scale)))
             new_height = max(1, int(round(in_height * scale)))
+
+            new_width = round_to_multiple(new_width, _SIZE_MULTIPLE)
+            new_height = round_to_multiple(new_height, _SIZE_MULTIPLE)
 
             latent_width = new_width // 8
             latent_height = new_height // 8

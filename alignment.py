@@ -102,6 +102,7 @@ def align_overlay_to_background(
             ov_np.shape[0],
             bg_np.shape[1],
             bg_np.shape[0],
+            status,
         )
         transform_results.append(transform_json)
         logger.info("Transform JSON: %s", transform_json)
@@ -179,14 +180,25 @@ def _remove_rotation(matrix, overlay_width, overlay_height, scale_mode):
     return np.array([[scale_x, 0.0, tx], [0.0, scale_y, ty]], dtype=np.float32)
 
 
-def _format_transform_json(matrix, overlay_width, overlay_height, background_width, background_height):
+def _format_transform_json(
+    matrix,
+    overlay_width,
+    overlay_height,
+    background_width,
+    background_height,
+    status,
+):
+    payload = {
+        "status": status,
+        "overlay_scale": {"x": None, "y": None},
+        "overlay_rotation_angle": None,
+        "overlay_position_pixels": {"x": None, "y": None},
+        "overlay_position": {"x": None, "y": None},
+        "fusion_position": {"x": None, "y": None},
+        "resolve_position_edit": {"x": None, "y": None},
+    }
+
     if matrix is None:
-        payload = {
-            "overlay_scale": {"x": None, "y": None},
-            "overlay_position": {"x": None, "y": None},
-            "overlay_rotation_angle": None,
-            "overlay_position_pixels": {"x": None, "y": None},
-        }
         return json.dumps(payload, ensure_ascii=True)
 
     a, b, tx = matrix[0]
@@ -206,10 +218,11 @@ def _format_transform_json(matrix, overlay_width, overlay_height, background_wid
     norm_y = float(1.0 - (pos_y / bg_h))
     resolve_rotation = -rotation_deg
 
-    payload = {
+    payload.update({
         "overlay_scale": {"x": round(float(scale_x), 3), "y": round(float(scale_y), 3)},
         "overlay_rotation_angle": round(float(resolve_rotation), 3),
         "overlay_position_pixels": {"x": round(float(pos_x), 3), "y": round(float(pos_y), 3)},
+        "overlay_position": {"x": round(norm_x, 6), "y": round(norm_y, 6)},
         "fusion_position": {"x": round(norm_x, 6), "y": round(norm_y, 6)},
         "resolve_position_edit": _format_resolve_edit_position(
             norm_x,
@@ -219,7 +232,7 @@ def _format_transform_json(matrix, overlay_width, overlay_height, background_wid
             overlay_width,
             overlay_height,
         ),
-    }
+    })
     return json.dumps(payload, ensure_ascii=True)
 
 

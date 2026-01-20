@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.0
+Version: 0.4.1
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,8 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-19 | v0.4.1 | ImageAlignOverlayToBackground: transform_json теперь всегда содержит status и overlay_position.
+- 2026-01-19 | v0.4.1 | Image Prepare for QwenEdit Outpaint: as_is округляет размеры до кратных 32.
 - 2026-01-19 | v0.4.0 | JsonDisplayAndSave: сохранение в файл стало опциональным; поддержка пути к директории.
 - 2026-01-19 | v0.4.0 | JsonDisplayAndSave: исправлено отображение JSON без экранирования.
 - 2026-01-19 | v0.4.0 | pyproject.toml: обновлены name/description проекта.
@@ -81,9 +83,11 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - transform_json (STRING)
 
 Поля transform_json:
+- status: статус выравнивания (ok или сообщение об ошибке).
 - overlay_scale: масштаб по X/Y.
 - overlay_rotation_angle: угол поворота в градусах (плюс = против часовой).
 - overlay_position_pixels: позиция центра оверлея в пикселях бэкграунда.
+- overlay_position: позиция центра в нормированных координатах 0..1 (0/0 = левый нижний).
 - fusion_position: позиция центра в координатах Fusion (0..1, 0/0 = левый нижний).
 - resolve_position_edit: значения Position X/Y для Inspector → Edit в DaVinci Resolve (центр = 0/0; расчет зависит от размеров бэкграунда/овэрлея).
 
@@ -107,6 +111,8 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-19 | v0.4.1 | ImageAlignOverlayToBackground: transform_json always includes status and overlay_position.
+- 2026-01-19 | v0.4.1 | Image Prepare for QwenEdit Outpaint: as_is sizes are rounded to multiples of 32.
 - 2026-01-19 | v0.4.0 | JsonDisplayAndSave: optional file save; directory paths are supported.
 - 2026-01-19 | v0.4.0 | JsonDisplayAndSave: JSON display fixed (no escaped slashes).
 - 2026-01-19 | v0.4.0 | pyproject.toml: updated project name/description.
@@ -180,9 +186,11 @@ Outputs:
 - transform_json (STRING)
 
 transform_json fields:
+- status: alignment status (ok or error message).
 - overlay_scale: scale X/Y.
 - overlay_rotation_angle: rotation angle in degrees (positive = counter-clockwise).
 - overlay_position_pixels: overlay center in background pixels.
+- overlay_position: center in normalized coordinates 0..1 (0/0 = bottom-left).
 - fusion_position: center in Fusion coordinates (0..1, 0/0 = bottom-left).
 - resolve_position_edit: Position X/Y for DaVinci Resolve Inspector → Edit (center = 0/0; computed from background/overlay sizes).
 
