@@ -15,5 +15,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImagePrepare_for_QwenEdit_outpaint": "Image Prepare for QwenEdit Outpaint",
     "ImageAlignOverlayToBackground": "Align Overlay To Background",
     "JsonDisplayAndSave": "Show/Save JSON",
-    "VideoInpaintWatermark": "Video Inpaint (ProPainter/E2FGVI)",
+    "VideoInpaintWatermark": "Remove Static Watermark from Video",
 }

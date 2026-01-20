@@ -145,12 +145,12 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - **normalized_center**: центр в 0..1:
   **top_left** — origin в левом верхнем; **bottom_left** — origin в левом нижнем.
 
-#### Video Inpaint (ProPainter/E2FGVI)
+#### Remove Static Watermark from Video
 Нода для удаления объектов/водяных знаков на видео через инпейтинг. Варианты
 ProPainter и E2FGVI встроены. Веса хранятся в `propainter/weights/` и
 `e2fgvi/weights/` (при отсутствии скачиваются автоматически).
 
-- Display name: Video Inpaint (ProPainter/E2FGVI)
+- Display name: Remove Static Watermark from Video
 - Type name: VideoInpaintWatermark
 - Category: video/inpaint
 
@@ -404,12 +404,12 @@ transform_json fields:
 - **normalized_center**: center in 0..1:
   **top_left** origin; **bottom_left** origin.
 
-#### Video Inpaint (ProPainter/E2FGVI)
+#### Remove Static Watermark from Video
 Node for removing objects/watermarks on video via inpainting. ProPainter and
 E2FGVI are embedded. Weights live in `propainter/weights/` and `e2fgvi/weights/`
 (auto-downloaded if missing).
 
-- Display name: Video Inpaint (ProPainter/E2FGVI)
+- Display name: Remove Static Watermark from Video
 - Type name: VideoInpaintWatermark
 - Category: video/inpaint
 
