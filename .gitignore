@@ -3,4 +3,4 @@
 *.egg-info/
 dist/
 build/
-weights/*.pth
+propainter/weights/*.pth

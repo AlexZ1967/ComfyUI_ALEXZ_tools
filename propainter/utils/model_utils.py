@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import logging
 import os
+from pathlib import Path
 
 import torch
 
@@ -8,6 +9,7 @@ from ..model.modules.flow_comp_raft import RAFT_bi
 from ..model.propainter import InpaintGenerator
 from ..model.recurrent_flow_completion import RecurrentFlowCompleteNet
 from .model_cache import ModelCache
+from .download_utils import download_model
 
 
 logger = logging.getLogger(__name__)
@@ -25,22 +27,27 @@ _WEIGHT_FILES = {
     "flow": "recurrent_flow_completion.pth",
     "inpaint": "ProPainter.pth",
 }
+_PRETRAIN_MODEL_URL = "https://github.com/sczhou/ProPainter/releases/download/v0.1.0/"
 
 
 def _get_weights_dir() -> str:
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    return os.path.join(repo_root, "weights")
+    return os.path.join(repo_root, "propainter", "weights")
 
 
 def _resolve_weight_path(key: str) -> str:
-    weights_dir = _get_weights_dir()
+    weights_dir = Path(_get_weights_dir())
     filename = _WEIGHT_FILES[key]
-    path = os.path.join(weights_dir, filename)
-    if not os.path.exists(path):
+    path = weights_dir / filename
+    if path.exists():
+        return str(path)
+    try:
+        return download_model(_PRETRAIN_MODEL_URL, filename, weights_dir)
+    except Exception as exc:
         raise RuntimeError(
-            f"Missing weight file: {path}. Please place {filename} in {weights_dir}."
-        )
-    return path
+            f"Missing weight file: {path}. Place {filename} in {weights_dir} "
+            "or allow auto-download."
+        ) from exc
 
 
 def load_raft_model(device: torch.device, model_path: str | None = None) -> RAFT_bi:
