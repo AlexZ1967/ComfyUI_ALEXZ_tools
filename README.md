@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.1
+Version: 0.4.2
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-19 | v0.4.2 | Image Prepare for QwenEdit Outpaint: добавлена опция size_rounding (none/32).
 - 2026-01-19 | v0.4.1 | ImageAlignOverlayToBackground: transform_json теперь всегда содержит status и overlay_position.
 - 2026-01-19 | v0.4.1 | Image Prepare for QwenEdit Outpaint: as_is округляет размеры до кратных 32.
 - 2026-01-19 | v0.4.0 | JsonDisplayAndSave: сохранение в файл стало опциональным; поддержка пути к директории.
@@ -38,6 +39,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 Входы:
 - image (IMAGE)
 - aspect_ratio (as_is, 1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
+- size_rounding (none/32)
 
 Разрешения (image):
 - as_is: сохраняет пропорции, масштабирование по площади ~1328x1328
@@ -111,6 +113,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-19 | v0.4.2 | Image Prepare for QwenEdit Outpaint: added size_rounding option (none/32).
 - 2026-01-19 | v0.4.1 | ImageAlignOverlayToBackground: transform_json always includes status and overlay_position.
 - 2026-01-19 | v0.4.1 | Image Prepare for QwenEdit Outpaint: as_is sizes are rounded to multiples of 32.
 - 2026-01-19 | v0.4.0 | JsonDisplayAndSave: optional file save; directory paths are supported.
@@ -141,6 +144,7 @@ area is ~1328x1328, rounded to multiples of 32.
 Inputs:
 - image (IMAGE)
 - aspect_ratio (as_is, 1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
+- size_rounding (none/32)
 
 Resolutions (image):
 - as_is: keeps aspect ratio, scales to ~1328x1328 area

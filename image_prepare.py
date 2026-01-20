@@ -21,7 +21,7 @@ _ASPECT_RATIOS = {
 
 # Целевая площадь для масштабирования (при as_is)
 _TARGET_AREA = 1328 * 1328
-_SIZE_MULTIPLE = 32
+_SIZE_ROUNDING_OPTIONS = ("none", "32")
 _LATENT_CHANNELS = 4  # Стандартный VAE использует 4 канала
 
 
@@ -38,6 +38,10 @@ class ImagePrepareForQwenEditOutpaint:
                     list(_ASPECT_RATIOS.keys()),
                     {"default": "as_is", "tooltip": "Целевое соотношение сторон для ресайза."},
                 ),
+                "size_rounding": (
+                    list(_SIZE_ROUNDING_OPTIONS),
+                    {"default": "none", "tooltip": "Округление размеров до кратных (none/32)."},
+                ),
             },
         }
 
@@ -46,7 +50,7 @@ class ImagePrepareForQwenEditOutpaint:
     FUNCTION = "prepare"
     CATEGORY = "image/qwen"
 
-    def prepare(self, image, aspect_ratio):
+    def prepare(self, image, aspect_ratio, size_rounding):
         samples = image.movedim(-1, 1)
         in_height = samples.shape[2]
         in_width = samples.shape[3]
@@ -59,8 +63,10 @@ class ImagePrepareForQwenEditOutpaint:
             new_width = max(1, int(round(in_width * scale)))
             new_height = max(1, int(round(in_height * scale)))
 
-            new_width = round_to_multiple(new_width, _SIZE_MULTIPLE)
-            new_height = round_to_multiple(new_height, _SIZE_MULTIPLE)
+            if size_rounding != "none":
+                multiple = int(size_rounding)
+                new_width = round_to_multiple(new_width, multiple)
+                new_height = round_to_multiple(new_height, multiple)
 
             latent_width = new_width // 8
             latent_height = new_height // 8
