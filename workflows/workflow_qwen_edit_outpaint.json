@@ -88,7 +88,8 @@
         "Node name for S&R": "ImagePrepare_for_QwenEdit_outpaint"
       },
       "widgets_values": [
-        "1x1"
+        "1x1",
+        "none"
       ]
     },
     {
