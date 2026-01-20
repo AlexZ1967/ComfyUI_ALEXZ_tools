@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.6
+Version: 0.4.7
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-19 | v0.4.7 | VideoInpaintWatermark: встроенная реализация ProPainter, без внешних нод.
 - 2026-01-19 | v0.4.6 | VideoInpaintWatermark: добавлена нода для видео-инпейнтинга (ProPainter/E2FGVI).
 - 2026-01-19 | v0.4.5 | ImageAlignOverlayToBackground: добавлены min_matches/min_inliers и lab_channels.
 - 2026-01-19 | v0.4.4 | Image Prepare for QwenEdit Outpaint: убрана опция size_rounding.
@@ -139,8 +140,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 
 #### Video Inpaint (ProPainter/E2FGVI)
 Нода для удаления объектов/водяных знаков на видео через инпейтинг. Вариант
-ProPainter встроен (если установлен соответствующий набор нод). E2FGVI требует
-отдельной установки ноды и моделей.
+ProPainter встроен (веса в `weights/`). E2FGVI пока не реализован.
 
 - Display name: Video Inpaint (ProPainter/E2FGVI)
 - Type name: VideoInpaintWatermark
@@ -186,6 +186,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-19 | v0.4.7 | VideoInpaintWatermark: built-in ProPainter implementation (no external nodes).
 - 2026-01-19 | v0.4.6 | VideoInpaintWatermark: added video inpainting node (ProPainter/E2FGVI).
 - 2026-01-19 | v0.4.5 | ImageAlignOverlayToBackground: added min_matches/min_inliers and lab_channels.
 - 2026-01-19 | v0.4.4 | Image Prepare for QwenEdit Outpaint: removed size_rounding option.
@@ -317,8 +318,7 @@ transform_json fields:
 
 #### Video Inpaint (ProPainter/E2FGVI)
 Node for removing objects/watermarks on video via inpainting. ProPainter is
-supported if the ProPainter node pack is installed. E2FGVI requires a separate
-node/model installation.
+included (weights in `weights/`). E2FGVI is not implemented yet.
 
 - Display name: Video Inpaint (ProPainter/E2FGVI)
 - Type name: VideoInpaintWatermark
@@ -357,3 +357,9 @@ Inputs:
 
 Outputs:
 - **json_pretty** (STRING)
+Примечания:
+- Для ProPainter нужны веса в `weights/` (см. `weights/README.txt`).
+- E2FGVI будет добавлен позже.
+Notes:
+- ProPainter requires weights in `weights/` (see `weights/README.txt`).
+- E2FGVI will be added later.
