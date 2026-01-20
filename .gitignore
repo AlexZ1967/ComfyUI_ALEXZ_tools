@@ -4,3 +4,4 @@
 dist/
 build/
 propainter/weights/*.pth
+e2fgvi/weights/*.pth

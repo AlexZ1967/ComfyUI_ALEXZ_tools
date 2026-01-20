@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.8
+Version: 0.4.9
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-19 | v0.4.9 | VideoInpaintWatermark: встроен E2FGVI (e2fgvi/e2fgvi_hq).
 - 2026-01-19 | v0.4.8 | ProPainter weights перенесены в propainter/weights, добавлена авто-загрузка.
 - 2026-01-19 | v0.4.7 | VideoInpaintWatermark: встроенная реализация ProPainter, без внешних нод.
 - 2026-01-19 | v0.4.6 | VideoInpaintWatermark: добавлена нода для видео-инпейнтинга (ProPainter/E2FGVI).
@@ -140,8 +141,9 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - **resolve_position_edit**: значения Position X/Y для Inspector → Edit в DaVinci Resolve (центр = 0/0; расчет зависит от размеров бэкграунда/овэрлея).
 
 #### Video Inpaint (ProPainter/E2FGVI)
-Нода для удаления объектов/водяных знаков на видео через инпейтинг. Вариант
-ProPainter встроен (веса в `propainter/weights/`, при отсутствии скачиваются автоматически). E2FGVI пока не реализован.
+Нода для удаления объектов/водяных знаков на видео через инпейтинг. Варианты
+ProPainter и E2FGVI встроены. Веса хранятся в `propainter/weights/` и
+`e2fgvi/weights/` (при отсутствии скачиваются автоматически).
 
 - Display name: Video Inpaint (ProPainter/E2FGVI)
 - Type name: VideoInpaintWatermark
@@ -150,7 +152,7 @@ ProPainter встроен (веса в `propainter/weights/`, при отсут�
 Входы:
 - **frames** (IMAGE)
 - **mask** (MASK)
-- **method** (propainter/e2fgvi)
+- **method** (propainter/e2fgvi/e2fgvi_hq)
 - **width** (INT, 0 = как у входа)
 - **height** (INT, 0 = как у входа)
 - **mask_dilates** (INT)
@@ -187,6 +189,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-19 | v0.4.9 | VideoInpaintWatermark: embedded E2FGVI (e2fgvi/e2fgvi_hq).
 - 2026-01-19 | v0.4.8 | ProPainter weights moved to propainter/weights with auto-download.
 - 2026-01-19 | v0.4.7 | VideoInpaintWatermark: built-in ProPainter implementation (no external nodes).
 - 2026-01-19 | v0.4.6 | VideoInpaintWatermark: added video inpainting node (ProPainter/E2FGVI).
@@ -319,8 +322,9 @@ transform_json fields:
 - **resolve_position_edit**: Position X/Y for DaVinci Resolve Inspector → Edit (center = 0/0; computed from background/overlay sizes).
 
 #### Video Inpaint (ProPainter/E2FGVI)
-Node for removing objects/watermarks on video via inpainting. ProPainter is
-included (weights in `propainter/weights/`). E2FGVI is not implemented yet.
+Node for removing objects/watermarks on video via inpainting. ProPainter and
+E2FGVI are embedded. Weights live in `propainter/weights/` and `e2fgvi/weights/`
+(auto-downloaded if missing).
 
 - Display name: Video Inpaint (ProPainter/E2FGVI)
 - Type name: VideoInpaintWatermark
@@ -329,7 +333,7 @@ included (weights in `propainter/weights/`). E2FGVI is not implemented yet.
 Inputs:
 - **frames** (IMAGE)
 - **mask** (MASK)
-- **method** (propainter/e2fgvi)
+- **method** (propainter/e2fgvi/e2fgvi_hq)
 - **width** (INT, 0 = input)
 - **height** (INT, 0 = input)
 - **mask_dilates** (INT)
@@ -362,8 +366,12 @@ Outputs:
 Примечания:
 - Для ProPainter нужны веса в `propainter/weights/` (см. `propainter/weights/README.txt`).
 - Если весов нет, они будут скачаны при первом запуске (нужен доступ в интернет).
-- E2FGVI будет добавлен позже.
+- Для E2FGVI нужны веса в `e2fgvi/weights/` (см. `e2fgvi/weights/README.txt`).
+- Если весов нет, они будут скачаны с Google Drive (нужен доступ в интернет).
+- E2FGVI-HQ поддерживает произвольные разрешения, но требует больше памяти.
 Notes:
 - ProPainter requires weights in `propainter/weights/` (see `propainter/weights/README.txt`).
 - Missing weights are downloaded on first run (internet required).
-- E2FGVI will be added later.
+- E2FGVI requires weights in `e2fgvi/weights/` (see `e2fgvi/weights/README.txt`).
+- Missing E2FGVI weights are downloaded from Google Drive (internet required).
+- E2FGVI-HQ supports arbitrary resolutions but uses more VRAM.
