@@ -166,6 +166,33 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **cudnn_benchmark** (default/enable/disable)
 - **tf32** (default/enable/disable)
 
+Описание входов:
+- **frames**: входные кадры видео (batch).
+- **mask**: маска области удаления (1 кадр или batch).
+- **method**: выбор алгоритма (propainter/e2fgvi/e2fgvi_hq).
+- **width/height**: целевой размер (0 = оставить как у входа).
+- **mask_dilates**: расширение маски (в пикселях, итерации дилатации).
+- **flow_mask_dilates**: расширение маски для оптического потока.
+- **ref_stride**: шаг выбора опорных кадров (E2FGVI).
+- **neighbor_length**: окно соседних кадров для обработки.
+- **subvideo_length**: длина батча/подвидео для ProPainter.
+- **raft_iter**: число итераций RAFT (ProPainter).
+- **fp16**: ускорение и экономия VRAM ценой точности.
+- **throughput_mode**: пропускать очистку кэша GPU (быстрее, но больше памяти).
+- **cudnn_benchmark**: оптимизация cuDNN под размер входа.
+- **tf32**: разрешить TF32 матмулы (быстрее, менее точно).
+
+Рекомендации по параметрам:
+- **method**: `propainter` обычно лучше на сложных сценах; `e2fgvi_hq` — для произвольных разрешений.
+- **width/height**: оставляйте 0, если не нужно менять размер.
+- **mask_dilates/flow_mask_dilates**: 4–12 для небольших логотипов, 10–20 для крупных.
+- **ref_stride**: 5–15 для типовых видео; меньше = точнее, но медленнее.
+- **neighbor_length**: 5–15 типично; больше помогает при сложной динамике.
+- **subvideo_length**: 40–120 для длинных роликов; меньше при нехватке VRAM.
+- **raft_iter**: 10–30 типично; больше = точнее, но медленнее.
+- **fp16**: включайте на GPU с ограниченной памятью.
+- **throughput_mode**: включайте при стабильной памяти (без OOM).
+
 Выходы:
 - **image** (IMAGE)
 
@@ -346,6 +373,33 @@ Inputs:
 - **throughput_mode** (enable/disable)
 - **cudnn_benchmark** (default/enable/disable)
 - **tf32** (default/enable/disable)
+
+Input descriptions:
+- **frames**: input video frames (batch).
+- **mask**: removal mask (single frame or batch).
+- **method**: algorithm choice (propainter/e2fgvi/e2fgvi_hq).
+- **width/height**: target size (0 = keep input).
+- **mask_dilates**: mask dilation iterations (pixels/iterations).
+- **flow_mask_dilates**: flow-mask dilation iterations.
+- **ref_stride**: reference frame stride (E2FGVI).
+- **neighbor_length**: window of neighboring frames.
+- **subvideo_length**: subvideo batch length (ProPainter).
+- **raft_iter**: RAFT iterations (ProPainter).
+- **fp16**: faster, lower VRAM, slightly less accurate.
+- **throughput_mode**: skip GPU cache cleanup (faster, more VRAM).
+- **cudnn_benchmark**: cuDNN tuning for fixed sizes.
+- **tf32**: enable TF32 matmuls (faster, slightly less precise).
+
+Parameter guidance:
+- **method**: `propainter` usually best on complex scenes; `e2fgvi_hq` for arbitrary resolutions.
+- **width/height**: keep 0 unless resizing is required.
+- **mask_dilates/flow_mask_dilates**: 4–12 for small logos, 10–20 for large.
+- **ref_stride**: 5–15 typical; lower = more accurate, slower.
+- **neighbor_length**: 5–15 typical; higher helps with complex motion.
+- **subvideo_length**: 40–120 for longer videos; lower if VRAM is tight.
+- **raft_iter**: 10–30 typical; higher = more accurate, slower.
+- **fp16**: enable for limited VRAM GPUs.
+- **throughput_mode**: enable if you have VRAM headroom.
 
 Outputs:
 - **image** (IMAGE)
