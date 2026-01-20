@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.3
+Version: 0.4.4
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-19 | v0.4.4 | Image Prepare for QwenEdit Outpaint: убрана опция size_rounding.
 - 2026-01-19 | v0.4.3 | ImageAlignOverlayToBackground: добавлен color_mode (gray/lab_l/lab), use_color помечен устаревшим.
 - 2026-01-19 | v0.4.2 | Image Prepare for QwenEdit Outpaint: добавлена опция size_rounding (none/32).
 - 2026-01-19 | v0.4.1 | ImageAlignOverlayToBackground: transform_json теперь всегда содержит status и overlay_position.
@@ -31,7 +32,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 #### Image Prepare for QwenEdit Outpaint
 Нода подготовки для Qwen Image Edit Outpaint. Масштабирует и центрирует
 изображение под выбранное соотношение сторон, затем возвращает пустой латент
-нужного размера для KSampler. Целевая площадь ~1328x1328, округление до кратных 32.
+нужного размера для KSampler. Целевая площадь ~1328x1328.
 
 - Display name: Image Prepare for QwenEdit Outpaint
 - Type name: ImagePrepare_for_QwenEdit_outpaint
@@ -40,7 +41,6 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 Входы:
 - image (IMAGE)
 - aspect_ratio (as_is, 1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
-- size_rounding (none/32)
 
 Разрешения (image):
 - as_is: сохраняет пропорции, масштабирование по площади ~1328x1328
@@ -115,6 +115,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-19 | v0.4.4 | Image Prepare for QwenEdit Outpaint: removed size_rounding option.
 - 2026-01-19 | v0.4.3 | ImageAlignOverlayToBackground: added color_mode (gray/lab_l/lab), use_color marked deprecated.
 - 2026-01-19 | v0.4.2 | Image Prepare for QwenEdit Outpaint: added size_rounding option (none/32).
 - 2026-01-19 | v0.4.1 | ImageAlignOverlayToBackground: transform_json always includes status and overlay_position.
@@ -138,7 +139,7 @@ Outpaint and an overlay alignment node with transformation export.
 #### Image Prepare for QwenEdit Outpaint
 Prepares inputs for Qwen Image Edit Outpaint. Resizes and centers the image to
 the selected aspect ratio, then outputs an empty latent for KSampler. Target
-area is ~1328x1328, rounded to multiples of 32.
+area is ~1328x1328.
 
 - Display name: Image Prepare for QwenEdit Outpaint
 - Type name: ImagePrepare_for_QwenEdit_outpaint
@@ -147,7 +148,6 @@ area is ~1328x1328, rounded to multiples of 32.
 Inputs:
 - image (IMAGE)
 - aspect_ratio (as_is, 1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)
-- size_rounding (none/32)
 
 Resolutions (image):
 - as_is: keeps aspect ratio, scales to ~1328x1328 area
