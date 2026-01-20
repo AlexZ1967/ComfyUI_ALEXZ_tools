@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.4
+Version: 0.4.5
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-19 | v0.4.5 | ImageAlignOverlayToBackground: добавлены min_matches/min_inliers и lab_channels.
 - 2026-01-19 | v0.4.4 | Image Prepare for QwenEdit Outpaint: убрана опция size_rounding.
 - 2026-01-19 | v0.4.3 | ImageAlignOverlayToBackground: добавлен color_mode (gray/lab_l/lab), use_color помечен устаревшим.
 - 2026-01-19 | v0.4.2 | Image Prepare for QwenEdit Outpaint: добавлена опция size_rounding (none/32).
@@ -75,9 +76,12 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - ransac_thresh (FLOAT)
 - opacity (FLOAT)
 - matcher_type (orb/akaze/sift)
+- min_matches (INT)
+- min_inliers (INT)
 - scale_mode (preserve_aspect/independent_xy)
 - allow_rotation (BOOLEAN)
 - color_mode (gray/lab_l/lab)
+- lab_channels (l/lab)
 - use_color (BOOLEAN, optional, deprecated)
 
 Выходы:
@@ -115,6 +119,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-19 | v0.4.5 | ImageAlignOverlayToBackground: added min_matches/min_inliers and lab_channels.
 - 2026-01-19 | v0.4.4 | Image Prepare for QwenEdit Outpaint: removed size_rounding option.
 - 2026-01-19 | v0.4.3 | ImageAlignOverlayToBackground: added color_mode (gray/lab_l/lab), use_color marked deprecated.
 - 2026-01-19 | v0.4.2 | Image Prepare for QwenEdit Outpaint: added size_rounding option (none/32).
@@ -182,9 +187,12 @@ Inputs:
 - ransac_thresh (FLOAT)
 - opacity (FLOAT)
 - matcher_type (orb/akaze/sift)
+- min_matches (INT)
+- min_inliers (INT)
 - scale_mode (preserve_aspect/independent_xy)
 - allow_rotation (BOOLEAN)
 - color_mode (gray/lab_l/lab)
+- lab_channels (l/lab)
 - use_color (BOOLEAN, optional, deprecated)
 
 Outputs:

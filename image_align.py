@@ -4,6 +4,8 @@ from .alignment import align_overlay_to_background
 from .constants import (
     DEFAULT_FEATURE_COUNT,
     DEFAULT_GOOD_MATCH_PERCENT,
+    DEFAULT_MIN_INLIERS,
+    DEFAULT_MIN_MATCHES,
     DEFAULT_OPACITY,
     DEFAULT_RANSAC_THRESH,
     MATCHER_TYPES,
@@ -26,6 +28,20 @@ class ImageAlignOverlayToBackground:
                     "max": 10000,
                     "step": 100,
                     "tooltip": "Число ключевых точек: больше точности, но медленнее.",
+                }),
+                "min_matches": ("INT", {
+                    "default": DEFAULT_MIN_MATCHES,
+                    "min": 4,
+                    "max": 200,
+                    "step": 1,
+                    "tooltip": "Минимум совпадений для оценки трансформации.",
+                }),
+                "min_inliers": ("INT", {
+                    "default": DEFAULT_MIN_INLIERS,
+                    "min": 3,
+                    "max": 200,
+                    "step": 1,
+                    "tooltip": "Минимум inliers после RANSAC.",
                 }),
                 "good_match_percent": ("FLOAT", {
                     "default": DEFAULT_GOOD_MATCH_PERCENT,
@@ -52,6 +68,7 @@ class ImageAlignOverlayToBackground:
                 "scale_mode": (["preserve_aspect", "independent_xy"], {"default": "preserve_aspect", "tooltip": "Масштабирование: с сохранением пропорций или отдельно по X/Y."}),
                 "allow_rotation": ("BOOLEAN", {"default": True, "tooltip": "Разрешить поворот оверлея."}),
                 "color_mode": (["gray", "lab_l", "lab"], {"default": "gray", "tooltip": "Режим обработки цвета: серый, L-канал LAB, полный LAB."}),
+                "lab_channels": (["l", "lab"], {"default": "lab", "tooltip": "Каналы LAB при color_mode=lab: только L или L+ab."}),
             },
             "optional": {
                 "background_mask": ("MASK", {"tooltip": "Маска области совпадений на фоне (белое=использовать)."}),
@@ -70,6 +87,8 @@ class ImageAlignOverlayToBackground:
         background,
         overlay,
         feature_count,
+        min_matches,
+        min_inliers,
         good_match_percent,
         ransac_thresh,
         opacity,
@@ -77,6 +96,7 @@ class ImageAlignOverlayToBackground:
         scale_mode,
         allow_rotation,
         color_mode,
+        lab_channels,
         background_mask=None,
         overlay_mask=None,
         use_color=None,
@@ -85,6 +105,9 @@ class ImageAlignOverlayToBackground:
             color_mode = "lab"
         if color_mode is None:
             color_mode = "lab" if use_color else "gray"
+        if color_mode == "lab_l":
+            color_mode = "lab"
+            lab_channels = "l"
         if scale_mode == "uniform":
             _LOGGER.warning("scale_mode 'uniform' is deprecated; using 'preserve_aspect'.")
             scale_mode = "preserve_aspect"
@@ -97,6 +120,8 @@ class ImageAlignOverlayToBackground:
             background_mask=background_mask,
             overlay_mask=overlay_mask,
             feature_count=feature_count,
+            min_matches=min_matches,
+            min_inliers=min_inliers,
             good_match_percent=good_match_percent,
             ransac_thresh=ransac_thresh,
             opacity=opacity,
@@ -104,6 +129,7 @@ class ImageAlignOverlayToBackground:
             scale_mode=scale_mode,
             allow_rotation=allow_rotation,
             color_mode=color_mode,
+            lab_channels=lab_channels,
             logger=_LOGGER,
         )
 

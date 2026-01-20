@@ -17,6 +17,8 @@ def align_overlay_to_background(
     background_mask,
     overlay_mask,
     feature_count,
+    min_matches,
+    min_inliers,
     good_match_percent,
     ransac_thresh,
     opacity,
@@ -24,6 +26,7 @@ def align_overlay_to_background(
     scale_mode,
     allow_rotation,
     color_mode,
+    lab_channels,
     logger,
 ):
     if cv2 is None:
@@ -50,6 +53,8 @@ def align_overlay_to_background(
             bg_np,
             ov_np,
             feature_count,
+            min_matches,
+            min_inliers,
             good_match_percent,
             ransac_thresh,
             bg_mask_np,
@@ -58,6 +63,7 @@ def align_overlay_to_background(
             scale_mode,
             allow_rotation,
             color_mode,
+            lab_channels,
         )
         if aligned_np is None:
             logger.warning("Alignment failed: %s", status)
@@ -119,6 +125,8 @@ def _align_overlay_to_background(
     background_np,
     overlay_np,
     feature_count,
+    min_matches,
+    min_inliers,
     good_match_percent,
     ransac_thresh,
     bg_mask_np,
@@ -127,6 +135,7 @@ def _align_overlay_to_background(
     scale_mode,
     allow_rotation,
     color_mode,
+    lab_channels,
 ):
     if cv2 is None:
         raise RuntimeError("opencv-python is required for feature alignment. Please install opencv-python.")
@@ -137,14 +146,16 @@ def _align_overlay_to_background(
         bg_mask_np,
         ov_mask_np,
         feature_count,
+        min_matches,
         good_match_percent,
         matcher_type,
         color_mode,
+        lab_channels,
     )
     if ov_points is None:
         return None, None, status
 
-    matrix, status = estimate_affine(ov_points, bg_points, ransac_thresh, scale_mode)
+    matrix, status = estimate_affine(ov_points, bg_points, ransac_thresh, scale_mode, min_inliers)
     if matrix is None:
         return None, None, status
     if not allow_rotation:
