@@ -108,17 +108,16 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - **lab_channels**: какие каналы LAB использовать при color_mode=lab (l или lab).
 - **use_color**: устаревший флаг, эквивалент color_mode=lab.
 
-Рекомендации по параметрам:
+Рекомендации по параметрам (единицы и примеры):
 - **matcher_type**: ORB быстрый и устойчивый; AKAZE подходит для шума; SIFT точнее, но медленнее.
-- **feature_count**: увеличивайте для детализированных сцен; снижайте для скорости.
-- **good_match_percent**: 0.1–0.3 для типовых случаев, выше — больше устойчивости при шуме.
-- **min_matches**: минимальное число совпадений ключевых точек (features) между оверлеем и фоном.
-- **min_inliers**: минимальное число inliers после RANSAC (совпадений, которые хорошо описываются найденной трансформацией).
-- **ransac_thresh**: порог RANSAC (в пикселях) — ниже = точнее, выше = устойчивее к шуму/сдвигам.
-- **RANSAC**: алгоритм, который оценивает трансформацию по подмножеству совпадений и отбрасывает выбросы.
+- **feature_count**: количество ключевых точек; примеры: 800–1500 (быстро), 2000–4000 (детальнее).
+- **good_match_percent**: доля лучших совпадений (0..1); примеры: 0.1–0.3 типично, 0.4–0.6 при шуме.
+- **min_matches**: минимальное число совпадений ключевых точек (целое); примеры: 8–20 простые сцены, 20–50 сложные.
+- **min_inliers**: минимальное число inliers после RANSAC (целое); обычно близко к min_matches.
+- **ransac_thresh**: порог RANSAC (в пикселях); примеры: 2–5 точнее, 6–10 устойчивее к шуму.
 - **scale_mode**: preserve_aspect — обычно верно для фотографии; independent_xy полезен при деформациях.
 - **allow_rotation**: отключайте, если оверлей не должен вращаться.
-- **opacity**: влияет только на композит; не влияет на расчет матрицы.
+- **opacity**: прозрачность композита (0..1); примеры: 0.5 = 50% оверлея.
 - **color_mode**: gray — универсальный; lab_l — устойчивее к цветовым артефактам; lab — лучше на цветных текстурах.
 - **lab_channels**: l — только яркость; lab — яркость+цвет (актуально при color_mode=lab).
 
@@ -257,17 +256,16 @@ Input descriptions:
 - **lab_channels**: LAB channels used when color_mode=lab (l or lab).
 - **use_color**: deprecated flag, same as color_mode=lab.
 
-Parameter guidance:
+Parameter guidance (units and examples):
 - **matcher_type**: ORB is fast and robust; AKAZE handles noise well; SIFT is most accurate but slower.
-- **feature_count**: increase for detailed scenes; lower for speed.
-- **good_match_percent**: 0.1–0.3 for typical cases; higher adds robustness to noise.
-- **min_matches**: minimum number of keypoint matches (features) between overlay and background.
-- **min_inliers**: minimum number of RANSAC inliers (matches consistent with the estimated transform).
-- **ransac_thresh**: RANSAC pixel threshold — lower = more precise, higher = more tolerant to noise/misalignment.
-- **RANSAC**: an algorithm that fits the transform on subsets of matches and rejects outliers.
+- **feature_count**: number of keypoints; examples: 800–1500 (fast), 2000–4000 (more detail).
+- **good_match_percent**: fraction of best matches (0..1); examples: 0.1–0.3 typical, 0.4–0.6 for noisy scenes.
+- **min_matches**: minimum keypoint matches (integer); examples: 8–20 simple scenes, 20–50 complex.
+- **min_inliers**: minimum RANSAC inliers (integer); usually close to min_matches.
+- **ransac_thresh**: RANSAC pixel threshold; examples: 2–5 for precision, 6–10 for tolerance.
 - **scale_mode**: preserve_aspect for normal photos; independent_xy for non-uniform scaling.
 - **allow_rotation**: disable if the overlay must not rotate.
-- **opacity**: affects composite only; does not affect alignment.
+- **opacity**: composite opacity (0..1); example: 0.5 = 50% overlay.
 - **color_mode**: gray is general; lab_l is more stable with color artifacts; lab can help on colorful textures.
 - **lab_channels**: l = luminance only; lab = luminance+color (used when color_mode=lab).
 
