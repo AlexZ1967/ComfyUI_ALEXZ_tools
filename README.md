@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.5
+Version: 0.4.6
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-19 | v0.4.6 | VideoInpaintWatermark: добавлена нода для видео-инпейнтинга (ProPainter/E2FGVI).
 - 2026-01-19 | v0.4.5 | ImageAlignOverlayToBackground: добавлены min_matches/min_inliers и lab_channels.
 - 2026-01-19 | v0.4.4 | Image Prepare for QwenEdit Outpaint: убрана опция size_rounding.
 - 2026-01-19 | v0.4.3 | ImageAlignOverlayToBackground: добавлен color_mode (gray/lab_l/lab), use_color помечен устаревшим.
@@ -136,6 +137,35 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - **fusion_position**: позиция центра в координатах Fusion (0..1, 0/0 = левый нижний).
 - **resolve_position_edit**: значения Position X/Y для Inspector → Edit в DaVinci Resolve (центр = 0/0; расчет зависит от размеров бэкграунда/овэрлея).
 
+#### Video Inpaint (ProPainter/E2FGVI)
+Нода для удаления объектов/водяных знаков на видео через инпейтинг. Вариант
+ProPainter встроен (если установлен соответствующий набор нод). E2FGVI требует
+отдельной установки ноды и моделей.
+
+- Display name: Video Inpaint (ProPainter/E2FGVI)
+- Type name: VideoInpaintWatermark
+- Category: video/inpaint
+
+Входы:
+- **frames** (IMAGE)
+- **mask** (MASK)
+- **method** (propainter/e2fgvi)
+- **width** (INT, 0 = как у входа)
+- **height** (INT, 0 = как у входа)
+- **mask_dilates** (INT)
+- **flow_mask_dilates** (INT)
+- **ref_stride** (INT)
+- **neighbor_length** (INT)
+- **subvideo_length** (INT)
+- **raft_iter** (INT)
+- **fp16** (enable/disable)
+- **throughput_mode** (enable/disable)
+- **cudnn_benchmark** (default/enable/disable)
+- **tf32** (default/enable/disable)
+
+Выходы:
+- **image** (IMAGE)
+
 #### Show/Save JSON
 Нода для аккуратного отображения JSON и записи в файл по заданному пути
 (если путь указан).
@@ -156,6 +186,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-19 | v0.4.6 | VideoInpaintWatermark: added video inpainting node (ProPainter/E2FGVI).
 - 2026-01-19 | v0.4.5 | ImageAlignOverlayToBackground: added min_matches/min_inliers and lab_channels.
 - 2026-01-19 | v0.4.4 | Image Prepare for QwenEdit Outpaint: removed size_rounding option.
 - 2026-01-19 | v0.4.3 | ImageAlignOverlayToBackground: added color_mode (gray/lab_l/lab), use_color marked deprecated.
@@ -283,6 +314,35 @@ transform_json fields:
 - **overlay_position**: center in normalized coordinates 0..1 (0/0 = bottom-left).
 - **fusion_position**: center in Fusion coordinates (0..1, 0/0 = bottom-left).
 - **resolve_position_edit**: Position X/Y for DaVinci Resolve Inspector → Edit (center = 0/0; computed from background/overlay sizes).
+
+#### Video Inpaint (ProPainter/E2FGVI)
+Node for removing objects/watermarks on video via inpainting. ProPainter is
+supported if the ProPainter node pack is installed. E2FGVI requires a separate
+node/model installation.
+
+- Display name: Video Inpaint (ProPainter/E2FGVI)
+- Type name: VideoInpaintWatermark
+- Category: video/inpaint
+
+Inputs:
+- **frames** (IMAGE)
+- **mask** (MASK)
+- **method** (propainter/e2fgvi)
+- **width** (INT, 0 = input)
+- **height** (INT, 0 = input)
+- **mask_dilates** (INT)
+- **flow_mask_dilates** (INT)
+- **ref_stride** (INT)
+- **neighbor_length** (INT)
+- **subvideo_length** (INT)
+- **raft_iter** (INT)
+- **fp16** (enable/disable)
+- **throughput_mode** (enable/disable)
+- **cudnn_benchmark** (default/enable/disable)
+- **tf32** (default/enable/disable)
+
+Outputs:
+- **image** (IMAGE)
 
 #### Show/Save JSON
 Node to display JSON neatly and save it to a file path (if provided).
