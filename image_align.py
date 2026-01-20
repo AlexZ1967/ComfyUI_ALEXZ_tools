@@ -55,7 +55,7 @@ class ImageAlignOverlayToBackground:
                     "min": 1.0,
                     "max": 20.0,
                     "step": 0.5,
-                    "tooltip": "Порог RANSAC для выбросов (в пикселях).",
+                    "tooltip": "Порог RANSAC (пиксели): оценивает трансформацию и отбрасывает выбросы.",
                 }),
                 "opacity": ("FLOAT", {
                     "default": DEFAULT_OPACITY,

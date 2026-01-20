@@ -62,6 +62,12 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 бэкграунду (масштаб/поворот/сдвиг). Возвращает выровненный оверлей, композит,
 разницу и JSON с параметрами трансформации.
 
+Принцип работы:
+1. Детектор (ORB/AKAZE/SIFT) находит ключевые точки и дескрипторы в фоне и оверлее.
+2. Мэтчер сопоставляет дескрипторы и оставляет лучшие совпадения.
+3. RANSAC оценивает матрицу трансформации по подмножеству совпадений и отбрасывает выбросы.
+4. Оверлей приводится к масштабу/повороту/сдвигу и композитится с фоном.
+
 - Display name: Align Overlay To Background
 - Type name: ImageAlignOverlayToBackground
 - Category: image/alignment
@@ -83,6 +89,20 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - color_mode (gray/lab_l/lab)
 - lab_channels (l/lab)
 - use_color (BOOLEAN, optional, deprecated)
+
+Рекомендации по параметрам:
+- matcher_type: ORB быстрый и устойчивый; AKAZE подходит для шума; SIFT точнее, но медленнее.
+- feature_count: увеличивайте для детализированных сцен; снижайте для скорости.
+- good_match_percent: 0.1–0.3 для типовых случаев, выше — больше устойчивости при шуме.
+- min_matches: минимальное число совпадений ключевых точек (features) между оверлеем и фоном.
+- min_inliers: минимальное число inliers после RANSAC (совпадений, которые хорошо описываются найденной трансформацией).
+- ransac_thresh: порог RANSAC (в пикселях) — ниже = точнее, выше = устойчивее к шуму/сдвигам.
+- RANSAC: алгоритм, который оценивает трансформацию по подмножеству совпадений и отбрасывает выбросы.
+- scale_mode: preserve_aspect — обычно верно для фотографии; independent_xy полезен при деформациях.
+- allow_rotation: отключайте, если оверлей не должен вращаться.
+- opacity: влияет только на композит; не влияет на расчет матрицы.
+- color_mode: gray — универсальный; lab_l — устойчивее к цветовым артефактам; lab — лучше на цветных текстурах.
+- lab_channels: l — только яркость; lab — яркость+цвет (актуально при color_mode=lab).
 
 Выходы:
 - aligned_overlay (IMAGE)
@@ -173,6 +193,12 @@ Finds feature matches between two images and aligns the overlay to the
 background (scale/rotation/translation). Outputs aligned overlay, composite,
 difference, and transform JSON.
 
+How it works:
+1. A detector (ORB/AKAZE/SIFT) finds keypoints and descriptors in background and overlay.
+2. The matcher pairs descriptors and keeps the best matches.
+3. RANSAC estimates the transform from a subset of matches and rejects outliers.
+4. The overlay is warped (scale/rotation/translation) and composited with the background.
+
 - Display name: Align Overlay To Background
 - Type name: ImageAlignOverlayToBackground
 - Category: image/alignment
@@ -194,6 +220,20 @@ Inputs:
 - color_mode (gray/lab_l/lab)
 - lab_channels (l/lab)
 - use_color (BOOLEAN, optional, deprecated)
+
+Parameter guidance:
+- matcher_type: ORB is fast and robust; AKAZE handles noise well; SIFT is most accurate but slower.
+- feature_count: increase for detailed scenes; lower for speed.
+- good_match_percent: 0.1–0.3 for typical cases; higher adds robustness to noise.
+- min_matches: minimum number of keypoint matches (features) between overlay and background.
+- min_inliers: minimum number of RANSAC inliers (matches consistent with the estimated transform).
+- ransac_thresh: RANSAC pixel threshold — lower = more precise, higher = more tolerant to noise/misalignment.
+- RANSAC: an algorithm that fits the transform on subsets of matches and rejects outliers.
+- scale_mode: preserve_aspect for normal photos; independent_xy for non-uniform scaling.
+- allow_rotation: disable if the overlay must not rotate.
+- opacity: affects composite only; does not affect alignment.
+- color_mode: gray is general; lab_l is more stable with color artifacts; lab can help on colorful textures.
+- lab_channels: l = luminance only; lab = luminance+color (used when color_mode=lab).
 
 Outputs:
 - aligned_overlay (IMAGE)
