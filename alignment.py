@@ -207,6 +207,8 @@ def _format_transform_json(
         "overlay_position": {"x": None, "y": None},
         "fusion_position": {"x": None, "y": None},
         "resolve_position_edit": {"x": None, "y": None},
+        "pixel_center": {"top_left": {"x": None, "y": None}, "center": {"x": None, "y": None}},
+        "normalized_center": {"top_left": {"x": None, "y": None}, "bottom_left": {"x": None, "y": None}},
     }
 
     if matrix is None:
@@ -223,26 +225,37 @@ def _format_transform_json(
     center_y = overlay_height * 0.5
     pos_x = a * center_x + b * center_y + tx
     pos_y = c * center_x + d * center_y + ty
-    bg_w = max(1.0, background_width - 1.0)
-    bg_h = max(1.0, background_height - 1.0)
+    bg_w = max(1.0, float(background_width))
+    bg_h = max(1.0, float(background_height))
     norm_x = float(pos_x / bg_w)
-    norm_y = float(1.0 - (pos_y / bg_h))
+    norm_y_bottom = float(1.0 - (pos_y / bg_h))
+    norm_y_top = float(pos_y / bg_h)
+    center_origin_x = float(pos_x - (bg_w * 0.5))
+    center_origin_y = float(pos_y - (bg_h * 0.5))
     resolve_rotation = -rotation_deg
 
     payload.update({
         "overlay_scale": {"x": round(float(scale_x), 3), "y": round(float(scale_y), 3)},
         "overlay_rotation_angle": round(float(resolve_rotation), 3),
         "overlay_position_pixels": {"x": round(float(pos_x), 3), "y": round(float(pos_y), 3)},
-        "overlay_position": {"x": round(norm_x, 6), "y": round(norm_y, 6)},
-        "fusion_position": {"x": round(norm_x, 6), "y": round(norm_y, 6)},
+        "overlay_position": {"x": round(norm_x, 6), "y": round(norm_y_bottom, 6)},
+        "fusion_position": {"x": round(norm_x, 6), "y": round(norm_y_bottom, 6)},
         "resolve_position_edit": _format_resolve_edit_position(
             norm_x,
-            norm_y,
+            norm_y_bottom,
             background_width,
             background_height,
             overlay_width,
             overlay_height,
         ),
+        "pixel_center": {
+            "top_left": {"x": round(float(pos_x), 3), "y": round(float(pos_y), 3)},
+            "center": {"x": round(center_origin_x, 3), "y": round(center_origin_y, 3)},
+        },
+        "normalized_center": {
+            "top_left": {"x": round(norm_x, 6), "y": round(norm_y_top, 6)},
+            "bottom_left": {"x": round(norm_x, 6), "y": round(norm_y_bottom, 6)},
+        },
     })
     return json.dumps(payload, ensure_ascii=True)
 

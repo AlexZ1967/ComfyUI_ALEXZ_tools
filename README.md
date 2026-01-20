@@ -139,6 +139,10 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - **overlay_position**: позиция центра в нормированных координатах 0..1 (0/0 = левый нижний).
 - **fusion_position**: позиция центра в координатах Fusion (0..1, 0/0 = левый нижний).
 - **resolve_position_edit**: значения Position X/Y для Inspector → Edit в DaVinci Resolve (центр = 0/0; расчет зависит от размеров бэкграунда/овэрлея).
+- **pixel_center**: центр в пикселях:
+  **top_left** — origin в левом верхнем; **center** — origin в центре кадра.
+- **normalized_center**: центр в 0..1:
+  **top_left** — origin в левом верхнем; **bottom_left** — origin в левом нижнем.
 
 #### Video Inpaint (ProPainter/E2FGVI)
 Нода для удаления объектов/водяных знаков на видео через инпейтинг. Варианты
@@ -194,7 +198,23 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **throughput_mode**: включайте при стабильной памяти (без OOM).
 
 Выходы:
-- **image** (IMAGE)
+- **image** (IMAGE): кадры с обрезкой по bbox маски, RGBA (альфа = исходная маска).
+- **mask** (MASK): обрезанная маска (альфа-канал).
+- **transform_json** (STRING): JSON с позицией и масштабом для повторного совмещения (формат как у Align).
+
+Поля transform_json:
+- **status**: ok или empty_mask (если маска пуста).
+- **overlay_scale**: всегда 1.0/1.0 (масштаб уже учтен в кадре).
+- **overlay_rotation_angle**: всегда 0.0.
+- **overlay_position_pixels**: центр обрезки в пикселях полного кадра.
+- **overlay_position**: центр обрезки в нормированных координатах 0..1.
+- **fusion_position**: те же координаты для Fusion (0..1, 0/0 = левый нижний).
+- **resolve_position_edit**: значения Position X/Y для Inspector → Edit в DaVinci Resolve
+  (расчет зависит от размеров полного кадра и обрезки).
+- **pixel_center**: центр обрезки в пикселях:
+  **top_left** — origin в левом верхнем; **center** — origin в центре кадра.
+- **normalized_center**: центр обрезки в нормированных координатах 0..1:
+  **top_left** — origin в левом верхнем; **bottom_left** — origin в левом нижнем.
 
 #### Show/Save JSON
 Нода для аккуратного отображения JSON и записи в файл по заданному пути
@@ -347,6 +367,10 @@ transform_json fields:
 - **overlay_position**: center in normalized coordinates 0..1 (0/0 = bottom-left).
 - **fusion_position**: center in Fusion coordinates (0..1, 0/0 = bottom-left).
 - **resolve_position_edit**: Position X/Y for DaVinci Resolve Inspector → Edit (center = 0/0; computed from background/overlay sizes).
+- **pixel_center**: center in pixels:
+  **top_left** origin; **center** origin.
+- **normalized_center**: center in 0..1:
+  **top_left** origin; **bottom_left** origin.
 
 #### Video Inpaint (ProPainter/E2FGVI)
 Node for removing objects/watermarks on video via inpainting. ProPainter and
@@ -402,7 +426,23 @@ Parameter guidance:
 - **throughput_mode**: enable if you have VRAM headroom.
 
 Outputs:
-- **image** (IMAGE)
+- **image** (IMAGE): frames cropped to the mask bbox, RGBA (alpha = original mask).
+- **mask** (MASK): cropped mask (alpha channel).
+- **transform_json** (STRING): JSON with placement data (same format as Align).
+
+transform_json fields:
+- **status**: ok or empty_mask (mask has no pixels).
+- **overlay_scale**: always 1.0/1.0 (scale is already baked into the crop).
+- **overlay_rotation_angle**: always 0.0.
+- **overlay_position_pixels**: crop center in full-frame pixels.
+- **overlay_position**: crop center in normalized 0..1 coordinates.
+- **fusion_position**: same for Fusion (0..1, 0/0 = bottom-left).
+- **resolve_position_edit**: Position X/Y for Inspector → Edit in DaVinci Resolve
+  (depends on full-frame and crop sizes).
+- **pixel_center**: crop center in pixels:
+  **top_left** origin; **center** origin.
+- **normalized_center**: crop center in 0..1 coordinates:
+  **top_left** origin; **bottom_left** origin.
 
 #### Show/Save JSON
 Node to display JSON neatly and save it to a file path (if provided).
