@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.2
+Version: 0.4.3
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-19 | v0.4.3 | ImageAlignOverlayToBackground: добавлен color_mode (gray/lab_l/lab), use_color помечен устаревшим.
 - 2026-01-19 | v0.4.2 | Image Prepare for QwenEdit Outpaint: добавлена опция size_rounding (none/32).
 - 2026-01-19 | v0.4.1 | ImageAlignOverlayToBackground: transform_json теперь всегда содержит status и overlay_position.
 - 2026-01-19 | v0.4.1 | Image Prepare for QwenEdit Outpaint: as_is округляет размеры до кратных 32.
@@ -76,7 +77,8 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - matcher_type (orb/akaze/sift)
 - scale_mode (preserve_aspect/independent_xy)
 - allow_rotation (BOOLEAN)
-- use_color (BOOLEAN)
+- color_mode (gray/lab_l/lab)
+- use_color (BOOLEAN, optional, deprecated)
 
 Выходы:
 - aligned_overlay (IMAGE)
@@ -113,6 +115,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-19 | v0.4.3 | ImageAlignOverlayToBackground: added color_mode (gray/lab_l/lab), use_color marked deprecated.
 - 2026-01-19 | v0.4.2 | Image Prepare for QwenEdit Outpaint: added size_rounding option (none/32).
 - 2026-01-19 | v0.4.1 | ImageAlignOverlayToBackground: transform_json always includes status and overlay_position.
 - 2026-01-19 | v0.4.1 | Image Prepare for QwenEdit Outpaint: as_is sizes are rounded to multiples of 32.
@@ -181,7 +184,8 @@ Inputs:
 - matcher_type (orb/akaze/sift)
 - scale_mode (preserve_aspect/independent_xy)
 - allow_rotation (BOOLEAN)
-- use_color (BOOLEAN)
+- color_mode (gray/lab_l/lab)
+- use_color (BOOLEAN, optional, deprecated)
 
 Outputs:
 - aligned_overlay (IMAGE)
