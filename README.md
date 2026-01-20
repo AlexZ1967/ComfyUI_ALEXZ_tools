@@ -169,6 +169,9 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **throughput_mode** (enable/disable)
 - **cudnn_benchmark** (default/enable/disable)
 - **tf32** (default/enable/disable)
+- **pre_crop** (BOOLEAN)
+- **crop_padding** (INT)
+- **color_match_mode** (none/mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)
 
 Описание входов:
 - **frames**: входные кадры видео (batch).
@@ -185,6 +188,13 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **throughput_mode**: пропускать очистку кэша GPU (быстрее, но больше памяти).
 - **cudnn_benchmark**: оптимизация cuDNN под размер входа.
 - **tf32**: разрешить TF32 матмулы (быстрее, менее точно).
+- **pre_crop**: обрезать вход по маске перед инпейтингом (снижает RAM/VRAM).
+- **crop_padding**: паддинг вокруг маски в пикселях.
+- **color_match_mode**: подгонка цвета по чистой области (вне маски).
+  Варианты: `none` — без коррекции; `mean_std` — выравнивание по среднему/σ (RGB);
+  `linear` — линейная подгонка `a*x+b` (RGB); `hist` — совпадение гистограмм (RGB);
+  `lab_l` — корректирует только яркость L (LAB); `lab_l_cdf` — CDF‑matching по L;
+  `lab_full` — корректирует L+a+b (LAB) по среднему/σ; `lab_cdf` — CDF‑matching по L+a+b.
 
 Рекомендации по параметрам:
 - **method**: `propainter` обычно лучше на сложных сценах; `e2fgvi_hq` — для произвольных разрешений.
@@ -196,6 +206,10 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **raft_iter**: 10–30 типично; больше = точнее, но медленнее.
 - **fp16**: включайте на GPU с ограниченной памятью.
 - **throughput_mode**: включайте при стабильной памяти (без OOM).
+- **pre_crop**: включайте, если маска маленькая — экономит память и ускоряет.
+- **crop_padding**: 8–32 пикселя для контекста вокруг водяного знака.
+- **color_match_mode**: `lab_l`/`lab_l_cdf` для яркости/гаммы; `mean_std`/`linear` для быстрых правок цвета;
+  `lab_full` или `lab_cdf` — самый точный, но медленный вариант для сложного цветового дрейфа.
 
 Выходы:
 - **image** (IMAGE): кадры с обрезкой по bbox маски, RGBA (альфа = исходная маска).
@@ -397,6 +411,9 @@ Inputs:
 - **throughput_mode** (enable/disable)
 - **cudnn_benchmark** (default/enable/disable)
 - **tf32** (default/enable/disable)
+- **pre_crop** (BOOLEAN)
+- **crop_padding** (INT)
+- **color_match_mode** (none/mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)
 
 Input descriptions:
 - **frames**: input video frames (batch).
@@ -413,6 +430,13 @@ Input descriptions:
 - **throughput_mode**: skip GPU cache cleanup (faster, more VRAM).
 - **cudnn_benchmark**: cuDNN tuning for fixed sizes.
 - **tf32**: enable TF32 matmuls (faster, slightly less precise).
+- **pre_crop**: crop input to the mask bbox before inpainting (less RAM/VRAM).
+- **crop_padding**: padding around the mask in pixels.
+- **color_match_mode**: color matching on clean area (outside mask).
+  Modes: `none` (no correction); `mean_std` (mean/std matching, RGB);
+  `linear` (linear fit `a*x+b`, RGB); `hist` (histogram matching, RGB);
+  `lab_l` (L‑only in LAB); `lab_l_cdf` (CDF matching on L);
+  `lab_full` (mean/std on L+a+b); `lab_cdf` (CDF matching on L+a+b).
 
 Parameter guidance:
 - **method**: `propainter` usually best on complex scenes; `e2fgvi_hq` for arbitrary resolutions.
@@ -424,6 +448,10 @@ Parameter guidance:
 - **raft_iter**: 10–30 typical; higher = more accurate, slower.
 - **fp16**: enable for limited VRAM GPUs.
 - **throughput_mode**: enable if you have VRAM headroom.
+- **pre_crop**: enable for small masks to save memory and time.
+- **crop_padding**: 8–32 pixels for extra context around the watermark.
+- **color_match_mode**: try `lab_l`/`lab_l_cdf` for brightness/gamma; `mean_std`/`linear` for fast RGB matching;
+  `lab_full` or `lab_cdf` for the most accurate but slowest correction.
 
 Outputs:
 - **image** (IMAGE): frames cropped to the mask bbox, RGBA (alpha = original mask).
