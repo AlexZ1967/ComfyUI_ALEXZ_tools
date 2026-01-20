@@ -173,6 +173,10 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **pre_crop** (BOOLEAN)
 - **crop_padding** (INT)
 - **color_match_mode** (none/mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)
+- **cache_dir** (STRING)
+- **output_dir** (STRING)
+- **output_name** (STRING)
+- **save_only** (BOOLEAN)
 
 Описание входов:
 - **frames**: входные кадры видео (batch).
@@ -196,6 +200,14 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
   `linear` — линейная подгонка `a*x+b` (RGB); `hist` — совпадение гистограмм (RGB);
   `lab_l` — корректирует только яркость L (LAB); `lab_l_cdf` — CDF‑matching по L;
   `lab_full` — корректирует L+a+b (LAB) по среднему/σ; `lab_cdf` — CDF‑matching по L+a+b.
+- **cache_dir**: папка для кэша обрезанного входа (PNG с альфой, имена `output_name` + `input_0000.png`, работает при **pre_crop**=true).
+- **output_dir**: папка для сохранения результата (PNG с альфой, имена `output_name0000.png`), также сохраняет `output_name` + `transform.json`.
+- **output_name**: префикс имени файлов (например `patch_`).
+- **save_only**: если включено, результат пишется только на диск, а выход IMAGE/MASK = 1x1 (требует **output_dir**).
+  Варианты: `none` — без коррекции; `mean_std` — выравнивание по среднему/σ (RGB);
+  `linear` — линейная подгонка `a*x+b` (RGB); `hist` — совпадение гистограмм (RGB);
+  `lab_l` — корректирует только яркость L (LAB); `lab_l_cdf` — CDF‑matching по L;
+  `lab_full` — корректирует L+a+b (LAB) по среднему/σ; `lab_cdf` — CDF‑matching по L+a+b.
 
 Рекомендации по параметрам:
 - **method**: `propainter` обычно лучше на сложных сценах; `e2fgvi_hq` — для произвольных разрешений.
@@ -211,6 +223,10 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **crop_padding**: 8–32 пикселя для контекста вокруг водяного знака.
 - **color_match_mode**: `lab_l`/`lab_l_cdf` для яркости/гаммы; `mean_std`/`linear` для быстрых правок цвета;
   `lab_full` или `lab_cdf` — самый точный, но медленный вариант для сложного цветового дрейфа.
+- **cache_dir**: используйте для записи обрезанного входа на диск; экономит RAM, но медленнее.
+- **output_dir**: включайте, если хотите сразу получить PNG‑патчи на диске; рядом будет `transform.json`.
+- **output_name**: например `patch_` даст `patch_0000.png`.
+- **save_only**: включайте для очень длинных видео, чтобы не держать результат в памяти.
 
 Выходы:
 - **image** (IMAGE): кадры с обрезкой по bbox маски, RGBA (альфа = исходная маска).
@@ -416,6 +432,10 @@ Inputs:
 - **pre_crop** (BOOLEAN)
 - **crop_padding** (INT)
 - **color_match_mode** (none/mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)
+- **cache_dir** (STRING)
+- **output_dir** (STRING)
+- **output_name** (STRING)
+- **save_only** (BOOLEAN)
 
 Input descriptions:
 - **frames**: input video frames (batch).
@@ -439,6 +459,10 @@ Input descriptions:
   `linear` (linear fit `a*x+b`, RGB); `hist` (histogram matching, RGB);
   `lab_l` (L‑only in LAB); `lab_l_cdf` (CDF matching on L);
   `lab_full` (mean/std on L+a+b); `lab_cdf` (CDF matching on L+a+b).
+- **cache_dir**: directory for cached cropped input (PNG with alpha, names `output_name` + `input_0000.png`, requires **pre_crop**=true).
+- **output_dir**: directory to save output PNG patches (names `output_name0000.png`), also writes `output_name` + `transform.json`.
+- **output_name**: filename prefix (e.g. `patch_`).
+- **save_only**: when enabled, writes results to disk only; IMAGE/MASK outputs are 1x1 (requires **output_dir**).
 
 Parameter guidance:
 - **method**: `propainter` usually best on complex scenes; `e2fgvi_hq` for arbitrary resolutions.
@@ -454,6 +478,10 @@ Parameter guidance:
 - **crop_padding**: 8–32 pixels for extra context around the watermark.
 - **color_match_mode**: try `lab_l`/`lab_l_cdf` for brightness/gamma; `mean_std`/`linear` for fast RGB matching;
   `lab_full` or `lab_cdf` for the most accurate but slowest correction.
+- **cache_dir**: save cropped input to disk if you want persistence (slower, lower RAM).
+- **output_dir**: enable to auto-write PNG patches to disk; `transform.json` is written alongside.
+- **output_name**: e.g. `patch_` -> `patch_0000.png`.
+- **save_only**: enable for very long videos to avoid storing large outputs in memory.
 
 Outputs:
 - **image** (IMAGE): frames cropped to the mask bbox, RGBA (alpha = original mask).

@@ -1,10 +1,12 @@
 import json
 import logging
+import os
 
 import numpy as np
 import torch
 import torch.nn.functional as torch_nn_func
 from comfy import model_management
+from PIL import Image
 
 from .propainter.propainter_inference import (
     ProPainterConfig,
@@ -334,6 +336,59 @@ def _apply_color_match(
     return torch.from_numpy(out_np)
 
 
+def _sanitize_prefix(prefix: str) -> str:
+    if prefix is None:
+        return "patch_"
+    prefix = prefix.strip()
+    return prefix if prefix else "patch_"
+
+
+def _ensure_dir(path: str) -> None:
+    if not path:
+        return
+    os.makedirs(path, exist_ok=True)
+
+
+def _save_rgba_sequence(
+    rgb_frames: torch.Tensor,
+    alpha_mask: torch.Tensor,
+    output_dir: str,
+    prefix: str,
+    label: str,
+) -> None:
+    if not output_dir:
+        return
+    _ensure_dir(output_dir)
+    prefix = _sanitize_prefix(prefix)
+
+    rgb_frames = rgb_frames.detach().cpu()
+    alpha_mask = alpha_mask.detach().cpu()
+    if alpha_mask.dim() == 2:
+        alpha_mask = alpha_mask.unsqueeze(0)
+    if alpha_mask.size(0) == 1 and rgb_frames.size(0) > 1:
+        alpha_mask = alpha_mask.repeat(rgb_frames.size(0), 1, 1)
+
+    for idx in range(rgb_frames.size(0)):
+        rgb = rgb_frames[idx].clamp(0.0, 1.0).numpy()
+        if rgb.shape[-1] > 3:
+            rgb = rgb[..., :3]
+        alpha = alpha_mask[idx].clamp(0.0, 1.0).numpy()
+        rgba = np.concatenate([rgb, alpha[..., None]], axis=-1)
+        rgba_u8 = (rgba * 255.0).round().astype(np.uint8)
+        filename = f"{prefix}{label}{idx:04d}.png"
+        Image.fromarray(rgba_u8, mode="RGBA").save(os.path.join(output_dir, filename))
+
+
+def _save_transform_json(output_dir: str, prefix: str, transform_json: str) -> None:
+    if not output_dir:
+        return
+    _ensure_dir(output_dir)
+    prefix = _sanitize_prefix(prefix)
+    filename = f"{prefix}transform.json"
+    with open(os.path.join(output_dir, filename), "w", encoding="utf-8") as handle:
+        handle.write(transform_json)
+
+
 def _format_resolve_edit_position(
     norm_x: float,
     norm_y: float,
@@ -493,6 +548,10 @@ class VideoInpaintWatermark:
                 "pre_crop": ("BOOLEAN", {"default": True, "tooltip": "Обрезать по маске до инпейнтинга (экономит RAM/VRAM)."}),
                 "crop_padding": ("INT", {"default": 16, "min": 0, "max": 512, "tooltip": "Паддинг вокруг маски (0-512, типично 8–32)."}),
                 "color_match_mode": (["none", "mean_std", "linear", "hist", "lab_l", "lab_l_cdf", "lab_full", "lab_cdf"], {"default": "none", "tooltip": "Подгонка цвета по чистой зоне (mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)."}),
+                "cache_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для кэша обрезанного входа (PNG с альфой). Пусто = не сохранять."}),
+                "output_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для сохранения результата (PNG с альфой). Пусто = не сохранять."}),
+                "output_name": ("STRING", {"default": "patch_", "multiline": False, "tooltip": "Префикс имени файлов (например: patch_ -> patch_0000.png)."}),
+                "save_only": ("BOOLEAN", {"default": False, "tooltip": "Сохранять результат только на диск (выход IMAGE/MASK будет 1x1)."}),
             },
         }
 
@@ -521,8 +580,14 @@ class VideoInpaintWatermark:
         pre_crop: bool,
         crop_padding: int,
         color_match_mode: str,
+        cache_dir: str,
+        output_dir: str,
+        output_name: str,
+        save_only: bool,
     ):
         _check_inputs(frames, mask)
+        if save_only and not output_dir:
+            raise ValueError("save_only=true requires output_dir to be set.")
         full_height = int(frames.shape[1])
         full_width = int(frames.shape[2])
         if pre_crop:
@@ -530,6 +595,9 @@ class VideoInpaintWatermark:
         else:
             bbox = (0, 0, full_width, full_height)
             status = "ok"
+
+        if cache_dir and pre_crop:
+            _save_rgba_sequence(frames, mask, cache_dir, output_name, "input_")
 
         if status == "empty_mask":
             output_images = frames
@@ -542,6 +610,13 @@ class VideoInpaintWatermark:
                 status,
             )
             _LOGGER.info("Transform JSON: %s", transform_json)
+            if output_dir:
+                _save_rgba_sequence(rgba[..., :3], out_mask, output_dir, output_name, "")
+                _save_transform_json(output_dir, output_name, transform_json)
+            if save_only:
+                dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
+                dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
+                return (dummy_image, dummy_mask, transform_json)
             return (rgba, out_mask, transform_json)
 
         if method in ("e2fgvi", "e2fgvi_hq"):
@@ -562,6 +637,9 @@ class VideoInpaintWatermark:
                 full_width=full_width,
                 full_height=full_height,
                 color_match_mode=color_match_mode,
+                output_dir=output_dir,
+                output_name=output_name,
+                save_only=save_only,
             )
         device = model_management.get_torch_device()
 
@@ -655,6 +733,13 @@ class VideoInpaintWatermark:
                 output_images.shape[1],
             )
         _LOGGER.info("Transform JSON: %s", transform_json)
+        if output_dir:
+            _save_rgba_sequence(rgba[..., :3], out_mask, output_dir, output_name, "")
+            _save_transform_json(output_dir, output_name, transform_json)
+        if save_only:
+            dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
+            dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
+            return (dummy_image, dummy_mask, transform_json)
         return (rgba, out_mask, transform_json)
 
     def _inpaint_e2fgvi(
@@ -675,6 +760,9 @@ class VideoInpaintWatermark:
         full_width: int,
         full_height: int,
         color_match_mode: str,
+        output_dir: str,
+        output_name: str,
+        save_only: bool,
     ):
         device = model_management.get_torch_device()
         frames_np = e2f_convert_frames(frames)
@@ -767,6 +855,13 @@ class VideoInpaintWatermark:
                 output_images.shape[1],
             )
         _LOGGER.info("Transform JSON: %s", transform_json)
+        if output_dir:
+            _save_rgba_sequence(rgba[..., :3], out_mask, output_dir, output_name, "")
+            _save_transform_json(output_dir, output_name, transform_json)
+        if save_only:
+            dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
+            dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
+            return (dummy_image, dummy_mask, transform_json)
         return (rgba, out_mask, transform_json)
 
 
