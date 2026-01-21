@@ -38,6 +38,11 @@ from .e2fgvi.utils.model_utils import load_model as e2f_load_model
 
 _LOGGER = logging.getLogger("VideoInpaintWatermark")
 
+STREAM_CHUNK_DEFAULT = 30
+STREAM_START_DEFAULT = 0
+STREAM_END_DEFAULT = 0
+STREAM_STRIDE_DEFAULT = 1
+
 
 def _check_interrupt() -> None:
     model_management.throw_exception_if_processing_interrupted()
@@ -493,7 +498,7 @@ def _build_preview_composite(
     output_dir: str,
     prefix: str,
     index: int,
-) -> tuple[torch.Tensor, torch.Tensor] | None:
+) -> torch.Tensor | None:
     if not cache_dir or not output_dir:
         return None
     prefix = _sanitize_prefix(prefix)
@@ -510,8 +515,7 @@ def _build_preview_composite(
     comp_rgba = np.concatenate([comp_rgb, np.ones_like(alpha)], axis=-1)
 
     preview_image = torch.from_numpy(comp_rgba).unsqueeze(0)
-    preview_mask = torch.from_numpy(output_rgba[..., 3]).unsqueeze(0)
-    return preview_image, preview_mask
+    return preview_image
 
 
 def _stream_write_fullframes(
@@ -759,8 +763,6 @@ class VideoInpaintWatermark:
         video_path: str,
         mask: torch.Tensor,
         method: str,
-        width: int,
-        height: int,
         mask_dilates: int,
         flow_mask_dilates: int,
         ref_stride: int,
@@ -771,34 +773,33 @@ class VideoInpaintWatermark:
         throughput_mode: str,
         cudnn_benchmark: str,
         tf32: str,
-        pre_crop: bool,
         crop_padding: int,
         color_match_mode: str,
         cache_dir: str,
         output_dir: str,
         output_name: str,
-        save_only: bool,
-        stream_chunk: int,
-        stream_start: int,
-        stream_end: int,
-        stream_stride: int,
         preview_frame: int,
         write_fullframes: bool,
         fullframe_prefix: str,
     ):
+        pre_crop = True
+        width = 0
+        height = 0
+        stream_chunk = STREAM_CHUNK_DEFAULT
+        stream_start = STREAM_START_DEFAULT
+        stream_end = STREAM_END_DEFAULT
+        stream_stride = STREAM_STRIDE_DEFAULT
         if not video_path:
-            raise ValueError("streaming_mode=true requires video_path to be set.")
+            raise ValueError("video_path is required.")
         if not output_dir:
-            raise ValueError("streaming_mode requires output_dir to be set.")
-        if not save_only:
-            raise ValueError("streaming_mode requires save_only=true to avoid large RAM usage.")
+            raise ValueError("output_dir is required.")
         if not cache_dir:
-            raise ValueError("streaming_mode requires cache_dir to be set.")
+            raise ValueError("cache_dir is required.")
         _purge_cached_inputs(cache_dir, output_name)
         try:
             import cv2
         except ImportError as exc:
-            raise RuntimeError("OpenCV is required for streaming_mode.") from exc
+            raise RuntimeError("OpenCV is required for video processing.") from exc
 
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
@@ -881,8 +882,7 @@ class VideoInpaintWatermark:
 
         if cache_index == 0:
             dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
-            dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
-            return (dummy_image, dummy_mask, transform_json or "{}")
+            return (dummy_image, transform_json or "{}")
 
         if status == "empty_mask":
             prefix = _sanitize_prefix(output_name)
@@ -904,10 +904,9 @@ class VideoInpaintWatermark:
                 preview_index = max(0, min(cache_index - 1, preview_frame))
                 preview = _build_preview_composite(cache_dir, output_dir, output_name, preview_index)
             dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
-            dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
             if preview is not None:
-                return (preview[0], preview[1], transform_json or "{}")
-            return (dummy_image, dummy_mask, transform_json or "{}")
+                return (preview, transform_json or "{}")
+            return (dummy_image, transform_json or "{}")
 
         gc.collect()
         if torch.cuda.is_available():
@@ -944,8 +943,6 @@ class VideoInpaintWatermark:
                 frames_chunk,
                 mask_chunk,
                 method,
-                width,
-                height,
                 mask_dilates,
                 flow_mask_dilates,
                 ref_stride,
@@ -991,18 +988,15 @@ class VideoInpaintWatermark:
             )
 
         dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
-        dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
         if preview is not None:
-            return (preview[0], preview[1], transform_json or "{}")
-        return (dummy_image, dummy_mask, transform_json or "{}")
+            return (preview, transform_json or "{}")
+        return (dummy_image, transform_json or "{}")
 
     def _process_stream_chunk(
         self,
         frames_buf: list[np.ndarray],
         mask: torch.Tensor,
         method: str,
-        width: int,
-        height: int,
         mask_dilates: int,
         flow_mask_dilates: int,
         ref_stride: int,
@@ -1027,6 +1021,8 @@ class VideoInpaintWatermark:
         mask_is_ready: bool = False,
     ) -> int:
         _check_interrupt()
+        width = 0
+        height = 0
         frames_np = np.stack(frames_buf, axis=0).astype(np.float32) / 255.0
         frames = torch.from_numpy(frames_np)
         save_count = frames.size(dim=0)
@@ -1051,8 +1047,6 @@ class VideoInpaintWatermark:
                 frames=frames,
                 mask=mask_full,
                 method=method,
-                width=width,
-                height=height,
                 mask_dilates=mask_dilates,
                 ref_stride=ref_stride,
                 neighbor_length=neighbor_length,
@@ -1079,10 +1073,8 @@ class VideoInpaintWatermark:
                     allow_tf32=tf32 == "enable",
                 )
 
-            if width <= 0:
-                width = int(frames.shape[2])
-            if height <= 0:
-                height = int(frames.shape[1])
+            width = int(frames.shape[2])
+            height = int(frames.shape[1])
 
             frames_np = convert_image_to_frames(frames)
             video_length = frames.size(dim=0)
@@ -1165,8 +1157,6 @@ class VideoInpaintWatermark:
             "required": {
                 "mask": ("MASK", {"tooltip": "Маска для удаления (1 кадр или batch)."}),
                 "method": (["propainter", "e2fgvi", "e2fgvi_hq"], {"default": "propainter", "tooltip": "Алгоритм инпейнтинга."}),
-                "width": ("INT", {"default": 0, "min": 0, "max": 4096, "tooltip": "Ширина выхода (0 = как у входа, 256–2048 типично)."}),
-                "height": ("INT", {"default": 0, "min": 0, "max": 4096, "tooltip": "Высота выхода (0 = как у входа, 256–2048 типично)."}),
                 "mask_dilates": ("INT", {"default": 8, "min": 0, "max": 100, "tooltip": "Расширение маски (0-100, типично 4–12)."}),
                 "flow_mask_dilates": ("INT", {"default": 8, "min": 0, "max": 100, "tooltip": "Расширение flow-маски (0-100, типично 4–12)."}),
                 "ref_stride": ("INT", {"default": 10, "min": 1, "max": 100, "tooltip": "Шаг опорных кадров (1-100, типично 5–15)."}),
@@ -1177,30 +1167,21 @@ class VideoInpaintWatermark:
                 "throughput_mode": (["enable", "disable"], {"default": "disable", "tooltip": "Пропускать очистку кэша GPU (enable быстрее, но больше памяти)."}),
                 "cudnn_benchmark": (["default", "enable", "disable"], {"default": "default", "tooltip": "cuDNN benchmark (enable быстрее при фикс. размере)."}),
                 "tf32": (["default", "enable", "disable"], {"default": "default", "tooltip": "TF32 матмулы (enable быстрее, чуть менее точно)."}),
-                "pre_crop": ("BOOLEAN", {"default": True, "tooltip": "Обрезать по маске до инпейнтинга (экономит RAM/VRAM)."}),
                 "crop_padding": ("INT", {"default": 16, "min": 0, "max": 512, "tooltip": "Паддинг вокруг маски (0-512, типично 8–32)."}),
                 "color_match_mode": (["none", "mean_std", "linear", "hist", "lab_l", "lab_l_cdf", "lab_full", "lab_cdf"], {"default": "none", "tooltip": "Подгонка цвета по чистой зоне (mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)."}),
-                "cache_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для кэша обрезанного входа (PNG с альфой). Обязательна при streaming_mode."}),
-                "output_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для сохранения результата (PNG с альфой). Обязательна при save_only/streaming_mode."}),
+                "cache_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для кэша обрезанного входа (RGB+mask). Обязательна."}),
+                "output_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для сохранения результата (PNG с альфой). Обязательна."}),
                 "output_name": ("STRING", {"default": "patch_", "multiline": False, "tooltip": "Префикс имени файлов (например: patch_ -> patch_0000.png)."}),
-                "save_only": ("BOOLEAN", {"default": False, "tooltip": "Сохранять результат только на диск (выход IMAGE/MASK будет 1x1)."}),
-                "streaming_mode": ("BOOLEAN", {"default": False, "tooltip": "Двухфазный стриминг: кэш в cache_dir, затем обработка чанками. Требует video_path, cache_dir, output_dir, save_only."}),
                 "video_path": ("STRING", {"default": "", "multiline": False, "tooltip": "Путь к видео для стриминга (например /path/video.mp4)."}),
-                "stream_chunk": ("INT", {"default": 30, "min": 1, "max": 300, "tooltip": "Размер чанка кадров при стриминге (1-300)."}),
-                "stream_start": ("INT", {"default": 0, "min": 0, "max": 1000000, "tooltip": "Стартовый кадр для стриминга (0 = с начала)."}),
-                "stream_end": ("INT", {"default": 0, "min": 0, "max": 1000000, "tooltip": "Конечный кадр (0 = до конца)."}),
-                "stream_stride": ("INT", {"default": 1, "min": 1, "max": 100, "tooltip": "Шаг кадров (1 = каждый кадр)."}),
                 "preview_frame": ("INT", {"default": 0, "min": -1, "max": 1000000, "tooltip": "Кадр для превью композита (0 = первый, -1 = не выводить)."}),
-                "write_fullframes": ("BOOLEAN", {"default": False, "tooltip": "Записать полные кадры с наложенным патчем (только streaming_mode)."}),
+                "write_fullframes": ("BOOLEAN", {"default": False, "tooltip": "Записать полные кадры с наложенным патчем."}),
                 "fullframe_prefix": ("STRING", {"default": "fullframe_", "multiline": False, "tooltip": "Префикс для полных кадров (fullframe_0000.png)."}),
             },
-            "optional": {
-                "frames": ("IMAGE", {"tooltip": "Видео кадры (IMAGE batch)."}),
-            },
+            "optional": {},
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK", "STRING")
-    RETURN_NAMES = ("image", "mask", "transform_json")
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("preview_image", "transform_json")
     FUNCTION = "inpaint"
     CATEGORY = "video/inpaint"
 
@@ -1208,8 +1189,6 @@ class VideoInpaintWatermark:
         self,
         mask: torch.Tensor,
         method: str,
-        width: int,
-        height: int,
         mask_dilates: int,
         flow_mask_dilates: int,
         ref_stride: int,
@@ -1220,227 +1199,45 @@ class VideoInpaintWatermark:
         throughput_mode: str,
         cudnn_benchmark: str,
         tf32: str,
-        pre_crop: bool,
         crop_padding: int,
         color_match_mode: str,
         cache_dir: str,
         output_dir: str,
         output_name: str,
-        save_only: bool,
-        streaming_mode: bool,
         video_path: str,
-        stream_chunk: int,
-        stream_start: int,
-        stream_end: int,
-        stream_stride: int,
         preview_frame: int,
         write_fullframes: bool,
         fullframe_prefix: str,
-        frames: torch.Tensor = None,
     ):
-        if streaming_mode:
-            return self._stream_video(
-                video_path=video_path,
-                mask=mask,
-                method=method,
-                width=width,
-                height=height,
-                mask_dilates=mask_dilates,
-                flow_mask_dilates=flow_mask_dilates,
-                ref_stride=ref_stride,
-                neighbor_length=neighbor_length,
-                subvideo_length=subvideo_length,
-                raft_iter=raft_iter,
-                fp16=fp16,
-                throughput_mode=throughput_mode,
-                cudnn_benchmark=cudnn_benchmark,
-                tf32=tf32,
-                pre_crop=pre_crop,
-                crop_padding=crop_padding,
-                color_match_mode=color_match_mode,
-                cache_dir=cache_dir,
-                output_dir=output_dir,
-                output_name=output_name,
-                save_only=save_only,
-                stream_chunk=stream_chunk,
-                stream_start=stream_start,
-                stream_end=stream_end,
-                stream_stride=stream_stride,
-                preview_frame=preview_frame,
-                write_fullframes=write_fullframes,
-                fullframe_prefix=fullframe_prefix,
-            )
-
-        if frames is None:
-            raise ValueError("frames input is required when streaming_mode is disabled.")
-        _check_inputs(frames, mask)
-        if save_only and not output_dir:
-            raise ValueError("save_only=true requires output_dir to be set.")
-        full_height = int(frames.shape[1])
-        full_width = int(frames.shape[2])
-        if pre_crop:
-            frames, mask, bbox, status = _pre_crop_inputs(frames, mask, crop_padding)
-        else:
-            bbox = (0, 0, full_width, full_height)
-            status = "ok"
-
-        if cache_dir and pre_crop:
-            _save_rgba_sequence(frames, mask, cache_dir, output_name, "input_")
-
-        if status == "empty_mask":
-            output_images = frames
-            rgba, out_mask, transform_json = _compose_outputs_from_bbox(
-                output_images,
-                mask,
-                bbox,
-                full_width,
-                full_height,
-                status,
-            )
-            _LOGGER.info("Transform JSON: %s", transform_json)
-            if output_dir:
-                _save_rgba_sequence(rgba[..., :3], out_mask, output_dir, output_name, "")
-                _save_transform_json(output_dir, output_name, transform_json)
-            if save_only:
-                if preview_frame >= 0:
-                    idx = max(0, min(int(preview_frame), rgba.size(dim=0) - 1))
-                    return (rgba[idx : idx + 1], out_mask[idx : idx + 1], transform_json)
-                dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
-                dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
-                return (dummy_image, dummy_mask, transform_json)
-            return (rgba, out_mask, transform_json)
-
-        if method in ("e2fgvi", "e2fgvi_hq"):
-            return self._inpaint_e2fgvi(
-                frames=frames,
-                mask=mask,
-                method=method,
-                width=width,
-                height=height,
-                mask_dilates=mask_dilates,
-                ref_stride=ref_stride,
-                neighbor_length=neighbor_length,
-                fp16=fp16,
-                throughput_mode=throughput_mode,
-                pre_crop=pre_crop,
-                crop_bbox=bbox,
-                crop_status=status,
-                full_width=full_width,
-                full_height=full_height,
-                color_match_mode=color_match_mode,
-                output_dir=output_dir,
-                output_name=output_name,
-                save_only=save_only,
-                preview_frame=preview_frame,
-            )
-        device = model_management.get_torch_device()
-
-        if cudnn_benchmark != "default" or tf32 != "default":
-            configure_cudnn(
-                benchmark=cudnn_benchmark == "enable",
-                allow_tf32=tf32 == "enable",
-            )
-
-        if width <= 0:
-            width = int(frames.shape[2])
-        if height <= 0:
-            height = int(frames.shape[1])
-
-        frames_np = convert_image_to_frames(frames)
-        video_length = frames.size(dim=0)
-        input_size = (frames_np[0].shape[1], frames_np[0].shape[0])
-
-        image_config = ImageConfig(
-            width, height, mask_dilates, flow_mask_dilates, input_size, video_length
-        )
-        inpaint_config = ProPainterConfig(
+        return self._stream_video(
+            video_path=video_path,
+            mask=mask,
+            method=method,
+            mask_dilates=mask_dilates,
+            flow_mask_dilates=flow_mask_dilates,
             ref_stride=ref_stride,
             neighbor_length=neighbor_length,
             subvideo_length=subvideo_length,
             raft_iter=raft_iter,
             fp16=fp16,
-            video_length=video_length,
-            device=device,
-            process_size=image_config.process_size,
-            skip_empty_cache=throughput_mode == "enable",
+            throughput_mode=throughput_mode,
+            cudnn_benchmark=cudnn_benchmark,
+            tf32=tf32,
+            crop_padding=crop_padding,
+            color_match_mode=color_match_mode,
+            cache_dir=cache_dir,
+            output_dir=output_dir,
+            output_name=output_name,
+            preview_frame=preview_frame,
+            write_fullframes=write_fullframes,
+            fullframe_prefix=fullframe_prefix,
         )
-        _LOGGER.info(
-            "ProPainter: %s frames, process_size=%s, device=%s",
-            video_length,
-            image_config.process_size,
-            device,
-        )
-
-        frames_tensor, flow_masks_tensor, masks_dilated_tensor, original_frames = (
-            prepare_frames_and_masks(frames_np, mask, image_config, device)
-        )
-
-        models = initialize_models(device, inpaint_config.fp16)
-
-        updated_frames, updated_masks, pred_flows_bi = process_inpainting(
-            models,
-            frames_tensor,
-            flow_masks_tensor,
-            masks_dilated_tensor,
-            inpaint_config,
-        )
-
-        composed_frames = feature_propagation(
-            models.inpaint_model,
-            updated_frames,
-            updated_masks,
-            masks_dilated_tensor,
-            pred_flows_bi,
-            original_frames,
-            inpaint_config,
-        )
-
-        output_images, _flow_masks, _masks_dilated = handle_output(
-            composed_frames, flow_masks_tensor, masks_dilated_tensor
-        )
-
-        del frames_tensor, flow_masks_tensor, masks_dilated_tensor, updated_frames, updated_masks, pred_flows_bi
-        if torch.cuda.is_available() and throughput_mode != "enable":
-            torch.cuda.empty_cache()
-
-        if pre_crop:
-            crop_width = max(1, bbox[2] - bbox[0])
-            crop_height = max(1, bbox[3] - bbox[1])
-            output_images = _resize_images_to_size(output_images, crop_height, crop_width)
-            output_images = _apply_color_match(output_images, frames, mask, color_match_mode)
-            rgba, out_mask, transform_json = _compose_outputs_from_bbox(
-                output_images,
-                mask,
-                bbox,
-                full_width,
-                full_height,
-                status,
-            )
-        else:
-            output_images = _apply_color_match(output_images, frames, mask, color_match_mode)
-            rgba, out_mask, transform_json = _crop_outputs(
-                output_images,
-                mask,
-                output_images.shape[2],
-                output_images.shape[1],
-            )
-        _LOGGER.info("Transform JSON: %s", transform_json)
-        if output_dir:
-            _save_rgba_sequence(rgba[..., :3], out_mask, output_dir, output_name, "")
-            _save_transform_json(output_dir, output_name, transform_json)
-        if save_only:
-            dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
-            dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
-            return (dummy_image, dummy_mask, transform_json)
-        return (rgba, out_mask, transform_json)
 
     def _inpaint_e2fgvi(
         self,
         frames: torch.Tensor,
         mask: torch.Tensor,
         method: str,
-        width: int,
-        height: int,
         mask_dilates: int,
         ref_stride: int,
         neighbor_length: int,
@@ -1460,6 +1257,8 @@ class VideoInpaintWatermark:
         device = model_management.get_torch_device()
         frames_np = e2f_convert_frames(frames)
         masks_np = e2f_convert_masks(mask)
+        width = 0
+        height = 0
 
         if method == "e2fgvi":
             target_size = (432, 240) if width <= 0 or height <= 0 else (width, height)

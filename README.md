@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.5.2
+Version: 0.5.3
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-21 | v0.5.3 | VideoInpaintWatermark: выходы упрощены до preview_image + transform_json (без маски).
 - 2026-01-21 | v0.5.2 | VideoInpaintWatermark: запись полноразмерных кадров (fullframe_*) при стриминге.
 - 2026-01-21 | v0.5.1 | VideoInpaintWatermark: двухфазный стриминг с кэшем на диск, отдельные RGB/маска файлы, preview_frame для контроля.
 - 2026-01-20 | v0.5.0 | VideoInpaintWatermark: предобрезка по маске и режимы коррекции цвета (color_match_mode).
@@ -157,11 +158,8 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - Category: video/inpaint
 
 Входы:
-- **frames** (IMAGE)
 - **mask** (MASK)
 - **method** (propainter/e2fgvi/e2fgvi_hq)
-- **width** (INT, 0 = как у входа)
-- **height** (INT, 0 = как у входа)
 - **mask_dilates** (INT)
 - **flow_mask_dilates** (INT)
 - **ref_stride** (INT)
@@ -172,28 +170,19 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **throughput_mode** (enable/disable)
 - **cudnn_benchmark** (default/enable/disable)
 - **tf32** (default/enable/disable)
-- **pre_crop** (BOOLEAN)
 - **crop_padding** (INT)
 - **color_match_mode** (none/mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)
 - **cache_dir** (STRING)
 - **output_dir** (STRING)
 - **output_name** (STRING)
-- **save_only** (BOOLEAN)
-- **streaming_mode** (BOOLEAN)
 - **video_path** (STRING)
-- **stream_chunk** (INT)
-- **stream_start** (INT)
-- **stream_end** (INT)
-- **stream_stride** (INT)
 - **preview_frame** (INT)
 - **write_fullframes** (BOOLEAN)
 - **fullframe_prefix** (STRING)
 
 Описание входов:
-- **frames**: входные кадры видео (batch, используется при **streaming_mode=false**).
 - **mask**: маска области удаления (1 кадр или batch).
 - **method**: выбор алгоритма (propainter/e2fgvi/e2fgvi_hq).
-- **width/height**: целевой размер (0 = оставить как у входа).
 - **mask_dilates**: расширение маски (в пикселях, итерации дилатации).
 - **flow_mask_dilates**: расширение маски для оптического потока.
 - **ref_stride**: шаг выбора опорных кадров (E2FGVI).
@@ -204,30 +193,27 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **throughput_mode**: пропускать очистку кэша GPU (быстрее, но больше памяти).
 - **cudnn_benchmark**: оптимизация cuDNN под размер входа.
 - **tf32**: разрешить TF32 матмулы (быстрее, менее точно).
-- **pre_crop**: обрезать вход по маске перед инпейтингом (снижает RAM/VRAM).
 - **crop_padding**: паддинг вокруг маски в пикселях.
 - **color_match_mode**: подгонка цвета по чистой области (вне маски).
   Варианты: `none` — без коррекции; `mean_std` — выравнивание по среднему/σ (RGB);
   `linear` — линейная подгонка `a*x+b` (RGB); `hist` — совпадение гистограмм (RGB);
   `lab_l` — корректирует только яркость L (LAB); `lab_l_cdf` — CDF‑matching по L;
   `lab_full` — корректирует L+a+b (LAB) по среднему/σ; `lab_cdf` — CDF‑matching по L+a+b.
-- **cache_dir**: папка для кэша обрезанного входа (RGB `input_0000.png` + маска `mask_0000.png`, работает при **pre_crop**=true, обязательна при **streaming_mode**).
+- **cache_dir**: папка для кэша обрезанного входа (RGB `input_0000.png` + маска `mask_0000.png`).
 - **output_dir**: папка для сохранения результата (PNG с альфой, имена `output_name0000.png`), также сохраняет `output_name` + `transform.json`.
 - **output_name**: префикс имени файлов (например `patch_`).
-- **save_only**: если включено, результат пишется только на диск, а выход IMAGE/MASK = 1x1 (требует **output_dir**).
-- **streaming_mode**: двухфазный стриминг: сначала кэширует кропнутые кадры в **cache_dir**, затем читает их чанками и инпейнтит без загрузки всего видео в RAM (требует **video_path**, **save_only**, **cache_dir**, **output_dir**).
 - **video_path**: путь к видео для стриминга.
-- **stream_chunk**: размер чанка кадров (2–60 обычно).
-- **stream_start**: стартовый кадр (0 = с начала).
-- **stream_end**: конечный кадр (0 = до конца).
-- **stream_stride**: шаг кадров (1 = каждый кадр).
 - **preview_frame**: индекс кадра для превью (0 = первый обработанный, -1 = не выводить).
-- **write_fullframes**: записать полные кадры с наложенным патчем в **output_dir** (только streaming_mode).
+- **write_fullframes**: записать полные кадры с наложенным патчем в **output_dir**.
 - **fullframe_prefix**: префикс файлов полноразмерных кадров (например `fullframe_0000.png`).
+
+Примечание:
+- Нода всегда работает в режиме стриминга с кешированием и всегда делает pre‑crop по маске.
+- Режим save‑only включен постоянно (результат пишется на диск).
+- Параметры стрима фиксированы: chunk=30, start=0, end=0, stride=1.
 
 Рекомендации по параметрам:
 - **method**: `propainter` обычно лучше на сложных сценах; `e2fgvi_hq` — для произвольных разрешений.
-- **width/height**: оставляйте 0, если не нужно менять размер.
 - **mask_dilates/flow_mask_dilates**: 4–12 для небольших логотипов, 10–20 для крупных.
 - **ref_stride**: 5–15 для типовых видео; меньше = точнее, но медленнее.
 - **neighbor_length**: 5–15 типично; больше помогает при сложной динамике.
@@ -235,26 +221,23 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **raft_iter**: 10–30 типично; больше = точнее, но медленнее.
 - **fp16**: включайте на GPU с ограниченной памятью.
 - **throughput_mode**: включайте при стабильной памяти (без OOM).
-- **pre_crop**: включайте, если маска маленькая — экономит память и ускоряет.
 - **crop_padding**: 8–32 пикселя для контекста вокруг водяного знака.
 - **color_match_mode**: `lab_l`/`lab_l_cdf` для яркости/гаммы; `mean_std`/`linear` для быстрых правок цвета;
   `lab_full` или `lab_cdf` — самый точный, но медленный вариант для сложного цветового дрейфа.
-- **cache_dir**: используйте для записи обрезанного входа на диск; экономит RAM, но медленнее.
-- **output_dir**: включайте, если хотите сразу получить PNG‑патчи на диске; рядом будет `transform.json`.
+- **cache_dir**: папка для записи обрезанного входа на диск; экономит RAM, но медленнее.
+- **output_dir**: папка для PNG‑патчей на диске; рядом будет `transform.json`.
 - **output_name**: например `patch_` даст `patch_0000.png`.
-- **save_only**: включайте для очень длинных видео, чтобы не держать результат в памяти.
-- **streaming_mode**: включайте для длинных видео, чтобы не держать весь batch в RAM.
-- **stream_chunk**: 20–60 обычно; меньше = меньше RAM, но медленнее.
+- **preview_frame**: используйте, чтобы посмотреть конкретный кадр без сборки всего видео в интерфейсе.
 
 Выходы:
-- **image** (IMAGE): кадры с обрезкой по bbox маски, RGBA (альфа = исходная маска).
-- **mask** (MASK): обрезанная маска (альфа-канал).
+- **preview_image** (IMAGE): один кадр превью (композит патча поверх кэша).
 - **transform_json** (STRING): JSON с позицией и масштабом для повторного совмещения (формат как у Align).
 
-Примечание: при **save_only=true** выход IMAGE/MASK — 1x1 (чтобы не держать все кадры в RAM).
-Если **preview_frame >= 0**, нода вернет только выбранный кадр для контроля.
-Если включен **streaming_mode** и **preview_frame >= 0**, на выходе будет композит
-выбранного кадра (результат поверх кэша) для быстрой проверки.
+Примечание: нода всегда работает в стриминге с кешем и делает pre‑crop по маске,
+результат всегда пишется на диск. Если **preview_frame >= 0**, она возвращает один
+кадр для контроля. Если **preview_frame = -1**, выход IMAGE = 1x1. При
+**write_fullframes=true** сохраняются полноразмерные кадры с наложенным патчем.
+Параметры стрима фиксированы: chunk=30, start=0, end=0, stride=1.
 
 Поля transform_json:
 - **status**: ok или empty_mask (если маска пуста).
@@ -297,6 +280,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-21 | v0.5.3 | VideoInpaintWatermark: outputs simplified to preview_image + transform_json (no mask).
 - 2026-01-21 | v0.5.2 | VideoInpaintWatermark: full-frame output (fullframe_*) in streaming mode.
 - 2026-01-21 | v0.5.1 | VideoInpaintWatermark: two-pass streaming with disk cache, separate RGB/mask cache files, preview_frame output.
 - 2026-01-20 | v0.5.0 | VideoInpaintWatermark: pre-crop by mask and color matching modes (color_match_mode).
@@ -446,11 +430,8 @@ E2FGVI are embedded. Weights live in `propainter/weights/` and `e2fgvi/weights/`
 - Category: video/inpaint
 
 Inputs:
-- **frames** (IMAGE)
 - **mask** (MASK)
 - **method** (propainter/e2fgvi/e2fgvi_hq)
-- **width** (INT, 0 = input)
-- **height** (INT, 0 = input)
 - **mask_dilates** (INT)
 - **flow_mask_dilates** (INT)
 - **ref_stride** (INT)
@@ -461,28 +442,19 @@ Inputs:
 - **throughput_mode** (enable/disable)
 - **cudnn_benchmark** (default/enable/disable)
 - **tf32** (default/enable/disable)
-- **pre_crop** (BOOLEAN)
 - **crop_padding** (INT)
 - **color_match_mode** (none/mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)
 - **cache_dir** (STRING)
 - **output_dir** (STRING)
 - **output_name** (STRING)
-- **save_only** (BOOLEAN)
-- **streaming_mode** (BOOLEAN)
 - **video_path** (STRING)
-- **stream_chunk** (INT)
-- **stream_start** (INT)
-- **stream_end** (INT)
-- **stream_stride** (INT)
 - **preview_frame** (INT)
 - **write_fullframes** (BOOLEAN)
 - **fullframe_prefix** (STRING)
 
 Input descriptions:
-- **frames**: input video frames (batch, used when **streaming_mode=false**).
 - **mask**: removal mask (single frame or batch).
 - **method**: algorithm choice (propainter/e2fgvi/e2fgvi_hq).
-- **width/height**: target size (0 = keep input).
 - **mask_dilates**: mask dilation iterations (pixels/iterations).
 - **flow_mask_dilates**: flow-mask dilation iterations.
 - **ref_stride**: reference frame stride (E2FGVI).
@@ -493,30 +465,22 @@ Input descriptions:
 - **throughput_mode**: skip GPU cache cleanup (faster, more VRAM).
 - **cudnn_benchmark**: cuDNN tuning for fixed sizes.
 - **tf32**: enable TF32 matmuls (faster, slightly less precise).
-- **pre_crop**: crop input to the mask bbox before inpainting (less RAM/VRAM).
 - **crop_padding**: padding around the mask in pixels.
 - **color_match_mode**: color matching on clean area (outside mask).
   Modes: `none` (no correction); `mean_std` (mean/std matching, RGB);
   `linear` (linear fit `a*x+b`, RGB); `hist` (histogram matching, RGB);
   `lab_l` (L‑only in LAB); `lab_l_cdf` (CDF matching on L);
   `lab_full` (mean/std on L+a+b); `lab_cdf` (CDF matching on L+a+b).
-- **cache_dir**: directory for cached cropped input (RGB `input_0000.png` + mask `mask_0000.png`, requires **pre_crop**=true; mandatory for **streaming_mode**).
+- **cache_dir**: directory for cached cropped input (RGB `input_0000.png` + mask `mask_0000.png`).
 - **output_dir**: directory to save output PNG patches (names `output_name0000.png`), also writes `output_name` + `transform.json`.
 - **output_name**: filename prefix (e.g. `patch_`).
-- **save_only**: when enabled, writes results to disk only; IMAGE/MASK outputs are 1x1 (requires **output_dir**).
-- **streaming_mode**: two-pass stream mode: first caches cropped frames to **cache_dir**, then processes them in chunks without loading the full video into RAM (requires **video_path**, **save_only**, **cache_dir**, **output_dir**).
 - **video_path**: video path for streaming.
-- **stream_chunk**: chunk size (2–60 typical).
-- **stream_start**: start frame (0 = from beginning).
-- **stream_end**: end frame (0 = until end).
-- **stream_stride**: frame step (1 = every frame).
 - **preview_frame**: preview frame index (0 = first processed, -1 = disable preview output).
-- **write_fullframes**: write full frames with the patch composited into **output_dir** (streaming_mode only).
+- **write_fullframes**: write full frames with the patch composited into **output_dir**.
 - **fullframe_prefix**: prefix for full-frame files (e.g. `fullframe_0000.png`).
 
 Parameter guidance:
 - **method**: `propainter` usually best on complex scenes; `e2fgvi_hq` for arbitrary resolutions.
-- **width/height**: keep 0 unless resizing is required.
 - **mask_dilates/flow_mask_dilates**: 4–12 for small logos, 10–20 for large.
 - **ref_stride**: 5–15 typical; lower = more accurate, slower.
 - **neighbor_length**: 5–15 typical; higher helps with complex motion.
@@ -524,26 +488,22 @@ Parameter guidance:
 - **raft_iter**: 10–30 typical; higher = more accurate, slower.
 - **fp16**: enable for limited VRAM GPUs.
 - **throughput_mode**: enable if you have VRAM headroom.
-- **pre_crop**: enable for small masks to save memory and time.
 - **crop_padding**: 8–32 pixels for extra context around the watermark.
 - **color_match_mode**: try `lab_l`/`lab_l_cdf` for brightness/gamma; `mean_std`/`linear` for fast RGB matching;
   `lab_full` or `lab_cdf` for the most accurate but slowest correction.
-- **cache_dir**: save cropped input to disk if you want persistence (slower, lower RAM).
-- **output_dir**: enable to auto-write PNG patches to disk; `transform.json` is written alongside.
+- **cache_dir**: directory for cached cropped input on disk (slower, lower RAM).
+- **output_dir**: directory for PNG patches; `transform.json` is written alongside.
 - **output_name**: e.g. `patch_` -> `patch_0000.png`.
-- **save_only**: enable for very long videos to avoid storing large outputs in memory.
-- **streaming_mode**: enable for long videos to avoid RAM spikes.
-- **stream_chunk**: 20–60 typical; lower = less RAM, slower.
+- **preview_frame**: use to inspect a specific frame without loading the whole sequence in UI.
 
 Outputs:
-- **image** (IMAGE): frames cropped to the mask bbox, RGBA (alpha = original mask).
-- **mask** (MASK): cropped mask (alpha channel).
+- **preview_image** (IMAGE): single preview frame (patch composited over cached input).
 - **transform_json** (STRING): JSON with placement data (same format as Align).
 
-Note: when **save_only=true**, IMAGE/MASK outputs are 1x1 to avoid keeping large batches
-in RAM. If **preview_frame >= 0**, the node returns only the selected frame for preview.
-With **streaming_mode** and **preview_frame >= 0**, the node outputs a composite
-preview frame (result over cached input) for quick validation.
+Note: the node always writes results to disk and always uses streaming cache with pre-crop.
+If **preview_frame >= 0**, it returns one frame for preview. If **preview_frame = -1**,
+IMAGE output is 1x1. With **write_fullframes=true**, full-size frames are saved
+with the patch composited. Stream parameters are fixed: chunk=30, start=0, end=0, stride=1.
 
 transform_json fields:
 - **status**: ok or empty_mask (mask has no pixels).
