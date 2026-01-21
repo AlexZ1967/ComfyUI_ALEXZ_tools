@@ -269,6 +269,13 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
   **top_left** — origin в левом верхнем; **center** — origin в центре кадра.
 - **normalized_center**: центр обрезки в нормированных координатах 0..1:
   **top_left** — origin в левом верхнем; **bottom_left** — origin в левом нижнем.
+- **color_space**: цветовое пространство PNG‑патча (сейчас `srgb`).
+- **alpha_mode**: тип альфы (`straight`).
+- **levels**: уровни (`full`).
+
+Примечание для DaVinci Resolve:
+- Для PNG‑патча установите Alpha = **Straight** и Data Levels = **Full**.
+- В проекте с цветовым менеджментом сопоставьте `color_space` (обычно sRGB → project space).
 
 #### Show/Save JSON
 Нода для аккуратного отображения JSON и записи в файл по заданному пути
@@ -551,6 +558,13 @@ transform_json fields:
   **top_left** origin; **center** origin.
 - **normalized_center**: crop center in 0..1 coordinates:
   **top_left** origin; **bottom_left** origin.
+- **color_space**: PNG patch color space (currently `srgb`).
+- **alpha_mode**: alpha type (`straight`).
+- **levels**: data levels (`full`).
+
+Resolve note:
+- Set PNG patch Alpha = **Straight** and Data Levels = **Full**.
+- If color management is enabled, map `color_space` (usually sRGB → project space).
 
 #### Show/Save JSON
 Node to display JSON neatly and save it to a file path (if provided).

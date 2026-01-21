@@ -648,6 +648,9 @@ def _format_crop_json(
         "resolve_position_edit": {"x": None, "y": None},
         "pixel_center": {"top_left": {"x": None, "y": None}, "center": {"x": None, "y": None}},
         "normalized_center": {"top_left": {"x": None, "y": None}, "bottom_left": {"x": None, "y": None}},
+        "color_space": "srgb",
+        "alpha_mode": "straight",
+        "levels": "full",
     }
     if status != "ok":
         return json.dumps(payload, ensure_ascii=True)
