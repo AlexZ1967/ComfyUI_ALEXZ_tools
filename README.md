@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.5.1
+Version: 0.5.2
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-21 | v0.5.2 | VideoInpaintWatermark: запись полноразмерных кадров (fullframe_*) при стриминге.
 - 2026-01-21 | v0.5.1 | VideoInpaintWatermark: двухфазный стриминг с кэшем на диск, отдельные RGB/маска файлы, preview_frame для контроля.
 - 2026-01-20 | v0.5.0 | VideoInpaintWatermark: предобрезка по маске и режимы коррекции цвета (color_match_mode).
 - 2026-01-19 | v0.4.9 | VideoInpaintWatermark: встроен E2FGVI (e2fgvi/e2fgvi_hq).
@@ -185,6 +186,8 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **stream_end** (INT)
 - **stream_stride** (INT)
 - **preview_frame** (INT)
+- **write_fullframes** (BOOLEAN)
+- **fullframe_prefix** (STRING)
 
 Описание входов:
 - **frames**: входные кадры видео (batch, используется при **streaming_mode=false**).
@@ -219,6 +222,8 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **stream_end**: конечный кадр (0 = до конца).
 - **stream_stride**: шаг кадров (1 = каждый кадр).
 - **preview_frame**: индекс кадра для превью (0 = первый обработанный, -1 = не выводить).
+- **write_fullframes**: записать полные кадры с наложенным патчем в **output_dir** (только streaming_mode).
+- **fullframe_prefix**: префикс файлов полноразмерных кадров (например `fullframe_0000.png`).
 
 Рекомендации по параметрам:
 - **method**: `propainter` обычно лучше на сложных сценах; `e2fgvi_hq` — для произвольных разрешений.
@@ -285,6 +290,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-21 | v0.5.2 | VideoInpaintWatermark: full-frame output (fullframe_*) in streaming mode.
 - 2026-01-21 | v0.5.1 | VideoInpaintWatermark: two-pass streaming with disk cache, separate RGB/mask cache files, preview_frame output.
 - 2026-01-20 | v0.5.0 | VideoInpaintWatermark: pre-crop by mask and color matching modes (color_match_mode).
 - 2026-01-19 | v0.4.9 | VideoInpaintWatermark: embedded E2FGVI (e2fgvi/e2fgvi_hq).
@@ -461,6 +467,9 @@ Inputs:
 - **stream_start** (INT)
 - **stream_end** (INT)
 - **stream_stride** (INT)
+- **preview_frame** (INT)
+- **write_fullframes** (BOOLEAN)
+- **fullframe_prefix** (STRING)
 
 Input descriptions:
 - **frames**: input video frames (batch, used when **streaming_mode=false**).
@@ -495,6 +504,8 @@ Input descriptions:
 - **stream_end**: end frame (0 = until end).
 - **stream_stride**: frame step (1 = every frame).
 - **preview_frame**: preview frame index (0 = first processed, -1 = disable preview output).
+- **write_fullframes**: write full frames with the patch composited into **output_dir** (streaming_mode only).
+- **fullframe_prefix**: prefix for full-frame files (e.g. `fullframe_0000.png`).
 
 Parameter guidance:
 - **method**: `propainter` usually best on complex scenes; `e2fgvi_hq` for arbitrary resolutions.

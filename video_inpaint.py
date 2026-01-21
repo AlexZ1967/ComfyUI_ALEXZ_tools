@@ -356,6 +356,13 @@ def _sanitize_prefix(prefix: str) -> str:
     return prefix if prefix else "patch_"
 
 
+def _sanitize_prefix_with_default(prefix: str, default: str) -> str:
+    if prefix is None:
+        return default
+    prefix = prefix.strip()
+    return prefix if prefix else default
+
+
 def _ensure_dir(path: str) -> None:
     if not path:
         return
@@ -501,6 +508,93 @@ def _build_preview_composite(
     preview_image = torch.from_numpy(comp_rgba).unsqueeze(0)
     preview_mask = torch.from_numpy(output_rgba[..., 3]).unsqueeze(0)
     return preview_image, preview_mask
+
+
+def _stream_write_fullframes(
+    video_path: str,
+    output_dir: str,
+    output_name: str,
+    fullframe_prefix: str,
+    bbox: tuple[int, int, int, int],
+    pre_crop: bool,
+    stream_start: int,
+    stream_end: int,
+    stream_stride: int,
+) -> None:
+    try:
+        import cv2
+    except ImportError as exc:
+        raise RuntimeError("OpenCV is required for fullframe output.") from exc
+
+    if not output_dir:
+        return
+
+    patch_prefix = _sanitize_prefix(output_name)
+    full_prefix = _sanitize_prefix_with_default(fullframe_prefix, "fullframe_")
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError(f"Failed to open video: {video_path}")
+
+    if stream_start > 0:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, stream_start)
+
+    frame_index = stream_start
+    patch_index = 0
+
+    try:
+        while True:
+            ret, frame_bgr = cap.read()
+            if not ret:
+                break
+            if stream_end > 0 and frame_index >= stream_end:
+                break
+            if (frame_index - stream_start) % stream_stride != 0:
+                frame_index += 1
+                continue
+
+            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            patch_path = os.path.join(output_dir, f"{patch_prefix}{patch_index:04d}.png")
+            if os.path.exists(patch_path):
+                patch_rgba = _load_rgba_frame(patch_path)
+                patch_rgb = patch_rgba[..., :3].astype(np.float32)
+                alpha = patch_rgba[..., 3:4].astype(np.float32) / 255.0
+
+                if pre_crop:
+                    x0, y0, x1, y1 = bbox
+                    region = frame_rgb[y0:y1, x0:x1, :].astype(np.float32)
+                    if patch_rgb.shape[:2] != region.shape[:2]:
+                        patch_rgb = cv2.resize(
+                            patch_rgb, (region.shape[1], region.shape[0]), interpolation=cv2.INTER_LINEAR
+                        )
+                        alpha = cv2.resize(
+                            alpha, (region.shape[1], region.shape[0]), interpolation=cv2.INTER_NEAREST
+                        )
+                        alpha = alpha[..., None] if alpha.ndim == 2 else alpha
+                    region = patch_rgb * alpha + region * (1.0 - alpha)
+                    frame_rgb[y0:y1, x0:x1, :] = np.clip(region, 0.0, 255.0).astype(np.uint8)
+                else:
+                    if patch_rgb.shape[:2] != frame_rgb.shape[:2]:
+                        patch_rgb = cv2.resize(
+                            patch_rgb, (frame_rgb.shape[1], frame_rgb.shape[0]), interpolation=cv2.INTER_LINEAR
+                        )
+                        alpha = cv2.resize(
+                            alpha, (frame_rgb.shape[1], frame_rgb.shape[0]), interpolation=cv2.INTER_NEAREST
+                        )
+                        alpha = alpha[..., None] if alpha.ndim == 2 else alpha
+                    frame_rgb = np.clip(
+                        patch_rgb * alpha + frame_rgb.astype(np.float32) * (1.0 - alpha),
+                        0.0,
+                        255.0,
+                    ).astype(np.uint8)
+
+            out_name = f"{full_prefix}{patch_index:04d}.png"
+            _save_rgb_frame(frame_rgb, output_dir, out_name)
+
+            patch_index += 1
+            frame_index += 1
+    finally:
+        cap.release()
 
 
 def _format_resolve_edit_position(
@@ -669,6 +763,8 @@ class VideoInpaintWatermark:
         stream_end: int,
         stream_stride: int,
         preview_frame: int,
+        write_fullframes: bool,
+        fullframe_prefix: str,
     ):
         if not video_path:
             raise ValueError("streaming_mode=true requires video_path to be set.")
@@ -717,17 +813,15 @@ class VideoInpaintWatermark:
                     mask_full = _normalize_mask(mask)
                     mask_full = _ensure_mask_batch(mask_full, 1)
                     mask_full = _resize_mask_to_output(mask_full, full_height, full_width)
-                    if pre_crop:
-                        x0, y0, x1, y1, status = _mask_to_bbox(mask_full)
-                        if status == "ok":
+                    x0, y0, x1, y1, status = _mask_to_bbox(mask_full)
+                    if status == "ok":
+                        if pre_crop:
                             x0 = max(0, x0 - crop_padding)
                             y0 = max(0, y0 - crop_padding)
                             x1 = min(full_width, x1 + crop_padding)
                             y1 = min(full_height, y1 + crop_padding)
-                        else:
-                            x0, y0, x1, y1 = 0, 0, full_width, full_height
                     else:
-                        x0, y0, x1, y1, status = 0, 0, full_width, full_height, "ok"
+                        x0, y0, x1, y1 = 0, 0, full_width, full_height
 
                     bbox = (x0, y0, x1, y1)
                     center_x = (x0 + x1) * 0.5
@@ -859,6 +953,19 @@ class VideoInpaintWatermark:
         if preview_frame >= 0:
             preview_index = max(0, min(cache_index - 1, preview_frame))
             preview = _build_preview_composite(cache_dir, output_dir, output_name, preview_index)
+
+        if write_fullframes:
+            _stream_write_fullframes(
+                video_path=video_path,
+                output_dir=output_dir,
+                output_name=output_name,
+                fullframe_prefix=fullframe_prefix,
+                bbox=bbox,
+                pre_crop=pre_crop,
+                stream_start=stream_start,
+                stream_end=stream_end,
+                stream_stride=stream_stride,
+            )
 
         dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
         dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
@@ -1060,6 +1167,8 @@ class VideoInpaintWatermark:
                 "stream_end": ("INT", {"default": 0, "min": 0, "max": 1000000, "tooltip": "Конечный кадр (0 = до конца)."}),
                 "stream_stride": ("INT", {"default": 1, "min": 1, "max": 100, "tooltip": "Шаг кадров (1 = каждый кадр)."}),
                 "preview_frame": ("INT", {"default": 0, "min": -1, "max": 1000000, "tooltip": "Кадр для превью композита (0 = первый, -1 = не выводить)."}),
+                "write_fullframes": ("BOOLEAN", {"default": False, "tooltip": "Записать полные кадры с наложенным патчем (только streaming_mode)."}),
+                "fullframe_prefix": ("STRING", {"default": "fullframe_", "multiline": False, "tooltip": "Префикс для полных кадров (fullframe_0000.png)."}),
             },
             "optional": {
                 "frames": ("IMAGE", {"tooltip": "Видео кадры (IMAGE batch)."}),
@@ -1101,6 +1210,8 @@ class VideoInpaintWatermark:
         stream_end: int,
         stream_stride: int,
         preview_frame: int,
+        write_fullframes: bool,
+        fullframe_prefix: str,
         frames: torch.Tensor = None,
     ):
         if streaming_mode:
@@ -1132,6 +1243,8 @@ class VideoInpaintWatermark:
                 stream_end=stream_end,
                 stream_stride=stream_stride,
                 preview_frame=preview_frame,
+                write_fullframes=write_fullframes,
+                fullframe_prefix=fullframe_prefix,
             )
 
         if frames is None:
