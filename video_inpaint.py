@@ -39,6 +39,10 @@ from .e2fgvi.utils.model_utils import load_model as e2f_load_model
 _LOGGER = logging.getLogger("VideoInpaintWatermark")
 
 
+def _check_interrupt() -> None:
+    model_management.throw_exception_if_processing_interrupted()
+
+
 def _check_inputs(frames: torch.Tensor, masks: torch.Tensor) -> None:
     if frames.size(dim=0) <= 1:
         raise ValueError(f"Image length must be greater than 1, but got: {frames.size(dim=0)}")
@@ -552,6 +556,7 @@ def _stream_write_fullframes(
 
     try:
         while True:
+            _check_interrupt()
             ret, frame_bgr = cap.read()
             if not ret:
                 break
@@ -810,6 +815,7 @@ class VideoInpaintWatermark:
 
         try:
             while True:
+                _check_interrupt()
                 ret, frame_bgr = cap.read()
                 if not ret:
                     break
@@ -909,6 +915,7 @@ class VideoInpaintWatermark:
         global_index = 0
 
         for idx in range(0, len(cache_files), max(1, stream_chunk)):
+            _check_interrupt()
             chunk_paths = cache_files[idx : idx + max(1, stream_chunk)]
             frames_list = []
             masks_list = []
@@ -1016,6 +1023,7 @@ class VideoInpaintWatermark:
         inputs_already_cropped: bool = False,
         mask_is_ready: bool = False,
     ) -> int:
+        _check_interrupt()
         frames_np = np.stack(frames_buf, axis=0).astype(np.float32) / 255.0
         frames = torch.from_numpy(frames_np)
         save_count = frames.size(dim=0)
@@ -1472,6 +1480,7 @@ class VideoInpaintWatermark:
         comp_frames = [None] * video_length
 
         for f in range(0, video_length, neighbor_stride):
+            _check_interrupt()
             neighbor_ids = list(
                 range(max(0, f - neighbor_stride), min(video_length, f + neighbor_stride + 1))
             )
