@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.4.9
+Version: 0.5.1
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-21 | v0.5.1 | VideoInpaintWatermark: двухфазный стриминг с кэшем на диск, отдельные RGB/маска файлы, preview_frame для контроля.
 - 2026-01-20 | v0.5.0 | VideoInpaintWatermark: предобрезка по маске и режимы коррекции цвета (color_match_mode).
 - 2026-01-19 | v0.4.9 | VideoInpaintWatermark: встроен E2FGVI (e2fgvi/e2fgvi_hq).
 - 2026-01-19 | v0.4.8 | ProPainter weights перенесены в propainter/weights, добавлена авто-загрузка.
@@ -177,9 +178,16 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **output_dir** (STRING)
 - **output_name** (STRING)
 - **save_only** (BOOLEAN)
+- **streaming_mode** (BOOLEAN)
+- **video_path** (STRING)
+- **stream_chunk** (INT)
+- **stream_start** (INT)
+- **stream_end** (INT)
+- **stream_stride** (INT)
+- **preview_frame** (INT)
 
 Описание входов:
-- **frames**: входные кадры видео (batch).
+- **frames**: входные кадры видео (batch, используется при **streaming_mode=false**).
 - **mask**: маска области удаления (1 кадр или batch).
 - **method**: выбор алгоритма (propainter/e2fgvi/e2fgvi_hq).
 - **width/height**: целевой размер (0 = оставить как у входа).
@@ -200,14 +208,17 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
   `linear` — линейная подгонка `a*x+b` (RGB); `hist` — совпадение гистограмм (RGB);
   `lab_l` — корректирует только яркость L (LAB); `lab_l_cdf` — CDF‑matching по L;
   `lab_full` — корректирует L+a+b (LAB) по среднему/σ; `lab_cdf` — CDF‑matching по L+a+b.
-- **cache_dir**: папка для кэша обрезанного входа (PNG с альфой, имена `output_name` + `input_0000.png`, работает при **pre_crop**=true).
+- **cache_dir**: папка для кэша обрезанного входа (RGB `input_0000.png` + маска `mask_0000.png`, работает при **pre_crop**=true, обязательна при **streaming_mode**).
 - **output_dir**: папка для сохранения результата (PNG с альфой, имена `output_name0000.png`), также сохраняет `output_name` + `transform.json`.
 - **output_name**: префикс имени файлов (например `patch_`).
 - **save_only**: если включено, результат пишется только на диск, а выход IMAGE/MASK = 1x1 (требует **output_dir**).
-  Варианты: `none` — без коррекции; `mean_std` — выравнивание по среднему/σ (RGB);
-  `linear` — линейная подгонка `a*x+b` (RGB); `hist` — совпадение гистограмм (RGB);
-  `lab_l` — корректирует только яркость L (LAB); `lab_l_cdf` — CDF‑matching по L;
-  `lab_full` — корректирует L+a+b (LAB) по среднему/σ; `lab_cdf` — CDF‑matching по L+a+b.
+- **streaming_mode**: двухфазный стриминг: сначала кэширует кропнутые кадры в **cache_dir**, затем читает их чанками и инпейнтит без загрузки всего видео в RAM (требует **video_path**, **save_only**, **cache_dir**, **output_dir**).
+- **video_path**: путь к видео для стриминга.
+- **stream_chunk**: размер чанка кадров (2–60 обычно).
+- **stream_start**: стартовый кадр (0 = с начала).
+- **stream_end**: конечный кадр (0 = до конца).
+- **stream_stride**: шаг кадров (1 = каждый кадр).
+- **preview_frame**: индекс кадра для превью (0 = первый обработанный, -1 = не выводить).
 
 Рекомендации по параметрам:
 - **method**: `propainter` обычно лучше на сложных сценах; `e2fgvi_hq` — для произвольных разрешений.
@@ -227,11 +238,18 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **output_dir**: включайте, если хотите сразу получить PNG‑патчи на диске; рядом будет `transform.json`.
 - **output_name**: например `patch_` даст `patch_0000.png`.
 - **save_only**: включайте для очень длинных видео, чтобы не держать результат в памяти.
+- **streaming_mode**: включайте для длинных видео, чтобы не держать весь batch в RAM.
+- **stream_chunk**: 20–60 обычно; меньше = меньше RAM, но медленнее.
 
 Выходы:
 - **image** (IMAGE): кадры с обрезкой по bbox маски, RGBA (альфа = исходная маска).
 - **mask** (MASK): обрезанная маска (альфа-канал).
 - **transform_json** (STRING): JSON с позицией и масштабом для повторного совмещения (формат как у Align).
+
+Примечание: при **save_only=true** выход IMAGE/MASK — 1x1 (чтобы не держать все кадры в RAM).
+Если **preview_frame >= 0**, нода вернет только выбранный кадр для контроля.
+Если включен **streaming_mode** и **preview_frame >= 0**, на выходе будет композит
+выбранного кадра (результат поверх кэша) для быстрой проверки.
 
 Поля transform_json:
 - **status**: ok или empty_mask (если маска пуста).
@@ -267,6 +285,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-21 | v0.5.1 | VideoInpaintWatermark: two-pass streaming with disk cache, separate RGB/mask cache files, preview_frame output.
 - 2026-01-20 | v0.5.0 | VideoInpaintWatermark: pre-crop by mask and color matching modes (color_match_mode).
 - 2026-01-19 | v0.4.9 | VideoInpaintWatermark: embedded E2FGVI (e2fgvi/e2fgvi_hq).
 - 2026-01-19 | v0.4.8 | ProPainter weights moved to propainter/weights with auto-download.
@@ -436,9 +455,15 @@ Inputs:
 - **output_dir** (STRING)
 - **output_name** (STRING)
 - **save_only** (BOOLEAN)
+- **streaming_mode** (BOOLEAN)
+- **video_path** (STRING)
+- **stream_chunk** (INT)
+- **stream_start** (INT)
+- **stream_end** (INT)
+- **stream_stride** (INT)
 
 Input descriptions:
-- **frames**: input video frames (batch).
+- **frames**: input video frames (batch, used when **streaming_mode=false**).
 - **mask**: removal mask (single frame or batch).
 - **method**: algorithm choice (propainter/e2fgvi/e2fgvi_hq).
 - **width/height**: target size (0 = keep input).
@@ -459,10 +484,17 @@ Input descriptions:
   `linear` (linear fit `a*x+b`, RGB); `hist` (histogram matching, RGB);
   `lab_l` (L‑only in LAB); `lab_l_cdf` (CDF matching on L);
   `lab_full` (mean/std on L+a+b); `lab_cdf` (CDF matching on L+a+b).
-- **cache_dir**: directory for cached cropped input (PNG with alpha, names `output_name` + `input_0000.png`, requires **pre_crop**=true).
+- **cache_dir**: directory for cached cropped input (RGB `input_0000.png` + mask `mask_0000.png`, requires **pre_crop**=true; mandatory for **streaming_mode**).
 - **output_dir**: directory to save output PNG patches (names `output_name0000.png`), also writes `output_name` + `transform.json`.
 - **output_name**: filename prefix (e.g. `patch_`).
 - **save_only**: when enabled, writes results to disk only; IMAGE/MASK outputs are 1x1 (requires **output_dir**).
+- **streaming_mode**: two-pass stream mode: first caches cropped frames to **cache_dir**, then processes them in chunks without loading the full video into RAM (requires **video_path**, **save_only**, **cache_dir**, **output_dir**).
+- **video_path**: video path for streaming.
+- **stream_chunk**: chunk size (2–60 typical).
+- **stream_start**: start frame (0 = from beginning).
+- **stream_end**: end frame (0 = until end).
+- **stream_stride**: frame step (1 = every frame).
+- **preview_frame**: preview frame index (0 = first processed, -1 = disable preview output).
 
 Parameter guidance:
 - **method**: `propainter` usually best on complex scenes; `e2fgvi_hq` for arbitrary resolutions.
@@ -482,11 +514,18 @@ Parameter guidance:
 - **output_dir**: enable to auto-write PNG patches to disk; `transform.json` is written alongside.
 - **output_name**: e.g. `patch_` -> `patch_0000.png`.
 - **save_only**: enable for very long videos to avoid storing large outputs in memory.
+- **streaming_mode**: enable for long videos to avoid RAM spikes.
+- **stream_chunk**: 20–60 typical; lower = less RAM, slower.
 
 Outputs:
 - **image** (IMAGE): frames cropped to the mask bbox, RGBA (alpha = original mask).
 - **mask** (MASK): cropped mask (alpha channel).
 - **transform_json** (STRING): JSON with placement data (same format as Align).
+
+Note: when **save_only=true**, IMAGE/MASK outputs are 1x1 to avoid keeping large batches
+in RAM. If **preview_frame >= 0**, the node returns only the selected frame for preview.
+With **streaming_mode** and **preview_frame >= 0**, the node outputs a composite
+preview frame (result over cached input) for quick validation.
 
 transform_json fields:
 - **status**: ok or empty_mask (mask has no pixels).
