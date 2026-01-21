@@ -520,6 +520,7 @@ def _stream_write_fullframes(
     stream_start: int,
     stream_end: int,
     stream_stride: int,
+    total_frames: int | None,
 ) -> None:
     try:
         import cv2
@@ -541,6 +542,13 @@ def _stream_write_fullframes(
 
     frame_index = stream_start
     patch_index = 0
+    progress = None
+    try:
+        from tqdm import tqdm
+
+        progress = tqdm(total=total_frames, desc="Fullframe composite", leave=False)
+    except Exception:
+        progress = None
 
     try:
         while True:
@@ -593,7 +601,11 @@ def _stream_write_fullframes(
 
             patch_index += 1
             frame_index += 1
+            if progress is not None:
+                progress.update(1)
     finally:
+        if progress is not None:
+            progress.close()
         cap.release()
 
 
@@ -965,6 +977,7 @@ class VideoInpaintWatermark:
                 stream_start=stream_start,
                 stream_end=stream_end,
                 stream_stride=stream_stride,
+                total_frames=cache_index,
             )
 
         dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
