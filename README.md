@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.5.3
+Version: 0.5.4
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-21 | v0.5.4 | VideoInpaintWatermark: выбор видео через Upload/список input, пути к кэшу/выходу вводятся вручную (упрощено).
 - 2026-01-21 | v0.5.3 | VideoInpaintWatermark: выходы упрощены до preview_image + transform_json (без маски).
 - 2026-01-21 | v0.5.2 | VideoInpaintWatermark: запись полноразмерных кадров (fullframe_*) при стриминге.
 - 2026-01-21 | v0.5.1 | VideoInpaintWatermark: двухфазный стриминг с кэшем на диск, отдельные RGB/маска файлы, preview_frame для контроля.
@@ -175,7 +176,7 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **cache_dir** (STRING)
 - **output_dir** (STRING)
 - **output_name** (STRING)
-- **video_path** (STRING)
+- **video** (STRING)
 - **preview_frame** (INT)
 - **write_fullframes** (BOOLEAN)
 - **fullframe_prefix** (STRING)
@@ -202,7 +203,7 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 - **cache_dir**: папка для кэша обрезанного входа (RGB `input_0000.png` + маска `mask_0000.png`).
 - **output_dir**: папка для сохранения результата (PNG с альфой, имена `output_name0000.png`), также сохраняет `output_name` + `transform.json`.
 - **output_name**: префикс имени файлов (например `patch_`).
-- **video_path**: путь к видео для стриминга.
+- **video**: файл видео из `input/` (можно загрузить через Upload).
 - **preview_frame**: индекс кадра для превью (0 = первый обработанный, -1 = не выводить).
 - **write_fullframes**: записать полные кадры с наложенным патчем в **output_dir**.
 - **fullframe_prefix**: префикс файлов полноразмерных кадров (например `fullframe_0000.png`).
@@ -280,6 +281,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-21 | v0.5.4 | VideoInpaintWatermark: video selection via Upload/input list; cache/output paths remain manual (simplified).
 - 2026-01-21 | v0.5.3 | VideoInpaintWatermark: outputs simplified to preview_image + transform_json (no mask).
 - 2026-01-21 | v0.5.2 | VideoInpaintWatermark: full-frame output (fullframe_*) in streaming mode.
 - 2026-01-21 | v0.5.1 | VideoInpaintWatermark: two-pass streaming with disk cache, separate RGB/mask cache files, preview_frame output.
@@ -447,7 +449,7 @@ Inputs:
 - **cache_dir** (STRING)
 - **output_dir** (STRING)
 - **output_name** (STRING)
-- **video_path** (STRING)
+- **video** (STRING)
 - **preview_frame** (INT)
 - **write_fullframes** (BOOLEAN)
 - **fullframe_prefix** (STRING)
@@ -474,7 +476,7 @@ Input descriptions:
 - **cache_dir**: directory for cached cropped input (RGB `input_0000.png` + mask `mask_0000.png`).
 - **output_dir**: directory to save output PNG patches (names `output_name0000.png`), also writes `output_name` + `transform.json`.
 - **output_name**: filename prefix (e.g. `patch_`).
-- **video_path**: video path for streaming.
+- **video**: video file from `input/` (use Upload to add).
 - **preview_frame**: preview frame index (0 = first processed, -1 = disable preview output).
 - **write_fullframes**: write full frames with the patch composited into **output_dir**.
 - **fullframe_prefix**: prefix for full-frame files (e.g. `fullframe_0000.png`).

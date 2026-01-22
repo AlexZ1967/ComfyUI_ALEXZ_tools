@@ -9,6 +9,7 @@ import shutil
 import numpy as np
 import torch
 import torch.nn.functional as torch_nn_func
+import folder_paths
 from comfy import model_management
 from PIL import Image
 
@@ -760,7 +761,7 @@ def _compose_outputs_from_bbox(
 class VideoInpaintWatermark:
     def _stream_video(
         self,
-        video_path: str,
+        video: str,
         mask: torch.Tensor,
         method: str,
         mask_dilates: int,
@@ -789,12 +790,15 @@ class VideoInpaintWatermark:
         stream_start = STREAM_START_DEFAULT
         stream_end = STREAM_END_DEFAULT
         stream_stride = STREAM_STRIDE_DEFAULT
-        if not video_path:
-            raise ValueError("video_path is required.")
+        if not video:
+            raise ValueError("video is required.")
         if not output_dir:
             raise ValueError("output_dir is required.")
         if not cache_dir:
             raise ValueError("cache_dir is required.")
+        video_path = folder_paths.get_annotated_filepath(video)
+        if not os.path.exists(video_path):
+            raise ValueError(f"Video file not found: {video}")
         _purge_cached_inputs(cache_dir, output_name)
         try:
             import cv2
@@ -1153,6 +1157,10 @@ class VideoInpaintWatermark:
 
     @classmethod
     def INPUT_TYPES(cls):
+        input_dir = folder_paths.get_input_directory()
+        files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
+        files = folder_paths.filter_files_content_types(files, ["video"])
+        dir_choices = _list_candidate_dirs()
         return {
             "required": {
                 "mask": ("MASK", {"tooltip": "Маска для удаления (1 кадр или batch)."}),
@@ -1170,9 +1178,11 @@ class VideoInpaintWatermark:
                 "crop_padding": ("INT", {"default": 16, "min": 0, "max": 512, "tooltip": "Паддинг вокруг маски (0-512, типично 8–32)."}),
                 "color_match_mode": (["none", "mean_std", "linear", "hist", "lab_l", "lab_l_cdf", "lab_full", "lab_cdf"], {"default": "none", "tooltip": "Подгонка цвета по чистой зоне (mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)."}),
                 "cache_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для кэша обрезанного входа (RGB+mask). Обязательна."}),
+                "cache_dir_pick": (dir_choices if dir_choices else [""], {"default": dir_choices[0] if dir_choices else "", "tooltip": "Выбрать папку для кэша из найденных директорий."}),
                 "output_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для сохранения результата (PNG с альфой). Обязательна."}),
+                "output_dir_pick": (dir_choices if dir_choices else [""], {"default": dir_choices[0] if dir_choices else "", "tooltip": "Выбрать папку для результата из найденных директорий."}),
                 "output_name": ("STRING", {"default": "patch_", "multiline": False, "tooltip": "Префикс имени файлов (например: patch_ -> patch_0000.png)."}),
-                "video_path": ("STRING", {"default": "", "multiline": False, "tooltip": "Путь к видео для стриминга (например /path/video.mp4)."}),
+                "video": (sorted(files), {"video_upload": True, "tooltip": "Видео из папки input (Upload для добавления)."}),
                 "preview_frame": ("INT", {"default": 0, "min": -1, "max": 1000000, "tooltip": "Кадр для превью композита (0 = первый, -1 = не выводить)."}),
                 "write_fullframes": ("BOOLEAN", {"default": False, "tooltip": "Записать полные кадры с наложенным патчем."}),
                 "fullframe_prefix": ("STRING", {"default": "fullframe_", "multiline": False, "tooltip": "Префикс для полных кадров (fullframe_0000.png)."}),
@@ -1204,13 +1214,13 @@ class VideoInpaintWatermark:
         cache_dir: str,
         output_dir: str,
         output_name: str,
-        video_path: str,
+        video: str,
         preview_frame: int,
         write_fullframes: bool,
         fullframe_prefix: str,
     ):
         return self._stream_video(
-            video_path=video_path,
+            video=video,
             mask=mask,
             method=method,
             mask_dilates=mask_dilates,
