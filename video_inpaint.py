@@ -1160,7 +1160,6 @@ class VideoInpaintWatermark:
         input_dir = folder_paths.get_input_directory()
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         files = folder_paths.filter_files_content_types(files, ["video"])
-        dir_choices = _list_candidate_dirs()
         return {
             "required": {
                 "mask": ("MASK", {"tooltip": "Маска для удаления (1 кадр или batch)."}),
@@ -1178,9 +1177,7 @@ class VideoInpaintWatermark:
                 "crop_padding": ("INT", {"default": 16, "min": 0, "max": 512, "tooltip": "Паддинг вокруг маски (0-512, типично 8–32)."}),
                 "color_match_mode": (["none", "mean_std", "linear", "hist", "lab_l", "lab_l_cdf", "lab_full", "lab_cdf"], {"default": "none", "tooltip": "Подгонка цвета по чистой зоне (mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)."}),
                 "cache_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для кэша обрезанного входа (RGB+mask). Обязательна."}),
-                "cache_dir_pick": (dir_choices if dir_choices else [""], {"default": dir_choices[0] if dir_choices else "", "tooltip": "Выбрать папку для кэша из найденных директорий."}),
                 "output_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для сохранения результата (PNG с альфой). Обязательна."}),
-                "output_dir_pick": (dir_choices if dir_choices else [""], {"default": dir_choices[0] if dir_choices else "", "tooltip": "Выбрать папку для результата из найденных директорий."}),
                 "output_name": ("STRING", {"default": "patch_", "multiline": False, "tooltip": "Префикс имени файлов (например: patch_ -> patch_0000.png)."}),
                 "video": (sorted(files), {"video_upload": True, "tooltip": "Видео из папки input (Upload для добавления)."}),
                 "preview_frame": ("INT", {"default": 0, "min": -1, "max": 1000000, "tooltip": "Кадр для превью композита (0 = первый, -1 = не выводить)."}),
