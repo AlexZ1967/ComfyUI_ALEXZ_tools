@@ -10,6 +10,7 @@
 - Логируемая загрузка нод при старте (видно, что загрузилось/почему упало).
 - Исправлен perceptual_vgg: принудительное отключение inference_mode для корректного backward (фикc падения "does not require grad").
 - Добавлен tqdm‑прогресс в perceptual_vgg и лог скачивания весов AdaIN/VGG (видно процесс загрузки/оптимизации).
+- Доп. фикс perceptual_vgg: выходим из inference_mode и клонируем входы перед оптимизацией, чтобы не ловить `Inference tensors cannot be saved for backward`.
 
 ## 0.6.3 — 2026-01-27
 - Torch-only pipeline (GPU/CPU), perf tips для Color Match.

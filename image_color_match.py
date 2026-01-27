@@ -5,6 +5,7 @@ from typing import Optional
 
 import os
 import urllib.request
+from contextlib import nullcontext
 
 import torch
 import torch.nn.functional as F
@@ -311,17 +312,21 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
     b = torch.zeros(3, device=device, dtype=img.dtype).requires_grad_(True)
     opt = torch.optim.Adam([W, b], lr=lr)
 
-    ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else torch.enable_grad()
+    # Exit inference_mode if enabled and recreate tensors to avoid "Inference tensors cannot be saved for backward"
+    ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else nullcontext()
     steps_int = max(1, int(steps))
     with ctx:
-        iterator = tqdm(range(steps_int), desc="perceptual_vgg", leave=False)
-        for _ in iterator:
-            opt.zero_grad(set_to_none=True)
-            x = torch.clamp(torch.einsum("hwc,dc->hwd", img, W) + b, 0.0, 1.0)
-            feat_x = vgg(prep(x))
-            loss = torch.mean((feat_x - feat_ref) ** 2)
-            loss.backward()
-            opt.step()
+        img_work = img.detach().clone()
+        ref_work = ref.detach().clone()
+        with torch.enable_grad():
+            iterator = tqdm(range(steps_int), desc="perceptual_vgg", leave=False)
+            for _ in iterator:
+                opt.zero_grad(set_to_none=True)
+                x = torch.clamp(torch.einsum("hwc,dc->hwd", img_work, W) + b, 0.0, 1.0)
+                feat_x = vgg(prep(x))
+                loss = torch.mean((feat_x - feat_ref) ** 2)
+                loss.backward()
+                opt.step()
 
     corrected = torch.clamp(torch.einsum("hwc,dc->hwd", img, W.detach()) + b.detach(), 0.0, 1.0)
     params = {
