@@ -3,6 +3,9 @@ import logging
 import math
 from typing import Optional
 
+import os
+import urllib.request
+
 import torch
 import torch.nn.functional as F
 
@@ -374,6 +377,85 @@ def _build_1d_cube_lut(resolve_params: dict | None, size: int) -> str | None:
     return "\n".join(lines)
 
 
+# --- AdaIN (encoder/decoder) ---
+
+
+def _adain_style_transfer(content: torch.Tensor, style: torch.Tensor, encoder, decoder):
+    def encode(x):
+        return encoder(x)
+
+    def calc_mean_std(feat, eps=1e-5):
+        size = feat.size()
+        N, C = size[:2]
+        feat_var = feat.view(N, C, -1).var(dim=2) + eps
+        feat_std = feat_var.sqrt().view(N, C, 1, 1)
+        feat_mean = feat.view(N, C, -1).mean(dim=2).view(N, C, 1, 1)
+        return feat_mean, feat_std
+
+    with torch.no_grad():
+        f_c = encode(content)
+        f_s = encode(style)
+        mean_c, std_c = calc_mean_std(f_c)
+        mean_s, std_s = calc_mean_std(f_s)
+        norm = (f_c - mean_c) / std_c
+        t = norm * std_s + mean_s
+        out = decoder(t)
+    return torch.clamp(out, 0.0, 1.0)
+
+
+def _load_adain_weights(device):
+    base = os.path.join(os.path.dirname(__file__), "models", "color_match", "adain")
+    os.makedirs(base, exist_ok=True)
+    vgg_path = os.path.join(base, "vgg_normalised.pth")
+    dec_path = os.path.join(base, "decoder.pth")
+    # auto-download if missing
+    if not os.path.exists(vgg_path):
+        urllib.request.urlretrieve(
+            "https://github.com/naoto0804/pytorch-AdaIN/raw/master/models/vgg_normalised.pth",
+            vgg_path,
+        )
+    if not os.path.exists(dec_path):
+        urllib.request.urlretrieve(
+            "https://github.com/naoto0804/pytorch-AdaIN/raw/master/models/decoder.pth",
+            dec_path,
+        )
+
+    from torchvision.models import vgg19
+
+    vgg = vgg19(weights=None).features.to(device).eval()
+    vgg.load_state_dict(torch.load(vgg_path, map_location=device))
+    encoder = torch.nn.Sequential(*list(vgg.children())[:21]).eval()  # up to relu4_1
+    for p in encoder.parameters():
+        p.requires_grad_(False)
+
+    decoder = torch.nn.Sequential(
+        torch.nn.Conv2d(512, 256, 3, 1, 1),
+        torch.nn.ReLU(inplace=True),
+        torch.nn.Upsample(scale_factor=2, mode="nearest"),
+        torch.nn.Conv2d(256, 256, 3, 1, 1),
+        torch.nn.ReLU(inplace=True),
+        torch.nn.Conv2d(256, 256, 3, 1, 1),
+        torch.nn.ReLU(inplace=True),
+        torch.nn.Conv2d(256, 256, 3, 1, 1),
+        torch.nn.ReLU(inplace=True),
+        torch.nn.Conv2d(256, 128, 3, 1, 1),
+        torch.nn.ReLU(inplace=True),
+        torch.nn.Upsample(scale_factor=2, mode="nearest"),
+        torch.nn.Conv2d(128, 128, 3, 1, 1),
+        torch.nn.ReLU(inplace=True),
+        torch.nn.Conv2d(128, 64, 3, 1, 1),
+        torch.nn.ReLU(inplace=True),
+        torch.nn.Upsample(scale_factor=2, mode="nearest"),
+        torch.nn.Conv2d(64, 64, 3, 1, 1),
+        torch.nn.ReLU(inplace=True),
+        torch.nn.Conv2d(64, 3, 3, 1, 1),
+    ).to(device).eval()
+    decoder.load_state_dict(torch.load(dec_path, map_location=device))
+    for p in decoder.parameters():
+        p.requires_grad_(False)
+    return encoder, decoder
+
+
 class ImageColorMatchToReference:
     @classmethod
     def INPUT_TYPES(cls):
@@ -381,7 +463,7 @@ class ImageColorMatchToReference:
             "required": {
                 "reference": ("IMAGE", {"tooltip": "Базовое изображение (образец)."}),
                 "image": ("IMAGE", {"tooltip": "Изображение, которое нужно подогнать по цвету."}),
-                "mode": (["levels", "mean_std", "linear", "hist", "pca_cov", "lab_l", "lab_full", "lab_l_cdf", "lab_cdf", "hsv_shift", "perceptual_vgg"], {"default": "levels", "tooltip": "Метод коррекции."}),
+                "mode": (["levels", "mean_std", "linear", "hist", "pca_cov", "lab_l", "lab_full", "lab_l_cdf", "lab_cdf", "hsv_shift", "perceptual_vgg", "perceptual_adain"], {"default": "levels", "tooltip": "Метод коррекции."}),
                 "percentile": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 5.0, "step": 0.1, "tooltip": "Процентиль для levels (обрезка хвостов)."}),
                 "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила применения коррекции (0..1)."}),
                 "clip": ("BOOLEAN", {"default": True, "tooltip": "Обрезать результат в диапазоне 0..1."}),
@@ -482,6 +564,14 @@ class ImageColorMatchToReference:
                 corrected_t = _lab_match_torch(img_t, ref_t, mm_t, mode)
             elif mode == "perceptual_vgg":
                 corrected_t, deep_params = _perceptual_vgg(img_t, ref_t, perceptual_steps, perceptual_lr)
+            elif mode == "perceptual_adain":
+                encoder, decoder = _load_adain_weights(img_t.device)
+                # HWC -> NCHW
+                c_bchw = img_t.permute(2, 0, 1).unsqueeze(0)
+                s_bchw = ref_t.permute(2, 0, 1).unsqueeze(0)
+                corrected_bchw = _adain_style_transfer(c_bchw, s_bchw, encoder, decoder)
+                corrected_t = torch.clamp(corrected_bchw.squeeze(0).permute(1, 2, 0), 0.0, 1.0)
+                deep_params = {"mode": "adain", "weights": "naoto0804/pytorch-AdaIN"}
             else:
                 corrected_t = img_t
 
