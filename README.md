@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.6.2
+Version: 0.6.3
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-27 | v0.6.3 | Color Match: torch-only (GPU) обработка, подсказки по скорости.
 - 2026-01-27 | v0.6.2 | Color Match: waveform/parade, ΔE метрики, heatmap, расширенный JSON.
 - 2026-01-27 | v0.6.1 | Color Match To Reference: добавлены режимы PCA/strength, LUT экспорт; документация обновлена.
 - 2026-01-27 | v0.6.0 | New node: Color Match To Reference (цветокоррекция по образцу, difference и JSON для GIMP/Resolve/Fusion).
@@ -199,6 +200,11 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - GIMP: Colors → Levels (R/G/B: black, white, gamma), при необходимости Colors → Hue-Saturation (Hue shift, Saturation %, Value %).
 - Resolve/Fusion: в Primaries/ColorCorrector выставить Gain (scale), Lift (offset), Gamma (power) по каналам; значения в match_json.
 
+Производительность (torch-only):
+- Нода работает на том же устройстве, что входные тензоры (GPU ускоряет все режимы, включая waveform и ΔE).
+- Самые дешёвые режимы: `mean_std`, `linear`. Дороже: `hist`, `pca_cov`, `lab_*` (особенно cdf). Waveform/heatmap добавляют вычисления, выключайте при неиспользовании.
+- При сильных батчах/высоких разрешениях уменьшите `waveform_width` и отключите `deltae_heatmap` для экономии времени.
+
 #### Remove Static Watermark from Video
 Нода для удаления объектов/водяных знаков на видео через инпейтинг. Варианты
 ProPainter и E2FGVI встроены. Веса хранятся в `propainter/weights/` и
@@ -331,6 +337,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-27 | v0.6.3 | Color Match: torch-only pipeline (GPU/CPU), perf tips.
 - 2026-01-27 | v0.6.2 | Color Match: added waveform/parade outputs, ΔE stats/heatmap, richer JSON.
 - 2026-01-27 | v0.6.1 | Color Match To Reference: new PCA mode, strength blending, optional 1D LUT export; docs updated.
 - 2026-01-27 | v0.6.0 | New node: Color Match To Reference (sample-based color match, difference, JSON for GIMP/Resolve/Fusion).
