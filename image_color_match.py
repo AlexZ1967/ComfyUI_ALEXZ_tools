@@ -545,8 +545,8 @@ class ImageColorMatchToReference:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "STRING")
-    RETURN_NAMES = ("matched_image", "difference", "deltae_heatmap", "waveform_ref", "waveform_matched", "match_json")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "STRING")
+    RETURN_NAMES = ("matched_image", "difference", "raw_difference", "deltae_heatmap", "waveform_ref", "waveform_matched", "match_json")
     FUNCTION = "match"
     CATEGORY = "image/color"
 
@@ -576,6 +576,7 @@ class ImageColorMatchToReference:
         matched_list = []
         diff_list = []
         deltae_list = []
+        raw_diff_list = []
         wave_ref_list = []
         wave_match_list = []
         json_list = []
@@ -676,6 +677,7 @@ class ImageColorMatchToReference:
                 matched_t = torch.cat([matched_t, alpha_channel], dim=-1)
 
             diff = torch.abs(matched_t[..., :3] - ref_t)
+            raw_diff = torch.abs(img_t[..., :3] - ref_t)
             delta_e = _delta_e76(_rgb_to_lab(ref_t), _rgb_to_lab(corrected_t))
             delta_stats = _delta_e_stats(delta_e)
 
@@ -745,6 +747,7 @@ class ImageColorMatchToReference:
             json_list.append(json.dumps(payload, ensure_ascii=True))
             matched_list.append(matched_t.cpu())
             diff_list.append(diff.cpu())
+            raw_diff_list.append(raw_diff.cpu())
             deltae_list.append(heat.cpu())
             wave_ref_list.append(wave_ref.cpu())
             wave_match_list.append(wave_match.cpu())
@@ -752,6 +755,7 @@ class ImageColorMatchToReference:
         return (
             torch.stack(matched_list, dim=0),
             torch.stack(diff_list, dim=0),
+            torch.stack(raw_diff_list, dim=0),
             torch.stack(deltae_list, dim=0),
             torch.stack(wave_ref_list, dim=0),
             torch.stack(wave_match_list, dim=0),
