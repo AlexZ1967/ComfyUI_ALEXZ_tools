@@ -15,6 +15,7 @@ _NODE_SPECS = [
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 LOAD_RESULTS = {"ok": [], "fail": []}
+_LOG_LINES = []
 
 
 def _load_node(name: str, display: str, module: str, attr: str):
@@ -24,14 +25,21 @@ def _load_node(name: str, display: str, module: str, attr: str):
         NODE_CLASS_MAPPINGS[name] = cls
         NODE_DISPLAY_NAME_MAPPINGS[name] = display
         LOAD_RESULTS["ok"].append(name)
-        _LOGGER.info("Loaded node %s (%s.%s)", name, module, attr)
+        _LOG_LINES.append(f"✅ {display} loaded")
     except Exception as exc:  # pragma: no cover - diagnostic
         LOAD_RESULTS["fail"].append({"name": name, "reason": str(exc)})
+        _LOG_LINES.append(f"❌ {display} failed: {exc}")
         _LOGGER.error("Failed to load node %s: %s\n%s", name, exc, traceback.format_exc())
 
 
 for _name, _disp, _mod, _attr in _NODE_SPECS:
     _load_node(_name, _disp, _mod, _attr)
+
+# Compact startup log
+header = "ALEXZ_tools loading..."
+_LOGGER.info(header)
+for line in _LOG_LINES:
+    _LOGGER.info(line)
 
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "LOAD_RESULTS"]
