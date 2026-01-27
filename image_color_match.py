@@ -304,7 +304,8 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
     b = torch.zeros(3, device=device, dtype=img.dtype).requires_grad_(True)
     opt = torch.optim.Adam([W, b], lr=lr)
 
-    with torch.enable_grad():
+    ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else torch.enable_grad()
+    with ctx:
         for _ in range(int(steps)):
             opt.zero_grad(set_to_none=True)
             x = torch.clamp(torch.einsum("hwc,dc->hwd", img, W) + b, 0.0, 1.0)

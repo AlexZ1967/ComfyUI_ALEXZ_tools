@@ -8,6 +8,7 @@
 - Добавлены stub-режимы perceptual_ltct/lut3d/unet (требуют весов).
 - README упрощён, гайды вынесены в отдельные файлы с линками из описаний нод.
 - Логируемая загрузка нод при старте (видно, что загрузилось/почему упало).
+- Исправлен perceptual_vgg: принудительное отключение inference_mode для корректного backward (фикc падения "does not require grad").
 
 ## 0.6.3 — 2026-01-27
 - Torch-only pipeline (GPU/CPU), perf tips для Color Match.
