@@ -278,6 +278,48 @@ def _heatmap(de: torch.Tensor, vmax: float = 20.0):
     return torch.clamp(torch.stack([r, g, b], dim=-1), 0.0, 1.0)
 
 
+def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float):
+    # optimize 3x3 color matrix + bias to minimize VGG relu3_1 MSE
+    from torchvision.models import vgg19, VGG19_Weights
+
+    device = img.device
+    vgg = vgg19(weights=VGG19_Weights.DEFAULT).features[:12].to(device).eval()  # up to relu3_1
+    for p in vgg.parameters():
+        p.requires_grad = False
+
+    def prep(x):
+        # x: HWC 0..1
+        x = x.permute(2, 0, 1).unsqueeze(0)
+        mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225], device=device).view(1, 3, 1, 1)
+        return (x - mean) / std
+
+    with torch.no_grad():
+        feat_ref = vgg(prep(ref))
+
+    W = torch.eye(3, device=device, dtype=img.dtype).requires_grad_(True)
+    b = torch.zeros(3, device=device, dtype=img.dtype).requires_grad_(True)
+    opt = torch.optim.Adam([W, b], lr=lr)
+
+    for _ in range(int(steps)):
+        opt.zero_grad(set_to_none=True)
+        x = torch.clamp(torch.einsum("hwc,dc->hwd", img, W) + b, 0.0, 1.0)
+        feat_x = vgg(prep(x))
+        loss = torch.mean((feat_x - feat_ref) ** 2)
+        loss.backward()
+        opt.step()
+
+    corrected = torch.clamp(torch.einsum("hwc,dc->hwd", img, W.detach()) + b.detach(), 0.0, 1.0)
+    params = {
+        "matrix": W.detach().cpu().tolist(),
+        "bias": b.detach().cpu().tolist(),
+        "loss_final": float(loss.detach().cpu()),
+        "steps": int(steps),
+        "lr": float(lr),
+    }
+    return corrected, params
+
+
 def _waveform(img: torch.Tensor, mode: str, width: int, gain: float, use_log: bool):
     img = torch.clamp(img, 0.0, 1.0)
     H_in, W_in, _ = img.shape
@@ -339,7 +381,7 @@ class ImageColorMatchToReference:
             "required": {
                 "reference": ("IMAGE", {"tooltip": "Базовое изображение (образец)."}),
                 "image": ("IMAGE", {"tooltip": "Изображение, которое нужно подогнать по цвету."}),
-                "mode": (["levels", "mean_std", "linear", "hist", "pca_cov", "lab_l", "lab_full", "lab_l_cdf", "lab_cdf", "hsv_shift"], {"default": "levels", "tooltip": "Метод коррекции."}),
+                "mode": (["levels", "mean_std", "linear", "hist", "pca_cov", "lab_l", "lab_full", "lab_l_cdf", "lab_cdf", "hsv_shift", "perceptual_vgg"], {"default": "levels", "tooltip": "Метод коррекции."}),
                 "percentile": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 5.0, "step": 0.1, "tooltip": "Процентиль для levels (обрезка хвостов)."}),
                 "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила применения коррекции (0..1)."}),
                 "clip": ("BOOLEAN", {"default": True, "tooltip": "Обрезать результат в диапазоне 0..1."}),
@@ -356,6 +398,8 @@ class ImageColorMatchToReference:
                 "waveform_gain": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1, "tooltip": "Усиление яркости точек waveform."}),
                 "waveform_log": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала интенсивностей waveform."}),
                 "deltae_heatmap": ("BOOLEAN", {"default": False, "tooltip": "Вывести heatmap ΔE как IMAGE."}),
+                "perceptual_steps": ("INT", {"default": 30, "min": 1, "max": 200, "tooltip": "Итерации оптимизации для perceptual_vgg."}),
+                "perceptual_lr": ("FLOAT", {"default": 0.05, "min": 0.001, "max": 0.5, "step": 0.01, "tooltip": "LR для perceptual_vgg (оптимизация 3x3+bias)."}),
             },
         }
 
@@ -383,6 +427,8 @@ class ImageColorMatchToReference:
         waveform_gain=1.0,
         waveform_log=True,
         deltae_heatmap=False,
+        perceptual_steps=30,
+        perceptual_lr=0.05,
     ):
         batch_size = max(reference.shape[0], image.shape[0])
         matched_list = []
@@ -418,6 +464,7 @@ class ImageColorMatchToReference:
             status = "ok"
             gimp_levels = None
             gimp_hsv = None
+            deep_params = None
 
             if mode == "levels":
                 corrected_t, gimp_levels, status = _apply_levels(img_t, ref_t, mm_t, float(percentile))
@@ -433,6 +480,8 @@ class ImageColorMatchToReference:
                 corrected_t = _pca_cov(img_t, ref_t, mm_t)
             elif mode in ("lab_l", "lab_full", "lab_l_cdf", "lab_cdf"):
                 corrected_t = _lab_match_torch(img_t, ref_t, mm_t, mode)
+            elif mode == "perceptual_vgg":
+                corrected_t, deep_params = _perceptual_vgg(img_t, ref_t, perceptual_steps, perceptual_lr)
             else:
                 corrected_t = img_t
 
@@ -526,6 +575,7 @@ class ImageColorMatchToReference:
                     "scale": resolve_params["scale"] if resolve_params else None,
                     "offset": resolve_params["offset"] if resolve_params else None,
                 },
+                "deep": deep_params,
                 "presets": presets,
                 "stats": stats,
             }

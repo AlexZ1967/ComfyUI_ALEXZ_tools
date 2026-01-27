@@ -7,7 +7,7 @@ Version: 0.6.3
 Outpaint и ноду выравнивания оверлея по бэкграунду с выводом параметров
 трансформации.
 
-### Изменения
+- 2026-01-27 | v0.6.4 | Color Match: добавлен perceptual_vgg (VGG19, без скачивания весов вручную).
 - 2026-01-27 | v0.6.3 | Color Match: torch-only (GPU) обработка, подсказки по скорости.
 - 2026-01-27 | v0.6.2 | Color Match: waveform/parade, ΔE метрики, heatmap, расширенный JSON.
 - 2026-01-27 | v0.6.1 | Color Match To Reference: добавлены режимы PCA/strength, LUT экспорт; документация обновлена.
@@ -336,7 +336,7 @@ ProPainter и E2FGVI встроены. Веса хранятся в `propainter/
 A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
-### Changelog
+- 2026-01-27 | v0.6.4 | Color Match: new mode perceptual_vgg (optimizes 3x3+bias by VGG19 perceptual loss).
 - 2026-01-27 | v0.6.3 | Color Match: torch-only pipeline (GPU/CPU), perf tips.
 - 2026-01-27 | v0.6.2 | Color Match: added waveform/parade outputs, ΔE stats/heatmap, richer JSON.
 - 2026-01-27 | v0.6.1 | Color Match To Reference: new PCA mode, strength blending, optional 1D LUT export; docs updated.
@@ -490,19 +490,8 @@ difference map, and JSON with parameters for GIMP, DaVinci Resolve, and Fusion.
 - Type name: ImageColorMatchToReference
 - Category: image/color
 
-Inputs:
-- **reference** (IMAGE) — sample image.
-- **image** (IMAGE) — image to correct.
-- **mode** (levels/mean_std/linear/hist/pca_cov/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift)
-- **percentile** (FLOAT) — tail trimming for levels (0..5%).
-- **strength** (FLOAT) — blend strength (0..1) with the original image.
-- **clip** (BOOLEAN) — clamp output to 0..1.
-- **match_mask** (MASK, optional) — where to compute stats (white=use).
-- **apply_mask** (MASK, optional) — where to apply correction (white=apply).
-- **preserve_alpha** (BOOLEAN) — keep alpha if present.
-- **export_lut / lut_size** — generate 1D LUT (.cube).
-- **waveform_enabled / waveform_mode / waveform_width / waveform_gain / waveform_log** — enable waveform/parade outputs.
-- **deltae_heatmap** — output ΔE heatmap image.
+- **mode** (levels/mean_std/linear/hist/pca_cov/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift/perceptual_vgg)
+- **perceptual_steps / perceptual_lr** — VGG19 perceptual mode (optimizes 3x3+bias).
 
 Outputs:
 - **matched_image** (IMAGE) — corrected image.
