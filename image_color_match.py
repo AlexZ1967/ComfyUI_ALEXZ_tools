@@ -9,6 +9,12 @@ import urllib.request
 import torch
 import torch.nn.functional as F
 
+try:
+    from tqdm.auto import tqdm
+except Exception:  # pragma: no cover - optional dependency
+    def tqdm(iterable=None, **kwargs):
+        return iterable if iterable is not None else []
+
 from .color_match_utils import normalize_mask, resize_mask_to_output
 from .utils import select_batch_item
 
@@ -286,6 +292,7 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
     from torchvision.models import vgg19, VGG19_Weights
 
     device = img.device
+    _LOGGER.info("Loading VGG19 (perceptual_vgg)...")
     vgg = vgg19(weights=VGG19_Weights.DEFAULT).features[:12].to(device).eval()  # up to relu3_1
     for p in vgg.parameters():
         p.requires_grad = False
@@ -305,8 +312,10 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
     opt = torch.optim.Adam([W, b], lr=lr)
 
     ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else torch.enable_grad()
+    steps_int = max(1, int(steps))
     with ctx:
-        for _ in range(int(steps)):
+        iterator = tqdm(range(steps_int), desc="perceptual_vgg", leave=False)
+        for _ in iterator:
             opt.zero_grad(set_to_none=True)
             x = torch.clamp(torch.einsum("hwc,dc->hwd", img, W) + b, 0.0, 1.0)
             feat_x = vgg(prep(x))
@@ -412,11 +421,13 @@ def _load_adain_weights(device):
     dec_path = os.path.join(base, "decoder.pth")
     # auto-download if missing
     if not os.path.exists(vgg_path):
+        _LOGGER.info("Downloading AdaIN encoder weights...")
         urllib.request.urlretrieve(
             "https://github.com/naoto0804/pytorch-AdaIN/raw/master/models/vgg_normalised.pth",
             vgg_path,
         )
     if not os.path.exists(dec_path):
+        _LOGGER.info("Downloading AdaIN decoder weights...")
         urllib.request.urlretrieve(
             "https://github.com/naoto0804/pytorch-AdaIN/raw/master/models/decoder.pth",
             dec_path,
