@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.5.4
+Version: 0.5.5
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-27 | v0.5.5 | New node: Color Match To Reference (цветокоррекция по образцу, difference и JSON для GIMP/Resolve/Fusion).
 - 2026-01-21 | v0.5.4 | VideoInpaintWatermark: выбор видео через Upload/список input, пути к кэшу/выходу вводятся вручную (упрощено).
 - 2026-01-21 | v0.5.3 | VideoInpaintWatermark: выходы упрощены до preview_image + transform_json (без маски).
 - 2026-01-21 | v0.5.2 | VideoInpaintWatermark: запись полноразмерных кадров (fullframe_*) при стриминге.
@@ -149,6 +150,43 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - **normalized_center**: центр в 0..1:
   **top_left** — origin в левом верхнем; **bottom_left** — origin в левом нижнем.
 
+#### Color Match To Reference
+Подгоняет цвет/яркость изображения под образец. Выводит скорректированное изображение,
+карту разницы и JSON с параметрами для GIMP, DaVinci Resolve и Fusion.
+
+- Display name: Color Match To Reference
+- Type name: ImageColorMatchToReference
+- Category: image/color
+
+Входы:
+- **reference** (IMAGE) — образец.
+- **image** (IMAGE) — картинка для коррекции.
+- **mode** (levels/mean_std/linear/hist/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift)
+- **percentile** (FLOAT) — обрезка хвостов для levels (0..5%).
+- **clip** (BOOLEAN) — обрезать результат 0..1.
+- **match_mask** (MASK, optional) — где считать статистику (белое=учитывать).
+- **apply_mask** (MASK, optional) — где применять коррекцию (белое=применить).
+- **preserve_alpha** (BOOLEAN) — сохранить альфу, если есть.
+
+Выходы:
+- **matched_image** (IMAGE) — скорректированное изображение.
+- **difference** (IMAGE) — |matched - reference| в RGB.
+- **match_json** (STRING) — параметры коррекции и пресеты.
+
+Поля match_json:
+- **status/mode** — итог и выбранный метод.
+- **gimp_levels** — per-channel input black/white/gamma (+black_out/white_out).
+- **gimp_hsv** — hue_shift_deg, saturation_mul, value_mul (для hsv_shift).
+- **resolve** — scale (gain), offset (lift), gamma (per-channel).
+- **fusion** — gain/lift/gamma для ColorCorrector.
+- **linear** — scale/offset (линейная аппроксимация).
+- **presets** — блоки gimp/resolve/fusion с подсказками.
+- **stats** — средние и σ reference/image, была ли маска.
+
+Применение:
+- GIMP: Colors → Levels (R/G/B: black, white, gamma), при необходимости Colors → Hue-Saturation (Hue shift, Saturation %, Value %).
+- Resolve/Fusion: в Primaries/ColorCorrector выставить Gain (scale), Lift (offset), Gamma (power) по каналам; значения в match_json.
+
 #### Remove Static Watermark from Video
 Нода для удаления объектов/водяных знаков на видео через инпейтинг. Варианты
 ProPainter и E2FGVI встроены. Веса хранятся в `propainter/weights/` и
@@ -281,6 +319,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-27 | v0.5.5 | New node: Color Match To Reference (sample-based color match, difference, JSON for GIMP/Resolve/Fusion).
 - 2026-01-21 | v0.5.4 | VideoInpaintWatermark: video selection via Upload/input list; cache/output paths remain manual (simplified).
 - 2026-01-21 | v0.5.3 | VideoInpaintWatermark: outputs simplified to preview_image + transform_json (no mask).
 - 2026-01-21 | v0.5.2 | VideoInpaintWatermark: full-frame output (fullframe_*) in streaming mode.
@@ -421,6 +460,43 @@ transform_json fields:
   **top_left** origin; **center** origin.
 - **normalized_center**: center in 0..1:
   **top_left** origin; **bottom_left** origin.
+
+#### Color Match To Reference
+Matches color/brightness of an image to a reference. Outputs corrected image,
+difference map, and JSON with parameters for GIMP, DaVinci Resolve, and Fusion.
+
+- Display name: Color Match To Reference
+- Type name: ImageColorMatchToReference
+- Category: image/color
+
+Inputs:
+- **reference** (IMAGE) — sample image.
+- **image** (IMAGE) — image to correct.
+- **mode** (levels/mean_std/linear/hist/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift)
+- **percentile** (FLOAT) — tail trimming for levels (0..5%).
+- **clip** (BOOLEAN) — clamp output to 0..1.
+- **match_mask** (MASK, optional) — where to compute stats (white=use).
+- **apply_mask** (MASK, optional) — where to apply correction (white=apply).
+- **preserve_alpha** (BOOLEAN) — keep alpha if present.
+
+Outputs:
+- **matched_image** (IMAGE) — corrected image.
+- **difference** (IMAGE) — |matched - reference| in RGB.
+- **match_json** (STRING) — correction params and presets.
+
+match_json fields:
+- **status/mode** — result and chosen method.
+- **gimp_levels** — per-channel input black/white/gamma (+black_out/white_out).
+- **gimp_hsv** — hue_shift_deg, saturation_mul, value_mul (for hsv_shift).
+- **resolve** — scale (gain), offset (lift), gamma (per-channel).
+- **fusion** — gain/lift/gamma for ColorCorrector.
+- **linear** — scale/offset (linear approximation).
+- **presets** — blocks gimp/resolve/fusion with short hints.
+- **stats** — means & std for reference/image, whether mask was used.
+
+How to apply:
+- GIMP: Colors → Levels (R/G/B: black, white, gamma); optionally Colors → Hue-Saturation (Hue shift, Saturation %, Value %).
+- Resolve/Fusion: in Primaries/ColorCorrector set Gain (scale), Lift (offset), Gamma (power) per channel; values are in match_json.
 
 #### Remove Static Watermark from Video
 Node for removing objects/watermarks on video via inpainting. ProPainter and

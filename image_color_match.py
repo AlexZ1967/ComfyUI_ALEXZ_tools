@@ -74,8 +74,27 @@ def _apply_levels(
             "black": int(round(black_in * 255.0)),
             "white": int(round(white_in * 255.0)),
             "gamma": round(float(gamma), 4),
+            "black_out": int(round(black_out * 255.0)),
+            "white_out": int(round(white_out * 255.0)),
         }
     return out, params, "ok"
+
+
+def _linear_fit(img: np.ndarray, ref: np.ndarray, mask: Optional[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+    if mask is not None:
+        keep = mask
+        img_sel = img[keep]
+        ref_sel = ref[keep]
+    else:
+        img_sel = img.reshape(-1, 3)
+        ref_sel = ref.reshape(-1, 3)
+    mean_img = img_sel.mean(axis=0)
+    mean_ref = ref_sel.mean(axis=0)
+    std_img = img_sel.std(axis=0)
+    std_ref = ref_sel.std(axis=0)
+    scale = np.where(std_img > _EPS, std_ref / std_img, 1.0)
+    offset = mean_ref - scale * mean_img
+    return scale, offset
 
 
 def _apply_hsv_shift(img: np.ndarray, ref: np.ndarray, mask: Optional[np.ndarray]) -> tuple[np.ndarray, dict, str]:
@@ -193,6 +212,10 @@ class ImageColorMatchToReference:
             status = "ok"
             gimp_levels = None
             gimp_hsv = None
+            resolve_params = None
+            fusion_params = None
+            linear_scale = None
+            linear_offset = None
 
             if mode == "levels":
                 corrected, gimp_levels, status = _apply_levels(img_np, ref_np, match_mask_np, float(percentile))
@@ -214,6 +237,21 @@ class ImageColorMatchToReference:
             if status.startswith("error"):
                 corrected = img_np
 
+            linear_scale, linear_offset = _linear_fit(img_np, ref_np, match_mask_np)
+            resolve_params = {
+                "scale": [round(float(s), 5) for s in linear_scale],
+                "offset": [round(float(o), 5) for o in linear_offset],
+                "gamma": [
+                    gimp_levels[k]["gamma"] if gimp_levels else 1.0
+                    for k in ("r", "g", "b")
+                ],
+            }
+            fusion_params = {
+                "gain": resolve_params["scale"],
+                "lift": resolve_params["offset"],
+                "gamma": resolve_params["gamma"],
+            }
+
             if am_t is not None:
                 mask_apply = am_t.detach().cpu().numpy()[..., None]
                 corrected = corrected * mask_apply + img_np * (1.0 - mask_apply)
@@ -230,13 +268,45 @@ class ImageColorMatchToReference:
             stats = {
                 "ref_mean": [round(float(x), 4) for x in ref_np.reshape(-1, 3).mean(axis=0)],
                 "img_mean": [round(float(x), 4) for x in img_np.reshape(-1, 3).mean(axis=0)],
+                "ref_std": [round(float(x), 4) for x in ref_np.reshape(-1, 3).std(axis=0)],
+                "img_std": [round(float(x), 4) for x in img_np.reshape(-1, 3).std(axis=0)],
                 "mask_used": match_mask_np is not None,
+            }
+            presets = {
+                "gimp": {
+                    "levels": gimp_levels,
+                    "hue_saturation": gimp_hsv,
+                    "hint": "Colors -> Levels (set per-channel input black/white/gamma); Colors -> Hue-Saturation for hue/sat/value.",
+                },
+                "resolve": {
+                    "color_wheels": {
+                        "gain": resolve_params["scale"] if resolve_params else None,
+                        "lift": resolve_params["offset"] if resolve_params else None,
+                        "gamma": resolve_params["gamma"] if resolve_params else None,
+                    },
+                    "hint": "Apply gain/offset per channel in Primaries (Log/Wheels). Gamma ~= per-channel power.",
+                },
+                "fusion": {
+                    "color_corrector": {
+                        "gain": fusion_params["gain"] if fusion_params else None,
+                        "lift": fusion_params["lift"] if fusion_params else None,
+                        "gamma": fusion_params["gamma"] if fusion_params else None,
+                    },
+                    "hint": "In CC node: set Gain RGB, Lift RGB, Gamma RGB.",
+                },
             }
             payload = {
                 "status": status,
                 "mode": mode,
                 "gimp_levels": gimp_levels,
                 "gimp_hsv": gimp_hsv,
+                "resolve": resolve_params,
+                "fusion": fusion_params,
+                "linear": {
+                    "scale": [round(float(s), 5) for s in linear_scale] if linear_scale is not None else None,
+                    "offset": [round(float(o), 5) for o in linear_offset] if linear_offset is not None else None,
+                },
+                "presets": presets,
                 "stats": stats,
             }
             json_list.append(json.dumps(payload, ensure_ascii=True))
