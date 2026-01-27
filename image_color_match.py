@@ -339,6 +339,31 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
     return corrected, params
 
 
+def _perceptual_vgg_fast(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float, max_side: int = 256):
+    # downsample for speed, run perceptual_vgg with few steps, apply matrix to full-res
+    h, w, _ = img.shape
+    scale = 1.0
+    if max(h, w) > max_side:
+        scale = max_side / max(h, w)
+        new_h = max(1, int(round(h * scale)))
+        new_w = max(1, int(round(w * scale)))
+        img_small = F.interpolate(img.permute(2, 0, 1).unsqueeze(0), size=(new_h, new_w), mode="bilinear", align_corners=False).squeeze(0).permute(1, 2, 0)
+        ref_small = F.interpolate(ref.permute(2, 0, 1).unsqueeze(0), size=(new_h, new_w), mode="bilinear", align_corners=False).squeeze(0).permute(1, 2, 0)
+    else:
+        img_small, ref_small = img, ref
+
+    fast_steps = max(1, min(int(steps), 5))
+    corrected_small, params = _perceptual_vgg(img_small, ref_small, fast_steps, lr)
+    # apply learned matrix to full image
+    W = torch.tensor(params["matrix"], device=img.device, dtype=img.dtype)
+    b = torch.tensor(params["bias"], device=img.device, dtype=img.dtype)
+    corrected_full = torch.clamp(torch.einsum("hwc,dc->hwd", img, W) + b, 0.0, 1.0)
+    params["mode"] = "perceptual_vgg_fast"
+    params["used_scale"] = scale
+    params["used_steps"] = fast_steps
+    return corrected_full, params
+
+
 def _waveform(img: torch.Tensor, mode: str, width: int, gain: float, use_log: bool):
     img = torch.clamp(img, 0.0, 1.0)
     H_in, W_in, _ = img.shape
@@ -494,6 +519,7 @@ class ImageColorMatchToReference:
                     "hsv_shift",
                     "perceptual_vgg",
                     "perceptual_adain",
+                    "perceptual_vgg_fast",
                     "perceptual_ltct",
                     "perceptual_lut3d",
                     "perceptual_unet",
@@ -598,6 +624,8 @@ class ImageColorMatchToReference:
                 corrected_t = _lab_match_torch(img_t, ref_t, mm_t, mode)
             elif mode == "perceptual_vgg":
                 corrected_t, deep_params = _perceptual_vgg(img_t, ref_t, perceptual_steps, perceptual_lr)
+            elif mode == "perceptual_vgg_fast":
+                corrected_t, deep_params = _perceptual_vgg_fast(img_t, ref_t, perceptual_steps, perceptual_lr)
             elif mode == "perceptual_adain":
                 encoder, decoder = _load_adain_weights(img_t.device)
                 # HWC -> NCHW

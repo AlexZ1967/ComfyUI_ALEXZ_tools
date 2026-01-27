@@ -54,7 +54,7 @@ Guide: [GUIDE_ALIGN.md](GUIDE_ALIGN.md)
 - Type name: ImageColorMatchToReference  
 - Category: image/color
 
-Режимы: levels / mean_std / linear / hist / pca_cov / lab_l / lab_full / lab_l_cdf / lab_cdf / hsv_shift / perceptual_vgg / perceptual_adain / perceptual_ltct / perceptual_lut3d / perceptual_unet (последние три требуют веса).  
+Режимы: levels / mean_std / linear / hist / pca_cov / lab_l / lab_full / lab_l_cdf / lab_cdf / hsv_shift / perceptual_vgg / perceptual_vgg_fast / perceptual_adain / perceptual_ltct / perceptual_lut3d / perceptual_unet (последние три требуют веса).  
 Выходы: `matched_image`, `difference`, `deltae_heatmap`, `waveform_ref`, `waveform_matched`, `match_json`
 Guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md)
 
