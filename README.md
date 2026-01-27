@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.6.1
+Version: 0.6.2
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-27 | v0.6.2 | Color Match: waveform/parade, ΔE метрики, heatmap, расширенный JSON.
 - 2026-01-27 | v0.6.1 | Color Match To Reference: добавлены режимы PCA/strength, LUT экспорт; документация обновлена.
 - 2026-01-27 | v0.6.0 | New node: Color Match To Reference (цветокоррекция по образцу, difference и JSON для GIMP/Resolve/Fusion).
 - 2026-01-21 | v0.5.4 | VideoInpaintWatermark: выбор видео через Upload/список input, пути к кэшу/выходу вводятся вручную (упрощено).
@@ -169,24 +170,30 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - **match_mask** (MASK, optional) — где считать статистику (белое=учитывать).
 - **apply_mask** (MASK, optional) — где применять коррекцию (белое=применить).
 - **preserve_alpha** (BOOLEAN) — сохранить альфу, если есть.
-- **export_lut** (BOOLEAN) — сгенерировать 1D LUT (.cube).
-- **lut_size** (INT) — размер LUT (по умолчанию 256).
+- **export_lut / lut_size** — сгенерировать 1D LUT (.cube).
+- **waveform_enabled / waveform_mode / waveform_width / waveform_gain / waveform_log** — вывод waveform/parade для контроля.
+- **deltae_heatmap** — вывод теплоты ΔE как отдельного изображения.
 
 Выходы:
 - **matched_image** (IMAGE) — скорректированное изображение.
 - **difference** (IMAGE) — |matched - reference| в RGB.
+- **deltae_heatmap** (IMAGE) — тепловая карта ΔE (если включено, иначе 1x1).
+- **waveform_ref** (IMAGE) — waveform/parade референса (если включено).
+- **waveform_matched** (IMAGE) — waveform/parade результата (если включено).
 - **match_json** (STRING) — параметры коррекции и пресеты.
 
 Поля match_json:
 - **status/mode** — итог и выбранный метод.
 - **gimp_levels** — per-channel input black/white/gamma (+black_out/white_out).
 - **gimp_hsv** — hue_shift_deg, saturation_mul, value_mul (для hsv_shift).
-- **resolve** — scale (gain), offset (lift), gamma (per-channel).
-- **fusion** — gain/lift/gamma для ColorCorrector.
-- **linear** — scale/offset (линейная аппроксимация).
+- **resolve/fusion/linear** — коэффициенты для Resolve/Fusion/линейной аппроксимации.
 - **lut_1d_cube/lut_size** — текст 1D LUT (.cube), если export_lut=true.
 - **presets** — блоки gimp/resolve/fusion с подсказками.
-- **stats** — средние и σ reference/image, была ли маска.
+- **stats** — средние, σ и **delta_e** (mean/median/p95/under2/under5/max), mask_used.
+  
+Как оценивать результат:
+- Смотрите **delta_e** в stats: mean < 2 и p95 < 5 обычно значит «очень близко». under2/under5 — доля пикселей в пределах порогов.
+- Визуально: difference и deltae_heatmap подсветят проблемные зоны; waveform/parade покажут совпадение уровней (полосы должны накладываться).
 
 Применение:
 - GIMP: Colors → Levels (R/G/B: black, white, gamma), при необходимости Colors → Hue-Saturation (Hue shift, Saturation %, Value %).
@@ -324,6 +331,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-27 | v0.6.2 | Color Match: added waveform/parade outputs, ΔE stats/heatmap, richer JSON.
 - 2026-01-27 | v0.6.1 | Color Match To Reference: new PCA mode, strength blending, optional 1D LUT export; docs updated.
 - 2026-01-27 | v0.6.0 | New node: Color Match To Reference (sample-based color match, difference, JSON for GIMP/Resolve/Fusion).
 - 2026-01-21 | v0.5.4 | VideoInpaintWatermark: video selection via Upload/input list; cache/output paths remain manual (simplified).
@@ -485,24 +493,29 @@ Inputs:
 - **match_mask** (MASK, optional) — where to compute stats (white=use).
 - **apply_mask** (MASK, optional) — where to apply correction (white=apply).
 - **preserve_alpha** (BOOLEAN) — keep alpha if present.
-- **export_lut** (BOOLEAN) — generate 1D LUT (.cube).
-- **lut_size** (INT) — LUT size (default 256).
+- **export_lut / lut_size** — generate 1D LUT (.cube).
+- **waveform_enabled / waveform_mode / waveform_width / waveform_gain / waveform_log** — enable waveform/parade outputs.
+- **deltae_heatmap** — output ΔE heatmap image.
 
 Outputs:
 - **matched_image** (IMAGE) — corrected image.
 - **difference** (IMAGE) — |matched - reference| in RGB.
+- **deltae_heatmap** (IMAGE) — ΔE heatmap (if enabled, else 1x1).
+- **waveform_ref** (IMAGE) — reference waveform/parade (if enabled).
+- **waveform_matched** (IMAGE) — matched waveform/parade (if enabled).
 - **match_json** (STRING) — correction params and presets.
 
 match_json fields:
 - **status/mode** — result and chosen method.
-- **gimp_levels** — per-channel input black/white/gamma (+black_out/white_out).
-- **gimp_hsv** — hue_shift_deg, saturation_mul, value_mul (for hsv_shift).
-- **resolve** — scale (gain), offset (lift), gamma (per-channel).
-- **fusion** — gain/lift/gamma for ColorCorrector.
-- **linear** — scale/offset (linear approximation).
-- **lut_1d_cube/lut_size** — text 1D LUT (.cube) if export_lut=true.
+- **gimp_levels/gimp_hsv** — inputs for GIMP Levels / Hue-Sat.
+- **resolve/fusion/linear** — gain/offset/gamma and linear scale/offset.
+- **lut_1d_cube/lut_size** — text LUT if requested.
 - **presets** — blocks gimp/resolve/fusion with short hints.
-- **stats** — means & std for reference/image, whether mask was used.
+- **stats** — means, std, and **delta_e** (mean/median/p95/under2/under5/max), mask_used.
+
+How to judge quality:
+- Look at **delta_e** stats: mean < 2 and p95 < 5 usually means very close. under2/under5 show pixel ratios within thresholds.
+- Visually: use **difference** and **deltae_heatmap** to spot problem areas; waveform/parade should largely overlap between ref and matched if exposure/contrast align.
 
 How to apply:
 - GIMP: Colors → Levels (R/G/B: black, white, gamma); optionally Colors → Hue-Saturation (Hue shift, Saturation %, Value %).

@@ -24,6 +24,7 @@ from .utils import select_batch_item
 
 _LOGGER = logging.getLogger("ImageColorMatchToReference")
 _EPS = 1e-6
+_WAVEFORM_HEIGHT = 256
 
 
 def _torch_resize_image(img: torch.Tensor, height: int, width: int) -> torch.Tensor:
@@ -162,6 +163,115 @@ def _build_1d_cube_lut(resolve_params: dict | None, size: int) -> str | None:
     return "\n".join(lines)
 
 
+def _rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
+    if cv2 is not None:
+        rgb8 = np.clip(rgb * 255.0, 0, 255).astype(np.uint8)
+        lab = cv2.cvtColor(rgb8, cv2.COLOR_RGB2LAB).astype(np.float32)
+        # OpenCV Lab: L 0..255, a/b 0..255 -> bring to common float scale
+        lab[..., 0] = lab[..., 0] * (100.0 / 255.0)
+        lab[..., 1:] = lab[..., 1:] - 128.0
+        return lab
+    # Fallback manual conversion (approx) to XYZ then Lab
+    mask = rgb > 0.04045
+    rgb_lin = np.where(mask, ((rgb + 0.055) / 1.055) ** 2.4, rgb / 12.92)
+    M = np.array([[0.4124564, 0.3575761, 0.1804375],
+                  [0.2126729, 0.7151522, 0.0721750],
+                  [0.0193339, 0.1191920, 0.9503041]])
+    xyz = rgb_lin @ M.T
+    xyz_ref = np.array([0.95047, 1.0, 1.08883])
+    xyz = xyz / xyz_ref
+
+    def f(t):
+        delta = 6 / 29
+        return np.where(t > delta ** 3, np.cbrt(t), t / (3 * delta ** 2) + 4 / 29)
+
+    fx, fy, fz = f(xyz[..., 0]), f(xyz[..., 1]), f(xyz[..., 2])
+    L = (116 * fy) - 16
+    a = 500 * (fx - fy)
+    b = 200 * (fy - fz)
+    return np.stack([L, a, b], axis=-1)
+
+
+def _delta_e76(lab1: np.ndarray, lab2: np.ndarray) -> np.ndarray:
+    diff = lab1 - lab2
+    return np.sqrt((diff ** 2).sum(axis=-1))
+
+
+def _delta_e_stats(delta_e: np.ndarray) -> dict:
+    flat = delta_e.reshape(-1)
+    if flat.size == 0:
+        return {}
+    return {
+        "mean": round(float(np.mean(flat)), 4),
+        "median": round(float(np.median(flat)), 4),
+        "p95": round(float(np.percentile(flat, 95)), 4),
+        "under2": round(float((flat < 2.0).mean()), 4),
+        "under5": round(float((flat < 5.0).mean()), 4),
+        "max": round(float(np.max(flat)), 4),
+    }
+
+
+def _build_heatmap(delta_e: np.ndarray, vmax: float = 20.0) -> np.ndarray:
+    norm = np.clip(delta_e / max(vmax, _EPS), 0.0, 1.0)
+    if cv2 is not None:
+        norm_u8 = (norm * 255.0).astype(np.uint8)
+        heat = cv2.applyColorMap(norm_u8, cv2.COLORMAP_JET)
+        return cv2.cvtColor(heat, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    # fallback simple colormap: blue->green->red
+    r = norm
+    g = 1.0 - np.abs(norm - 0.5) * 2.0
+    b = 1.0 - norm
+    heat = np.stack([r, g, b], axis=-1)
+    return np.clip(heat, 0.0, 1.0)
+
+
+def _downsample_width(img: np.ndarray, target_w: int) -> np.ndarray:
+    h, w, _ = img.shape
+    if w == target_w:
+        return img
+    if cv2 is not None:
+        return cv2.resize(img, (target_w, h), interpolation=cv2.INTER_AREA)
+    # simple block average
+    scale = w / target_w
+    idx = (np.arange(target_w) * scale).astype(int)
+    idx = np.clip(idx, 0, w - 1)
+    return img[:, idx, :]
+
+
+def _build_waveform(img: np.ndarray, mode: str, width: int, gain: float, use_log: bool) -> np.ndarray:
+    img = np.clip(img, 0.0, 1.0)
+    img_ds = _downsample_width(img, width)
+    h, w, _ = img_ds.shape
+    H = _WAVEFORM_HEIGHT
+
+    if mode == "parade":
+        chans = [img_ds[..., i] for i in range(3)]
+        colors = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
+    else:
+        luma = 0.2126 * img_ds[..., 0] + 0.7152 * img_ds[..., 1] + 0.0722 * img_ds[..., 2]
+        chans = [luma]
+        colors = [(1, 1, 1)]
+
+    canvas = np.zeros((H, w, 3), dtype=np.float32)
+    for chan, color in zip(chans, colors):
+        # hist per column
+        bins = (np.clip(chan, 0.0, 1.0) * (H - 1)).astype(int)
+        for x in range(w):
+            col_bins, counts = np.unique(bins[:, x], return_counts=True)
+            if use_log:
+                counts = np.log1p(counts)
+            counts = counts * gain
+            if counts.max() > 0:
+                counts = counts / counts.max()
+            canvas[col_bins, x, 0] += counts * color[0]
+            canvas[col_bins, x, 1] += counts * color[1]
+            canvas[col_bins, x, 2] += counts * color[2]
+
+    canvas = np.clip(canvas, 0.0, 1.0)
+    canvas = np.flipud(canvas)  # 0 at bottom
+    return canvas
+
+
 class ImageColorMatchToReference:
     @classmethod
     def INPUT_TYPES(cls):
@@ -180,11 +290,17 @@ class ImageColorMatchToReference:
                 "preserve_alpha": ("BOOLEAN", {"default": True, "tooltip": "Если вход RGBA — сохранить альфу из исходника."}),
                 "export_lut": ("BOOLEAN", {"default": False, "tooltip": "Сгенерировать 1D LUT (.cube) из linear/levels параметров."}),
                 "lut_size": ("INT", {"default": 256, "min": 16, "max": 1024, "tooltip": "Размер 1D LUT."}),
+                "waveform_enabled": ("BOOLEAN", {"default": False, "tooltip": "Строить waveform/parade для контроля."}),
+                "waveform_mode": (["luma", "parade"], {"default": "parade", "tooltip": "Режим waveform: лума или RGB parade."}),
+                "waveform_width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина waveform в пикселях."}),
+                "waveform_gain": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1, "tooltip": "Усиление яркости точек waveform."}),
+                "waveform_log": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала интенсивностей waveform."}),
+                "deltae_heatmap": ("BOOLEAN", {"default": False, "tooltip": "Вывести heatmap ΔE как IMAGE."}),
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "STRING")
-    RETURN_NAMES = ("matched_image", "difference", "match_json")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "STRING")
+    RETURN_NAMES = ("matched_image", "difference", "deltae_heatmap", "waveform_ref", "waveform_matched", "match_json")
     FUNCTION = "match"
     CATEGORY = "image/color"
 
@@ -201,10 +317,19 @@ class ImageColorMatchToReference:
         export_lut=False,
         lut_size=256,
         strength=1.0,
+        waveform_enabled=False,
+        waveform_mode="parade",
+        waveform_width=512,
+        waveform_gain=1.0,
+        waveform_log=True,
+        deltae_heatmap=False,
     ):
         batch_size = max(reference.shape[0], image.shape[0])
         matched_list = []
         diff_list = []
+        deltae_list = []
+        wave_ref_list = []
+        wave_match_list = []
         json_list = []
 
         for idx in range(batch_size):
@@ -294,6 +419,22 @@ class ImageColorMatchToReference:
                 matched_t = torch.cat([matched_t, alpha_channel], dim=-1)
 
             diff = torch.abs(matched_t[..., :3] - ref_t)
+            lab_ref = _rgb_to_lab(ref_np)
+            lab_matched = _rgb_to_lab(corrected)
+            delta_e = _delta_e76(lab_ref, lab_matched)
+            delta_stats = _delta_e_stats(delta_e)
+
+            if deltae_heatmap:
+                heat = torch.from_numpy(_build_heatmap(delta_e)).float()
+            else:
+                heat = torch.zeros((1, 1, 3), dtype=torch.float32)
+
+            if waveform_enabled:
+                wave_ref = torch.from_numpy(_build_waveform(ref_np, waveform_mode, int(waveform_width), float(waveform_gain), bool(waveform_log)))
+                wave_match = torch.from_numpy(_build_waveform(corrected, waveform_mode, int(waveform_width), float(waveform_gain), bool(waveform_log)))
+            else:
+                wave_ref = torch.zeros((1, 1, 3), dtype=torch.float32)
+                wave_match = torch.zeros((1, 1, 3), dtype=torch.float32)
 
             stats = {
                 "ref_mean": [round(float(x), 4) for x in ref_np.reshape(-1, 3).mean(axis=0)],
@@ -301,6 +442,7 @@ class ImageColorMatchToReference:
                 "ref_std": [round(float(x), 4) for x in ref_np.reshape(-1, 3).std(axis=0)],
                 "img_std": [round(float(x), 4) for x in img_np.reshape(-1, 3).std(axis=0)],
                 "mask_used": match_mask_np is not None,
+                "delta_e": delta_stats,
             }
             presets = {
                 "gimp": {
@@ -346,10 +488,16 @@ class ImageColorMatchToReference:
             json_list.append(json.dumps(payload, ensure_ascii=True))
             matched_list.append(matched_t)
             diff_list.append(diff)
+            deltae_list.append(heat)
+            wave_ref_list.append(wave_ref)
+            wave_match_list.append(wave_match)
 
         return (
             torch.stack(matched_list, dim=0),
             torch.stack(diff_list, dim=0),
+            torch.stack(deltae_list, dim=0),
+            torch.stack(wave_ref_list, dim=0),
+            torch.stack(wave_match_list, dim=0),
             json_list,
         )
 
