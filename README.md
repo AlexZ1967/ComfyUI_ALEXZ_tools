@@ -19,6 +19,7 @@ Color Match guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md)
 - [Color Match To Reference](#color-match-to-reference)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
 - [Show/Save JSON](#showsave-json)
+- Дополнительные гайды: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md), [GUIDE_IMAGE_PREP.md](GUIDE_IMAGE_PREP.md), [GUIDE_ALIGN.md](GUIDE_ALIGN.md), [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md), [GUIDE_JSON.md](GUIDE_JSON.md)
 
 ---
 
