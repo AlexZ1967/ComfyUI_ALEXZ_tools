@@ -71,7 +71,11 @@ def detect_and_match(
     bg_keypoints, bg_desc = detector.detectAndCompute(bg_gray, bg_mask_np)
 
     if ov_desc is None or bg_desc is None or len(ov_keypoints) < min_matches or len(bg_keypoints) < min_matches:
-        return None, None, "Not enough keypoints for alignment."
+        return None, None, (
+            f"Not enough keypoints for alignment "
+            f"({len(ov_keypoints)}/{len(bg_keypoints)} found, need >= {min_matches}). "
+            "Try lowering min_matches or increasing feature_count."
+        )
 
     if matcher_type in ("sift",):
         matcher = cv2.BFMatcher(norm_type)
@@ -79,12 +83,18 @@ def detect_and_match(
         ratio = 0.75
         matches = [m for m, n in knn_matches if m.distance < ratio * n.distance]
         if len(matches) < min_matches:
-            return None, None, "Not enough matches for alignment."
+            return None, None, (
+                f"Not enough matches ({len(matches)}/{min_matches}). "
+                "Try lowering min_matches/good_match_percent, increasing feature_count, or switching matcher_type."
+            )
     else:
         matcher = cv2.BFMatcher(norm_type, crossCheck=True)
         matches = matcher.match(ov_desc, bg_desc)
         if len(matches) < min_matches:
-            return None, None, "Not enough matches for alignment."
+            return None, None, (
+                f"Not enough matches ({len(matches)}/{min_matches}). "
+                "Try lowering min_matches/good_match_percent, increasing feature_count, or switching matcher_type."
+            )
 
     matches = sorted(matches, key=lambda match: match.distance)
     keep = max(min_matches, int(len(matches) * good_match_percent))
