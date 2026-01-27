@@ -5,8 +5,7 @@ Version: 0.6.4
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, инпейнтинг водяных знаков в видео и отображение/сохранение JSON.
 
-Changelog: [CHANGELOG.md](CHANGELOG.md)  
-Color Match guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md)
+Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## Install
 1. Клонируйте в `ComfyUI/custom_nodes/`:  
@@ -19,7 +18,6 @@ Color Match guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md)
 - [Color Match To Reference](#color-match-to-reference)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
 - [Show/Save JSON](#showsave-json)
-- Дополнительные гайды: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md), [GUIDE_IMAGE_PREP.md](GUIDE_IMAGE_PREP.md), [GUIDE_ALIGN.md](GUIDE_ALIGN.md), [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md), [GUIDE_JSON.md](GUIDE_JSON.md)
 
 ---
 
@@ -32,6 +30,7 @@ Color Match guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md)
 
 Inputs: `image`, `aspect_ratio` (as_is, 1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)  
 Outputs: `image`, `latent`
+Guide: [GUIDE_IMAGE_PREP.md](GUIDE_IMAGE_PREP.md)
 
 ---
 
@@ -43,7 +42,8 @@ Outputs: `image`, `latent`
 - Category: image/alignment
 
 Основные входы: background/overlay (+маски), feature_count, good_match_percent, ransac_thresh, opacity, matcher_type, min_matches, min_inliers, scale_mode, allow_rotation, color_mode.  
-Выходы: `aligned_overlay`, `composite`, `difference`, `transform_json`
+Выходы: `aligned_overlay`, `composite`, `difference`, `transform_json`  
+Guide: [GUIDE_ALIGN.md](GUIDE_ALIGN.md)
 
 ---
 
@@ -56,6 +56,7 @@ Outputs: `image`, `latent`
 
 Режимы: levels / mean_std / linear / hist / pca_cov / lab_l / lab_full / lab_l_cdf / lab_cdf / hsv_shift / perceptual_vgg / perceptual_adain / perceptual_ltct / perceptual_lut3d / perceptual_unet (последние три требуют веса).  
 Выходы: `matched_image`, `difference`, `deltae_heatmap`, `waveform_ref`, `waveform_matched`, `match_json`
+Guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md)
 
 ---
 
@@ -68,6 +69,7 @@ Outputs: `image`, `latent`
 
 Ключевые входы: mask, method (propainter/e2fgvi/e2fgvi_hq), mask_dilates/flow_mask_dilates, ref_stride, neighbor_length, subvideo_length, raft_iter, fp16, throughput_mode, crop_padding, color_match_mode, cache_dir, output_dir, output_name, video, preview_frame, write_fullframes.  
 Выходы: `preview_image`, `transform_json`
+Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 
 ---
 
@@ -79,3 +81,4 @@ Outputs: `image`, `latent`
 - Category: utils/json  
 Inputs: `json_text`, optional `output_path`  
 Outputs: `json_pretty`
+Guide: [GUIDE_JSON.md](GUIDE_JSON.md)
