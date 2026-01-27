@@ -2,6 +2,7 @@ from .image_align import ImageAlignOverlayToBackground
 from .image_prepare import ImagePrepareForQwenEditOutpaint
 from .json_output import JsonDisplayAndSave
 from .video_inpaint import VideoInpaintWatermark
+from .image_color_match import ImageColorMatchToReference
 
 
 NODE_CLASS_MAPPINGS = {
@@ -9,6 +10,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageAlignOverlayToBackground": ImageAlignOverlayToBackground,
     "JsonDisplayAndSave": JsonDisplayAndSave,
     "VideoInpaintWatermark": VideoInpaintWatermark,
+    "ImageColorMatchToReference": ImageColorMatchToReference,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -16,4 +18,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageAlignOverlayToBackground": "Align Overlay To Background",
     "JsonDisplayAndSave": "Show/Save JSON",
     "VideoInpaintWatermark": "Remove Static Watermark from Video",
+    "ImageColorMatchToReference": "Color Match To Reference",
 }
