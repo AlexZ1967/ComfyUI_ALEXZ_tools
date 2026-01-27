@@ -463,7 +463,23 @@ class ImageColorMatchToReference:
             "required": {
                 "reference": ("IMAGE", {"tooltip": "Базовое изображение (образец)."}),
                 "image": ("IMAGE", {"tooltip": "Изображение, которое нужно подогнать по цвету."}),
-                "mode": (["levels", "mean_std", "linear", "hist", "pca_cov", "lab_l", "lab_full", "lab_l_cdf", "lab_cdf", "hsv_shift", "perceptual_vgg", "perceptual_adain"], {"default": "levels", "tooltip": "Метод коррекции."}),
+                "mode": ([
+                    "levels",
+                    "mean_std",
+                    "linear",
+                    "hist",
+                    "pca_cov",
+                    "lab_l",
+                    "lab_full",
+                    "lab_l_cdf",
+                    "lab_cdf",
+                    "hsv_shift",
+                    "perceptual_vgg",
+                    "perceptual_adain",
+                    "perceptual_ltct",
+                    "perceptual_lut3d",
+                    "perceptual_unet",
+                ], {"default": "levels", "tooltip": "Метод коррекции."}),
                 "percentile": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 5.0, "step": 0.1, "tooltip": "Процентиль для levels (обрезка хвостов)."}),
                 "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила применения коррекции (0..1)."}),
                 "clip": ("BOOLEAN", {"default": True, "tooltip": "Обрезать результат в диапазоне 0..1."}),
@@ -572,6 +588,12 @@ class ImageColorMatchToReference:
                 corrected_bchw = _adain_style_transfer(c_bchw, s_bchw, encoder, decoder)
                 corrected_t = torch.clamp(corrected_bchw.squeeze(0).permute(1, 2, 0), 0.0, 1.0)
                 deep_params = {"mode": "adain", "weights": "naoto0804/pytorch-AdaIN"}
+            elif mode == "perceptual_ltct":
+                _not_implemented_mode("perceptual_ltct")
+            elif mode == "perceptual_lut3d":
+                _not_implemented_mode("perceptual_lut3d")
+            elif mode == "perceptual_unet":
+                _not_implemented_mode("perceptual_unet")
             else:
                 corrected_t = img_t
 
@@ -692,3 +714,8 @@ class ImageColorMatchToReference:
 
 
 _LOGGER.warning("Loaded ImageColorMatchToReference. NODE_CLASS_MAPPINGS=%s", ["ImageColorMatchToReference"])
+def _not_implemented_mode(name: str):
+    raise RuntimeError(
+        f"{name} mode requested but weights/model not provided. "
+        "Please place weights under models/color_match/ and extend loader accordingly."
+    )

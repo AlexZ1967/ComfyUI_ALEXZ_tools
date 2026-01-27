@@ -490,8 +490,8 @@ difference map, and JSON with parameters for GIMP, DaVinci Resolve, and Fusion.
 - Type name: ImageColorMatchToReference
 - Category: image/color
 
-- **mode** (levels/mean_std/linear/hist/pca_cov/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift/perceptual_vgg)
-- **perceptual_steps / perceptual_lr** — VGG19 perceptual mode (optimizes 3x3+bias).
+- **mode** (levels/mean_std/linear/hist/pca_cov/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift/perceptual_vgg/perceptual_adain/perceptual_ltct/perceptual_lut3d/perceptual_unet)
+- **perceptual_steps / perceptual_lr** — VGG19 perceptual mode (optimizes 3x3+bias); AdaIN/LTCT/LUT3D/UNet используют свои веса (см. примечания ниже).
 
 Outputs:
 - **matched_image** (IMAGE) — corrected image.
@@ -506,6 +506,7 @@ match_json fields:
 - **gimp_levels/gimp_hsv** — inputs for GIMP Levels / Hue-Sat.
 - **resolve/fusion/linear** — gain/offset/gamma and linear scale/offset.
 - **lut_1d_cube/lut_size** — text LUT if requested.
+- **deep** — параметры perceptual_vgg/adain; другие deep-моды требуют весов.
 - **presets** — blocks gimp/resolve/fusion with short hints.
 - **stats** — means, std, and **delta_e** (mean/median/p95/under2/under5/max), mask_used.
 
