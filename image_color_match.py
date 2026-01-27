@@ -294,27 +294,29 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
 
     device = img.device
     _LOGGER.info("Loading VGG19 (perceptual_vgg)...")
-    vgg = vgg19(weights=VGG19_Weights.DEFAULT).features[:12].to(device).eval()  # up to relu3_1
-    for p in vgg.parameters():
-        p.requires_grad = False
+    inf_ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else nullcontext()
 
-    def prep(x):
-        # x: HWC 0..1
-        x = x.permute(2, 0, 1).unsqueeze(0)
-        mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(1, 3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225], device=device).view(1, 3, 1, 1)
-        return (x - mean) / std
+    with inf_ctx:
+        vgg = vgg19(weights=VGG19_Weights.DEFAULT).features[:12].to(device).eval()  # up to relu3_1
+        for p in vgg.parameters():
+            p.requires_grad = False
 
-    with torch.inference_mode(False), torch.no_grad():
-        feat_ref = vgg(prep(ref))
+        def prep(x):
+            # x: HWC 0..1
+            x = x.permute(2, 0, 1).unsqueeze(0)
+            mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(1, 3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225], device=device).view(1, 3, 1, 1)
+            return (x - mean) / std
 
-    W = torch.eye(3, device=device, dtype=img.dtype).requires_grad_(True)
-    b = torch.zeros(3, device=device, dtype=img.dtype).requires_grad_(True)
-    opt = torch.optim.Adam([W, b], lr=lr)
+        # reference features (no grads needed)
+        with torch.no_grad():
+            feat_ref = vgg(prep(ref.detach().clone()))
 
-    # Exit inference_mode if enabled and recreate tensors to avoid "Inference tensors cannot be saved for backward"
-    steps_int = max(1, int(steps))
-    with torch.inference_mode(False):
+        W = torch.eye(3, device=device, dtype=img.dtype).requires_grad_(True)
+        b = torch.zeros(3, device=device, dtype=img.dtype).requires_grad_(True)
+        opt = torch.optim.Adam([W, b], lr=lr)
+
+        steps_int = max(1, int(steps))
         img_work = img.detach().clone()
         with torch.enable_grad():
             iterator = tqdm(range(steps_int), desc="perceptual_vgg", leave=False)
