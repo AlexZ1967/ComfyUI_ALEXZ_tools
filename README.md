@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.5.5
+Version: 0.6.0
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,7 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
-- 2026-01-27 | v0.5.5 | New node: Color Match To Reference (цветокоррекция по образцу, difference и JSON для GIMP/Resolve/Fusion).
+- 2026-01-27 | v0.6.0 | New node: Color Match To Reference (цветокоррекция по образцу, difference и JSON для GIMP/Resolve/Fusion).
 - 2026-01-21 | v0.5.4 | VideoInpaintWatermark: выбор видео через Upload/список input, пути к кэшу/выходу вводятся вручную (упрощено).
 - 2026-01-21 | v0.5.3 | VideoInpaintWatermark: выходы упрощены до preview_image + transform_json (без маски).
 - 2026-01-21 | v0.5.2 | VideoInpaintWatermark: запись полноразмерных кадров (fullframe_*) при стриминге.
@@ -319,7 +319,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
-- 2026-01-27 | v0.5.5 | New node: Color Match To Reference (sample-based color match, difference, JSON for GIMP/Resolve/Fusion).
+- 2026-01-27 | v0.6.0 | New node: Color Match To Reference (sample-based color match, difference, JSON for GIMP/Resolve/Fusion).
 - 2026-01-21 | v0.5.4 | VideoInpaintWatermark: video selection via Upload/input list; cache/output paths remain manual (simplified).
 - 2026-01-21 | v0.5.3 | VideoInpaintWatermark: outputs simplified to preview_image + transform_json (no mask).
 - 2026-01-21 | v0.5.2 | VideoInpaintWatermark: full-frame output (fullframe_*) in streaming mode.
