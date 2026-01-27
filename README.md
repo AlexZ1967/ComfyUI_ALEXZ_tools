@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.6.0
+Version: 0.6.1
 
 ## Русский
 Набор кастомных нод для ComfyUI. Включает подготовку изображения для Qwen
@@ -8,6 +8,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 трансформации.
 
 ### Изменения
+- 2026-01-27 | v0.6.1 | Color Match To Reference: добавлены режимы PCA/strength, LUT экспорт; документация обновлена.
 - 2026-01-27 | v0.6.0 | New node: Color Match To Reference (цветокоррекция по образцу, difference и JSON для GIMP/Resolve/Fusion).
 - 2026-01-21 | v0.5.4 | VideoInpaintWatermark: выбор видео через Upload/список input, пути к кэшу/выходу вводятся вручную (упрощено).
 - 2026-01-21 | v0.5.3 | VideoInpaintWatermark: выходы упрощены до preview_image + transform_json (без маски).
@@ -161,12 +162,15 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 Входы:
 - **reference** (IMAGE) — образец.
 - **image** (IMAGE) — картинка для коррекции.
-- **mode** (levels/mean_std/linear/hist/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift)
+- **mode** (levels/mean_std/linear/hist/pca_cov/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift)
 - **percentile** (FLOAT) — обрезка хвостов для levels (0..5%).
+- **strength** (FLOAT) — сила применения коррекции (0..1, смешивание с исходником).
 - **clip** (BOOLEAN) — обрезать результат 0..1.
 - **match_mask** (MASK, optional) — где считать статистику (белое=учитывать).
 - **apply_mask** (MASK, optional) — где применять коррекцию (белое=применить).
 - **preserve_alpha** (BOOLEAN) — сохранить альфу, если есть.
+- **export_lut** (BOOLEAN) — сгенерировать 1D LUT (.cube).
+- **lut_size** (INT) — размер LUT (по умолчанию 256).
 
 Выходы:
 - **matched_image** (IMAGE) — скорректированное изображение.
@@ -180,6 +184,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 - **resolve** — scale (gain), offset (lift), gamma (per-channel).
 - **fusion** — gain/lift/gamma для ColorCorrector.
 - **linear** — scale/offset (линейная аппроксимация).
+- **lut_1d_cube/lut_size** — текст 1D LUT (.cube), если export_lut=true.
 - **presets** — блоки gimp/resolve/fusion с подсказками.
 - **stats** — средние и σ reference/image, была ли маска.
 
@@ -319,6 +324,7 @@ A set of custom nodes for ComfyUI. Includes image preparation for Qwen
 Outpaint and an overlay alignment node with transformation export.
 
 ### Changelog
+- 2026-01-27 | v0.6.1 | Color Match To Reference: new PCA mode, strength blending, optional 1D LUT export; docs updated.
 - 2026-01-27 | v0.6.0 | New node: Color Match To Reference (sample-based color match, difference, JSON for GIMP/Resolve/Fusion).
 - 2026-01-21 | v0.5.4 | VideoInpaintWatermark: video selection via Upload/input list; cache/output paths remain manual (simplified).
 - 2026-01-21 | v0.5.3 | VideoInpaintWatermark: outputs simplified to preview_image + transform_json (no mask).
@@ -472,12 +478,15 @@ difference map, and JSON with parameters for GIMP, DaVinci Resolve, and Fusion.
 Inputs:
 - **reference** (IMAGE) — sample image.
 - **image** (IMAGE) — image to correct.
-- **mode** (levels/mean_std/linear/hist/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift)
+- **mode** (levels/mean_std/linear/hist/pca_cov/lab_l/lab_full/lab_l_cdf/lab_cdf/hsv_shift)
 - **percentile** (FLOAT) — tail trimming for levels (0..5%).
+- **strength** (FLOAT) — blend strength (0..1) with the original image.
 - **clip** (BOOLEAN) — clamp output to 0..1.
 - **match_mask** (MASK, optional) — where to compute stats (white=use).
 - **apply_mask** (MASK, optional) — where to apply correction (white=apply).
 - **preserve_alpha** (BOOLEAN) — keep alpha if present.
+- **export_lut** (BOOLEAN) — generate 1D LUT (.cube).
+- **lut_size** (INT) — LUT size (default 256).
 
 Outputs:
 - **matched_image** (IMAGE) — corrected image.
@@ -491,6 +500,7 @@ match_json fields:
 - **resolve** — scale (gain), offset (lift), gamma (per-channel).
 - **fusion** — gain/lift/gamma for ColorCorrector.
 - **linear** — scale/offset (linear approximation).
+- **lut_1d_cube/lut_size** — text 1D LUT (.cube) if export_lut=true.
 - **presets** — blocks gimp/resolve/fusion with short hints.
 - **stats** — means & std for reference/image, whether mask was used.
 

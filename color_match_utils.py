@@ -125,6 +125,38 @@ def _match_hist_rgb(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) ->
     return out_np
 
 
+def _pca_cov_transfer(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) -> np.ndarray:
+    src = out_np.reshape(-1, 3)
+    tar = ref_np.reshape(-1, 3)
+    if keep is not None and keep.shape[:2] == out_np.shape[:2]:
+        mask_flat = keep.reshape(-1)
+        src = src[mask_flat]
+        tar = tar[mask_flat]
+    if src.shape[0] < 10 or tar.shape[0] < 10:
+        return out_np
+
+    src_mean = src.mean(axis=0)
+    tar_mean = tar.mean(axis=0)
+    src_c = src - src_mean
+    tar_c = tar - tar_mean
+
+    cov_src = np.cov(src_c, rowvar=False) + np.eye(3) * 1e-6
+    cov_tar = np.cov(tar_c, rowvar=False) + np.eye(3) * 1e-6
+
+    eig_src, E_src = np.linalg.eigh(cov_src)
+    eig_tar, E_tar = np.linalg.eigh(cov_tar)
+
+    sqrt_tar = (E_tar @ np.diag(np.sqrt(eig_tar)) @ E_tar.T)
+    inv_sqrt_src = (E_src @ np.diag(1.0 / np.sqrt(eig_src)) @ E_src.T)
+
+    A = sqrt_tar @ inv_sqrt_src
+
+    flat = out_np.reshape(-1, 3)
+    transformed = (A @ (flat - src_mean).T).T + tar_mean
+    transformed = transformed.reshape(out_np.shape)
+    return np.clip(transformed, 0.0, 1.0)
+
+
 def _match_lab_l(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, use_cdf: bool) -> np.ndarray:
     if cv2 is None:
         return out_np
@@ -216,6 +248,8 @@ def apply_color_match(
         out_np = _match_linear_rgb(out_np, ref_np, keep)
     elif mode == "hist":
         out_np = _match_hist_rgb(out_np, ref_np, keep)
+    elif mode == "pca_cov":
+        out_np = _pca_cov_transfer(out_np, ref_np, keep)
     elif mode == "lab_l":
         out_np = _match_lab_l(out_np, ref_np, keep, use_cdf=False)
     elif mode == "lab_l_cdf":
