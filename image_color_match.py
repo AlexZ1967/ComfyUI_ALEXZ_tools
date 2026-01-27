@@ -304,13 +304,14 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
     b = torch.zeros(3, device=device, dtype=img.dtype).requires_grad_(True)
     opt = torch.optim.Adam([W, b], lr=lr)
 
-    for _ in range(int(steps)):
-        opt.zero_grad(set_to_none=True)
-        x = torch.clamp(torch.einsum("hwc,dc->hwd", img, W) + b, 0.0, 1.0)
-        feat_x = vgg(prep(x))
-        loss = torch.mean((feat_x - feat_ref) ** 2)
-        loss.backward()
-        opt.step()
+    with torch.enable_grad():
+        for _ in range(int(steps)):
+            opt.zero_grad(set_to_none=True)
+            x = torch.clamp(torch.einsum("hwc,dc->hwd", img, W) + b, 0.0, 1.0)
+            feat_x = vgg(prep(x))
+            loss = torch.mean((feat_x - feat_ref) ** 2)
+            loss.backward()
+            opt.step()
 
     corrected = torch.clamp(torch.einsum("hwc,dc->hwd", img, W.detach()) + b.detach(), 0.0, 1.0)
     params = {
