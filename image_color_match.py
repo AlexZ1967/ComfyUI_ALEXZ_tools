@@ -305,7 +305,7 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
         std = torch.tensor([0.229, 0.224, 0.225], device=device).view(1, 3, 1, 1)
         return (x - mean) / std
 
-    with torch.no_grad():
+    with torch.inference_mode(False), torch.no_grad():
         feat_ref = vgg(prep(ref))
 
     W = torch.eye(3, device=device, dtype=img.dtype).requires_grad_(True)
@@ -313,11 +313,9 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
     opt = torch.optim.Adam([W, b], lr=lr)
 
     # Exit inference_mode if enabled and recreate tensors to avoid "Inference tensors cannot be saved for backward"
-    ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else nullcontext()
     steps_int = max(1, int(steps))
-    with ctx:
+    with torch.inference_mode(False):
         img_work = img.detach().clone()
-        ref_work = ref.detach().clone()
         with torch.enable_grad():
             iterator = tqdm(range(steps_int), desc="perceptual_vgg", leave=False)
             for _ in iterator:
