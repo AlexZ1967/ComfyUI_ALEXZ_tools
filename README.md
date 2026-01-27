@@ -156,6 +156,7 @@ Outpaint и ноду выравнивания оверлея по бэкграу
 #### Color Match To Reference
 Подгоняет цвет/яркость изображения под образец. Выводит скорректированное изображение,
 карту разницы и JSON с параметрами для GIMP, DaVinci Resolve и Fusion.
+[Полное руководство / How-to](COLOR_MATCH_GUIDE.md)
 
 - Display name: Color Match To Reference
 - Type name: ImageColorMatchToReference
@@ -485,6 +486,7 @@ transform_json fields:
 #### Color Match To Reference
 Matches color/brightness of an image to a reference. Outputs corrected image,
 difference map, and JSON with parameters for GIMP, DaVinci Resolve, and Fusion.
+[Full guide](COLOR_MATCH_GUIDE.md)
 [Полное руководство](COLOR_MATCH_GUIDE.md)
 
 - Display name: Color Match To Reference
