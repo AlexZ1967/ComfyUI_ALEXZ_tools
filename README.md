@@ -485,6 +485,7 @@ transform_json fields:
 #### Color Match To Reference
 Matches color/brightness of an image to a reference. Outputs corrected image,
 difference map, and JSON with parameters for GIMP, DaVinci Resolve, and Fusion.
+[Полное руководство](COLOR_MATCH_GUIDE.md)
 
 - Display name: Color Match To Reference
 - Type name: ImageColorMatchToReference
