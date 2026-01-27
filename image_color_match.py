@@ -3,143 +3,312 @@ import logging
 import math
 from typing import Optional
 
-import numpy as np
 import torch
-import torch.nn.functional as torch_nn_func
+import torch.nn.functional as F
 
-try:
-    import cv2
-except Exception:  # pragma: no cover - runtime dependency check
-    cv2 = None
-
-from .color_match_utils import (
-    apply_color_match,
-    ensure_mask_batch,
-    normalize_mask,
-    resize_images_to_size,
-    resize_mask_to_output,
-)
+from .color_match_utils import normalize_mask, resize_mask_to_output
 from .utils import select_batch_item
-
 
 _LOGGER = logging.getLogger("ImageColorMatchToReference")
 _EPS = 1e-6
 _WAVEFORM_HEIGHT = 256
 
 
-def _torch_resize_image(img: torch.Tensor, height: int, width: int) -> torch.Tensor:
-    if img.shape[0] == height and img.shape[1] == width:
+def _resize_image(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
+    if img.shape[0] == h and img.shape[1] == w:
         return img
-    img_bchw = img.permute(2, 0, 1).unsqueeze(0)
-    resized = torch_nn_func.interpolate(img_bchw, size=(height, width), mode="bilinear", align_corners=False)
-    return resized.squeeze(0).permute(1, 2, 0)
+    bchw = img.permute(2, 0, 1).unsqueeze(0)
+    out = F.interpolate(bchw, size=(h, w), mode="bilinear", align_corners=False)
+    return out.squeeze(0).permute(1, 2, 0)
 
 
-def _get_percentiles(arr: np.ndarray, mask: Optional[np.ndarray], p: float) -> tuple[float, float, float] | None:
-    vals = arr.reshape(-1) if mask is None else arr[mask]
-    if vals.size < 10:
+def _torch_percentiles(values: torch.Tensor, mask: Optional[torch.Tensor], p: float):
+    if mask is not None:
+        values = values[mask > 0.5]
+    if values.numel() < 10:
         return None
-    lo = float(np.percentile(vals, p))
-    hi = float(np.percentile(vals, 100.0 - p))
-    med = float(np.percentile(vals, 50.0))
-    return lo, hi, med
+    return (
+        torch.quantile(values, p / 100.0),
+        torch.quantile(values, 1.0 - p / 100.0),
+        torch.quantile(values, 0.5),
+    )
 
 
-def _apply_levels(
-    img: np.ndarray,
-    ref: np.ndarray,
-    mask: Optional[np.ndarray],
-    percentile: float,
-) -> tuple[np.ndarray, dict, str]:
+def _apply_levels(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor], p: float):
     params = {"r": None, "g": None, "b": None}
-    out = img.copy()
+    out = img.clone()
     for ch, key in enumerate(("r", "g", "b")):
-        bounds_img = _get_percentiles(img[..., ch], mask, percentile)
-        bounds_ref = _get_percentiles(ref[..., ch], mask, percentile)
-        if bounds_img is None or bounds_ref is None:
+        b_in = _torch_percentiles(img[..., ch], mask, p)
+        b_ref = _torch_percentiles(ref[..., ch], mask, p)
+        if b_in is None or b_ref is None:
             return img, params, "error: not enough pixels to estimate levels"
-
-        black_in, white_in, med_in = bounds_img
-        black_out, white_out, med_out = bounds_ref
-        denom = max(white_in - black_in, _EPS)
-        norm_in = np.clip((img[..., ch] - black_in) / denom, 0.0, 1.0)
-
-        norm_med_in = np.clip((med_in - black_in) / denom, _EPS, 1.0 - _EPS)
-        norm_med_out = np.clip((med_out - black_out) / max(white_out - black_out, _EPS), _EPS, 1.0 - _EPS)
-        gamma = math.log(norm_med_out) / math.log(norm_med_in) if norm_med_in not in (0.0, 1.0) else 1.0
-
-        corrected = np.power(norm_in, gamma)
-        corrected = corrected * (white_out - black_out) + black_out
-        out[..., ch] = corrected
+        black_in, white_in, med_in = b_in
+        black_out, white_out, med_out = b_ref
+        denom = torch.clamp(white_in - black_in, min=_EPS)
+        norm = torch.clamp((img[..., ch] - black_in) / denom, 0.0, 1.0)
+        norm_med_in = torch.clamp((med_in - black_in) / denom, _EPS, 1.0 - _EPS)
+        norm_med_out = torch.clamp((med_out - black_out) / torch.clamp(white_out - black_out, min=_EPS), _EPS, 1.0 - _EPS)
+        gamma = torch.log(norm_med_out) / torch.log(norm_med_in) if 0 < norm_med_in < 1 else torch.tensor(1.0, device=img.device)
+        corr = torch.pow(norm, gamma)
+        corr = corr * (white_out - black_out) + black_out
+        out[..., ch] = corr
         params[key] = {
-            "black": int(round(black_in * 255.0)),
-            "white": int(round(white_in * 255.0)),
+            "black": int(round(float(black_in * 255.0))),
+            "white": int(round(float(white_in * 255.0))),
             "gamma": round(float(gamma), 4),
-            "black_out": int(round(black_out * 255.0)),
-            "white_out": int(round(white_out * 255.0)),
+            "black_out": int(round(float(black_out * 255.0))),
+            "white_out": int(round(float(white_out * 255.0))),
         }
     return out, params, "ok"
 
 
-def _linear_fit(img: np.ndarray, ref: np.ndarray, mask: Optional[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+def _linear_fit_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
     if mask is not None:
-        keep = mask
-        img_sel = img[keep]
-        ref_sel = ref[keep]
+        m = mask > 0.5
+        img_sel = img[m]
+        ref_sel = ref[m]
     else:
         img_sel = img.reshape(-1, 3)
         ref_sel = ref.reshape(-1, 3)
-    mean_img = img_sel.mean(axis=0)
-    mean_ref = ref_sel.mean(axis=0)
-    std_img = img_sel.std(axis=0)
-    std_ref = ref_sel.std(axis=0)
-    scale = np.where(std_img > _EPS, std_ref / std_img, 1.0)
+    mean_img = img_sel.mean(dim=0)
+    mean_ref = ref_sel.mean(dim=0)
+    var_img = ((img_sel - mean_img) ** 2).mean(dim=0)
+    cov = ((img_sel - mean_img) * (ref_sel - mean_ref)).mean(dim=0)
+    scale = torch.where(var_img > _EPS, cov / torch.clamp(var_img, min=_EPS), torch.ones_like(var_img))
     offset = mean_ref - scale * mean_img
     return scale, offset
 
 
-def _apply_hsv_shift(img: np.ndarray, ref: np.ndarray, mask: Optional[np.ndarray]) -> tuple[np.ndarray, dict, str]:
-    if cv2 is None:
-        return img, {}, "error: opencv-python is required for hsv_shift"
-
-    img_hsv = cv2.cvtColor((img * 255.0).astype(np.uint8), cv2.COLOR_RGB2HSV).astype(np.float32)
-    ref_hsv = cv2.cvtColor((ref * 255.0).astype(np.uint8), cv2.COLOR_RGB2HSV).astype(np.float32)
-
-    hue_img = img_hsv[..., 0]
-    hue_ref = ref_hsv[..., 0]
-    sat_img = img_hsv[..., 1]
-    sat_ref = ref_hsv[..., 1]
-    val_img = img_hsv[..., 2]
-    val_ref = ref_hsv[..., 2]
-
+def _mean_std_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
     if mask is not None:
-        m = mask
-        hue_diff = hue_ref[m] - hue_img[m]
-        sat_ratio = sat_ref[m].mean() / max(sat_img[m].mean(), _EPS)
-        val_ratio = val_ref[m].mean() / max(val_img[m].mean(), _EPS)
+        m = mask > 0.5
+        img_sel = img[m]
+        ref_sel = ref[m]
     else:
-        hue_diff = hue_ref.reshape(-1) - hue_img.reshape(-1)
-        sat_ratio = sat_ref.mean() / max(sat_img.mean(), _EPS)
-        val_ratio = val_ref.mean() / max(val_img.mean(), _EPS)
+        img_sel = img.reshape(-1, 3)
+        ref_sel = ref.reshape(-1, 3)
+    mean_img = img_sel.mean(dim=0)
+    mean_ref = ref_sel.mean(dim=0)
+    std_img = torch.clamp(img_sel.std(dim=0), min=_EPS)
+    std_ref = ref_sel.std(dim=0)
+    out = (img - mean_img) * (std_ref / std_img) + mean_ref
+    return torch.clamp(out, 0.0, 1.0)
 
-    # average hue difference with wrap-around (OpenCV hue range 0..180)
-    hue_diff_rad = hue_diff * (np.pi / 90.0)
-    mean_sin = np.sin(hue_diff_rad).mean()
-    mean_cos = np.cos(hue_diff_rad).mean()
-    avg_diff_rad = math.atan2(mean_sin, mean_cos)
-    hue_shift_deg = avg_diff_rad * (90.0 / np.pi)
 
-    img_hsv[..., 0] = (img_hsv[..., 0] + hue_shift_deg) % 180.0
-    img_hsv[..., 1] = np.clip(img_hsv[..., 1] * sat_ratio, 0.0, 255.0)
-    img_hsv[..., 2] = np.clip(img_hsv[..., 2] * val_ratio, 0.0, 255.0)
+def _linear_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
+    scale, offset = _linear_fit_torch(img, ref, mask)
+    return torch.clamp(img * scale + offset, 0.0, 1.0)
 
-    corrected_rgb = cv2.cvtColor(img_hsv.astype(np.uint8), cv2.COLOR_HSV2RGB).astype(np.float32) / 255.0
+
+def _hist_match_channel(src: torch.Tensor, tar: torch.Tensor):
+    src_sort, src_idx = torch.sort(src)
+    positions = torch.linspace(0, 1, src_sort.numel(), device=src.device, dtype=src.dtype)
+    target_vals = torch.quantile(tar, positions.clamp(0, 1))
+    out = torch.empty_like(src_sort)
+    out[src_idx] = target_vals
+    return out
+
+
+def _hist_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
+    flat_img = img.reshape(-1, 3)
+    flat_ref = ref.reshape(-1, 3)
+    if mask is not None:
+        m = mask.view(-1) > 0.5
+        ref_sel = flat_ref[m]
+    else:
+        ref_sel = flat_ref
+    if ref_sel.shape[0] < 10:
+        return img
+    out = flat_img.clone()
+    for c in range(3):
+        out[:, c] = _hist_match_channel(flat_img[:, c], ref_sel[:, c])
+    return torch.clamp(out.view_as(img), 0.0, 1.0)
+
+
+def _pca_cov(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
+    src = img.reshape(-1, 3)
+    tar = ref.reshape(-1, 3)
+    if mask is not None:
+        m = mask.view(-1) > 0.5
+        src = src[m]
+        tar = tar[m]
+    if src.shape[0] < 10 or tar.shape[0] < 10:
+        return img
+    src_mean = src.mean(dim=0)
+    tar_mean = tar.mean(dim=0)
+    src_c = src - src_mean
+    tar_c = tar - tar_mean
+    cov_src = src_c.t() @ src_c / src_c.shape[0] + torch.eye(3, device=img.device, dtype=img.dtype) * 1e-6
+    cov_tar = tar_c.t() @ tar_c / tar_c.shape[0] + torch.eye(3, device=img.device, dtype=img.dtype) * 1e-6
+    eig_src, E_src = torch.linalg.eigh(cov_src)
+    eig_tar, E_tar = torch.linalg.eigh(cov_tar)
+    sqrt_tar = E_tar @ torch.diag(torch.sqrt(torch.clamp(eig_tar, min=1e-6))) @ E_tar.t()
+    inv_sqrt_src = E_src @ torch.diag(1.0 / torch.sqrt(torch.clamp(eig_src, min=1e-6))) @ E_src.t()
+    A = sqrt_tar @ inv_sqrt_src
+    flat = img.reshape(-1, 3)
+    transformed = (A @ (flat - src_mean).t()).t() + tar_mean
+    return torch.clamp(transformed.view_as(img), 0.0, 1.0)
+
+
+def _rgb_to_hsv(rgb: torch.Tensor):
+    r, g, b = rgb.unbind(-1)
+    maxc, _ = rgb.max(dim=-1)
+    minc, _ = rgb.min(dim=-1)
+    v = maxc
+    deltac = maxc - minc
+    s = torch.where(maxc == 0, torch.zeros_like(maxc), deltac / torch.clamp(maxc, min=_EPS))
+    hc = torch.zeros_like(maxc)
+    mask = deltac > _EPS
+    rc = ((maxc - r) / torch.clamp(deltac, min=_EPS))
+    gc = ((maxc - g) / torch.clamp(deltac, min=_EPS))
+    bc = ((maxc - b) / torch.clamp(deltac, min=_EPS))
+    hc = torch.where((maxc == r) & mask, bc - gc, hc)
+    hc = torch.where((maxc == g) & mask, 2.0 + rc - bc, hc)
+    hc = torch.where((maxc == b) & mask, 4.0 + gc - rc, hc)
+    h = (hc / 6.0) % 1.0
+    return torch.stack((h, s, v), dim=-1)
+
+
+def _hsv_to_rgb(hsv: torch.Tensor):
+    h, s, v = hsv.unbind(-1)
+    h6 = h * 6.0
+    i = torch.floor(h6).long()
+    f = h6 - i.float()
+    p = v * (1.0 - s)
+    q = v * (1.0 - s * f)
+    t = v * (1.0 - s * (1.0 - f))
+    r = torch.zeros_like(v)
+    g = torch.zeros_like(v)
+    b = torch.zeros_like(v)
+    i_mod = i % 6
+    r = torch.where(i_mod == 0, v, r)
+    g = torch.where(i_mod == 0, t, g)
+    b = torch.where(i_mod == 0, p, b)
+    r = torch.where(i_mod == 1, q, r)
+    g = torch.where(i_mod == 1, v, g)
+    b = torch.where(i_mod == 1, p, b)
+    r = torch.where(i_mod == 2, p, r)
+    g = torch.where(i_mod == 2, v, g)
+    b = torch.where(i_mod == 2, t, b)
+    r = torch.where(i_mod == 3, p, r)
+    g = torch.where(i_mod == 3, q, g)
+    b = torch.where(i_mod == 3, v, b)
+    r = torch.where(i_mod == 4, t, r)
+    g = torch.where(i_mod == 4, p, g)
+    b = torch.where(i_mod == 4, v, b)
+    r = torch.where(i_mod == 5, v, r)
+    g = torch.where(i_mod == 5, p, g)
+    b = torch.where(i_mod == 5, q, b)
+    return torch.stack((r, g, b), dim=-1)
+
+
+def _hsv_shift(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
+    hsv_img = _rgb_to_hsv(img)
+    hsv_ref = _rgb_to_hsv(ref)
+    h_img, s_img, v_img = hsv_img.unbind(-1)
+    h_ref, s_ref, v_ref = hsv_ref.unbind(-1)
+    if mask is not None:
+        m = mask > 0.5
+        h_diff = h_ref[m] - h_img[m]
+        s_ratio = s_ref[m].mean() / torch.clamp(s_img[m].mean(), min=_EPS)
+        v_ratio = v_ref[m].mean() / torch.clamp(v_img[m].mean(), min=_EPS)
+    else:
+        h_diff = h_ref.reshape(-1) - h_img.reshape(-1)
+        s_ratio = s_ref.mean() / torch.clamp(s_img.mean(), min=_EPS)
+        v_ratio = v_ref.mean() / torch.clamp(v_img.mean(), min=_EPS)
+    hue_shift = torch.atan2(torch.sin(h_diff * 2 * math.pi).mean(), torch.cos(h_diff * 2 * math.pi).mean()) / (2 * math.pi)
+    hsv_img_shifted = hsv_img.clone()
+    hsv_img_shifted[..., 0] = (hsv_img_shifted[..., 0] + hue_shift) % 1.0
+    hsv_img_shifted[..., 1] = torch.clamp(hsv_img_shifted[..., 1] * s_ratio, 0.0, 1.0)
+    hsv_img_shifted[..., 2] = torch.clamp(hsv_img_shifted[..., 2] * v_ratio, 0.0, 1.0)
+    corrected = torch.clamp(_hsv_to_rgb(hsv_img_shifted), 0.0, 1.0)
     params = {
-        "hue_shift_deg": round(float(hue_shift_deg), 3),
-        "saturation_mul": round(float(sat_ratio), 4),
-        "value_mul": round(float(val_ratio), 4),
+        "hue_shift_deg": round(float(hue_shift * 360.0), 3),
+        "saturation_mul": round(float(s_ratio), 4),
+        "value_mul": round(float(v_ratio), 4),
     }
-    return corrected_rgb, params, "ok"
+    return corrected, params, "ok"
+
+
+def _rgb_to_lab(rgb: torch.Tensor):
+    mask = rgb > 0.04045
+    rgb_lin = torch.where(mask, torch.pow((rgb + 0.055) / 1.055, 2.4), rgb / 12.92)
+    M = rgb.new_tensor([[0.4124564, 0.3575761, 0.1804375],
+                        [0.2126729, 0.7151522, 0.0721750],
+                        [0.0193339, 0.1191920, 0.9503041]])
+    xyz = torch.matmul(rgb_lin, M.t())
+    xyz_ref = rgb.new_tensor([0.95047, 1.0, 1.08883])
+    xyz = xyz / xyz_ref
+    delta = 6 / 29
+
+    def f(t):
+        return torch.where(t > delta ** 3, torch.pow(t, 1/3), t / (3 * delta ** 2) + 4 / 29)
+
+    fx, fy, fz = f(xyz[..., 0]), f(xyz[..., 1]), f(xyz[..., 2])
+    L = (116 * fy) - 16
+    a = 500 * (fx - fy)
+    b = 200 * (fy - fz)
+    return torch.stack([L, a, b], dim=-1)
+
+
+def _delta_e76(lab1: torch.Tensor, lab2: torch.Tensor):
+    diff = lab1 - lab2
+    return torch.sqrt(torch.clamp((diff ** 2).sum(dim=-1), min=0.0))
+
+
+def _delta_e_stats(de: torch.Tensor):
+    flat = de.reshape(-1)
+    if flat.numel() == 0:
+        return {}
+    return {
+        "mean": round(float(flat.mean()), 4),
+        "median": round(float(flat.median()), 4),
+        "p95": round(float(torch.quantile(flat, 0.95)), 4),
+        "under2": round(float((flat < 2.0).float().mean()), 4),
+        "under5": round(float((flat < 5.0).float().mean()), 4),
+        "max": round(float(flat.max()), 4),
+    }
+
+
+def _heatmap(de: torch.Tensor, vmax: float = 20.0):
+    norm = torch.clamp(de / max(vmax, _EPS), 0.0, 1.0)
+    r = norm
+    g = 1.0 - torch.abs(norm - 0.5) * 2.0
+    b = 1.0 - norm
+    return torch.clamp(torch.stack([r, g, b], dim=-1), 0.0, 1.0)
+
+
+def _waveform(img: torch.Tensor, mode: str, width: int, gain: float, use_log: bool):
+    img = torch.clamp(img, 0.0, 1.0)
+    H_in, W_in, _ = img.shape
+    if W_in != width:
+        img = F.interpolate(img.permute(2, 0, 1).unsqueeze(0), size=(H_in, width), mode="nearest").squeeze(0).permute(1, 2, 0)
+    H = _WAVEFORM_HEIGHT
+    if mode == "parade":
+        chans = [img[..., i] for i in range(3)]
+        colors = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], device=img.device, dtype=img.dtype)
+    else:
+        luma = 0.2126 * img[..., 0] + 0.7152 * img[..., 1] + 0.0722 * img[..., 2]
+        chans = [luma]
+        colors = torch.tensor([[1, 1, 1]], device=img.device, dtype=img.dtype)
+    canvas = torch.zeros((H, width, 3), device=img.device, dtype=img.dtype)
+    levels = torch.clamp(torch.stack(chans, dim=-1) * (H - 1), 0, H - 1).long()
+    for ci in range(len(chans)):
+        bins = levels[..., ci]
+        counts = torch.zeros((H, width), device=img.device, dtype=img.dtype)
+        for x in range(width):
+            hist = torch.bincount(bins[:, x], minlength=H).float()
+            counts[:, x] = hist
+        if use_log:
+            counts = torch.log1p(counts)
+        counts = counts * gain
+        max_per_col = torch.clamp(counts.max(dim=0, keepdim=True).values, min=_EPS)
+        counts = counts / max_per_col
+        canvas[..., 0] += counts * colors[ci, 0]
+        canvas[..., 1] += counts * colors[ci, 1]
+        canvas[..., 2] += counts * colors[ci, 2]
+    canvas = torch.flip(torch.clamp(canvas, 0.0, 1.0), dims=[0])
+    return canvas
 
 
 def _build_1d_cube_lut(resolve_params: dict | None, size: int) -> str | None:
@@ -151,7 +320,7 @@ def _build_1d_cube_lut(resolve_params: dict | None, size: int) -> str | None:
     if not scale or not offset or not gamma:
         return None
     size = max(16, int(size))
-    lines = ["# LUT generated by ImageColorMatchToReference", "LUT_1D_SIZE {}".format(size)]
+    lines = ["# LUT generated by ImageColorMatchToReference", f"LUT_1D_SIZE {size}"]
     for i in range(size):
         x = i / (size - 1)
         row = []
@@ -161,115 +330,6 @@ def _build_1d_cube_lut(resolve_params: dict | None, size: int) -> str | None:
             row.append(str(max(0.0, min(y, 1.0))))
         lines.append(" ".join(row))
     return "\n".join(lines)
-
-
-def _rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
-    if cv2 is not None:
-        rgb8 = np.clip(rgb * 255.0, 0, 255).astype(np.uint8)
-        lab = cv2.cvtColor(rgb8, cv2.COLOR_RGB2LAB).astype(np.float32)
-        # OpenCV Lab: L 0..255, a/b 0..255 -> bring to common float scale
-        lab[..., 0] = lab[..., 0] * (100.0 / 255.0)
-        lab[..., 1:] = lab[..., 1:] - 128.0
-        return lab
-    # Fallback manual conversion (approx) to XYZ then Lab
-    mask = rgb > 0.04045
-    rgb_lin = np.where(mask, ((rgb + 0.055) / 1.055) ** 2.4, rgb / 12.92)
-    M = np.array([[0.4124564, 0.3575761, 0.1804375],
-                  [0.2126729, 0.7151522, 0.0721750],
-                  [0.0193339, 0.1191920, 0.9503041]])
-    xyz = rgb_lin @ M.T
-    xyz_ref = np.array([0.95047, 1.0, 1.08883])
-    xyz = xyz / xyz_ref
-
-    def f(t):
-        delta = 6 / 29
-        return np.where(t > delta ** 3, np.cbrt(t), t / (3 * delta ** 2) + 4 / 29)
-
-    fx, fy, fz = f(xyz[..., 0]), f(xyz[..., 1]), f(xyz[..., 2])
-    L = (116 * fy) - 16
-    a = 500 * (fx - fy)
-    b = 200 * (fy - fz)
-    return np.stack([L, a, b], axis=-1)
-
-
-def _delta_e76(lab1: np.ndarray, lab2: np.ndarray) -> np.ndarray:
-    diff = lab1 - lab2
-    return np.sqrt((diff ** 2).sum(axis=-1))
-
-
-def _delta_e_stats(delta_e: np.ndarray) -> dict:
-    flat = delta_e.reshape(-1)
-    if flat.size == 0:
-        return {}
-    return {
-        "mean": round(float(np.mean(flat)), 4),
-        "median": round(float(np.median(flat)), 4),
-        "p95": round(float(np.percentile(flat, 95)), 4),
-        "under2": round(float((flat < 2.0).mean()), 4),
-        "under5": round(float((flat < 5.0).mean()), 4),
-        "max": round(float(np.max(flat)), 4),
-    }
-
-
-def _build_heatmap(delta_e: np.ndarray, vmax: float = 20.0) -> np.ndarray:
-    norm = np.clip(delta_e / max(vmax, _EPS), 0.0, 1.0)
-    if cv2 is not None:
-        norm_u8 = (norm * 255.0).astype(np.uint8)
-        heat = cv2.applyColorMap(norm_u8, cv2.COLORMAP_JET)
-        return cv2.cvtColor(heat, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
-    # fallback simple colormap: blue->green->red
-    r = norm
-    g = 1.0 - np.abs(norm - 0.5) * 2.0
-    b = 1.0 - norm
-    heat = np.stack([r, g, b], axis=-1)
-    return np.clip(heat, 0.0, 1.0)
-
-
-def _downsample_width(img: np.ndarray, target_w: int) -> np.ndarray:
-    h, w, _ = img.shape
-    if w == target_w:
-        return img
-    if cv2 is not None:
-        return cv2.resize(img, (target_w, h), interpolation=cv2.INTER_AREA)
-    # simple block average
-    scale = w / target_w
-    idx = (np.arange(target_w) * scale).astype(int)
-    idx = np.clip(idx, 0, w - 1)
-    return img[:, idx, :]
-
-
-def _build_waveform(img: np.ndarray, mode: str, width: int, gain: float, use_log: bool) -> np.ndarray:
-    img = np.clip(img, 0.0, 1.0)
-    img_ds = _downsample_width(img, width)
-    h, w, _ = img_ds.shape
-    H = _WAVEFORM_HEIGHT
-
-    if mode == "parade":
-        chans = [img_ds[..., i] for i in range(3)]
-        colors = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
-    else:
-        luma = 0.2126 * img_ds[..., 0] + 0.7152 * img_ds[..., 1] + 0.0722 * img_ds[..., 2]
-        chans = [luma]
-        colors = [(1, 1, 1)]
-
-    canvas = np.zeros((H, w, 3), dtype=np.float32)
-    for chan, color in zip(chans, colors):
-        # hist per column
-        bins = (np.clip(chan, 0.0, 1.0) * (H - 1)).astype(int)
-        for x in range(w):
-            col_bins, counts = np.unique(bins[:, x], return_counts=True)
-            if use_log:
-                counts = np.log1p(counts)
-            counts = counts * gain
-            if counts.max() > 0:
-                counts = counts / counts.max()
-            canvas[col_bins, x, 0] += counts * color[0]
-            canvas[col_bins, x, 1] += counts * color[1]
-            canvas[col_bins, x, 2] += counts * color[2]
-
-    canvas = np.clip(canvas, 0.0, 1.0)
-    canvas = np.flipud(canvas)  # 0 at bottom
-    return canvas
 
 
 class ImageColorMatchToReference:
@@ -292,7 +352,7 @@ class ImageColorMatchToReference:
                 "lut_size": ("INT", {"default": 256, "min": 16, "max": 1024, "tooltip": "Размер 1D LUT."}),
                 "waveform_enabled": ("BOOLEAN", {"default": False, "tooltip": "Строить waveform/parade для контроля."}),
                 "waveform_mode": (["luma", "parade"], {"default": "parade", "tooltip": "Режим waveform: лума или RGB parade."}),
-                "waveform_width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина waveform в пикселях."}),
+                "waveform_width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина waveform."}),
                 "waveform_gain": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1, "tooltip": "Усиление яркости точек waveform."}),
                 "waveform_log": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала интенсивностей waveform."}),
                 "deltae_heatmap": ("BOOLEAN", {"default": False, "tooltip": "Вывести heatmap ΔE как IMAGE."}),
@@ -346,56 +406,46 @@ class ImageColorMatchToReference:
                 img_t = img_t[..., :3]
 
             if img_t.shape[0] != ref_h or img_t.shape[1] != ref_w:
-                img_t = _torch_resize_image(img_t, ref_h, ref_w)
+                img_t = _resize_image(img_t, ref_h, ref_w)
 
             mm_t = select_batch_item(match_mask, idx) if match_mask is not None else None
             am_t = select_batch_item(apply_mask, idx) if apply_mask is not None else None
             if mm_t is not None:
                 mm_t = resize_mask_to_output(normalize_mask(mm_t), ref_h, ref_w)
-                match_mask_np = (mm_t.detach().cpu().numpy() > 0.5)
-            else:
-                match_mask_np = None
             if am_t is not None:
                 am_t = resize_mask_to_output(normalize_mask(am_t), ref_h, ref_w)
-
-            img_np = img_t.detach().cpu().numpy().astype(np.float32)
-            ref_np = ref_t.detach().cpu().numpy().astype(np.float32)
 
             status = "ok"
             gimp_levels = None
             gimp_hsv = None
-            resolve_params = None
-            fusion_params = None
-            linear_scale = None
-            linear_offset = None
 
             if mode == "levels":
-                corrected, gimp_levels, status = _apply_levels(img_np, ref_np, match_mask_np, float(percentile))
+                corrected_t, gimp_levels, status = _apply_levels(img_t, ref_t, mm_t, float(percentile))
             elif mode == "hsv_shift":
-                corrected, gimp_hsv, status = _apply_hsv_shift(img_np, ref_np, match_mask_np)
+                corrected_t, gimp_hsv, status = _hsv_shift(img_t, ref_t, mm_t)
+            elif mode == "mean_std":
+                corrected_t = _mean_std_match(img_t, ref_t, mm_t)
+            elif mode == "linear":
+                corrected_t = _linear_match(img_t, ref_t, mm_t)
+            elif mode == "hist":
+                corrected_t = _hist_match(img_t, ref_t, mm_t)
+            elif mode == "pca_cov":
+                corrected_t = _pca_cov(img_t, ref_t, mm_t)
+            elif mode in ("lab_l", "lab_full", "lab_l_cdf", "lab_cdf"):
+                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, mode)
             else:
-                if match_mask_np is not None:
-                    mask_for_stats = torch.from_numpy(1.0 - match_mask_np.astype(np.float32))
-                else:
-                    mask_for_stats = torch.zeros((1, 1))
-                corrected_t = apply_color_match(
-                    output_images=torch.from_numpy(img_np).unsqueeze(0),
-                    reference_images=torch.from_numpy(ref_np).unsqueeze(0),
-                    mask=mask_for_stats if match_mask_np is not None else torch.zeros((1, 1)),
-                    mode=mode,
-                ).squeeze(0)
-                corrected = corrected_t.detach().cpu().numpy().astype(np.float32)
+                corrected_t = img_t
 
             if status.startswith("error"):
-                corrected = img_np
+                corrected_t = img_t
 
             if strength < 1.0:
-                corrected = img_np * (1.0 - strength) + corrected * strength
+                corrected_t = img_t * (1.0 - strength) + corrected_t * strength
 
-            linear_scale, linear_offset = _linear_fit(img_np, ref_np, match_mask_np)
+            scale_t, offset_t = _linear_fit_torch(img_t, ref_t, mm_t)
             resolve_params = {
-                "scale": [round(float(s), 5) for s in linear_scale],
-                "offset": [round(float(o), 5) for o in linear_offset],
+                "scale": [round(float(s), 5) for s in scale_t],
+                "offset": [round(float(o), 5) for o in offset_t],
                 "gamma": [
                     gimp_levels[k]["gamma"] if gimp_levels else 1.0
                     for k in ("r", "g", "b")
@@ -408,47 +458,45 @@ class ImageColorMatchToReference:
             }
 
             if am_t is not None:
-                mask_apply = am_t.detach().cpu().numpy()[..., None]
-                corrected = corrected * mask_apply + img_np * (1.0 - mask_apply)
+                mask_apply = am_t[..., None]
+                corrected_t = corrected_t * mask_apply + img_t * (1.0 - mask_apply)
 
             if clip:
-                corrected = np.clip(corrected, 0.0, 1.0)
+                corrected_t = torch.clamp(corrected_t, 0.0, 1.0)
 
-            matched_t = torch.from_numpy(corrected.astype(np.float32))
+            matched_t = corrected_t
             if alpha_channel is not None and preserve_alpha:
                 matched_t = torch.cat([matched_t, alpha_channel], dim=-1)
 
             diff = torch.abs(matched_t[..., :3] - ref_t)
-            lab_ref = _rgb_to_lab(ref_np)
-            lab_matched = _rgb_to_lab(corrected)
-            delta_e = _delta_e76(lab_ref, lab_matched)
+            delta_e = _delta_e76(_rgb_to_lab(ref_t), _rgb_to_lab(corrected_t))
             delta_stats = _delta_e_stats(delta_e)
 
             if deltae_heatmap:
-                heat = torch.from_numpy(_build_heatmap(delta_e)).float()
+                heat = _heatmap(delta_e)
             else:
-                heat = torch.zeros((1, 1, 3), dtype=torch.float32)
+                heat = torch.zeros((1, 1, 3), dtype=matched_t.dtype, device=matched_t.device)
 
             if waveform_enabled:
-                wave_ref = torch.from_numpy(_build_waveform(ref_np, waveform_mode, int(waveform_width), float(waveform_gain), bool(waveform_log)))
-                wave_match = torch.from_numpy(_build_waveform(corrected, waveform_mode, int(waveform_width), float(waveform_gain), bool(waveform_log)))
+                wave_ref = _waveform(ref_t, waveform_mode, int(waveform_width), float(waveform_gain), bool(waveform_log))
+                wave_match = _waveform(corrected_t, waveform_mode, int(waveform_width), float(waveform_gain), bool(waveform_log))
             else:
-                wave_ref = torch.zeros((1, 1, 3), dtype=torch.float32)
-                wave_match = torch.zeros((1, 1, 3), dtype=torch.float32)
+                wave_ref = torch.zeros((1, 1, 3), dtype=matched_t.dtype, device=matched_t.device)
+                wave_match = torch.zeros((1, 1, 3), dtype=matched_t.dtype, device=matched_t.device)
 
             stats = {
-                "ref_mean": [round(float(x), 4) for x in ref_np.reshape(-1, 3).mean(axis=0)],
-                "img_mean": [round(float(x), 4) for x in img_np.reshape(-1, 3).mean(axis=0)],
-                "ref_std": [round(float(x), 4) for x in ref_np.reshape(-1, 3).std(axis=0)],
-                "img_std": [round(float(x), 4) for x in img_np.reshape(-1, 3).std(axis=0)],
-                "mask_used": match_mask_np is not None,
+                "ref_mean": [round(float(x), 4) for x in ref_t.reshape(-1, 3).mean(dim=0)],
+                "img_mean": [round(float(x), 4) for x in img_t.reshape(-1, 3).mean(dim=0)],
+                "ref_std": [round(float(x), 4) for x in ref_t.reshape(-1, 3).std(dim=0)],
+                "img_std": [round(float(x), 4) for x in img_t.reshape(-1, 3).std(dim=0)],
+                "mask_used": mm_t is not None,
                 "delta_e": delta_stats,
             }
             presets = {
                 "gimp": {
                     "levels": gimp_levels,
                     "hue_saturation": gimp_hsv,
-                    "hint": "Colors -> Levels (set per-channel input black/white/gamma); Colors -> Hue-Saturation for hue/sat/value.",
+                    "hint": "Colors -> Levels; Colors -> Hue-Saturation.",
                 },
                 "resolve": {
                     "color_wheels": {
@@ -456,7 +504,7 @@ class ImageColorMatchToReference:
                         "lift": resolve_params["offset"] if resolve_params else None,
                         "gamma": resolve_params["gamma"] if resolve_params else None,
                     },
-                    "hint": "Apply gain/offset per channel in Primaries (Log/Wheels). Gamma ~= per-channel power.",
+                    "hint": "Primaries gain/lift/gamma per channel.",
                 },
                 "fusion": {
                     "color_corrector": {
@@ -464,7 +512,7 @@ class ImageColorMatchToReference:
                         "lift": fusion_params["lift"] if fusion_params else None,
                         "gamma": fusion_params["gamma"] if fusion_params else None,
                     },
-                    "hint": "In CC node: set Gain RGB, Lift RGB, Gamma RGB.",
+                    "hint": "Fusion ColorCorrector gain/lift/gamma.",
                 },
             }
             payload = {
@@ -475,8 +523,8 @@ class ImageColorMatchToReference:
                 "resolve": resolve_params,
                 "fusion": fusion_params,
                 "linear": {
-                    "scale": [round(float(s), 5) for s in linear_scale] if linear_scale is not None else None,
-                    "offset": [round(float(o), 5) for o in linear_offset] if linear_offset is not None else None,
+                    "scale": resolve_params["scale"] if resolve_params else None,
+                    "offset": resolve_params["offset"] if resolve_params else None,
                 },
                 "presets": presets,
                 "stats": stats,
@@ -485,12 +533,13 @@ class ImageColorMatchToReference:
                 lut_text = _build_1d_cube_lut(resolve_params, int(lut_size))
                 payload["lut_1d_cube"] = lut_text
                 payload["lut_size"] = int(lut_size)
+
             json_list.append(json.dumps(payload, ensure_ascii=True))
-            matched_list.append(matched_t)
-            diff_list.append(diff)
-            deltae_list.append(heat)
-            wave_ref_list.append(wave_ref)
-            wave_match_list.append(wave_match)
+            matched_list.append(matched_t.cpu())
+            diff_list.append(diff.cpu())
+            deltae_list.append(heat.cpu())
+            wave_ref_list.append(wave_ref.cpu())
+            wave_match_list.append(wave_match.cpu())
 
         return (
             torch.stack(matched_list, dim=0),
@@ -502,7 +551,4 @@ class ImageColorMatchToReference:
         )
 
 
-_LOGGER.warning(
-    "Loaded ImageColorMatchToReference. NODE_CLASS_MAPPINGS=%s",
-    ["ImageColorMatchToReference"],
-)
+_LOGGER.warning("Loaded ImageColorMatchToReference. NODE_CLASS_MAPPINGS=%s", ["ImageColorMatchToReference"])
