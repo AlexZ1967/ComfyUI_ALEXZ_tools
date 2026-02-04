@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 try:
     import cv2
 except Exception:  # pragma: no cover - runtime dependency check
@@ -35,3 +36,54 @@ def mask_to_uint8(mask_tensor, target_hw):
 
 def round_to_multiple(value, multiple):
     return max(multiple, int(round(value / multiple)) * multiple)
+
+
+def ensure_hwc(t: torch.Tensor) -> torch.Tensor:
+    """Normalize tensor layout to HWC, dropping batch if present."""
+    if t.dim() == 4:
+        t = t[0]
+    if t.dim() == 3 and t.shape[0] == 3 and t.shape[-1] != 3:
+        t = t.permute(1, 2, 0)
+    return t
+
+
+def resize_to_hw(image: torch.Tensor, target_hw):
+    """Resize HWC tensor to (H, W) with bilinear interpolation."""
+    h, w = target_hw
+    if image.shape[0] == h and image.shape[1] == w:
+        return image
+    return (
+        F.interpolate(
+            image.permute(2, 0, 1).unsqueeze(0),
+            size=(h, w),
+            mode="bilinear",
+            align_corners=False,
+        )
+        .squeeze(0)
+        .permute(1, 2, 0)
+    )
+
+
+def image_difference(a: torch.Tensor, b: torch.Tensor, match_target: str = "a") -> torch.Tensor:
+    """
+    Compute absolute difference between two images (HWC or BCHW/BHWC).
+    If spatial sizes differ, resize one side:
+      match_target = \"a\" (default) -> resize b to a
+      match_target = \"b\" -> resize a to b
+      match_target = \"none\" -> no resize (may raise)
+    """
+    a = torch.clamp(ensure_hwc(a).float(), 0.0, 1.0)
+    b = torch.clamp(ensure_hwc(b).float(), 0.0, 1.0)
+
+    if a.shape[:2] != b.shape[:2]:
+        if match_target == "a":
+            b = resize_to_hw(b, a.shape[:2])
+        elif match_target == "b":
+            a = resize_to_hw(a, b.shape[:2])
+        elif match_target != "none":
+            raise ValueError(f"Unknown match_target: {match_target}")
+
+    if a.shape != b.shape:
+        raise ValueError(f"Shapes differ and can't be matched: {a.shape} vs {b.shape}")
+
+    return torch.abs(a - b)

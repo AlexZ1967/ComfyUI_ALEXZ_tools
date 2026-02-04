@@ -86,6 +86,18 @@ Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 
 ---
 
+## Image Difference
+Абсолютная разница между двумя картинками, при разных размерах можно выбрать сторону для ресайза.
+
+- Display name: Image Difference  
+- Type name: ImageDifference  
+- Category: image/utils  
+Входы: `image_a`, `image_b`, `match_target` (a/b/none).  
+Выходы: `difference` (|A−B|).  
+Guide: [GUIDE_IMAGE_DIFFERENCE.md](GUIDE_IMAGE_DIFFERENCE.md)
+
+---
+
 ## Show/Save JSON
 Узловой вывод красиво отформатированного JSON и (опционально) сохранение в файл/директорию.
 

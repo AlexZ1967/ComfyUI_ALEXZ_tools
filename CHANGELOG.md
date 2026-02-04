@@ -2,6 +2,7 @@
 
 ## 0.6.5 — 2026-02-04
 - Fix: VideoFrameMatch now normalizes image/frame tensors to HWC before MSE to avoid dimension mismatch errors.
+- New: Image Difference node (+shared diff helper) to compute |A−B| with optional auto-resize.
 
 ## 0.6.4 — 2026-01-27
 - Color Match: добавлен режим `perceptual_vgg` (VGG19, без ручной загрузки весов).

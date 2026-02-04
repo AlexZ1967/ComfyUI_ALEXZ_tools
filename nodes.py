@@ -11,6 +11,7 @@ _NODE_SPECS = [
     ("VideoInpaintWatermark", "Remove Static Watermark from Video", ".video_inpaint", "VideoInpaintWatermark"),
     ("ImageColorMatchToReference", "Color Match To Reference", ".image_color_match", "ImageColorMatchToReference"),
     ("VideoFrameMatch", "Find Closest Video Frame", ".video_frame_match", "VideoFrameMatch"),
+    ("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
 ]
 
 NODE_CLASS_MAPPINGS = {}

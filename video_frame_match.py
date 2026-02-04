@@ -7,9 +7,9 @@ import cv2
 import folder_paths
 import numpy as np
 import torch
+from .utils import ensure_hwc, image_difference
 
 _LOGGER = logging.getLogger("VideoFrameMatch")
-
 
 def _list_videos():
     input_dir = folder_paths.get_input_directory()
@@ -22,7 +22,6 @@ def _to_tensor(frame_bgr: np.ndarray) -> torch.Tensor:
     frame = torch.from_numpy(frame_rgb.astype(np.float32) / 255.0)
     return frame
 
-
 def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.Tensor:
     h, w = target_hw
     if frame.shape[0] == h and frame.shape[1] == w:
@@ -32,20 +31,8 @@ def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.T
         frame_bchw, size=(h, w), mode="bilinear", align_corners=False
     )
     return resized.squeeze(0).permute(1, 2, 0)
-
-
 def _mse_score(a: torch.Tensor, b: torch.Tensor) -> float:
     return float(torch.mean((a - b) ** 2).item())
-
-
-def _ensure_hwc(t: torch.Tensor) -> torch.Tensor:
-    # Accept shapes: HWC, CHW, BHWC, BCHW
-    if t.dim() == 4:  # batch
-        t = t[0]
-    if t.dim() == 3:
-        if t.shape[0] == 3 and t.shape[-1] != 3:  # CHW
-            t = t.permute(1, 2, 0)
-    return t
 
 
 class VideoFrameMatch:
@@ -69,7 +56,7 @@ class VideoFrameMatch:
 
     def match(self, image, video, stride, max_frames):
         target = image[0] if isinstance(image, list) else image
-        target = torch.clamp(_ensure_hwc(target), 0.0, 1.0).float()
+        target = torch.clamp(ensure_hwc(target), 0.0, 1.0).float()
         h_t, w_t = target.shape[:2]
 
         video_path = folder_paths.get_annotated_filepath(video)
@@ -95,7 +82,7 @@ class VideoFrameMatch:
                 if idx % stride != 0:
                     idx += 1
                     continue
-                frame_t = _ensure_hwc(_to_tensor(frame_bgr))
+                frame_t = ensure_hwc(_to_tensor(frame_bgr))
                 frame_t = _resize_to_match(frame_t, (h_t, w_t))
                 score = _mse_score(frame_t, target)
                 scores.append({"index": idx, "mse": score})
@@ -117,7 +104,7 @@ class VideoFrameMatch:
 
         return (
             best_frame_tensor.unsqueeze(0),
-            torch.abs(best_frame_tensor - target).unsqueeze(0),
+            image_difference(best_frame_tensor, target).unsqueeze(0),
             best_index,
             float(best_score),
             scores_json,
