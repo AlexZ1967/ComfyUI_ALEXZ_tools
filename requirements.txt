@@ -1,2 +1,4 @@
 opencv-python>=4.8
 tqdm>=4.66
+lpips>=0.1.4
+open-clip-torch>=2.24.0

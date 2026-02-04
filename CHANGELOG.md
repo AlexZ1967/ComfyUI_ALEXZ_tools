@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.6.7 — 2026-02-04
+- VideoFrameMatch: добавлены метрики SSIM/LPIPS/CLIP и цветовая нормализация перед сравнением.
+- VideoFrameMatch: `scores_json` теперь содержит объект с метаданными (metric/normalize).
+
 ## 0.6.6 — 2026-02-04
 - VideoFrameMatch: убран `stride`; `max_frames` теперь означает "последние N кадров" (0 = все).
 

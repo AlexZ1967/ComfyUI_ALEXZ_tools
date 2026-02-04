@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
+from . import color_match_utils
 try:
     import cv2
 except Exception:  # pragma: no cover - runtime dependency check
@@ -87,3 +88,18 @@ def image_difference(a: torch.Tensor, b: torch.Tensor, match_target: str = "a") 
         raise ValueError(f"Shapes differ and can't be matched: {a.shape} vs {b.shape}")
 
     return torch.abs(a - b)
+
+
+def normalize_to_reference(image: torch.Tensor, reference: torch.Tensor, mode: str) -> torch.Tensor:
+    """Normalize image to reference using color match modes."""
+    if mode == "none":
+        return image
+    supported = {"mean_std", "linear", "hist", "pca_cov", "lab_l", "lab_l_cdf", "lab_full", "lab_cdf"}
+    if mode not in supported:
+        raise ValueError(f"Unsupported normalize mode: {mode}")
+
+    img = torch.clamp(ensure_hwc(image).float(), 0.0, 1.0)
+    ref = torch.clamp(ensure_hwc(reference).float(), 0.0, 1.0)
+    mask = torch.zeros((ref.shape[0], ref.shape[1]), dtype=ref.dtype, device=ref.device)
+    out = color_match_utils.apply_color_match(img.unsqueeze(0), ref.unsqueeze(0), mask, mode)
+    return out[0].to(image.device)
