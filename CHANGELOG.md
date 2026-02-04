@@ -1,5 +1,8 @@
 # Changelog — ALEXZ_tools
 
+## 0.6.9 — 2026-02-04
+- VideoFrameMatch: логирование загрузки CLIP и прогресс обработки кадров.
+
 ## 0.6.8 — 2026-02-04
 - Fix: VideoFrameMatch fallback when seeking to last frames fails (avoids "No frames processed" with max_frames > 0).
 

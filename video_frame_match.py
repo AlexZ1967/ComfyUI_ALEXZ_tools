@@ -9,6 +9,10 @@ import folder_paths
 import numpy as np
 import torch
 import torch.nn.functional as F
+try:
+    from tqdm import tqdm
+except Exception:  # pragma: no cover - optional
+    tqdm = None
 from .utils import ensure_hwc, image_difference, normalize_to_reference, resize_to_hw
 
 _LOGGER = logging.getLogger("VideoFrameMatch")
@@ -128,12 +132,14 @@ def _get_clip_model(model_name: str, pretrained: str, device: torch.device):
         raise RuntimeError(
             "open-clip-torch is required for metric=clip. Install: pip install open-clip-torch"
         ) from exc
+    _LOGGER.info("CLIP: loading model %s (%s) on %s", model_name, pretrained, device.type)
     model, _, _ = open_clip.create_model_and_transforms(model_name, pretrained=pretrained)
     model = model.to(device).eval()
     image_size = getattr(model.visual, "image_size", 224)
     if isinstance(image_size, tuple):
         image_size = image_size[0]
     _CLIP_CACHE[key] = (model, image_size)
+    _LOGGER.info("CLIP: model loaded (image_size=%s)", image_size)
     return model, image_size
 
 
@@ -229,7 +235,9 @@ class VideoFrameMatch:
         target_metric = resize_to_hw(target, (metric_size_eff, metric_size_eff)) if metric_size_eff else target
         clip_ctx = None
         if metric == "clip":
+            _LOGGER.info("CLIP: resolving model (this may download weights)...")
             model, size = _get_clip_model(clip_model, clip_pretrained, metric_device)
+            _LOGGER.info("CLIP: encoding target image")
             target_feat = _clip_encode(target_metric, model, size, metric_device)
             clip_ctx = (model, size, target_feat)
 
@@ -263,6 +271,14 @@ class VideoFrameMatch:
             )
             return frame_t, score_val, {"index": frame_index, "score": score_val}
 
+        pbar = None
+        if tqdm is not None and total_frames > 0:
+            if use_tail_only:
+                pbar_total = min(max_frames, total_frames) if max_frames else total_frames
+            else:
+                pbar_total = total_frames
+            pbar = tqdm(total=pbar_total, desc="VideoFrameMatch", unit="frame")
+
         try:
             if use_tail_only and (total_frames == 0 or not seek_ok):
                 if total_frames > 0 and not seek_ok:
@@ -275,6 +291,8 @@ class VideoFrameMatch:
                         break
                     frame_t, score_val, score_item = _score_frame(frame_bgr, idx)
                     queue.append((idx, frame_t, score_val, score_item))
+                    if pbar is not None:
+                        pbar.update(1)
                     idx += 1
                 if not queue:
                     raise RuntimeError("No frames processed from video.")
@@ -292,6 +310,8 @@ class VideoFrameMatch:
                         best_score = score_val
                         best_index = idx
                         best_frame_tensor = frame_t
+                    if pbar is not None:
+                        pbar.update(1)
                     idx += 1
                 if best_frame_tensor is None and use_tail_only:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -303,11 +323,15 @@ class VideoFrameMatch:
                             break
                         frame_t, score_val, score_item = _score_frame(frame_bgr, idx)
                         queue.append((idx, frame_t, score_val, score_item))
+                        if pbar is not None:
+                            pbar.update(1)
                         idx += 1
                     if queue:
                         best_index, best_frame_tensor, best_score, _ = min(queue, key=lambda x: x[2])
                         scores = [item[3] for item in queue]
         finally:
+            if pbar is not None:
+                pbar.close()
             cap.release()
 
         if best_frame_tensor is None:
