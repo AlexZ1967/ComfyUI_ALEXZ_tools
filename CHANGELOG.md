@@ -1,5 +1,8 @@
 # Changelog — ALEXZ_tools
 
+## 0.7.0 — 2026-02-04
+- VideoFrameMatch: removed CLIP options/outputs and metric_size; simplified outputs (best_frame_number only).
+
 ## 0.6.9 — 2026-02-04
 - VideoFrameMatch: логирование загрузки CLIP и прогресс обработки кадров.
 
