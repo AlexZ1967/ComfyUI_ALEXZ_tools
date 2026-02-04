@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from collections import deque
 from typing import Optional, Tuple
 
 import cv2
@@ -35,6 +36,13 @@ def _mse_score(a: torch.Tensor, b: torch.Tensor) -> float:
     return float(torch.mean((a - b) ** 2).item())
 
 
+def _get_total_frames(cap: cv2.VideoCapture) -> int:
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if total <= 0:
+        return 0
+    return total
+
+
 class VideoFrameMatch:
     @classmethod
     def INPUT_TYPES(cls):
@@ -43,8 +51,7 @@ class VideoFrameMatch:
             "required": {
                 "image": ("IMAGE", {"tooltip": "Целевой кадр для поиска в видео."}),
                 "video": (videos, {"video_upload": True, "tooltip": "Видео из папки input/."}),
-                "stride": ("INT", {"default": 1, "min": 1, "max": 1000, "tooltip": "Шаг по кадрам при поиске."}),
-                "max_frames": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Ограничение на количество анализируемых кадров (0 = все)."}),
+                "max_frames": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Количество последних кадров для анализа (0 = все)."}),
             },
             "optional": {},
         }
@@ -54,7 +61,7 @@ class VideoFrameMatch:
     FUNCTION = "match"
     CATEGORY = "video/utils"
 
-    def match(self, image, video, stride, max_frames):
+    def match(self, image, video, max_frames):
         target = image[0] if isinstance(image, list) else image
         target = torch.clamp(ensure_hwc(target), 0.0, 1.0).float()
         h_t, w_t = target.shape[:2]
@@ -72,28 +79,52 @@ class VideoFrameMatch:
         best_frame_tensor: Optional[torch.Tensor] = None
         scores = []
 
-        idx = 0
-        processed = 0
+        total_frames = _get_total_frames(cap)
+        use_tail_only = bool(max_frames)
+        start_idx = 0
+        seek_ok = False
+
+        if use_tail_only and total_frames > 0:
+            start_idx = max(0, total_frames - max_frames)
+            if start_idx == 0:
+                seek_ok = True
+            else:
+                seek_ok = cap.set(cv2.CAP_PROP_POS_FRAMES, start_idx)
+
         try:
-            while True:
-                ret, frame_bgr = cap.read()
-                if not ret:
-                    break
-                if idx % stride != 0:
+            if use_tail_only and (total_frames == 0 or not seek_ok):
+                if total_frames > 0 and not seek_ok:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                queue = deque(maxlen=max_frames)
+                idx = 0
+                while True:
+                    ret, frame_bgr = cap.read()
+                    if not ret:
+                        break
+                    frame_t = ensure_hwc(_to_tensor(frame_bgr))
+                    frame_t = _resize_to_match(frame_t, (h_t, w_t))
+                    score = _mse_score(frame_t, target)
+                    queue.append((idx, frame_t, score))
                     idx += 1
-                    continue
-                frame_t = ensure_hwc(_to_tensor(frame_bgr))
-                frame_t = _resize_to_match(frame_t, (h_t, w_t))
-                score = _mse_score(frame_t, target)
-                scores.append({"index": idx, "mse": score})
-                if best_score is None or score < best_score:
-                    best_score = score
-                    best_index = idx
-                    best_frame_tensor = frame_t
-                idx += 1
-                processed += 1
-                if max_frames and processed >= max_frames:
-                    break
+                if not queue:
+                    raise RuntimeError("No frames processed from video.")
+                best_index, best_frame_tensor, best_score = min(queue, key=lambda x: x[2])
+                scores = [{"index": item[0], "mse": item[2]} for item in queue]
+            else:
+                idx = start_idx
+                while True:
+                    ret, frame_bgr = cap.read()
+                    if not ret:
+                        break
+                    frame_t = ensure_hwc(_to_tensor(frame_bgr))
+                    frame_t = _resize_to_match(frame_t, (h_t, w_t))
+                    score = _mse_score(frame_t, target)
+                    scores.append({"index": idx, "mse": score})
+                    if best_score is None or score < best_score:
+                        best_score = score
+                        best_index = idx
+                        best_frame_tensor = frame_t
+                    idx += 1
         finally:
             cap.release()
 

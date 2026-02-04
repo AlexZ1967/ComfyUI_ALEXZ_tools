@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.6.4
+Version: 0.6.6
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, инпейнтинг водяных знаков в видео и отображение/сохранение JSON.
@@ -17,6 +17,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 - [Align Overlay To Background](#align-overlay-to-background)
 - [Color Match To Reference](#color-match-to-reference)
 - [Find Closest Video Frame](#find-closest-video-frame)
+- [Image Difference](#image-difference)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
 - [Show/Save JSON](#showsave-json)
 
@@ -75,12 +76,12 @@ Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 ---
 
 ## Find Closest Video Frame
-По заданной картинке ищет наиболее похожий кадр в видео (по MSE). Перебирает кадры с заданным stride, возвращает лучший кадр, индекс и список оценок.
+По заданной картинке ищет наиболее похожий кадр в видео (по MSE). Если задан `max_frames`, анализируются только последние N кадров.
 
 - Display name: Find Closest Video Frame  
 - Type name: VideoFrameMatch  
 - Category: video/utils  
-Входы: `image` (целевой кадр), `video` (из input/), `stride` (шаг по кадрам), `max_frames` (0=все).  
+Входы: `image` (целевой кадр), `video` (из input/), `max_frames` (0=все, иначе последние N кадров).  
 Выходы: `best_frame`, `difference`, `best_index`, `best_score`, `scores_json` (первые 500 оценок).
 Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 

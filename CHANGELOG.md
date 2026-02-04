@@ -1,5 +1,8 @@
 # Changelog — ALEXZ_tools
 
+## 0.6.6 — 2026-02-04
+- VideoFrameMatch: убран `stride`; `max_frames` теперь означает "последние N кадров" (0 = все).
+
 ## 0.6.5 — 2026-02-04
 - Fix: VideoFrameMatch now normalizes image/frame tensors to HWC before MSE to avoid dimension mismatch errors.
 - New: Image Difference node (+shared diff helper) to compute |A−B| with optional auto-resize.
