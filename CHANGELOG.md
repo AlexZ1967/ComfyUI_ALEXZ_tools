@@ -1,5 +1,8 @@
 # Changelog — ALEXZ_tools
 
+## 0.6.8 — 2026-02-04
+- Fix: VideoFrameMatch fallback when seeking to last frames fails (avoids "No frames processed" with max_frames > 0).
+
 ## 0.6.7 — 2026-02-04
 - VideoFrameMatch: добавлены метрики SSIM/LPIPS/CLIP и цветовая нормализация перед сравнением.
 - VideoFrameMatch: `scores_json` теперь содержит объект с метаданными (metric/normalize).
