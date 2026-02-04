@@ -81,7 +81,7 @@ Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 - Type name: VideoFrameMatch  
 - Category: video/utils  
 Входы: `image` (целевой кадр), `video` (из input/), `stride` (шаг по кадрам), `max_frames` (0=все).  
-Выходы: `best_frame`, `best_index`, `best_score`, `scores_json` (первые 500 оценок).
+Выходы: `best_frame`, `difference`, `best_index`, `best_score`, `scores_json` (первые 500 оценок).
 Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 
 ---

@@ -52,8 +52,8 @@ class VideoFrameMatch:
             "optional": {},
         }
 
-    RETURN_TYPES = ("IMAGE", "INT", "FLOAT", "STRING")
-    RETURN_NAMES = ("best_frame", "best_index", "best_score", "scores_json")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "INT", "FLOAT", "STRING")
+    RETURN_NAMES = ("best_frame", "difference", "best_index", "best_score", "scores_json")
     FUNCTION = "match"
     CATEGORY = "video/utils"
 
@@ -107,6 +107,7 @@ class VideoFrameMatch:
 
         return (
             best_frame_tensor.unsqueeze(0),
+            torch.abs(best_frame_tensor - target).unsqueeze(0),
             best_index,
             float(best_score),
             scores_json,
