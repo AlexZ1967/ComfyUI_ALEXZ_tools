@@ -16,6 +16,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 - [Image Prepare for QwenEdit Outpaint](#image-prepare-for-qwenedit-outpaint)
 - [Align Overlay To Background](#align-overlay-to-background)
 - [Color Match To Reference](#color-match-to-reference)
+- [Find Closest Video Frame](#find-closest-video-frame)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
 - [Show/Save JSON](#showsave-json)
 
@@ -70,6 +71,18 @@ Guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md), кратко — [GUIDE_COL
 Ключевые входы: mask, method (propainter/e2fgvi/e2fgvi_hq), mask_dilates/flow_mask_dilates, ref_stride, neighbor_length, subvideo_length, raft_iter, fp16, throughput_mode, crop_padding, color_match_mode, cache_dir, output_dir, output_name, video, preview_frame, write_fullframes.  
 Выходы: `preview_image`, `transform_json`
 Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
+
+---
+
+## Find Closest Video Frame
+По заданной картинке ищет наиболее похожий кадр в видео (по MSE). Перебирает кадры с заданным stride, возвращает лучший кадр, индекс и список оценок.
+
+- Display name: Find Closest Video Frame  
+- Type name: VideoFrameMatch  
+- Category: video/utils  
+Входы: `image` (целевой кадр), `video` (из input/), `stride` (шаг по кадрам), `max_frames` (0=все).  
+Выходы: `best_frame`, `best_index`, `best_score`, `scores_json` (первые 500 оценок).
+Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 
 ---
 

@@ -10,6 +10,7 @@ _NODE_SPECS = [
     ("JsonDisplayAndSave", "Show/Save JSON", ".json_output", "JsonDisplayAndSave"),
     ("VideoInpaintWatermark", "Remove Static Watermark from Video", ".video_inpaint", "VideoInpaintWatermark"),
     ("ImageColorMatchToReference", "Color Match To Reference", ".image_color_match", "ImageColorMatchToReference"),
+    ("VideoFrameMatch", "Find Closest Video Frame", ".video_frame_match", "VideoFrameMatch"),
 ]
 
 NODE_CLASS_MAPPINGS = {}
