@@ -4,6 +4,10 @@
 - VideoFrameMatch: ffprobe fallback for frame count to speed up tail-only search.
 - VideoFrameMatch: log total_frames/start_idx/seek_ok for debugging.
 
+## 0.8.3 — 2026-02-05
+- VideoFrameMatch: enforce max_frames limit when tail search is requested.
+- VideoFrameMatch: verify actual seek position, fallback if seek is ineffective.
+
 ## 0.8.1 — 2026-02-05
 - Fix: VideoFrameMatch SSIM path missing torch.nn.functional import (NameError: F).
 

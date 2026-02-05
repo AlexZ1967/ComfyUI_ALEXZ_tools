@@ -231,6 +231,10 @@ class VideoFrameMatch:
                 seek_ok = True
             else:
                 seek_ok = cap.set(cv2.CAP_PROP_POS_FRAMES, start_idx)
+            if seek_ok:
+                actual_pos = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+                if abs(actual_pos - start_idx) > 2:
+                    seek_ok = False
         _LOGGER.info(
             "VideoFrameMatch: total_frames=%s, use_tail_only=%s, start_idx=%s, seek_ok=%s",
             total_frames,
@@ -255,7 +259,7 @@ class VideoFrameMatch:
         pbar = None
         if tqdm is not None and total_frames > 0:
             if use_tail_only:
-                pbar_total = min(max_frames, total_frames) if max_frames else total_frames
+                pbar_total = min(max_frames, max(total_frames - start_idx, 0)) if max_frames else total_frames
             else:
                 pbar_total = total_frames
             pbar = tqdm(total=pbar_total, desc="VideoFrameMatch", unit="frame")
@@ -281,6 +285,7 @@ class VideoFrameMatch:
                 scores = [item[3] for item in queue]
             else:
                 idx = start_idx
+                processed_tail = 0
                 while True:
                     ret, frame_bgr = cap.read()
                     if not ret:
@@ -294,6 +299,10 @@ class VideoFrameMatch:
                     if pbar is not None:
                         pbar.update(1)
                     idx += 1
+                    if use_tail_only and max_frames:
+                        processed_tail += 1
+                        if processed_tail >= max_frames:
+                            break
                 if best_frame_tensor is None and use_tail_only:
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     queue = deque(maxlen=max_frames)
