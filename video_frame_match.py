@@ -266,23 +266,45 @@ class VideoFrameMatch:
 
         try:
             if use_tail_only and (total_frames == 0 or not seek_ok):
-                if total_frames > 0 and not seek_ok:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                queue = deque(maxlen=max_frames)
-                idx = 0
-                while True:
-                    ret, frame_bgr = cap.read()
-                    if not ret:
-                        break
-                    frame_t, score_val, score_item = _score_frame(frame_bgr, idx)
-                    queue.append((idx, frame_t, score_val, score_item))
-                    if pbar is not None:
-                        pbar.update(1)
-                    idx += 1
-                if not queue:
-                    raise RuntimeError("No frames processed from video.")
-                best_index, best_frame_tensor, best_score, _ = min(queue, key=lambda x: x[2])
-                scores = [item[3] for item in queue]
+                if total_frames > 0 and max_frames:
+                    # Fast-skip to last N frames without full decode.
+                    skip_count = max(0, total_frames - max_frames)
+                    skipped = 0
+                    while skipped < skip_count:
+                        if not cap.grab():
+                            break
+                        skipped += 1
+                    idx = skipped
+                    processed = 0
+                    while processed < max_frames:
+                        ret, frame_bgr = cap.read()
+                        if not ret:
+                            break
+                        frame_t, score_val, score_item = _score_frame(frame_bgr, idx)
+                        scores.append(score_item)
+                        if best_score is None or score_val < best_score:
+                            best_score = score_val
+                            best_index = idx
+                            best_frame_tensor = frame_t
+                        if pbar is not None:
+                            pbar.update(1)
+                        idx += 1
+                        processed += 1
+                else:
+                    queue = deque(maxlen=max_frames)
+                    idx = 0
+                    while True:
+                        ret, frame_bgr = cap.read()
+                        if not ret:
+                            break
+                        frame_t, score_val, score_item = _score_frame(frame_bgr, idx)
+                        queue.append((idx, frame_t, score_val, score_item))
+                        if pbar is not None:
+                            pbar.update(1)
+                        idx += 1
+                    if queue:
+                        best_index, best_frame_tensor, best_score, _ = min(queue, key=lambda x: x[2])
+                        scores = [item[3] for item in queue]
             else:
                 idx = start_idx
                 processed_tail = 0
