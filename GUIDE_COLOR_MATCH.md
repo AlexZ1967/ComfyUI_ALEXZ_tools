@@ -1,16 +1,37 @@
-# Color Match To Reference — Guide (кратко)
+# Color Match To Reference — Quick Guide
 
-Основной гайд: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md)
+Полный развернутый гайд: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md).
 
-## Пресеты
-- `fast` — mean/std match (самый быстрый).
-- `balanced` — linear match (надёжный базовый).
-- `quality` — LAB CDF match (точнее, медленнее).
-- `perceptual` — VGG perceptual fast (самый медленный).
+## Назначение
+Быстрый выбор пресета для подгонки цвета `image` к `reference`.
 
-## Зависимости
-- Для `perceptual` нужен `torchvision` (обычно уже есть в стандартной среде ComfyUI).
+## Когда использовать
+- Нужна быстрая настройка без чтения полного гайда.
 
-## Выходы
-- `matched_image` — результат коррекции.
-- `match_json` — параметры коррекции, статистика и блок `quality` с метриками до/после (`mse`, `ssim`, `delta_e76`, `lpips_alex`) и `improvement_pct`.
+## Минимальный сценарий (3 шага)
+1. Подайте `reference` и `image`.
+2. Выберите `preset`.
+3. Проверьте `match_json.quality`.
+
+## Параметры
+| Параметр | Что делает | Рекомендация |
+|---|---|---|
+| `preset` | Режим коррекции | `fast`/`balanced`/`quality`/`perceptual` |
+| `strength` | Сила эффекта | 0.6-0.9 |
+
+## Decision helper
+- Скорость -> `fast`.
+- Базовое качество -> `balanced`.
+- Точность -> `quality`.
+- Максимум визуального match -> `perceptual`.
+
+## Интерпретация выходов
+- `matched_image`: результат.
+- `match_json.quality`: метрики до/после и `improvement_pct`.
+
+## Типовые ошибки и решения
+- Перекоррекция -> снизить `strength`.
+- Слабая коррекция -> перейти на `quality` или `perceptual`.
+
+## Производительность
+- `fast` быстрее всех, `perceptual` медленнее всех.

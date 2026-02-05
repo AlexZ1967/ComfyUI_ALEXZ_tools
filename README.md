@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.10.6
+Version: 0.10.7
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -13,6 +13,10 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 2. Установите зависимости ноды:  
    `pip install -r requirements.txt`
 3. Перезапустите ComfyUI.
+
+## Docs Check
+- Проверка синхронизации параметров/выходов нод и документации:  
+  `python scripts/docs_check.py`
 
 ## Runtime notes
 - `Color Match To Reference` preset `perceptual` использует `torchvision` из базовой среды ComfyUI.

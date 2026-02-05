@@ -1,45 +1,58 @@
 # Remove Static Watermark from Video — Guide
 
 ## Назначение
-Удаление статичных водяных знаков/объектов на видео через инпейнтинг. Встроены ProPainter и E2FGVI (e2fgvi/e2fgvi_hq), веса автозагружаются.
+Удаление статичных водяных знаков/объектов из видео через inpaint (ProPainter / E2FGVI).
 
-## Быстрый старт
-1) `mask`: бинарная маска (1 кадр или batch). Белое = удалить.  
-2) `method=propainter`, `mask_dilates=8`, `flow_mask_dilates=8`, `ref_stride=10`, `neighbor_length=10`, `subvideo_length=80`, `raft_iter=20`, `fp16=enable`.  
-3) Укажите `cache_dir` и `output_dir`, `output_name` (префикс), `video` (из input/), `preview_frame=0`.  
-4) Получите `preview_image` и `transform_json`; файлы патчей пишутся в `output_dir`.
+## Когда использовать
+- Нужно убрать логотип/штамп/объект в фиксированной области видео.
+- Нужны preview и параметры компоновки (`transform_json`).
 
-## Ключевые параметры
-- `method`: propainter (баланс качество/скорость), e2fgvi (стандарт), e2fgvi_hq (лучше на произвольных разрешениях, дороже).  
-- `mask_dilates` / `flow_mask_dilates`: расширение маски (8–12 для логотипов, 10–20 для крупных объектов).  
-- `ref_stride` (E2FGVI): 5–15 — шаг опорных кадров.  
-- `neighbor_length`: 5–15 — окно соседей.  
-- `subvideo_length` (ProPainter): 40–120; уменьшайте при нехватке VRAM.  
-- `raft_iter`: 10–30 — больше = точнее поток, медленнее.  
-- `fp16`: enable экономит VRAM.  
-- `throughput_mode`: enable — быстрее, но меньше очистки VRAM (осторожно с OOM).  
-- `crop_padding`: 8–32 — контекст вокруг маски при pre-crop.  
-- `color_match_mode`: none/mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf — подгон цвета патча к окружению.
-- `write_fullframes`: true, если нужны полноразмерные кадры с патчем.  
-- `fullframe_prefix`: префикс для полноразмерных кадров.
+## Минимальный сценарий (3 шага)
+1. Подайте `video` и `mask` (белое = удалять).
+2. Стартуйте с `method=propainter`, `fp16=enable`, `mask_dilates=8`, `flow_mask_dilates=8`.
+3. Проверьте `preview_image` и `transform_json.status`.
 
-## Рекомендации
-- Маска: лучше чуть больше реального логотипа и с мягкими краями; используйте `mask_dilates` вместо рисования «толстой» маски.  
-- Скорость: уменьшите `subvideo_length` (ProPainter), `neighbor_length`, `raft_iter`; включите `fp16`.  
-- Качество: увеличьте `neighbor_length`, уменьшите `ref_stride`, повысите `raft_iter`, используйте `color_match_mode` (lab_full/lab_cdf).  
-- Память: отключите `write_fullframes`, держите `throughput_mode=disable`, уменьшайте `subvideo_length`.
+## Параметры
+| Параметр | Что делает | Рекомендация |
+|---|---|---|
+| `method` | Модель inpaint | `propainter` базово, `e2fgvi_hq` для сложных кейсов |
+| `mask_dilates` / `flow_mask_dilates` | Расширение маски | 8-12 для логотипов |
+| `neighbor_length` | Окно соседних кадров | 8-15 (больше = лучше, но медленнее) |
+| `subvideo_length` | Размер обрабатываемого блока | 40-120, снижайте при OOM |
+| `raft_iter` | Итерации RAFT | 10-30 (больше = точнее/медленнее) |
+| `fp16` | Полуточность | Вкл для экономии VRAM |
+| `ref_stride` | Шаг опорных кадров | 5-15 (меньше = качественнее, медленнее) |
+| `cudnn_benchmark` | Автотюнинг cuDNN | Вкл для стабильного разрешения и скорости |
+| `tf32` | Разрешить TF32 на Ampere+ | Вкл для скорости при допустимой погрешности |
+| `throughput_mode` | Режим пропускной способности | Вкл для скорости, но выше риск OOM |
+| `crop_padding` | Отступ вокруг bbox маски | 8-32 обычно |
+| `color_match_mode` | Подгон цвета патча | Начните с `lab_l_cdf` / `lab_full` при цветовом дрейфе |
+| `output_dir` | Папка сохранения результатов | Укажите отдельную папку проекта |
+| `output_name` | Префикс имени patch-кадров | Например `patch_` |
+| `preview_frame` | Кадр предпросмотра | 0 или ключевой кадр |
+| `write_fullframes` | Сохранять полные кадры | Вкл только если действительно нужно |
+| `fullframe_prefix` | Префикс для полноразмерных кадров | Например `full_` |
 
-## Потоки и файлы
-- Работает в стриминге: вход режется по маске (pre-crop) и кэшируется в `cache_dir` (`input_XXXX.png`, `mask_XXXX.png`).  
-- Результат патчей (`output_name0000.png` + `transform.json`) — в `output_dir`.  
-- `preview_image` — кадр с патчем поверх кэша (если `preview_frame>=0`), иначе 1×1.
+## Decision helper
+- Нужен безопасный старт -> `propainter`, `fp16=enable`, `throughput_mode=disable`.
+- Динамичный фон/сложная текстура -> увеличьте `neighbor_length` и `raft_iter`.
+- Не хватает VRAM -> уменьшайте `subvideo_length`, отключите `write_fullframes`.
+- Виден цветовой шов -> включите `color_match_mode` (`lab_l_cdf` или `lab_full`).
 
-## transform_json
-Содержит позицию/масштаб обрезки в координатах полного кадра (подставляется для компоновки в NLE).  
-status: ok или empty_mask (если маска пустая).
+## Интерпретация выходов
+- `preview_image`: предпросмотр результата.
+- `transform_json`: статус и данные кропа/вставки.
 
-## Частые проблемы
-- OOM: уменьшайте `subvideo_length`, `neighbor_length`, `raft_iter`; включите `fp16`; отключите `throughput_mode`.  
-- Цветовой дрейф патча: примените `color_match_mode` (начните с `lab_l_cdf` или `lab_full`).  
-- Пустой результат / status=empty_mask: проверьте маску (белая область должна быть >0).  
-- Сильные артефакты на движении: увеличьте `neighbor_length`, `raft_iter`; попробуйте `method=e2fgvi_hq`. 
+Пример ключевых полей:
+```json
+{"status":"ok","x0":120,"y0":80,"x1":420,"y1":220}
+```
+
+## Типовые ошибки и решения
+- `status=empty_mask`: маска пустая или почти пустая.
+- OOM: уменьшайте `subvideo_length`/`neighbor_length`, включите `fp16`.
+- Артефакты на движении: увеличьте `raft_iter`, попробуйте `e2fgvi_hq`.
+
+## Производительность
+- Самые дорогие параметры: `method`, `neighbor_length`, `raft_iter`, `subvideo_length`.
+- Для больших роликов используйте кэш (`cache_dir`) и ограниченный preview.

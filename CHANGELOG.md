@@ -1,5 +1,12 @@
 # Changelog — ALEXZ_tools
 
+## 0.10.7 — 2026-02-05
+- Docs: all node guides unified to a single structure (purpose -> when to use -> 3-step scenario -> params table -> decision helper -> outputs -> errors -> performance).
+- Docs: added decision helpers and numeric quality thresholds/examples for Color Match, Video Frame Match, Difference, scopes, and other nodes.
+- Docs: translated `GUIDE_IMAGE_WAVEFORM.md` and `GUIDE_IMAGE_HISTOGRAM.md` fully to Russian.
+- Tooling: added `scripts/docs_check.py` to validate guide template and sync of key params/outputs with node API + README sections.
+- README: added `Docs Check` section with command to run docs validation.
+
 ## 0.10.6 — 2026-02-05
 - VideoFrameMatch: added `best.confidence` and `top_k` to `scores_json`.
 - VideoFrameMatch: added explicit `top_k_source` and kept LPIPS two-pass metadata for analysis.

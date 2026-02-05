@@ -1,26 +1,48 @@
-# Image Histogram Scope - Guide
+# Image Histogram Scope — Гайд
 
-## Purpose
-Histogram visualization for quick exposure and channel distribution checks.
+## Назначение
+Гистограмма изображения для анализа распределения яркости и цветовых каналов.
 
-## Inputs
-- `image`: source image.
-- `mode`: `rgb_overlay`, `rgb_split`, or `luma`.
-- `bins`: histogram bins count.
-- `width`, `height`: output scope size.
-- `log_scale`: log density scale.
+## Когда использовать
+- Для быстрой проверки экспозиции и цветового баланса.
+- Для сравнения распределений до/после обработки.
 
-## Outputs
-- `histogram`: histogram image.
-- `hist_json`: short JSON with mode/bins/peak values.
+## Минимальный сценарий (3 шага)
+1. Подайте `image`.
+2. Выберите `mode` (`rgb_overlay`, `rgb_split`, `luma`).
+3. Настройте `bins` и `log_scale`, затем оцените `histogram` и `hist_json`.
 
-## Usage
-1) Use `mode=rgb_overlay` for quick color balance checks.
-   Overlay now draws thin channel curves (no heavy fill) and uses max blending.
-2) Use `mode=rgb_split` when channels overlap too much.
-3) Use `mode=luma` to inspect exposure distribution only.
+## Параметры
+| Параметр | Что делает | Рекомендация |
+|---|---|---|
+| `mode` | Режим отображения | `rgb_overlay` для общего баланса, `rgb_split` для детального анализа |
+| `bins` | Детализация гистограммы | 64/128 быстрее, 256+ точнее |
+| `width` / `height` | Размер вывода | Обычно достаточно 512x256 |
+| `log_scale` | Логарифмическая шкала плотности | Включайте для редких теней/хайлайтов |
 
-## Notes
-- Start with `bins=256`.
-- For noisy images, reduce bins to `64` or `128`.
-- Enable `log_scale` when shadows/highlights are too sparse.
+## Decision helper
+- Нужна общая оценка цвета -> `rgb_overlay`.
+- Каналы сильно перекрываются -> `rgb_split`.
+- Нужна только яркость -> `luma`.
+- Кривая слишком «рваная» -> уменьшите `bins` до 64/128.
+
+## Интерпретация выходов
+- `histogram`: изображение гистограммы.
+- `hist_json`: метаданные (`mode`, `bins`, пики каналов).
+
+Пример:
+```json
+{"mode":"rgb_overlay","bins":256,"peak_r":1.0,"peak_g":0.84,"peak_b":0.76,"peak_bin_r":182}
+```
+
+## Численные ориентиры качества
+- Сильный перекос `peak_*` между каналами часто указывает на цветовой сдвиг.
+- Пик у крайних бинов (`0` или `bins-1`) может указывать на клип в тенях или светах.
+
+## Типовые ошибки и решения
+- Гистограмма «слишком плотная» -> включите `log_scale`.
+- Слишком медленно -> уменьшите `bins`, `width`, `height`.
+
+## Производительность
+- Основная нагрузка: `bins` и размер canvas.
+- Для предпросмотра: `bins=128`, `width=512`, `height=256`.

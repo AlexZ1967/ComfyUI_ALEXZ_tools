@@ -1,24 +1,43 @@
-# Image Waveform Scope - Guide
+# Image Waveform Scope — Гайд
 
-## Purpose
-Visual control of luminance and channel distribution in an image.
+## Назначение
+Waveform-анализ яркости и каналов изображения для контроля экспозиции и цветового баланса.
 
-## Inputs
-- `image`: source image.
-- `mode`: `luma` or `parade`.
-- `width`, `height`: scope resolution.
-- `gain`: point intensity multiplier.
-- `log_scale`: log density scale.
+## Когда использовать
+- Для проверки экспозиции и клиппинга.
+- Для сравнения цветового баланса до/после обработки.
 
-## Outputs
-- `waveform`: scope image in `IMAGE` format.
+## Минимальный сценарий (3 шага)
+1. Подайте `image`.
+2. Выберите `mode` (`luma` или `parade`).
+3. Настройте `gain` и `log_scale`, затем сравните форму waveform.
 
-## Usage
-1) Start with `mode=parade`, `width=512`, `height=256`, `gain=1.0`, `log_scale=true`.
-2) Compare reference and processed images by running both through the same settings.
-3) If waveform is too dim, increase `gain`.
+## Параметры
+| Параметр | Что делает | Рекомендация |
+|---|---|---|
+| `mode` | Режим анализа | `parade` для RGB-баланса, `luma` для экспозиции |
+| `width` / `height` | Размер scope | 512x256 для старта |
+| `gain` | Усиление плотности | Обычно 0.8-2.0 |
+| `log_scale` | Логарифмическая шкала плотности | Включайте для лучшей читаемости теней и хайлайтов |
 
-## Notes
-- `parade` helps detect channel imbalance.
-- `luma` is better for contrast/exposure checks.
-- Large scope sizes increase compute time.
+## Decision helper
+- Нужно быстро оценить RGB-баланс -> `parade`.
+- Нужна только экспозиция -> `luma`.
+- Волна слишком слабая -> увеличьте `gain`.
+- Картинка слишком шумная/яркая -> уменьшите `gain` и/или отключите `log_scale`.
+
+## Интерпретация выходов
+- `waveform`: визуальный scope-график.
+
+Ориентиры:
+- Плотность прижата к верху -> вероятный клип в светах.
+- Плотность у низа -> провалы в тенях.
+- Сильный разнос каналов в `parade` -> цветовой дисбаланс.
+
+## Типовые ошибки и решения
+- Scope кажется «пустым» -> увеличьте `gain`.
+- Слишком долго считается на больших размерах -> уменьшите `width/height`.
+
+## Производительность
+- Нагрузка растёт с `width`, `height` и `log_scale`.
+- Для интерактивной работы обычно достаточно 512x256 или ниже.

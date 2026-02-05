@@ -1,39 +1,63 @@
-# Color Match To Reference - Practical Guide
+# Color Match To Reference — Guide
 
-## Purpose
-Match color of `image` to `reference` using simple presets.
+## Назначение
+Подгонка цвета `image` к `reference` по пресетам (`fast`, `balanced`, `quality`, `perceptual`).
 
-## Dependencies
-- `preset=perceptual` uses VGG19 from `torchvision`.
-- In normal ComfyUI installs `torchvision` is already available in the base environment.
-- If your custom Python env does not include it, install `torchvision` manually in that env.
+## Когда использовать
+- Стабилизация цвета между кадрами/источниками.
+- Компенсация тоновых сдвигов после генерации видео.
+- Быстрый перенос базовой цветокоррекции с референса.
 
-## Quick Start
-1. Connect `reference` and `image`.
-2. Select `preset`:
-   - `fast`: mean/std match (fastest).
-   - `balanced`: linear channel fit (default).
-   - `quality`: LAB CDF match (better tone transfer, slower).
-   - `perceptual`: VGG perceptual fast (slowest).
-3. Tune `strength` if result is too strong (`0.6..0.8` is usually safe).
-4. Check `match_json` and, if needed, compare with `Image Difference` node.
+## Минимальный сценарий (3 шага)
+1. Подайте `reference` и `image`.
+2. Выберите `preset` и при необходимости `strength`.
+3. Проверьте `match_json.quality` и визуально сравните результат.
 
-## Masks
-- `match_mask`: where statistics are computed.
-- `apply_mask`: where correction is applied.
+## Параметры
+| Параметр | Что делает | Рекомендация |
+|---|---|---|
+| `reference` | Эталон цвета | Кадр/изображение нужного look |
+| `image` | Что корректируем | Текущий кадр/изображение |
+| `preset` | Алгоритм подгонки | `fast` самый быстрый, `balanced` базовый, `quality` точнее, `perceptual` самый медленный |
+| `strength` | Сила применения [0..1] | 0.6-0.9 для мягкой коррекции |
+| `match_mask` | Где считать статистику | Белое = учитывать |
+| `apply_mask` | Где применять коррекцию | Белое = применять |
+| `preserve_alpha` | Сохранить альфу | Оставляйте `true` для RGBA |
 
-## Outputs
-- `matched_image`: corrected image.
-- `match_json`: correction parameters and stats.
-- `match_json.quality.before`: `mse`, `ssim`, `delta_e76`, `lpips_alex` до коррекции.
-- `match_json.quality.after`: те же метрики после коррекции.
-- `match_json.quality.improvement_pct`: улучшение в процентах (для `mse/delta_e76/lpips` — уменьшение ошибки, для `ssim` — рост).
+## Decision helper
+- Нужно максимально быстро -> `fast`.
+- Нужен стабильный повседневный режим -> `balanced`.
+- Нужна лучшая точность по тону/цвету -> `quality`.
+- Нужна максимально перцептивная подгонка (дорого по времени) -> `perceptual`.
 
-## Quality Check
-- Compare `ref_mean/ref_std` and `img_mean/img_std` in `match_json.stats`.
-- Check `match_json.quality`: good match usually means `mse`, `delta_e76`, `lpips_alex` go down and `ssim` goes up.
+## Интерпретация выходов
+- `matched_image`: скорректированное изображение.
+- `match_json`: параметры коррекции + блок `quality`.
 
-## Common Fixes
-- Over-correction: lower `strength`.
-- Weak correction: switch `balanced` -> `quality` or `perceptual`.
-- Problem only in region: use `match_mask` and `apply_mask`.
+Пример `quality`:
+```json
+{
+  "quality": {
+    "before": {"mse": 0.012, "ssim": 0.82, "delta_e76": 7.1, "lpips_alex": 0.24},
+    "after": {"mse": 0.006, "ssim": 0.90, "delta_e76": 4.3, "lpips_alex": 0.16},
+    "improvement_pct": {"mse": 50.0, "ssim": 9.756, "delta_e76": 39.437, "lpips_alex": 33.333}
+  }
+}
+```
+
+## Численные ориентиры качества
+- `mse`: ниже лучше. Отлично: `<0.005`, приемлемо: `0.005-0.02`, плохо: `>0.02`.
+- `ssim`: выше лучше. Отлично: `>0.92`, приемлемо: `0.80-0.92`, плохо: `<0.80`.
+- `delta_e76`: ниже лучше. Отлично: `<3`, приемлемо: `3-8`, плохо: `>8`.
+- `lpips_alex`: ниже лучше. Отлично: `<0.12`, приемлемо: `0.12-0.30`, плохо: `>0.30`.
+
+## Типовые ошибки и решения
+- Перекоррекция: снизьте `strength`.
+- Недокоррекция: `balanced -> quality` или `perceptual`.
+- Проблема только в области: используйте `match_mask` и `apply_mask`.
+- `perceptual` недоступен: проверьте `torchvision` в среде ComfyUI.
+
+## Производительность
+- Скорость пресетов: `fast` > `balanced` > `quality` > `perceptual`.
+- Маски и большие разрешения увеличивают время.
+- `perceptual` может быть заметно медленным на 2K/4K.
