@@ -64,17 +64,37 @@ def _hist_counts(flat_channel: torch.Tensor, bins: int, log_scale: bool) -> torc
     return hist / max_val
 
 
-def _draw_hist_curve(canvas: torch.Tensor, hist: torch.Tensor, color: torch.Tensor, x0: int, x1: int) -> None:
+def _draw_hist_curve(
+    canvas: torch.Tensor,
+    hist: torch.Tensor,
+    color: torch.Tensor,
+    x0: int,
+    x1: int,
+    fill: bool = True,
+    blend: str = "add",
+    thickness: int = 1,
+) -> None:
     h, _, _ = canvas.shape
     width = max(1, x1 - x0)
     xs = torch.linspace(0, hist.numel() - 1, steps=width, device=hist.device)
     ys = hist[xs.long()]
     levels = (ys * (h - 1)).long()
     for i in range(width):
-        y = int(levels[i].item())
-        canvas[h - 1 - y :, x0 + i, 0] += color[0]
-        canvas[h - 1 - y :, x0 + i, 1] += color[1]
-        canvas[h - 1 - y :, x0 + i, 2] += color[2]
+        x = x0 + i
+        y = h - 1 - int(levels[i].item())
+        if fill:
+            y0, y1 = y, h
+        else:
+            t = max(1, int(thickness))
+            y0, y1 = max(0, y - t + 1), min(h, y + t)
+
+        if blend == "max":
+            patch = canvas[y0:y1, x, :]
+            canvas[y0:y1, x, :] = torch.maximum(
+                patch, color.view(1, 3).expand_as(patch)
+            )
+        else:
+            canvas[y0:y1, x, :] += color
 
 
 def _build_histogram(img: torch.Tensor, mode: str, bins: int, width: int, height: int, log_scale: bool):
@@ -89,18 +109,50 @@ def _build_histogram(img: torch.Tensor, mode: str, bins: int, width: int, height
         _draw_hist_curve(canvas, hist, img.new_tensor([1.0, 1.0, 1.0]), 0, w)
         info = {"mode": mode, "bins": int(bins), "peak": round(float(hist.max().item()), 4)}
     elif mode == "rgb_overlay":
+        canvas[:] = 0.02
         h_r = _hist_counts(flat[:, 0], bins, log_scale)
         h_g = _hist_counts(flat[:, 1], bins, log_scale)
         h_b = _hist_counts(flat[:, 2], bins, log_scale)
-        _draw_hist_curve(canvas, h_r, img.new_tensor([1.0, 0.0, 0.0]), 0, w)
-        _draw_hist_curve(canvas, h_g, img.new_tensor([0.0, 1.0, 0.0]), 0, w)
-        _draw_hist_curve(canvas, h_b, img.new_tensor([0.0, 0.0, 1.0]), 0, w)
+        _draw_hist_curve(
+            canvas,
+            h_r,
+            img.new_tensor([1.0, 0.0, 0.0]),
+            0,
+            w,
+            fill=False,
+            blend="max",
+            thickness=2,
+        )
+        _draw_hist_curve(
+            canvas,
+            h_g,
+            img.new_tensor([0.0, 1.0, 0.0]),
+            0,
+            w,
+            fill=False,
+            blend="max",
+            thickness=2,
+        )
+        _draw_hist_curve(
+            canvas,
+            h_b,
+            img.new_tensor([0.0, 0.0, 1.0]),
+            0,
+            w,
+            fill=False,
+            blend="max",
+            thickness=2,
+        )
         info = {
             "mode": mode,
             "bins": int(bins),
             "peak_r": round(float(h_r.max().item()), 4),
             "peak_g": round(float(h_g.max().item()), 4),
             "peak_b": round(float(h_b.max().item()), 4),
+            "peak_bin_r": int(torch.argmax(h_r).item()),
+            "peak_bin_g": int(torch.argmax(h_g).item()),
+            "peak_bin_b": int(torch.argmax(h_b).item()),
+            "channel_order": ["R", "G", "B"],
         }
     else:  # rgb_split
         part = max(1, w // 3)

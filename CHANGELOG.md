@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.10.4 — 2026-02-05
+- Image Histogram Scope: improved `rgb_overlay` readability (line curves instead of filled overlap, max blending).
+- Image Histogram Scope: extended `hist_json` for overlay with `peak_bin_r/g/b` and `channel_order`.
+
 ## 0.10.3 — 2026-02-05
 - VideoFrameMatch: removed stale `seek_ok` logging and dead code paths after ffmpeg-tail switch.
 - VideoFrameMatch: reduced repeated ffprobe stream probing by reusing stream info in one pass.

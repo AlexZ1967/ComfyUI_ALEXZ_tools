@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.10.3
+Version: 0.10.4
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -130,6 +130,7 @@ Guide: [GUIDE_IMAGE_WAVEFORM.md](GUIDE_IMAGE_WAVEFORM.md)
 - Type name: ImageHistogramScope  
 - Category: image/analysis  
 Входы: `image`, `mode` (rgb_overlay/rgb_split/luma), `bins`, `width`, `height`, `log_scale`.  
+`rgb_overlay`: тонкие RGB-кривые, с max-blend (меньше визуального смешивания).  
 Выходы: `histogram`, `hist_json`.  
 Guide: [GUIDE_IMAGE_HISTOGRAM.md](GUIDE_IMAGE_HISTOGRAM.md)
 

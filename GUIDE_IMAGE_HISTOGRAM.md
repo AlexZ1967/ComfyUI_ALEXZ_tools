@@ -16,6 +16,7 @@ Histogram visualization for quick exposure and channel distribution checks.
 
 ## Usage
 1) Use `mode=rgb_overlay` for quick color balance checks.
+   Overlay now draws thin channel curves (no heavy fill) and uses max blending.
 2) Use `mode=rgb_split` when channels overlap too much.
 3) Use `mode=luma` to inspect exposure distribution only.
 
