@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.8.5
+Version: 0.8.6
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, инпейнтинг водяных знаков в видео и отображение/сохранение JSON.
@@ -81,7 +81,7 @@ Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 - Display name: Find Closest Video Frame  
 - Type name: VideoFrameMatch  
 - Category: video/utils  
-Входы: `image`, `video`, `max_frames` (0=все, иначе последние N), `metric`, `normalize`, `lpips_net`, `use_ffmpeg_tail`.  
+Входы: `image`, `video`, `max_frames` (0=все, иначе последние N), `metric`, `normalize`, `lpips_net`.  
 Выходы: `best_frame`, `best_frame_number`, `scores_json` (объект с metric/normalize и первыми 500 оценок).
 Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 
