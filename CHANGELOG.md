@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.10.1 — 2026-02-05
+- Color Match: removed unused legacy functions and kept only active preset pipeline.
+- Requirements: added explicit `torchvision` dependency for perceptual preset.
+
 ## 0.10.0 — 2026-02-05
 - New node: Image Waveform Scope (`ImageWaveformScope`).
 - New node: Image Histogram Scope (`ImageHistogramScope`).
