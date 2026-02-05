@@ -1,5 +1,11 @@
 # Changelog — ALEXZ_tools
 
+## 0.11.0 — 2026-02-05
+- New node: `Match Video Cut Point` (`VideoCutMatch`) for A-tail vs B-head cut-point matching between two videos.
+- VideoCutMatch: outputs best pair frames, frame numbers, top-k candidates, confidence, and cut hints in JSON.
+- VideoCutMatch: supports `mse` / `ssim` / `lpips_alex` / `lpips_vgg`, optional normalization, and LPIPS two-pass search.
+- Docs: added `GUIDE_VIDEO_CUT_MATCH.md` and README node section.
+
 ## 0.10.7 — 2026-02-05
 - Docs: all node guides unified to a single structure (purpose -> when to use -> 3-step scenario -> params table -> decision helper -> outputs -> errors -> performance).
 - Docs: added decision helpers and numeric quality thresholds/examples for Color Match, Video Frame Match, Difference, scopes, and other nodes.

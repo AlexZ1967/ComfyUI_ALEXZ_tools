@@ -33,6 +33,12 @@ NODE_DOCS = [
         "readme_heading": "## Find Closest Video Frame",
     },
     {
+        "file": "video_cut_match.py",
+        "class": "VideoCutMatch",
+        "guide": "GUIDE_VIDEO_CUT_MATCH.md",
+        "readme_heading": "## Match Video Cut Point",
+    },
+    {
         "file": "image_difference.py",
         "class": "ImageDifference",
         "guide": "GUIDE_IMAGE_DIFFERENCE.md",

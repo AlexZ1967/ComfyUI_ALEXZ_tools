@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.10.7
+Version: 0.11.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -30,6 +30,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 - [Align Overlay To Background](#align-overlay-to-background)
 - [Color Match To Reference](#color-match-to-reference)
 - [Find Closest Video Frame](#find-closest-video-frame)
+- [Match Video Cut Point](#match-video-cut-point)
 - [Image Difference](#image-difference)
 - [Image Waveform Scope](#image-waveform-scope)
 - [Image Histogram Scope](#image-histogram-scope)
@@ -101,6 +102,19 @@ Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 Выходы: `best_frame`, `best_frame_number`, `scores_json` (объект с metric/normalize, `best{index,score,confidence}`, `top_k`; для `lpips_*` включает двухпроходный поиск с refine-метаданными).
 Примечание: при `max_frames > 0` требуется `ffmpeg` в `PATH`.
 Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
+
+---
+
+## Match Video Cut Point
+Ищет лучшую пару кадров для монтажа между двумя видео: хвост `video_a` и начало `video_b`.
+
+- Display name: Match Video Cut Point  
+- Type name: VideoCutMatch  
+- Category: video/utils  
+Входы: `video_a`, `video_b`, `search_tail_a`, `search_head_b`, `metric`, `normalize`, `top_k`.  
+Выходы: `best_frame_a`, `best_frame_b`, `best_frame_a_number`, `best_frame_b_number`, `match_json`.  
+`match_json` содержит `best`, `top_k`, `confidence` и `cut_hint` для склейки.
+Guide: [GUIDE_VIDEO_CUT_MATCH.md](GUIDE_VIDEO_CUT_MATCH.md)
 
 ---
 

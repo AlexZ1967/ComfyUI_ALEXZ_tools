@@ -73,6 +73,23 @@ class SmokeTests(unittest.TestCase):
         self.assertGreaterEqual(conf, 0.0)
         self.assertLessEqual(conf, 1.0)
 
+    def test_video_cut_match_helpers(self):
+        cut_mod = importlib.import_module("ComfyUI_ALEXZ_tools.video_cut_match")
+
+        top_pairs = []
+        cut_mod._update_top_pairs(top_pairs, {"frame_a_number": 10, "frame_b_number": 0, "score": 0.3}, 3)
+        cut_mod._update_top_pairs(top_pairs, {"frame_a_number": 11, "frame_b_number": 1, "score": 0.1}, 3)
+        cut_mod._update_top_pairs(top_pairs, {"frame_a_number": 12, "frame_b_number": 2, "score": 0.2}, 3)
+        cut_mod._update_top_pairs(top_pairs, {"frame_a_number": 13, "frame_b_number": 3, "score": 0.15}, 3)
+        self.assertEqual(top_pairs[0]["score"], 0.1)
+        self.assertEqual(len(top_pairs), 3)
+
+        conf = cut_mod._confidence_from_top_pairs(top_pairs)
+        self.assertGreaterEqual(conf, 0.0)
+        self.assertLessEqual(conf, 1.0)
+        blend = cut_mod._blend_window_from_confidence(conf)
+        self.assertIn(blend, [4, 8, 12])
+
 
 if __name__ == "__main__":
     unittest.main()
