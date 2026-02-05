@@ -50,14 +50,14 @@ Guide: [GUIDE_ALIGN.md](GUIDE_ALIGN.md)
 ---
 
 ## Color Match To Reference
-Цветокоррекция по образцу с пресетами качества (fast/balanced/quality/perceptual). Подробно: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md).
+Цветокоррекция по образцу с пресетами качества: fast (mean/std), balanced (linear), quality (LAB CDF), perceptual (VGG). Подробно: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md).
 
 - Display name: Color Match To Reference  
 - Type name: ImageColorMatchToReference  
 - Category: image/color
 
-Пресеты: `fast`, `balanced`, `quality`, `perceptual`.  
-Выходы: `matched_image`, `difference`, `match_json`.  
+Пресеты: `fast`=mean/std, `balanced`=linear, `quality`=LAB CDF, `perceptual`=VGG.  
+Выходы: `matched_image`, `match_json`.  
 Guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md), кратко — [GUIDE_COLOR_MATCH.md](GUIDE_COLOR_MATCH.md)
 
 ---

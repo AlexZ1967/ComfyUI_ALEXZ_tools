@@ -511,7 +511,7 @@ class ImageColorMatchToReference:
                     "balanced",
                     "quality",
                     "perceptual",
-                ], {"default": "balanced", "tooltip": "Пресет коррекции цвета."}),
+                ], {"default": "balanced", "tooltip": "Пресет: fast=mean/std, balanced=linear, quality=LAB CDF, perceptual=VGG perceptual."}),
                 "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила применения коррекции (0..1)."}),
             },
             "optional": {
@@ -521,8 +521,8 @@ class ImageColorMatchToReference:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "STRING")
-    RETURN_NAMES = ("matched_image", "difference", "match_json")
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("matched_image", "match_json")
     FUNCTION = "match"
     CATEGORY = "image/color"
 
@@ -538,7 +538,6 @@ class ImageColorMatchToReference:
     ):
         batch_size = max(reference.shape[0], image.shape[0])
         matched_list = []
-        diff_list = []
         json_list = []
 
         for idx in range(batch_size):
@@ -616,7 +615,6 @@ class ImageColorMatchToReference:
             if alpha_channel is not None and preserve_alpha:
                 matched_t = torch.cat([matched_t, alpha_channel], dim=-1)
 
-            diff = torch.abs(matched_t[..., :3] - ref_t)
 
             stats = {
                 "ref_mean": [round(float(x), 4) for x in ref_t.reshape(-1, 3).mean(dim=0)],
@@ -667,11 +665,9 @@ class ImageColorMatchToReference:
 
             json_list.append(json.dumps(payload, ensure_ascii=True))
             matched_list.append(matched_t.cpu())
-            diff_list.append(diff.cpu())
 
         return (
             torch.stack(matched_list, dim=0),
-            torch.stack(diff_list, dim=0),
             json_list,
         )
 
