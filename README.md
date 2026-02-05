@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.10.4
+Version: 0.10.5
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -93,7 +93,7 @@ Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 - Type name: VideoFrameMatch  
 - Category: video/utils  
 Входы: `image`, `video`, `max_frames` (0=все, иначе последние N), `metric`, `normalize`.  
-Выходы: `best_frame`, `best_frame_number`, `scores_json` (объект с metric/normalize и первыми 500 оценок).
+Выходы: `best_frame`, `best_frame_number`, `scores_json` (объект с metric/normalize и первыми 500 оценок; для `lpips_*` включает двухпроходный поиск с refine-метаданными).
 Примечание: при `max_frames > 0` требуется `ffmpeg` в `PATH`.
 Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 

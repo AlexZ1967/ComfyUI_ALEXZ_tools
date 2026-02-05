@@ -1,5 +1,11 @@
 # Changelog — ALEXZ_tools
 
+## 0.10.5 — 2026-02-05
+- VideoFrameMatch: added automatic two-pass search for `lpips_alex/lpips_vgg` (coarse MSE prefilter + LPIPS refine on top-k candidates).
+- VideoFrameMatch: reduced memory usage of long runs by storing only first 500 coarse scores in `scores_json`.
+- VideoFrameMatch: extended LPIPS `scores_json` with refine metadata (`search`, `coarse_metric`, `coarse_max_side`, `refine_candidates`, `refined_scores`).
+- Docs: updated VideoFrameMatch README/guide for two-pass LPIPS behavior.
+
 ## 0.10.4 — 2026-02-05
 - Image Histogram Scope: improved `rgb_overlay` readability (line curves instead of filled overlap, max blending).
 - Image Histogram Scope: extended `hist_json` for overlay with `peak_bin_r/g/b` and `channel_order`.

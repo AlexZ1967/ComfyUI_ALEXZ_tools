@@ -42,8 +42,32 @@ def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.T
         frame_bchw, size=(h, w), mode="bilinear", align_corners=False
     )
     return resized.squeeze(0).permute(1, 2, 0)
+
+
+def _downscale_max_side(frame: torch.Tensor, max_side: int) -> torch.Tensor:
+    h, w = frame.shape[:2]
+    if max(h, w) <= max_side:
+        return frame
+    scale = float(max_side) / float(max(h, w))
+    new_h = max(1, int(round(h * scale)))
+    new_w = max(1, int(round(w * scale)))
+    frame_bchw = frame.permute(2, 0, 1).unsqueeze(0)
+    resized = torch.nn.functional.interpolate(
+        frame_bchw,
+        size=(new_h, new_w),
+        mode="bilinear",
+        align_corners=False,
+    )
+    return resized.squeeze(0).permute(1, 2, 0)
+
+
 def _mse_score(a: torch.Tensor, b: torch.Tensor) -> float:
     return float(torch.mean((a - b) ** 2).item())
+
+
+def _append_score(scores, index: int, score: float, limit: int = 500):
+    if len(scores) < limit:
+        scores.append({"index": index, "score": float(score)})
 
 
 def _ffprobe_frames(video_path: str) -> int:
@@ -319,9 +343,14 @@ class VideoFrameMatch:
         best_index: int = -1
         best_frame_tensor: Optional[torch.Tensor] = None
         scores = []
+        refined_scores = []
 
         use_gpu = torch.cuda.is_available() and metric in {"ssim", "lpips_alex", "lpips_vgg"}
         metric_device = torch.device("cuda" if use_gpu else "cpu")
+        two_pass_lpips = metric in {"lpips_alex", "lpips_vgg"}
+        coarse_max_side = 256
+        candidate_limit = 24
+        candidates = []
         total_frames = _get_total_frames(cap, video_path)
         use_tail_only = bool(max_frames)
         vid_w, vid_h, fps = _ffprobe_stream_info(video_path)
@@ -329,28 +358,36 @@ class VideoFrameMatch:
             target = _resize_to_match(target, (vid_h, vid_w))
             h_t, w_t = target.shape[:2]
         target_metric = target
+        coarse_target = _downscale_max_side(target_metric, coarse_max_side) if two_pass_lpips else target_metric
 
         start_idx = 0
         if use_tail_only and total_frames > 0:
             start_idx = max(0, total_frames - max_frames)
         _LOGGER.info(
-            "VideoFrameMatch: total_frames=%s, use_tail_only=%s, start_idx=%s",
+            "VideoFrameMatch: total_frames=%s, use_tail_only=%s, start_idx=%s, two_pass_lpips=%s",
             total_frames,
             use_tail_only,
             start_idx,
+            two_pass_lpips,
         )
 
-        def _score_frame(frame_bgr, frame_index):
-            frame_t = ensure_hwc(_to_tensor(frame_bgr))
+        def _prepare_frame(frame_t: torch.Tensor):
             frame_t = _resize_to_match(frame_t, (h_t, w_t))
             frame_metric = normalize_to_reference(frame_t, target, normalize) if normalize != "none" else frame_t
-            score_val = _compute_score(
-                metric,
-                frame_metric,
-                target_metric,
-                metric_device,
-            )
-            return frame_t, score_val, {"index": frame_index, "score": score_val}
+            return frame_t, frame_metric
+
+        def _consider_candidate(frame_index: int, coarse_score: float, frame_rgb: np.ndarray):
+            item = {
+                "index": int(frame_index),
+                "coarse_score": float(coarse_score),
+                "frame_rgb": frame_rgb.copy(),
+            }
+            if len(candidates) < candidate_limit:
+                candidates.append(item)
+                return
+            worst_i = max(range(len(candidates)), key=lambda i: candidates[i]["coarse_score"])
+            if coarse_score < candidates[worst_i]["coarse_score"]:
+                candidates[worst_i] = item
 
         pbar = None
         if tqdm is not None and total_frames > 0:
@@ -382,22 +419,22 @@ class VideoFrameMatch:
                 idx = start_idx
                 processed = 0
                 for frame_rgb in _iter_ffmpeg_tail_frames(video_path, start_time, max_frames, vid_w, vid_h):
-                    frame_t = ensure_hwc(_to_tensor_rgb(frame_rgb))
-                    frame_t = _resize_to_match(frame_t, (h_t, w_t))
-                    frame_metric = (
-                        normalize_to_reference(frame_t, target, normalize) if normalize != "none" else frame_t
-                    )
-                    score_val = _compute_score(
-                        metric,
-                        frame_metric,
-                        target_metric,
-                        metric_device,
-                    )
-                    scores.append({"index": idx, "score": score_val})
-                    if best_score is None or score_val < best_score:
-                        best_score = score_val
-                        best_index = idx
-                        best_frame_tensor = frame_t
+                    frame_t, frame_metric = _prepare_frame(ensure_hwc(_to_tensor_rgb(frame_rgb)))
+                    if two_pass_lpips:
+                        score_val = _mse_score(_downscale_max_side(frame_metric, coarse_max_side), coarse_target)
+                        _consider_candidate(idx, score_val, frame_rgb)
+                    else:
+                        score_val = _compute_score(
+                            metric,
+                            frame_metric,
+                            target_metric,
+                            metric_device,
+                        )
+                        if best_score is None or score_val < best_score:
+                            best_score = score_val
+                            best_index = idx
+                            best_frame_tensor = frame_t
+                    _append_score(scores, idx, score_val)
                     if pbar is not None:
                         pbar.update(1)
                     idx += 1
@@ -410,12 +447,24 @@ class VideoFrameMatch:
                     ret, frame_bgr = cap.read()
                     if not ret:
                         break
-                    frame_t, score_val, score_item = _score_frame(frame_bgr, idx)
-                    scores.append(score_item)
-                    if best_score is None or score_val < best_score:
-                        best_score = score_val
-                        best_index = idx
-                        best_frame_tensor = frame_t
+                    if two_pass_lpips:
+                        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+                        frame_t, frame_metric = _prepare_frame(ensure_hwc(_to_tensor_rgb(frame_rgb)))
+                        score_val = _mse_score(_downscale_max_side(frame_metric, coarse_max_side), coarse_target)
+                        _consider_candidate(idx, score_val, frame_rgb)
+                    else:
+                        frame_t, frame_metric = _prepare_frame(ensure_hwc(_to_tensor(frame_bgr)))
+                        score_val = _compute_score(
+                            metric,
+                            frame_metric,
+                            target_metric,
+                            metric_device,
+                        )
+                        if best_score is None or score_val < best_score:
+                            best_score = score_val
+                            best_index = idx
+                            best_frame_tensor = frame_t
+                    _append_score(scores, idx, score_val)
                     if pbar is not None:
                         pbar.update(1)
                     idx += 1
@@ -424,13 +473,52 @@ class VideoFrameMatch:
                 pbar.close()
             cap.release()
 
+        if two_pass_lpips:
+            if not candidates:
+                raise RuntimeError("No candidate frames found for LPIPS refine pass.")
+            candidates.sort(key=lambda x: x["coarse_score"])
+            _LOGGER.info(
+                "VideoFrameMatch: starting LPIPS refine pass for %s candidates",
+                len(candidates),
+            )
+            pbar_refine = tqdm(total=len(candidates), desc="VideoFrameMatch refine", unit="cand") if tqdm is not None else None
+            try:
+                for item in candidates:
+                    frame_t, frame_metric = _prepare_frame(ensure_hwc(_to_tensor_rgb(item["frame_rgb"])))
+                    score_val = _compute_score(
+                        metric,
+                        frame_metric,
+                        target_metric,
+                        metric_device,
+                    )
+                    refined_scores.append(
+                        {
+                            "index": int(item["index"]),
+                            "coarse_score": float(item["coarse_score"]),
+                            "score": float(score_val),
+                        }
+                    )
+                    if best_score is None or score_val < best_score:
+                        best_score = score_val
+                        best_index = int(item["index"])
+                        best_frame_tensor = frame_t
+                    if pbar_refine is not None:
+                        pbar_refine.update(1)
+            finally:
+                if pbar_refine is not None:
+                    pbar_refine.close()
+
         if best_frame_tensor is None:
             raise RuntimeError("No frames processed from video.")
 
-        scores_json = json.dumps(
-            {"metric": metric, "normalize": normalize, "scores": scores[:500]},
-            ensure_ascii=True,
-        )
+        payload = {"metric": metric, "normalize": normalize, "scores": scores}
+        if two_pass_lpips:
+            payload["search"] = "two_pass_lpips"
+            payload["coarse_metric"] = "mse"
+            payload["coarse_max_side"] = coarse_max_side
+            payload["refine_candidates"] = len(candidates)
+            payload["refined_scores"] = refined_scores[:candidate_limit]
+        scores_json = json.dumps(payload, ensure_ascii=True)
 
         return (
             best_frame_tensor.unsqueeze(0),
