@@ -17,6 +17,7 @@
 ## 0.8.6 — 2026-02-05
 - VideoFrameMatch: when max_frames > 0 always use ffmpeg tail decode; require ffmpeg in PATH.
 - VideoFrameMatch: improved ffmpeg-not-found error message with install hints.
+- VideoFrameMatch: metric now uses lpips_alex/lpips_vgg instead of separate lpips_net param.
 
 ## 0.8.1 — 2026-02-05
 - Fix: VideoFrameMatch SSIM path missing torch.nn.functional import (NameError: F).

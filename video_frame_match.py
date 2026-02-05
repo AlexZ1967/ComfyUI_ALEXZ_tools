@@ -269,14 +269,15 @@ def _compute_score(
     frame: torch.Tensor,
     target: torch.Tensor,
     device: torch.device,
-    lpips_net: str,
 ) -> float:
     if metric == "mse":
         return _mse_score(frame, target)
     if metric == "ssim":
         return _ssim_distance(frame.to(device), target.to(device))
-    if metric == "lpips":
-        return _lpips_distance(frame, target, lpips_net, device)
+    if metric == "lpips_alex":
+        return _lpips_distance(frame, target, "alex", device)
+    if metric == "lpips_vgg":
+        return _lpips_distance(frame, target, "vgg", device)
     raise ValueError(f"Unknown metric: {metric}")
 
 
@@ -289,9 +290,8 @@ class VideoFrameMatch:
                 "image": ("IMAGE", {"tooltip": "Целевой кадр для поиска в видео."}),
                 "video": (videos, {"video_upload": True, "tooltip": "Видео из папки input/."}),
                 "max_frames": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Количество последних кадров для анализа (0 = все)."}),
-                "metric": (["mse", "ssim", "lpips"], {"default": "mse", "tooltip": "Метрика сходства кадра и картинки."}),
+                "metric": (["mse", "ssim", "lpips_alex", "lpips_vgg"], {"default": "mse", "tooltip": "Метрика сходства кадра и картинки."}),
                 "normalize": (["none", "mean_std", "linear", "hist"], {"default": "none", "tooltip": "Нормализация кадра к референсу перед сравнением."}),
-                "lpips_net": (["vgg", "alex"], {"default": "vgg", "tooltip": "Бэкбон LPIPS (vgg качественнее, alex быстрее)."}),
             },
             "optional": {},
         }
@@ -301,7 +301,7 @@ class VideoFrameMatch:
     FUNCTION = "match"
     CATEGORY = "video/utils"
 
-    def match(self, image, video, max_frames, metric, normalize, lpips_net):
+    def match(self, image, video, max_frames, metric, normalize):
         target = image[0] if isinstance(image, list) else image
         target = torch.clamp(ensure_hwc(target), 0.0, 1.0).float()
         h_t, w_t = target.shape[:2]
@@ -319,7 +319,7 @@ class VideoFrameMatch:
         best_frame_tensor: Optional[torch.Tensor] = None
         scores = []
 
-        use_gpu = torch.cuda.is_available() and metric in {"ssim", "lpips"}
+        use_gpu = torch.cuda.is_available() and metric in {"ssim", "lpips_alex", "lpips_vgg"}
         metric_device = torch.device("cuda" if use_gpu else "cpu")
         target_metric = target
 
@@ -347,7 +347,6 @@ class VideoFrameMatch:
                 frame_metric,
                 target_metric,
                 metric_device,
-                lpips_net,
             )
             return frame_t, score_val, {"index": frame_index, "score": score_val}
 
@@ -392,7 +391,6 @@ class VideoFrameMatch:
                         frame_metric,
                         target_metric,
                         metric_device,
-                        lpips_net,
                     )
                     scores.append({"index": idx, "score": score_val})
                     if best_score is None or score_val < best_score:

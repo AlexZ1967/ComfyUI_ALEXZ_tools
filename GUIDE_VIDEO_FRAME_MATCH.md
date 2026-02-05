@@ -12,9 +12,8 @@
 
 ## Параметры
 - `max_frames`: количество последних кадров для анализа (0 = без лимита).  
-- `metric`: `mse` / `ssim` / `lpips`.  
+- `metric`: `mse` / `ssim` / `lpips_alex` / `lpips_vgg`.  
 - `normalize`: `none` / `mean_std` / `linear` / `hist` (приводит кадр к цвету референса перед сравнением).  
-- `lpips_net`: `vgg` (качество) / `alex` (быстрее).  
 
 ## Выходы
 - `best_frame`: кадр, наиболее похожий на картинку.  
