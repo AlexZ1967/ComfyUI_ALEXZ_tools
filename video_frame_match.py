@@ -292,6 +292,7 @@ class VideoFrameMatch:
                 "max_frames": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Количество последних кадров для анализа (0 = все)."}),
                 "metric": (["mse", "ssim", "lpips_alex", "lpips_vgg"], {"default": "mse", "tooltip": "Метрика сходства кадра и картинки."}),
                 "normalize": (["none", "mean_std", "linear", "hist"], {"default": "none", "tooltip": "Нормализация кадра к референсу перед сравнением."}),
+                "resize_reference_to_video": ("BOOLEAN", {"default": False, "tooltip": "Привести референс к размеру видео перед сравнением."}),
             },
             "optional": {},
         }
@@ -301,7 +302,7 @@ class VideoFrameMatch:
     FUNCTION = "match"
     CATEGORY = "video/utils"
 
-    def match(self, image, video, max_frames, metric, normalize):
+    def match(self, image, video, max_frames, metric, normalize, resize_reference_to_video):
         target = image[0] if isinstance(image, list) else image
         target = torch.clamp(ensure_hwc(target), 0.0, 1.0).float()
         h_t, w_t = target.shape[:2]
@@ -321,12 +322,16 @@ class VideoFrameMatch:
 
         use_gpu = torch.cuda.is_available() and metric in {"ssim", "lpips_alex", "lpips_vgg"}
         metric_device = torch.device("cuda" if use_gpu else "cpu")
-        target_metric = target
-
         total_frames = _get_total_frames(cap, video_path)
         use_tail_only = bool(max_frames)
         start_idx = 0
         seek_ok = False
+        if resize_reference_to_video:
+            vid_w, vid_h, _ = _ffprobe_stream_info(video_path)
+            if vid_w > 0 and vid_h > 0 and (vid_h != h_t or vid_w != w_t):
+                target = _resize_to_match(target, (vid_h, vid_w))
+                h_t, w_t = target.shape[:2]
+        target_metric = target
 
         if use_tail_only and total_frames > 0:
             start_idx = max(0, total_frames - max_frames)
