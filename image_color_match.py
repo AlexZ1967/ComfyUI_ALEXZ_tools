@@ -16,6 +16,7 @@ except Exception:  # pragma: no cover - optional dependency
     def tqdm(iterable=None, **kwargs):
         return iterable if iterable is not None else []
 
+from . import color_match_utils
 from .color_match_utils import normalize_mask, resize_mask_to_output
 from .utils import select_batch_item
 
@@ -158,6 +159,19 @@ def _pca_cov(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor])
     flat = img.reshape(-1, 3)
     transformed = (A @ (flat - src_mean).t()).t() + tar_mean
     return torch.clamp(transformed.view_as(img), 0.0, 1.0)
+
+
+def _lab_match_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor], mode: str):
+    mask_t = torch.zeros((img.shape[0], img.shape[1]), dtype=img.dtype, device=img.device)
+    if mask is not None:
+        mask_t = normalize_mask(mask)
+    out = color_match_utils.apply_color_match(
+        img.unsqueeze(0),
+        ref.unsqueeze(0),
+        mask_t,
+        mode,
+    )
+    return out[0]
 
 
 def _rgb_to_hsv(rgb: torch.Tensor):

@@ -28,6 +28,9 @@
 ## 0.9.0 — 2026-02-05
 - Image Difference: removed match_target; auto-resize smaller image to larger by area.
 
+## 0.9.1 — 2026-02-05
+- Color Match: fix missing _lab_match_torch helper for quality preset.
+
 ## 0.8.1 — 2026-02-05
 - Fix: VideoFrameMatch SSIM path missing torch.nn.functional import (NameError: F).
 
