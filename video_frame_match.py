@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import subprocess
-from collections import deque
 from typing import Optional, Tuple
 
 import cv2
@@ -247,7 +246,9 @@ def _get_lpips_model(net: str, device: torch.device):
     try:
         import lpips  # type: ignore
     except Exception as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError("lpips is required for metric=lpips. Install: pip install lpips") from exc
+        raise RuntimeError(
+            "lpips is required for metric=lpips_alex/lpips_vgg. Install: pip install lpips"
+        ) from exc
     model = lpips.LPIPS(net=net).to(device).eval()
     _LPIPS_CACHE[key] = model
     return model
@@ -323,22 +324,20 @@ class VideoFrameMatch:
         metric_device = torch.device("cuda" if use_gpu else "cpu")
         total_frames = _get_total_frames(cap, video_path)
         use_tail_only = bool(max_frames)
-        start_idx = 0
-        seek_ok = False
-        vid_w, vid_h, _ = _ffprobe_stream_info(video_path)
+        vid_w, vid_h, fps = _ffprobe_stream_info(video_path)
         if vid_w > 0 and vid_h > 0 and (vid_h != h_t or vid_w != w_t):
             target = _resize_to_match(target, (vid_h, vid_w))
             h_t, w_t = target.shape[:2]
         target_metric = target
 
+        start_idx = 0
         if use_tail_only and total_frames > 0:
             start_idx = max(0, total_frames - max_frames)
         _LOGGER.info(
-            "VideoFrameMatch: total_frames=%s, use_tail_only=%s, start_idx=%s, seek_ok=%s",
+            "VideoFrameMatch: total_frames=%s, use_tail_only=%s, start_idx=%s",
             total_frames,
             use_tail_only,
             start_idx,
-            seek_ok,
         )
 
         def _score_frame(frame_bgr, frame_index):
@@ -365,8 +364,7 @@ class VideoFrameMatch:
             if use_tail_only:
                 if max_frames <= 0:
                     raise RuntimeError("max_frames must be > 0 for tail search.")
-                width, height, fps = _ffprobe_stream_info(video_path)
-                if width <= 0 or height <= 0 or fps <= 0:
+                if vid_w <= 0 or vid_h <= 0 or fps <= 0:
                     raise RuntimeError("ffprobe failed to read video stream info (width/height/fps).")
                 duration = _ffprobe_duration(video_path)
                 if duration <= 0 and total_frames > 0:
@@ -383,7 +381,7 @@ class VideoFrameMatch:
                 )
                 idx = start_idx
                 processed = 0
-                for frame_rgb in _iter_ffmpeg_tail_frames(video_path, start_time, max_frames, width, height):
+                for frame_rgb in _iter_ffmpeg_tail_frames(video_path, start_time, max_frames, vid_w, vid_h):
                     frame_t = ensure_hwc(_to_tensor_rgb(frame_rgb))
                     frame_t = _resize_to_match(frame_t, (h_t, w_t))
                     frame_metric = (
@@ -408,7 +406,6 @@ class VideoFrameMatch:
                         break
             else:
                 idx = start_idx
-                processed_tail = 0
                 while True:
                     ret, frame_bgr = cap.read()
                     if not ret:
@@ -422,26 +419,6 @@ class VideoFrameMatch:
                     if pbar is not None:
                         pbar.update(1)
                     idx += 1
-                    if use_tail_only and max_frames:
-                        processed_tail += 1
-                        if processed_tail >= max_frames:
-                            break
-                if best_frame_tensor is None and use_tail_only:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    queue = deque(maxlen=max_frames)
-                    idx = 0
-                    while True:
-                        ret, frame_bgr = cap.read()
-                        if not ret:
-                            break
-                        frame_t, score_val, score_item = _score_frame(frame_bgr, idx)
-                        queue.append((idx, frame_t, score_val, score_item))
-                        if pbar is not None:
-                            pbar.update(1)
-                        idx += 1
-                    if queue:
-                        best_index, best_frame_tensor, best_score, _ = min(queue, key=lambda x: x[2])
-                        scores = [item[3] for item in queue]
         finally:
             if pbar is not None:
                 pbar.close()

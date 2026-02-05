@@ -84,7 +84,13 @@ def _lab_match_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.
 
 
 def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float):
-    from torchvision.models import VGG19_Weights, vgg19
+    try:
+        from torchvision.models import VGG19_Weights, vgg19
+    except Exception as exc:  # pragma: no cover - runtime dependency check
+        raise RuntimeError(
+            "torchvision is required for preset=perceptual. "
+            "Use ComfyUI default environment or install torchvision."
+        ) from exc
 
     device = img.device
     _LOGGER.info("Loading VGG19 (perceptual_vgg)...")

@@ -8,6 +8,9 @@
 - `quality` — LAB CDF match (точнее, медленнее).
 - `perceptual` — VGG perceptual fast (самый медленный).
 
+## Зависимости
+- Для `perceptual` нужен `torchvision` (обычно уже есть в стандартной среде ComfyUI).
+
 ## Выходы
 - `matched_image` — результат коррекции.
 - `match_json` — параметры коррекции и статистика.

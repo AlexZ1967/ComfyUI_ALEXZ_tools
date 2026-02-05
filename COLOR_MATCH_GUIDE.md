@@ -3,15 +3,20 @@
 ## Purpose
 Match color of `image` to `reference` using simple presets.
 
+## Dependencies
+- `preset=perceptual` uses VGG19 from `torchvision`.
+- In normal ComfyUI installs `torchvision` is already available in the base environment.
+- If your custom Python env does not include it, install `torchvision` manually in that env.
+
 ## Quick Start
-1) Connect `reference` and `image`.
-2) Select `preset`:
-- `fast`: mean/std match (fastest).
-- `balanced`: linear channel fit (default).
-- `quality`: LAB CDF match (better tone transfer, slower).
-- `perceptual`: VGG perceptual fast (slowest).
-3) Tune `strength` if result is too strong (`0.6..0.8` is usually safe).
-4) Check `match_json` and, if needed, compare with `Image Difference` node.
+1. Connect `reference` and `image`.
+2. Select `preset`:
+   - `fast`: mean/std match (fastest).
+   - `balanced`: linear channel fit (default).
+   - `quality`: LAB CDF match (better tone transfer, slower).
+   - `perceptual`: VGG perceptual fast (slowest).
+3. Tune `strength` if result is too strong (`0.6..0.8` is usually safe).
+4. Check `match_json` and, if needed, compare with `Image Difference` node.
 
 ## Masks
 - `match_mask`: where statistics are computed.

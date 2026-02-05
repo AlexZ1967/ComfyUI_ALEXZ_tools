@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.10.2
+Version: 0.10.3
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -10,7 +10,16 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 ## Install
 1. Клонируйте в `ComfyUI/custom_nodes/`:  
    `git clone https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools.git`
-2. Перезапустите ComfyUI.
+2. Установите зависимости ноды:  
+   `pip install -r requirements.txt`
+3. Перезапустите ComfyUI.
+
+## Runtime notes
+- `Color Match To Reference` preset `perceptual` использует `torchvision` из базовой среды ComfyUI.
+- `Find Closest Video Frame` при `max_frames > 0` использует `ffmpeg` (должен быть в `PATH`).
+  Linux: `sudo apt install ffmpeg`  
+  Windows: `choco install ffmpeg`  
+  macOS: `brew install ffmpeg`
 
 ## Nodes (jump to details)
 - [Image Prepare for QwenEdit Outpaint](#image-prepare-for-qwenedit-outpaint)
@@ -85,6 +94,7 @@ Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 - Category: video/utils  
 Входы: `image`, `video`, `max_frames` (0=все, иначе последние N), `metric`, `normalize`.  
 Выходы: `best_frame`, `best_frame_number`, `scores_json` (объект с metric/normalize и первыми 500 оценок).
+Примечание: при `max_frames > 0` требуется `ffmpeg` в `PATH`.
 Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 
 ---
