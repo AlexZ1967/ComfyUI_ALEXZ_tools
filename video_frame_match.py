@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import subprocess
 from collections import deque
 from typing import Optional, Tuple
 
@@ -41,11 +42,54 @@ def _mse_score(a: torch.Tensor, b: torch.Tensor) -> float:
     return float(torch.mean((a - b) ** 2).item())
 
 
-def _get_total_frames(cap: cv2.VideoCapture) -> int:
+def _ffprobe_frames(video_path: str) -> int:
+    probes = [
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=nb_frames",
+            "-of",
+            "default=nk=1:nw=1",
+            video_path,
+        ],
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-count_frames",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=nb_read_frames",
+            "-of",
+            "default=nk=1:nw=1",
+            video_path,
+        ],
+    ]
+    for cmd in probes:
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        except FileNotFoundError:
+            return 0
+        if proc.returncode != 0:
+            continue
+        out = (proc.stdout or "").strip()
+        if out.isdigit():
+            val = int(out)
+            if val > 0:
+                return val
+    return 0
+
+
+def _get_total_frames(cap: cv2.VideoCapture, video_path: str) -> int:
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if total <= 0:
-        return 0
-    return total
+    if total > 0:
+        return total
+    return _ffprobe_frames(video_path)
 
 
 _SSIM_WINDOW_CACHE = {}
@@ -176,7 +220,7 @@ class VideoFrameMatch:
         metric_device = torch.device("cuda" if use_gpu else "cpu")
         target_metric = target
 
-        total_frames = _get_total_frames(cap)
+        total_frames = _get_total_frames(cap, video_path)
         use_tail_only = bool(max_frames)
         start_idx = 0
         seek_ok = False
@@ -187,6 +231,13 @@ class VideoFrameMatch:
                 seek_ok = True
             else:
                 seek_ok = cap.set(cv2.CAP_PROP_POS_FRAMES, start_idx)
+        _LOGGER.info(
+            "VideoFrameMatch: total_frames=%s, use_tail_only=%s, start_idx=%s, seek_ok=%s",
+            total_frames,
+            use_tail_only,
+            start_idx,
+            seek_ok,
+        )
 
         def _score_frame(frame_bgr, frame_index):
             frame_t = ensure_hwc(_to_tensor(frame_bgr))

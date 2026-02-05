@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.8.2 — 2026-02-05
+- VideoFrameMatch: ffprobe fallback for frame count to speed up tail-only search.
+- VideoFrameMatch: log total_frames/start_idx/seek_ok for debugging.
+
 ## 0.8.1 — 2026-02-05
 - Fix: VideoFrameMatch SSIM path missing torch.nn.functional import (NameError: F).
 
