@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.8.0 — 2026-02-05
+- Color Match To Reference: simplified inputs to presets (fast/balanced/quality/perceptual).
+- Color Match To Reference: reduced outputs to matched_image/difference/match_json.
+
 ## 0.7.0 — 2026-02-04
 - VideoFrameMatch: removed CLIP options/outputs and metric_size; simplified outputs (best_frame_number only).
 

@@ -2,10 +2,13 @@
 
 Основной гайд: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md)
 
-Доп. выходы:
-- `difference` — |matched - reference|
-- `raw_difference` — |input - reference| (без коррекции) — помогает сравнить, сколько улучшили.
+## Пресеты
+- `fast` — быстрый mean/std match.
+- `balanced` — линейная подгонка (scale/offset).
+- `quality` — LAB CDF match (качественнее, но медленнее).
+- `perceptual` — VGG perceptual (самый медленный).
 
-Быстрые режимы: `mean_std`, `linear`, `hsv_shift`, `perceptual_vgg_fast`, `perceptual_adain`.  
-Качественный, но медленнее: `perceptual_vgg`.  
-Stub (нужны веса): `perceptual_ltct/lut3d/unet`.
+## Выходы
+- `matched_image` — результат коррекции.
+- `difference` — |matched - reference|.
+- `match_json` — параметры коррекции и статистика.

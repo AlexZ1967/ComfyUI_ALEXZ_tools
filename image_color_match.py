@@ -506,47 +506,23 @@ class ImageColorMatchToReference:
             "required": {
                 "reference": ("IMAGE", {"tooltip": "Базовое изображение (образец)."}),
                 "image": ("IMAGE", {"tooltip": "Изображение, которое нужно подогнать по цвету."}),
-                "mode": ([
-                    "levels",
-                    "mean_std",
-                    "linear",
-                    "hist",
-                    "pca_cov",
-                    "lab_l",
-                    "lab_full",
-                    "lab_l_cdf",
-                    "lab_cdf",
-                    "hsv_shift",
-                    "perceptual_vgg",
-                    "perceptual_adain",
-                    "perceptual_vgg_fast",
-                    "perceptual_ltct",
-                    "perceptual_lut3d",
-                    "perceptual_unet",
-                ], {"default": "levels", "tooltip": "Метод коррекции."}),
-                "percentile": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 5.0, "step": 0.1, "tooltip": "Процентиль для levels (обрезка хвостов)."}),
+                "preset": ([
+                    "fast",
+                    "balanced",
+                    "quality",
+                    "perceptual",
+                ], {"default": "balanced", "tooltip": "Пресет коррекции цвета."}),
                 "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила применения коррекции (0..1)."}),
-                "clip": ("BOOLEAN", {"default": True, "tooltip": "Обрезать результат в диапазоне 0..1."}),
             },
             "optional": {
                 "match_mask": ("MASK", {"tooltip": "Где считать статистику (белое=учитывать)."}),
                 "apply_mask": ("MASK", {"tooltip": "Где применять коррекцию (белое=применить, чёрное=оставить исходное)."}),
                 "preserve_alpha": ("BOOLEAN", {"default": True, "tooltip": "Если вход RGBA — сохранить альфу из исходника."}),
-                "export_lut": ("BOOLEAN", {"default": False, "tooltip": "Сгенерировать 1D LUT (.cube) из linear/levels параметров."}),
-                "lut_size": ("INT", {"default": 256, "min": 16, "max": 1024, "tooltip": "Размер 1D LUT."}),
-                "waveform_enabled": ("BOOLEAN", {"default": False, "tooltip": "Строить waveform/parade для контроля."}),
-                "waveform_mode": (["luma", "parade"], {"default": "parade", "tooltip": "Режим waveform: лума или RGB parade."}),
-                "waveform_width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина waveform."}),
-                "waveform_gain": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1, "tooltip": "Усиление яркости точек waveform."}),
-                "waveform_log": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала интенсивностей waveform."}),
-                "deltae_heatmap": ("BOOLEAN", {"default": False, "tooltip": "Вывести heatmap ΔE как IMAGE."}),
-                "perceptual_steps": ("INT", {"default": 30, "min": 1, "max": 200, "tooltip": "Итерации оптимизации для perceptual_vgg."}),
-                "perceptual_lr": ("FLOAT", {"default": 0.05, "min": 0.001, "max": 0.5, "step": 0.01, "tooltip": "LR для perceptual_vgg (оптимизация 3x3+bias)."}),
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "STRING")
-    RETURN_NAMES = ("matched_image", "difference", "raw_difference", "deltae_heatmap", "waveform_ref", "waveform_matched", "match_json")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "STRING")
+    RETURN_NAMES = ("matched_image", "difference", "match_json")
     FUNCTION = "match"
     CATEGORY = "image/color"
 
@@ -554,31 +530,15 @@ class ImageColorMatchToReference:
         self,
         reference,
         image,
-        mode,
-        percentile,
-        clip,
+        preset,
         match_mask=None,
         apply_mask=None,
         preserve_alpha=True,
-        export_lut=False,
-        lut_size=256,
         strength=1.0,
-        waveform_enabled=False,
-        waveform_mode="parade",
-        waveform_width=512,
-        waveform_gain=1.0,
-        waveform_log=True,
-        deltae_heatmap=False,
-        perceptual_steps=30,
-        perceptual_lr=0.05,
     ):
         batch_size = max(reference.shape[0], image.shape[0])
         matched_list = []
         diff_list = []
-        deltae_list = []
-        raw_diff_list = []
-        wave_ref_list = []
-        wave_match_list = []
         json_list = []
 
         for idx in range(batch_size):
@@ -609,40 +569,21 @@ class ImageColorMatchToReference:
             gimp_hsv = None
             deep_params = None
 
-            if mode == "levels":
-                corrected_t, gimp_levels, status = _apply_levels(img_t, ref_t, mm_t, float(percentile))
-            elif mode == "hsv_shift":
-                corrected_t, gimp_hsv, status = _hsv_shift(img_t, ref_t, mm_t)
-            elif mode == "mean_std":
+            if preset == "fast":
                 corrected_t = _mean_std_match(img_t, ref_t, mm_t)
-            elif mode == "linear":
+                mode = "mean_std"
+            elif preset == "balanced":
                 corrected_t = _linear_match(img_t, ref_t, mm_t)
-            elif mode == "hist":
-                corrected_t = _hist_match(img_t, ref_t, mm_t)
-            elif mode == "pca_cov":
-                corrected_t = _pca_cov(img_t, ref_t, mm_t)
-            elif mode in ("lab_l", "lab_full", "lab_l_cdf", "lab_cdf"):
-                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, mode)
-            elif mode == "perceptual_vgg":
-                corrected_t, deep_params = _perceptual_vgg(img_t, ref_t, perceptual_steps, perceptual_lr)
-            elif mode == "perceptual_vgg_fast":
-                corrected_t, deep_params = _perceptual_vgg_fast(img_t, ref_t, perceptual_steps, perceptual_lr)
-            elif mode == "perceptual_adain":
-                encoder, decoder = _load_adain_weights(img_t.device)
-                # HWC -> NCHW
-                c_bchw = img_t.permute(2, 0, 1).unsqueeze(0)
-                s_bchw = ref_t.permute(2, 0, 1).unsqueeze(0)
-                corrected_bchw = _adain_style_transfer(c_bchw, s_bchw, encoder, decoder)
-                corrected_t = torch.clamp(corrected_bchw.squeeze(0).permute(1, 2, 0), 0.0, 1.0)
-                deep_params = {"mode": "adain", "weights": "naoto0804/pytorch-AdaIN"}
-            elif mode == "perceptual_ltct":
-                _not_implemented_mode("perceptual_ltct")
-            elif mode == "perceptual_lut3d":
-                _not_implemented_mode("perceptual_lut3d")
-            elif mode == "perceptual_unet":
-                _not_implemented_mode("perceptual_unet")
+                mode = "linear"
+            elif preset == "quality":
+                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "lab_cdf")
+                mode = "lab_cdf"
+            elif preset == "perceptual":
+                corrected_t, deep_params = _perceptual_vgg_fast(img_t, ref_t, 5, 0.05)
+                mode = "perceptual_vgg_fast"
             else:
                 corrected_t = img_t
+                mode = "none"
 
             if status.startswith("error"):
                 corrected_t = img_t
@@ -669,29 +610,13 @@ class ImageColorMatchToReference:
                 mask_apply = am_t[..., None]
                 corrected_t = corrected_t * mask_apply + img_t * (1.0 - mask_apply)
 
-            if clip:
-                corrected_t = torch.clamp(corrected_t, 0.0, 1.0)
+            corrected_t = torch.clamp(corrected_t, 0.0, 1.0)
 
             matched_t = corrected_t
             if alpha_channel is not None and preserve_alpha:
                 matched_t = torch.cat([matched_t, alpha_channel], dim=-1)
 
             diff = torch.abs(matched_t[..., :3] - ref_t)
-            raw_diff = torch.abs(img_t[..., :3] - ref_t)
-            delta_e = _delta_e76(_rgb_to_lab(ref_t), _rgb_to_lab(corrected_t))
-            delta_stats = _delta_e_stats(delta_e)
-
-            if deltae_heatmap:
-                heat = _heatmap(delta_e)
-            else:
-                heat = torch.zeros((1, 1, 3), dtype=matched_t.dtype, device=matched_t.device)
-
-            if waveform_enabled:
-                wave_ref = _waveform(ref_t, waveform_mode, int(waveform_width), float(waveform_gain), bool(waveform_log))
-                wave_match = _waveform(corrected_t, waveform_mode, int(waveform_width), float(waveform_gain), bool(waveform_log))
-            else:
-                wave_ref = torch.zeros((1, 1, 3), dtype=matched_t.dtype, device=matched_t.device)
-                wave_match = torch.zeros((1, 1, 3), dtype=matched_t.dtype, device=matched_t.device)
 
             stats = {
                 "ref_mean": [round(float(x), 4) for x in ref_t.reshape(-1, 3).mean(dim=0)],
@@ -699,7 +624,6 @@ class ImageColorMatchToReference:
                 "ref_std": [round(float(x), 4) for x in ref_t.reshape(-1, 3).std(dim=0)],
                 "img_std": [round(float(x), 4) for x in img_t.reshape(-1, 3).std(dim=0)],
                 "mask_used": mm_t is not None,
-                "delta_e": delta_stats,
             }
             presets = {
                 "gimp": {
@@ -726,6 +650,7 @@ class ImageColorMatchToReference:
             }
             payload = {
                 "status": status,
+                "preset": preset,
                 "mode": mode,
                 "gimp_levels": gimp_levels,
                 "gimp_hsv": gimp_hsv,
@@ -739,26 +664,14 @@ class ImageColorMatchToReference:
                 "presets": presets,
                 "stats": stats,
             }
-            if export_lut:
-                lut_text = _build_1d_cube_lut(resolve_params, int(lut_size))
-                payload["lut_1d_cube"] = lut_text
-                payload["lut_size"] = int(lut_size)
 
             json_list.append(json.dumps(payload, ensure_ascii=True))
             matched_list.append(matched_t.cpu())
             diff_list.append(diff.cpu())
-            raw_diff_list.append(raw_diff.cpu())
-            deltae_list.append(heat.cpu())
-            wave_ref_list.append(wave_ref.cpu())
-            wave_match_list.append(wave_match.cpu())
 
         return (
             torch.stack(matched_list, dim=0),
             torch.stack(diff_list, dim=0),
-            torch.stack(raw_diff_list, dim=0),
-            torch.stack(deltae_list, dim=0),
-            torch.stack(wave_ref_list, dim=0),
-            torch.stack(wave_match_list, dim=0),
             json_list,
         )
 
