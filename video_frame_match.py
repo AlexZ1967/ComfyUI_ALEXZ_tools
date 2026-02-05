@@ -146,7 +146,10 @@ def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     except FileNotFoundError:
-        raise RuntimeError("ffmpeg not found. Please install ffmpeg and ensure it is in PATH.")
+        raise RuntimeError(
+            "ffmpeg not found. Install it and ensure it is in PATH. "
+            "Linux: sudo apt install ffmpeg | Windows: choco install ffmpeg | macOS: brew install ffmpeg"
+        )
     if proc.stdout is None:
         return
     frame_bytes = width * height * 3
