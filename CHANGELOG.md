@@ -1,5 +1,10 @@
 # Changelog — ALEXZ_tools
 
+## 0.10.0 — 2026-02-05
+- New node: Image Waveform Scope (`ImageWaveformScope`).
+- New node: Image Histogram Scope (`ImageHistogramScope`).
+- Docs: README and guides updated for new analysis nodes.
+
 ## 0.8.2 — 2026-02-05
 - VideoFrameMatch: ffprobe fallback for frame count to speed up tail-only search.
 - VideoFrameMatch: log total_frames/start_idx/seek_ok for debugging.

@@ -1,9 +1,9 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.9.1
+Version: 0.10.0
 
 ## Overview
-Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, инпейнтинг водяных знаков в видео и отображение/сохранение JSON.
+Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
 
 Changelog: [CHANGELOG.md](CHANGELOG.md)
 
@@ -18,6 +18,8 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 - [Color Match To Reference](#color-match-to-reference)
 - [Find Closest Video Frame](#find-closest-video-frame)
 - [Image Difference](#image-difference)
+- [Image Waveform Scope](#image-waveform-scope)
+- [Image Histogram Scope](#image-histogram-scope)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
 - [Show/Save JSON](#showsave-json)
 
@@ -88,7 +90,7 @@ Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 ---
 
 ## Image Difference
-Абсолютная разница между двумя картинками, при разных размерах можно выбрать сторону для ресайза.
+Абсолютная разница между двумя картинками. Если размеры различаются, меньшая автоматически приводится к большей (по площади).
 
 - Display name: Image Difference  
 - Type name: ImageDifference  
@@ -96,6 +98,30 @@ Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 Входы: `image_a`, `image_b` (авторесайз меньшей к большей).  
 Выходы: `difference` (|A−B|).  
 Guide: [GUIDE_IMAGE_DIFFERENCE.md](GUIDE_IMAGE_DIFFERENCE.md)
+
+---
+
+## Image Waveform Scope
+Строит waveform scope по изображению: Luma или RGB parade.
+
+- Display name: Image Waveform Scope  
+- Type name: ImageWaveformScope  
+- Category: image/analysis  
+Входы: `image`, `mode` (luma/parade), `width`, `height`, `gain`, `log_scale`.  
+Выходы: `waveform`.  
+Guide: [GUIDE_IMAGE_WAVEFORM.md](GUIDE_IMAGE_WAVEFORM.md)
+
+---
+
+## Image Histogram Scope
+Строит гистограмму изображения в режимах RGB overlay, RGB split или Luma.
+
+- Display name: Image Histogram Scope  
+- Type name: ImageHistogramScope  
+- Category: image/analysis  
+Входы: `image`, `mode` (rgb_overlay/rgb_split/luma), `bins`, `width`, `height`, `log_scale`.  
+Выходы: `histogram`, `hist_json`.  
+Guide: [GUIDE_IMAGE_HISTOGRAM.md](GUIDE_IMAGE_HISTOGRAM.md)
 
 ---
 

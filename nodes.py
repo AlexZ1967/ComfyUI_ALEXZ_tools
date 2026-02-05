@@ -12,6 +12,8 @@ _NODE_SPECS = [
     ("ImageColorMatchToReference", "Color Match To Reference", ".image_color_match", "ImageColorMatchToReference"),
     ("VideoFrameMatch", "Find Closest Video Frame", ".video_frame_match", "VideoFrameMatch"),
     ("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
+    ("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
+    ("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
 ]
 
 NODE_CLASS_MAPPINGS = {}
