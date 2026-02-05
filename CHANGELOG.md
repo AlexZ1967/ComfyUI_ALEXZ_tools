@@ -1,5 +1,8 @@
 # Changelog — ALEXZ_tools
 
+## 0.8.1 — 2026-02-05
+- Fix: VideoFrameMatch SSIM path missing torch.nn.functional import (NameError: F).
+
 ## 0.8.0 — 2026-02-05
 - Color Match To Reference: simplified inputs to presets (fast/balanced/quality/perceptual).
 - Color Match To Reference: reduced outputs to matched_image/match_json.

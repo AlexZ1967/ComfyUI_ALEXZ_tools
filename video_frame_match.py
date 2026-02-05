@@ -8,6 +8,7 @@ import cv2
 import folder_paths
 import numpy as np
 import torch
+import torch.nn.functional as F
 try:
     from tqdm import tqdm
 except Exception:  # pragma: no cover - optional
