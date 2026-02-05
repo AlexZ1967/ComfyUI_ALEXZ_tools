@@ -29,6 +29,11 @@ def _to_tensor(frame_bgr: np.ndarray) -> torch.Tensor:
     frame = torch.from_numpy(frame_rgb.astype(np.float32) / 255.0)
     return frame
 
+
+def _to_tensor_rgb(frame_rgb: np.ndarray) -> torch.Tensor:
+    frame = torch.from_numpy(frame_rgb.astype(np.float32) / 255.0)
+    return frame
+
 def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.Tensor:
     h, w = target_hw
     if frame.shape[0] == h and frame.shape[1] == w:
@@ -83,6 +88,76 @@ def _ffprobe_frames(video_path: str) -> int:
             if val > 0:
                 return val
     return 0
+
+
+def _ffprobe_stream_info(video_path: str) -> Tuple[int, int, float]:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height,r_frame_rate",
+        "-of",
+        "default=nk=1:nw=1",
+        video_path,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return 0, 0, 0.0
+    if proc.returncode != 0:
+        return 0, 0, 0.0
+    lines = [ln.strip() for ln in (proc.stdout or "").splitlines() if ln.strip()]
+    if len(lines) < 3:
+        return 0, 0, 0.0
+    try:
+        width = int(lines[0])
+        height = int(lines[1])
+        rate = lines[2]
+        if "/" in rate:
+            num, den = rate.split("/", 1)
+            fps = float(num) / float(den) if float(den) != 0 else 0.0
+        else:
+            fps = float(rate)
+        return width, height, fps
+    except Exception:
+        return 0, 0, 0.0
+
+
+def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int, width: int, height: int):
+    cmd = [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-ss",
+        f"{start_time:.6f}",
+        "-i",
+        video_path,
+        "-frames:v",
+        str(max_frames),
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+    ]
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    except FileNotFoundError:
+        return
+    if proc.stdout is None:
+        return
+    frame_bytes = width * height * 3
+    while True:
+        chunk = proc.stdout.read(frame_bytes)
+        if not chunk or len(chunk) < frame_bytes:
+            break
+        frame = np.frombuffer(chunk, dtype=np.uint8).reshape(height, width, 3)
+        yield frame
+    proc.stdout.close()
+    proc.wait()
 
 
 def _get_total_frames(cap: cv2.VideoCapture, video_path: str) -> int:
@@ -189,6 +264,7 @@ class VideoFrameMatch:
                 "metric": (["mse", "ssim", "lpips"], {"default": "mse", "tooltip": "Метрика сходства кадра и картинки."}),
                 "normalize": (["none", "mean_std", "linear", "hist"], {"default": "none", "tooltip": "Нормализация кадра к референсу перед сравнением."}),
                 "lpips_net": (["vgg", "alex"], {"default": "vgg", "tooltip": "Бэкбон LPIPS (vgg качественнее, alex быстрее)."}),
+                "use_ffmpeg_tail": ("BOOLEAN", {"default": True, "tooltip": "Если seek не работает, использовать ffmpeg для чтения последних кадров по времени."}),
             },
             "optional": {},
         }
@@ -198,7 +274,7 @@ class VideoFrameMatch:
     FUNCTION = "match"
     CATEGORY = "video/utils"
 
-    def match(self, image, video, max_frames, metric, normalize, lpips_net):
+    def match(self, image, video, max_frames, metric, normalize, lpips_net, use_ffmpeg_tail):
         target = image[0] if isinstance(image, list) else image
         target = torch.clamp(ensure_hwc(target), 0.0, 1.0).float()
         h_t, w_t = target.shape[:2]
@@ -266,7 +342,44 @@ class VideoFrameMatch:
 
         try:
             if use_tail_only and (total_frames == 0 or not seek_ok):
-                if total_frames > 0 and max_frames:
+                if use_ffmpeg_tail and total_frames > 0 and max_frames:
+                    width, height, fps = _ffprobe_stream_info(video_path)
+                    if width > 0 and height > 0 and fps > 0:
+                        start_time = max(0.0, start_idx / fps)
+                        _LOGGER.info(
+                            "VideoFrameMatch: ffmpeg tail read (start_time=%.3fs, frames=%s)",
+                            start_time,
+                            max_frames,
+                        )
+                        idx = start_idx
+                        processed = 0
+                        for frame_rgb in _iter_ffmpeg_tail_frames(video_path, start_time, max_frames, width, height):
+                            frame_t = ensure_hwc(_to_tensor_rgb(frame_rgb))
+                            frame_t = _resize_to_match(frame_t, (h_t, w_t))
+                            frame_metric = (
+                                normalize_to_reference(frame_t, target, normalize) if normalize != "none" else frame_t
+                            )
+                            score_val = _compute_score(
+                                metric,
+                                frame_metric,
+                                target_metric,
+                                metric_device,
+                                lpips_net,
+                            )
+                            scores.append({"index": idx, "score": score_val})
+                            if best_score is None or score_val < best_score:
+                                best_score = score_val
+                                best_index = idx
+                                best_frame_tensor = frame_t
+                            if pbar is not None:
+                                pbar.update(1)
+                            idx += 1
+                            processed += 1
+                            if processed >= max_frames:
+                                break
+                    else:
+                        _LOGGER.warning("VideoFrameMatch: ffprobe stream info not available, fallback to grab skip.")
+                if total_frames > 0 and max_frames and best_frame_tensor is None:
                     # Fast-skip to last N frames without full decode.
                     skip_count = max(0, total_frames - max_frames)
                     skipped = 0
@@ -290,7 +403,7 @@ class VideoFrameMatch:
                             pbar.update(1)
                         idx += 1
                         processed += 1
-                else:
+                elif best_frame_tensor is None:
                     queue = deque(maxlen=max_frames)
                     idx = 0
                     while True:
