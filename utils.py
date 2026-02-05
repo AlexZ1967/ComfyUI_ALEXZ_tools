@@ -65,27 +65,18 @@ def resize_to_hw(image: torch.Tensor, target_hw):
     )
 
 
-def image_difference(a: torch.Tensor, b: torch.Tensor, match_target: str = "a") -> torch.Tensor:
-    """
-    Compute absolute difference between two images (HWC or BCHW/BHWC).
-    If spatial sizes differ, resize one side:
-      match_target = \"a\" (default) -> resize b to a
-      match_target = \"b\" -> resize a to b
-      match_target = \"none\" -> no resize (may raise)
-    """
+def image_difference(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """Compute absolute difference between two images (HWC or BCHW/BHWC)."""
     a = torch.clamp(ensure_hwc(a).float(), 0.0, 1.0)
     b = torch.clamp(ensure_hwc(b).float(), 0.0, 1.0)
 
     if a.shape[:2] != b.shape[:2]:
-        if match_target == "a":
+        area_a = a.shape[0] * a.shape[1]
+        area_b = b.shape[0] * b.shape[1]
+        if area_a >= area_b:
             b = resize_to_hw(b, a.shape[:2])
-        elif match_target == "b":
+        else:
             a = resize_to_hw(a, b.shape[:2])
-        elif match_target != "none":
-            raise ValueError(f"Unknown match_target: {match_target}")
-
-    if a.shape != b.shape:
-        raise ValueError(f"Shapes differ and can't be matched: {a.shape} vs {b.shape}")
 
     return torch.abs(a - b)
 

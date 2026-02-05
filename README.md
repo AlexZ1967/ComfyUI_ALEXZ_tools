@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.8.9
+Version: 0.9.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, инпейнтинг водяных знаков в видео и отображение/сохранение JSON.
@@ -93,7 +93,7 @@ Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 - Display name: Image Difference  
 - Type name: ImageDifference  
 - Category: image/utils  
-Входы: `image_a`, `image_b`, `match_target` (a/b/none).  
+Входы: `image_a`, `image_b` (авторесайз меньшей к большей).  
 Выходы: `difference` (|A−B|).  
 Guide: [GUIDE_IMAGE_DIFFERENCE.md](GUIDE_IMAGE_DIFFERENCE.md)
 
