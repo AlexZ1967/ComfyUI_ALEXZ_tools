@@ -1,5 +1,29 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.4 — 2026-02-06
+- Module browser API: removed all slicing from fallback output parsing (`RETURN_NAMES`) to support custom container types from third-party nodes.
+- Fixed repeated errors in `/alexz_tools/module_list` and `/alexz_tools/module_nodes`: `TypeError: '>' not supported between instances of 'slice' and 'int'`.
+
+## 0.12.3 — 2026-02-06
+- Module Node Picker: added dropdown of currently loaded ComfyUI modules (with node counts).
+- Added API endpoint `GET /alexz_tools/module_list` for loaded module names and counts.
+- Module picker input now supports datalist suggestions from loaded modules.
+
+## 0.12.2 — 2026-02-06
+- Module browser API: fixed fallback annotation generation for nodes with non-list `RETURN_NAMES` (no slicing on custom index objects).
+- Fixed runtime error: `'>' not supported between instances of 'slice' and 'int'` in `/alexz_tools/module_nodes`.
+
+## 0.12.1 — 2026-02-06
+- Module Node Picker: moved from top-menu-only UI to Sidebar tab (`Module Nodes`) via `registerSidebarTab`.
+- Added robust fallback: if Sidebar API is unavailable, `Module Nodes` button is added to menu container or as floating button.
+- Docs: updated README section for Sidebar-based usage.
+
+## 0.12.0 — 2026-02-05
+- New UI tool: `Module Node Picker` (button `Module Nodes` in ComfyUI top menu).
+- Added API endpoint `GET /alexz_tools/module_nodes` for module-based node listing with short annotations.
+- Added frontend panel to search by python module name and insert node into workflow by click.
+- README: documented Module Node Picker usage.
+
 ## 0.11.2 — 2026-02-05
 - Startup logs: restored single package header `ALEXZ_tools loading...` before compact `✅ <Node> loaded` lines.
 - Startup logs: kept duplicate module-level load messages disabled (only centralized logger in `nodes.py`).
