@@ -40,9 +40,7 @@ def _load_node(name: str, display: str, module: str, attr: str):
 for _name, _disp, _mod, _attr in _NODE_SPECS:
     _load_node(_name, _disp, _mod, _attr)
 
-# Compact startup log
-header = "ALEXZ_tools loading..."
-_LOGGER.info(header)
+_LOGGER.info("ALEXZ_tools loading...")
 for line in _LOG_LINES:
     _LOGGER.info(line)
 

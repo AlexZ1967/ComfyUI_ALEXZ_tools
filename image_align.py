@@ -132,9 +132,3 @@ class ImageAlignOverlayToBackground:
             lab_channels=lab_channels,
             logger=_LOGGER,
         )
-
-
-_LOGGER.warning(
-    "Loaded ImageAlignOverlayToBackground. NODE_CLASS_MAPPINGS=%s",
-    ["ImageAlignOverlayToBackground"],
-)

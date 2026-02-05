@@ -1,10 +1,6 @@
-import logging
-
 import torch
 
 from .utils import ensure_hwc, image_difference
-
-_LOGGER = logging.getLogger("ImageDifference")
 
 
 class ImageDifference:
@@ -28,6 +24,3 @@ class ImageDifference:
         b = ensure_hwc(image_b[0] if isinstance(image_b, list) else image_b)
         diff = image_difference(a, b)
         return (diff.unsqueeze(0),)
-
-
-_LOGGER.info("✅ Image Difference loaded")

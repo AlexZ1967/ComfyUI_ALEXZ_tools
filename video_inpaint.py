@@ -1144,9 +1144,3 @@ def _get_ref_index(mid_neighbor_id, neighbor_ids, length, ref_length, ref_num=-1
                     break
                 ref_index.append(i)
     return ref_index
-
-
-_LOGGER.warning(
-    "Loaded VideoInpaintWatermark. NODE_CLASS_MAPPINGS=%s",
-    ["VideoInpaintWatermark"],
-)

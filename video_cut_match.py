@@ -619,6 +619,3 @@ class VideoCutMatch:
             int(best["frame_b_number"]),
             json.dumps(payload, ensure_ascii=True),
         )
-
-
-_LOGGER.warning("Loaded VideoCutMatch. NODE_CLASS_MAPPINGS=%s", ["VideoCutMatch"])

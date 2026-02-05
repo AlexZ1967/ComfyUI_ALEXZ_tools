@@ -584,9 +584,3 @@ class VideoFrameMatch:
             best_index,
             scores_json,
         )
-
-
-_LOGGER.warning(
-    "Loaded VideoFrameMatch. NODE_CLASS_MAPPINGS=%s",
-    ["VideoFrameMatch"],
-)

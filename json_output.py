@@ -100,9 +100,3 @@ class JsonDisplayAndSave:
             _LOGGER.info("Saved JSON to %s", output_path)
 
         return {"ui": {"text": [text]}, "result": (text,)}
-
-
-_LOGGER.warning(
-    "Loaded JsonDisplayAndSave. NODE_CLASS_MAPPINGS=%s",
-    ["JsonDisplayAndSave"],
-)

@@ -1,12 +1,9 @@
 import json
-import logging
 
 import torch
 import torch.nn.functional as F
 
 from .utils import ensure_hwc
-
-_LOGGER = logging.getLogger("ImageScopes")
 
 
 def _resize_width(img: torch.Tensor, width: int) -> torch.Tensor:
@@ -236,7 +233,3 @@ class ImageHistogramScope:
             images.append(hist_img.cpu())
             infos.append(json.dumps(info, ensure_ascii=True))
         return (torch.stack(images, dim=0), infos)
-
-
-_LOGGER.info("✅ Image Waveform Scope loaded")
-_LOGGER.info("✅ Image Histogram Scope loaded")

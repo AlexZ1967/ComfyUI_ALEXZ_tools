@@ -1,4 +1,3 @@
-import logging
 import math
 
 import comfy.model_management
@@ -20,9 +19,6 @@ _ASPECT_RATIOS = {
 # Целевая площадь для масштабирования (при as_is)
 _TARGET_AREA = 1328 * 1328
 _LATENT_CHANNELS = 4  # Стандартный VAE использует 4 канала
-
-
-_LOGGER = logging.getLogger("ImagePrepare_for_QwenEdit_outpaint")
 
 
 class ImagePrepareForQwenEditOutpaint:
@@ -76,9 +72,3 @@ class ImagePrepareForQwenEditOutpaint:
             (image.shape[0], _LATENT_CHANNELS, latent_height, latent_width),
             device=comfy.model_management.intermediate_device(),
         )})
-
-
-_LOGGER.warning(
-    "Loaded ImagePrepare_for_QwenEdit_outpaint. NODE_CLASS_MAPPINGS=%s",
-    ["ImagePrepare_for_QwenEdit_outpaint"],
-)

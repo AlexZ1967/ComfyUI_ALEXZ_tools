@@ -1,5 +1,14 @@
 # Changelog — ALEXZ_tools
 
+## 0.11.2 — 2026-02-05
+- Startup logs: restored single package header `ALEXZ_tools loading...` before compact `✅ <Node> loaded` lines.
+- Startup logs: kept duplicate module-level load messages disabled (only centralized logger in `nodes.py`).
+
+## 0.11.1 — 2026-02-05
+- Startup logs: removed duplicate per-module `Loaded ... NODE_CLASS_MAPPINGS` messages.
+- Startup logs: removed duplicate `✅ ... loaded` messages emitted by `ImageDifference` and `ImageScopes` modules.
+- Startup logs: removed extra `ALEXZ_tools loading...` header; now only one compact list with `✅ <Node> loaded` remains.
+
 ## 0.11.0 — 2026-02-05
 - New node: `Match Video Cut Point` (`VideoCutMatch`) for A-tail vs B-head cut-point matching between two videos.
 - VideoCutMatch: outputs best pair frames, frame numbers, top-k candidates, confidence, and cut hints in JSON.

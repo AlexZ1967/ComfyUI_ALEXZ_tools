@@ -446,6 +446,3 @@ class ImageColorMatchToReference:
             torch.stack(matched_list, dim=0),
             json_list,
         )
-
-
-_LOGGER.warning("Loaded ImageColorMatchToReference. NODE_CLASS_MAPPINGS=%s", ["ImageColorMatchToReference"])
