@@ -1,5 +1,12 @@
 # Changelog — ALEXZ_tools
 
+## 0.10.6 — 2026-02-05
+- VideoFrameMatch: added `best.confidence` and `top_k` to `scores_json`.
+- VideoFrameMatch: added explicit `top_k_source` and kept LPIPS two-pass metadata for analysis.
+- Color Match To Reference: added quality metrics in `match_json` (`before/after/improvement_pct` for `mse`, `ssim`, `delta_e76`, `lpips_alex`).
+- UI tooltips: added compact performance hints for VideoFrameMatch, Color Match, Waveform Scope, and Histogram Scope.
+- Tests: added smoke tests (`tests/test_smoke_nodes.py`) for core utilities and JSON contract checks.
+
 ## 0.10.5 — 2026-02-05
 - VideoFrameMatch: added automatic two-pass search for `lpips_alex/lpips_vgg` (coarse MSE prefilter + LPIPS refine on top-k candidates).
 - VideoFrameMatch: reduced memory usage of long runs by storing only first 500 coarse scores in `scores_json`.

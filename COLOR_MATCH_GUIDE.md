@@ -25,10 +25,13 @@ Match color of `image` to `reference` using simple presets.
 ## Outputs
 - `matched_image`: corrected image.
 - `match_json`: correction parameters and stats.
+- `match_json.quality.before`: `mse`, `ssim`, `delta_e76`, `lpips_alex` до коррекции.
+- `match_json.quality.after`: те же метрики после коррекции.
+- `match_json.quality.improvement_pct`: улучшение в процентах (для `mse/delta_e76/lpips` — уменьшение ошибки, для `ssim` — рост).
 
 ## Quality Check
 - Compare `ref_mean/ref_std` and `img_mean/img_std` in `match_json.stats`.
-- If channel means are close and visual difference is small, match is usually good.
+- Check `match_json.quality`: good match usually means `mse`, `delta_e76`, `lpips_alex` go down and `ssim` goes up.
 
 ## Common Fixes
 - Over-correction: lower `strength`.

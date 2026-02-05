@@ -19,15 +19,15 @@
 Получите `best_frame`, `best_frame_number`, `scores_json`.
 
 ## Параметры
-- `max_frames`: количество последних кадров для анализа (0 = без лимита).  
-- `metric`: `mse` / `ssim` / `lpips_alex` / `lpips_vgg`.  
-- `normalize`: `none` / `mean_std` / `linear` / `hist` (приводит кадр к цвету референса перед сравнением).  
+- `max_frames`: количество последних кадров для анализа (0 = без лимита). Рекомендуется ограничивать для скорости.  
+- `metric`: `mse` / `ssim` / `lpips_alex` / `lpips_vgg`. `mse` быстрее всех, `lpips_*` медленнее.  
+- `normalize`: `none` / `mean_std` / `linear` / `hist` (приводит кадр к цвету референса перед сравнением). `none` быстрее, `hist` медленнее.  
 
 ## Выходы
 - `best_frame`: кадр, наиболее похожий на картинку.  
 - `best_frame_number`: номер кадра (с нуля).  
-- `scores_json`: объект `{metric, normalize, scores}` с первыми 500 оценками `{index, score}`.  
-  Для `lpips_alex/lpips_vgg` используется двухпроходный поиск: coarse-pass (`mse`) + refine-pass (`lpips`) по top-k кандидатам; в JSON добавляются поля `search`, `coarse_metric`, `coarse_max_side`, `refine_candidates`, `refined_scores`.
+- `scores_json`: объект с `metric`, `normalize`, `scores` (первые 500 coarse-оценок), `best` (`index`, `score`, `confidence`) и `top_k` (лучшие кандидаты).  
+  Для `lpips_alex/lpips_vgg` используется двухпроходный поиск: coarse-pass (`mse`) + refine-pass (`lpips`) по top-k кандидатам; добавляются поля `search`, `coarse_metric`, `coarse_max_side`, `refine_candidates`, `refined_scores`, `top_k_source`.
 
 ## Рекомендации
 - Если видео большое, ограничьте `max_frames`, чтобы ускорить поиск.  

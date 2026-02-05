@@ -13,4 +13,4 @@
 
 ## Выходы
 - `matched_image` — результат коррекции.
-- `match_json` — параметры коррекции и статистика.
+- `match_json` — параметры коррекции, статистика и блок `quality` с метриками до/после (`mse`, `ssim`, `delta_e76`, `lpips_alex`) и `improvement_pct`.

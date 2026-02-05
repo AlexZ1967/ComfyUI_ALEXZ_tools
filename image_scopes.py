@@ -180,10 +180,10 @@ class ImageWaveformScope:
             "required": {
                 "image": ("IMAGE", {"tooltip": "Входная картинка для waveform scope."}),
                 "mode": (["luma", "parade"], {"default": "parade", "tooltip": "Luma waveform или RGB parade."}),
-                "width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина scope."}),
-                "height": ("INT", {"default": 256, "min": 64, "max": 1024, "tooltip": "Высота scope."}),
+                "width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина scope. Больше ширина = медленнее расчёт."}),
+                "height": ("INT", {"default": 256, "min": 64, "max": 1024, "tooltip": "Высота scope. Больше высота = больше VRAM/CPU."}),
                 "gain": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1, "tooltip": "Усиление яркости точек scope."}),
-                "log_scale": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала плотности."}),
+                "log_scale": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала плотности. Чуть медленнее, но информативнее в тенях/хайлайтах."}),
             },
             "optional": {},
         }
@@ -208,10 +208,10 @@ class ImageHistogramScope:
             "required": {
                 "image": ("IMAGE", {"tooltip": "Входная картинка для histogram scope."}),
                 "mode": (["rgb_overlay", "rgb_split", "luma"], {"default": "rgb_overlay", "tooltip": "Наложенные RGB, разделенные RGB или luma histogram."}),
-                "bins": ("INT", {"default": 256, "min": 16, "max": 2048, "tooltip": "Количество бинов гистограммы."}),
-                "width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина scope."}),
-                "height": ("INT", {"default": 256, "min": 64, "max": 1024, "tooltip": "Высота scope."}),
-                "log_scale": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала плотности."}),
+                "bins": ("INT", {"default": 256, "min": 16, "max": 2048, "tooltip": "Количество бинов гистограммы. 64/128 быстрее, 256+ точнее."}),
+                "width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина scope. Больше ширина = медленнее."}),
+                "height": ("INT", {"default": 256, "min": 64, "max": 1024, "tooltip": "Высота scope. Больше высота = больше VRAM/CPU."}),
+                "log_scale": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала плотности. Немного медленнее."}),
             },
             "optional": {},
         }

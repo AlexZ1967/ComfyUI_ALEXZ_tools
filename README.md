@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.10.5
+Version: 0.10.6
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -68,6 +68,7 @@ Guide: [GUIDE_ALIGN.md](GUIDE_ALIGN.md)
 - Category: image/color
 
 Пресеты: `fast`=mean/std, `balanced`=linear, `quality`=LAB CDF, `perceptual`=VGG.  
+`match_json.quality`: метрики до/после (`mse`, `ssim`, `delta_e76`, `lpips_alex`) и `improvement_pct`.  
 Выходы: `matched_image`, `match_json`.  
 Guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md), кратко — [GUIDE_COLOR_MATCH.md](GUIDE_COLOR_MATCH.md)
 
@@ -93,7 +94,7 @@ Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 - Type name: VideoFrameMatch  
 - Category: video/utils  
 Входы: `image`, `video`, `max_frames` (0=все, иначе последние N), `metric`, `normalize`.  
-Выходы: `best_frame`, `best_frame_number`, `scores_json` (объект с metric/normalize и первыми 500 оценок; для `lpips_*` включает двухпроходный поиск с refine-метаданными).
+Выходы: `best_frame`, `best_frame_number`, `scores_json` (объект с metric/normalize, `best{index,score,confidence}`, `top_k`; для `lpips_*` включает двухпроходный поиск с refine-метаданными).
 Примечание: при `max_frames > 0` требуется `ffmpeg` в `PATH`.
 Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 

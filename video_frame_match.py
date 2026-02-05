@@ -70,6 +70,27 @@ def _append_score(scores, index: int, score: float, limit: int = 500):
         scores.append({"index": index, "score": float(score)})
 
 
+def _update_top_matches(top_matches, index: int, score: float, limit: int = 5):
+    item = {"index": int(index), "score": float(score)}
+    if len(top_matches) < limit:
+        top_matches.append(item)
+        top_matches.sort(key=lambda x: x["score"])
+        return
+    if score < top_matches[-1]["score"]:
+        top_matches[-1] = item
+        top_matches.sort(key=lambda x: x["score"])
+
+
+def _confidence_from_top(top_matches) -> float:
+    if len(top_matches) < 2:
+        return 1.0 if len(top_matches) == 1 else 0.0
+    best = float(top_matches[0]["score"])
+    second = float(top_matches[1]["score"])
+    scale = max(abs(second), abs(best), 1e-6)
+    conf = (second - best) / scale
+    return float(max(0.0, min(1.0, conf)))
+
+
 def _ffprobe_frames(video_path: str) -> int:
     probes = [
         [
@@ -314,9 +335,29 @@ class VideoFrameMatch:
             "required": {
                 "image": ("IMAGE", {"tooltip": "Целевой кадр для поиска в видео."}),
                 "video": (videos, {"video_upload": True, "tooltip": "Видео из папки input/."}),
-                "max_frames": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Количество последних кадров для анализа (0 = все)."}),
-                "metric": (["mse", "ssim", "lpips_alex", "lpips_vgg"], {"default": "mse", "tooltip": "Метрика сходства кадра и картинки."}),
-                "normalize": (["none", "mean_std", "linear", "hist"], {"default": "none", "tooltip": "Нормализация кадра к референсу перед сравнением."}),
+                "max_frames": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 100000,
+                        "tooltip": "Количество последних кадров для анализа (0 = все). Быстрее ставить ограничение (например 100..500).",
+                    },
+                ),
+                "metric": (
+                    ["mse", "ssim", "lpips_alex", "lpips_vgg"],
+                    {
+                        "default": "mse",
+                        "tooltip": "Метрика сходства: mse=самый быстрый, ssim=средне, lpips_alex/vgg=самые медленные (с двухпроходным ускорением).",
+                    },
+                ),
+                "normalize": (
+                    ["none", "mean_std", "linear", "hist"],
+                    {
+                        "default": "none",
+                        "tooltip": "Нормализация кадра к референсу. none — fastest; hist — slowest.",
+                    },
+                ),
             },
             "optional": {},
         }
@@ -344,6 +385,7 @@ class VideoFrameMatch:
         best_frame_tensor: Optional[torch.Tensor] = None
         scores = []
         refined_scores = []
+        top_matches = []
 
         use_gpu = torch.cuda.is_available() and metric in {"ssim", "lpips_alex", "lpips_vgg"}
         metric_device = torch.device("cuda" if use_gpu else "cpu")
@@ -430,6 +472,7 @@ class VideoFrameMatch:
                             target_metric,
                             metric_device,
                         )
+                        _update_top_matches(top_matches, idx, score_val)
                         if best_score is None or score_val < best_score:
                             best_score = score_val
                             best_index = idx
@@ -460,6 +503,7 @@ class VideoFrameMatch:
                             target_metric,
                             metric_device,
                         )
+                        _update_top_matches(top_matches, idx, score_val)
                         if best_score is None or score_val < best_score:
                             best_score = score_val
                             best_index = idx
@@ -498,6 +542,7 @@ class VideoFrameMatch:
                             "score": float(score_val),
                         }
                     )
+                    _update_top_matches(top_matches, int(item["index"]), score_val)
                     if best_score is None or score_val < best_score:
                         best_score = score_val
                         best_index = int(item["index"])
@@ -511,13 +556,27 @@ class VideoFrameMatch:
         if best_frame_tensor is None:
             raise RuntimeError("No frames processed from video.")
 
-        payload = {"metric": metric, "normalize": normalize, "scores": scores}
+        confidence = _confidence_from_top(top_matches)
+        payload = {
+            "metric": metric,
+            "normalize": normalize,
+            "scores": scores,
+            "best": {
+                "index": int(best_index),
+                "score": float(best_score),
+                "confidence": confidence,
+            },
+            "top_k": top_matches,
+        }
         if two_pass_lpips:
             payload["search"] = "two_pass_lpips"
             payload["coarse_metric"] = "mse"
             payload["coarse_max_side"] = coarse_max_side
             payload["refine_candidates"] = len(candidates)
             payload["refined_scores"] = refined_scores[:candidate_limit]
+            payload["top_k_source"] = "refine_lpips"
+        else:
+            payload["top_k_source"] = "full_metric_pass"
         scores_json = json.dumps(payload, ensure_ascii=True)
 
         return (

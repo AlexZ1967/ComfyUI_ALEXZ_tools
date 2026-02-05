@@ -3,6 +3,7 @@ import logging
 from contextlib import nullcontext
 from typing import Optional
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -18,6 +19,8 @@ from .utils import select_batch_item
 
 _LOGGER = logging.getLogger("ImageColorMatchToReference")
 _EPS = 1e-6
+_SSIM_WINDOW_CACHE = {}
+_LPIPS_CACHE = {}
 
 
 def _resize_image(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
@@ -171,6 +174,127 @@ def _perceptual_vgg_fast(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: f
     return corrected_full, params
 
 
+def _ssim_window(channels: int, device: torch.device, dtype: torch.dtype, size: int = 11, sigma: float = 1.5):
+    key = (channels, device.type, str(dtype), size, sigma)
+    if key in _SSIM_WINDOW_CACHE:
+        return _SSIM_WINDOW_CACHE[key]
+    coords = torch.arange(size, dtype=dtype, device=device) - size // 2
+    gauss = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
+    gauss = gauss / gauss.sum()
+    kernel_2d = gauss[:, None] * gauss[None, :]
+    kernel = kernel_2d.view(1, 1, size, size).repeat(channels, 1, 1, 1)
+    _SSIM_WINDOW_CACHE[key] = kernel
+    return kernel
+
+
+def _ssim_similarity(a: torch.Tensor, b: torch.Tensor) -> float:
+    a = a.permute(2, 0, 1).unsqueeze(0)
+    b = b.permute(2, 0, 1).unsqueeze(0)
+    channels = a.shape[1]
+    window = _ssim_window(channels, a.device, a.dtype)
+    mu1 = F.conv2d(a, window, padding=window.shape[-1] // 2, groups=channels)
+    mu2 = F.conv2d(b, window, padding=window.shape[-1] // 2, groups=channels)
+    mu1_sq = mu1.pow(2)
+    mu2_sq = mu2.pow(2)
+    mu1_mu2 = mu1 * mu2
+    sigma1_sq = F.conv2d(a * a, window, padding=window.shape[-1] // 2, groups=channels) - mu1_sq
+    sigma2_sq = F.conv2d(b * b, window, padding=window.shape[-1] // 2, groups=channels) - mu2_sq
+    sigma12 = F.conv2d(a * b, window, padding=window.shape[-1] // 2, groups=channels) - mu1_mu2
+    c1 = 0.01 ** 2
+    c2 = 0.03 ** 2
+    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / (
+        (mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2)
+    )
+    return float(ssim_map.mean().clamp(0.0, 1.0).item())
+
+
+def _downscale_max_side(img: torch.Tensor, max_side: int = 256) -> torch.Tensor:
+    h, w = img.shape[:2]
+    if max(h, w) <= max_side:
+        return img
+    scale = float(max_side) / float(max(h, w))
+    nh = max(1, int(round(h * scale)))
+    nw = max(1, int(round(w * scale)))
+    out = F.interpolate(
+        img.permute(2, 0, 1).unsqueeze(0),
+        size=(nh, nw),
+        mode="bilinear",
+        align_corners=False,
+    )
+    return out.squeeze(0).permute(1, 2, 0)
+
+
+def _lpips_model(device: torch.device):
+    key = ("alex", device.type)
+    if key in _LPIPS_CACHE:
+        return _LPIPS_CACHE[key]
+    try:
+        import lpips  # type: ignore
+    except Exception:
+        return None
+    model = lpips.LPIPS(net="alex").to(device).eval()
+    _LPIPS_CACHE[key] = model
+    return model
+
+
+def _lpips_alex_distance(a: torch.Tensor, b: torch.Tensor) -> Optional[float]:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = _lpips_model(device)
+    if model is None:
+        return None
+    aa = _downscale_max_side(a, 256).permute(2, 0, 1).unsqueeze(0).to(device)
+    bb = _downscale_max_side(b, 256).permute(2, 0, 1).unsqueeze(0).to(device)
+    aa = aa * 2.0 - 1.0
+    bb = bb * 2.0 - 1.0
+    with torch.inference_mode():
+        dist = model(aa, bb)
+    return float(dist.item())
+
+
+def _delta_e76_mean(a: torch.Tensor, b: torch.Tensor) -> Optional[float]:
+    if color_match_utils.cv2 is None:
+        return None
+    a_np = np.clip(a.detach().cpu().numpy().astype(np.float32), 0.0, 1.0)
+    b_np = np.clip(b.detach().cpu().numpy().astype(np.float32), 0.0, 1.0)
+    a_lab = color_match_utils.cv2.cvtColor(a_np, color_match_utils.cv2.COLOR_RGB2LAB)
+    b_lab = color_match_utils.cv2.cvtColor(b_np, color_match_utils.cv2.COLOR_RGB2LAB)
+    delta = np.linalg.norm(a_lab - b_lab, axis=2)
+    return float(np.mean(delta))
+
+
+def _quality_metrics(img: torch.Tensor, ref: torch.Tensor):
+    mse = float(torch.mean((img - ref) ** 2).item())
+    ssim = _ssim_similarity(img, ref)
+    de = _delta_e76_mean(img, ref)
+    lpips_a = _lpips_alex_distance(img, ref)
+    return {
+        "mse": mse,
+        "ssim": ssim,
+        "delta_e76": de,
+        "lpips_alex": lpips_a,
+    }
+
+
+def _improvement_pct(before: dict, after: dict) -> dict:
+    res = {}
+    for k in ("mse", "delta_e76", "lpips_alex"):
+        bv = before.get(k)
+        av = after.get(k)
+        if bv is None or av is None:
+            res[k] = None
+        else:
+            denom = max(float(bv), 1e-6)
+            res[k] = round((float(bv) - float(av)) / denom * 100.0, 3)
+    bv = before.get("ssim")
+    av = after.get("ssim")
+    if bv is None or av is None:
+        res["ssim"] = None
+    else:
+        denom = max(float(bv), 1e-6)
+        res["ssim"] = round((float(av) - float(bv)) / denom * 100.0, 3)
+    return res
+
+
 class ImageColorMatchToReference:
     @classmethod
     def INPUT_TYPES(cls):
@@ -182,7 +306,7 @@ class ImageColorMatchToReference:
                     ["fast", "balanced", "quality", "perceptual"],
                     {
                         "default": "balanced",
-                        "tooltip": "Пресет: fast=mean/std, balanced=linear, quality=LAB CDF, perceptual=VGG perceptual.",
+                        "tooltip": "Пресет: fast=самый быстрый, balanced=быстрый/стабильный, quality=медленнее/точнее, perceptual=самый медленный.",
                     },
                 ),
                 "strength": (
@@ -198,7 +322,7 @@ class ImageColorMatchToReference:
             },
             "optional": {
                 "match_mask": ("MASK", {"tooltip": "Где считать статистику (белое=учитывать)."}),
-                "apply_mask": ("MASK", {"tooltip": "Где применять коррекцию (белое=применить, чёрное=оставить исходное)."}),
+                "apply_mask": ("MASK", {"tooltip": "Где применять коррекцию (белое=применить, чёрное=оставить исходное). Маски повышают время обработки."}),
                 "preserve_alpha": ("BOOLEAN", {"default": True, "tooltip": "Если вход RGBA — сохранить альфу из исходника."}),
             },
         }
@@ -282,6 +406,9 @@ class ImageColorMatchToReference:
                 corrected_t = corrected_t * mask_apply + img_t * (1.0 - mask_apply)
 
             corrected_t = torch.clamp(corrected_t, 0.0, 1.0)
+            metrics_before = _quality_metrics(img_t, ref_t)
+            metrics_after = _quality_metrics(corrected_t, ref_t)
+            improvement = _improvement_pct(metrics_before, metrics_after)
             matched_t = corrected_t
             if alpha_channel is not None and preserve_alpha:
                 matched_t = torch.cat([matched_t, alpha_channel], dim=-1)
@@ -305,6 +432,11 @@ class ImageColorMatchToReference:
                 },
                 "deep": deep_params,
                 "stats": stats,
+                "quality": {
+                    "before": metrics_before,
+                    "after": metrics_after,
+                    "improvement_pct": improvement,
+                },
             }
 
             json_list.append(json.dumps(payload, ensure_ascii=True))
