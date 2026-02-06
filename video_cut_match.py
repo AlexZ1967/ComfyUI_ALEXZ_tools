@@ -401,11 +401,11 @@ class VideoCutMatch:
             "required": {
                 "video_a": (
                     videos,
-                    {"video_upload": True, "tooltip": "Первое видео (оригинал). Поиск идёт в его хвосте."},
+                    {"tooltip": "Первое видео (оригинал). Поиск идёт в его хвосте."},
                 ),
                 "video_b": (
                     videos,
-                    {"video_upload": True, "tooltip": "Второе видео (продолжение). Поиск идёт в его начале."},
+                    {"tooltip": "Второе видео (продолжение). Поиск идёт в его начале."},
                 ),
                 "search_tail_a": (
                     "INT",

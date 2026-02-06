@@ -345,8 +345,8 @@ class ImageColorMatchToReference:
         batch_size = max(reference.shape[0], image.shape[0])
         matched_list = []
         json_list = []
-
-        for idx in range(batch_size):
+        iterator = tqdm(range(batch_size), desc=f"ColorMatch[{preset}]", unit="img")
+        for idx in iterator:
             ref_t = select_batch_item(reference, idx)
             img_t = select_batch_item(image, idx)
             ref_h, ref_w = ref_t.shape[0], ref_t.shape[1]

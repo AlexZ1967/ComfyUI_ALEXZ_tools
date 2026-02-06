@@ -1,5 +1,13 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.15 — 2026-02-06
+- `Color Match To Reference`: added batch progress indication in console via `tqdm` (`ColorMatch[<preset>]`) during node execution.
+
+## 0.12.14 — 2026-02-06
+- `VideoCutMatch`: added two explicit upload buttons in node UI (`choose video_a to upload`, `choose video_b to upload`) so both source videos can be uploaded directly from the node.
+- `VideoCutMatch`: removed ambiguous built-in `video_upload` flags from `video_a`/`video_b` combo fields and switched to dedicated frontend uploader for each input.
+- Docs: updated README and `GUIDE_VIDEO_CUT_MATCH.md` for dual-upload workflow.
+
 ## 0.12.13 — 2026-02-06
 - Module Node Picker: simplified group/module classification to ComfyUI-native `RELATIVE_PYTHON_MODULE` first, with lightweight core fallback.
 - Fixes missing module buckets after recent classifier changes and restores complete `Custom_Nodes` population.
