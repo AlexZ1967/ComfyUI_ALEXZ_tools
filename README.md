@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.12.4
+Version: 0.12.13
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -28,9 +28,13 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 ## UI Tool: Module Node Picker
 - В современных версиях ComfyUI инструмент появляется как вкладка `Module Nodes` в боковой панели (Sidebar).
 - В старых версиях, где Sidebar API недоступен, появляется fallback-кнопка `Module Nodes` в меню.
-- Есть выпадающий список уже загруженных в ComfyUI модулей (и datalist-подсказки в поле ввода).
-- Выберите python-модуль (например, `ComfyUI_ALEXZ_tools`) и получите список нод этого модуля с краткими аннотациями.
-- Клик по ноде вставляет ее в текущий workflow (в центр видимой области графа).
+- Интерфейс разбит на 2 dropdown:
+  1) выбор группы `Core_Nodes`, `Core_Extras_Nodes`, `API_Nodes` или `Custom_Nodes`,
+  2) выбор python-модуля из выбранной группы.
+- Для `Custom_Nodes` во втором списке показываются имена пакетов как они лежат в `ComfyUI/custom_nodes` (без путей).
+- Для `Core_Extras_Nodes` и `API_Nodes` также показываются короткие имена модулей (без путей).
+- Внутри выбранного custom-пакета показываются все его ноды, включая ноды из подпапок пакета.
+- После выбора модуля показывается список нод; клик по ноде сразу вставляет её в workflow (в центр видимой области).
 
 ## Nodes (jump to details)
 - [Image Prepare for QwenEdit Outpaint](#image-prepare-for-qwenedit-outpaint)

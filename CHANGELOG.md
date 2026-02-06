@@ -1,5 +1,46 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.13 — 2026-02-06
+- Module Node Picker: simplified group/module classification to ComfyUI-native `RELATIVE_PYTHON_MODULE` first, with lightweight core fallback.
+- Fixes missing module buckets after recent classifier changes and restores complete `Custom_Nodes` population.
+- `ComfyUI-RMBG` / `AILab_*` nodes are now reliably grouped under `Custom_Nodes -> ComfyUI-RMBG` even when class file path is unavailable.
+
+## 0.12.12 — 2026-02-06
+- Group classification switched to ComfyUI-native `node_cls.RELATIVE_PYTHON_MODULE` as primary source for external nodes.
+- This restores stable population of `Custom_Nodes`, `Core_Extras_Nodes`, and `API_Nodes` while keeping `Core_Nodes` for built-ins.
+- Fix targets missing/empty group lists and incorrect bucket assignment (including `ComfyUI-RMBG`).
+
+## 0.12.11 — 2026-02-06
+- Fixed node grouping regression caused by source indexing by `node_name`.
+- Classification now uses reverse index by node class identity (`id(class_obj)`) from loaded `NODE_CLASS_MAPPINGS`, preventing cross-pack collisions and restoring full group/module lists.
+
+## 0.12.10 — 2026-02-06
+- Node source classification improved using loaded modules' `NODE_CLASS_MAPPINGS` indexes before path-based fallback.
+- Fixes mis-grouping cases where custom node classes are wrapped/exported and file-path detection alone is insufficient (e.g. `ComfyUI-RMBG` / `AILab_*` under `Core_Nodes`).
+
+## 0.12.9 — 2026-02-06
+- Node picker groups expanded from 2 to 4: `Core_Nodes`, `Core_Extras_Nodes`, `API_Nodes`, `Custom_Nodes`.
+- Group detection now maps nodes by source roots: `nodes` / `comfy_extras` / `comfy_api_nodes` / `custom_nodes`.
+- For `Custom_Nodes`, `Core_Extras_Nodes`, and `API_Nodes`, module list now shows short module names without path fragments.
+
+## 0.12.8 — 2026-02-06
+- Custom/Core detection hardened for third-party nodes: custom-pack name is now resolved from both class file path and python module file path.
+- Fixes cases where nodes from custom packs (e.g. wrapped/exported classes) were incorrectly shown under `Core_Nodes`.
+
+## 0.12.7 — 2026-02-06
+- Custom module grouping refined: for `Custom_Nodes` the second dropdown now uses package directory names from `ComfyUI/custom_nodes` (no path fragments).
+- Node grouping for custom packs now aggregates all nodes of the pack across subdirectories into one module bucket.
+
+## 0.12.6 — 2026-02-06
+- Module Node Picker UI adjusted: second dropdown now shows module names (not node names) for selected group.
+- Restored click-to-add flow: selecting a module shows node list, clicking a node inserts it into workflow immediately.
+- Removed explicit "Добавить ноду в workflow" button from picker.
+
+## 0.12.5 — 2026-02-06
+- Module Node Picker UI redesigned to two-step selection: `Core_Nodes | Custom_Nodes` then node list for selected group.
+- Added `GET /alexz_tools/node_catalog` endpoint with grouped node catalog for Sidebar picker.
+- Picker now shows selected node annotation, category, module and explicit "add node" action.
+
 ## 0.12.4 — 2026-02-06
 - Module browser API: removed all slicing from fallback output parsing (`RETURN_NAMES`) to support custom container types from third-party nodes.
 - Fixed repeated errors in `/alexz_tools/module_list` and `/alexz_tools/module_nodes`: `TypeError: '>' not supported between instances of 'slice' and 'int'`.

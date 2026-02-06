@@ -2,8 +2,14 @@ import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 
 const EXT_NAME = "ALEXZ.Tools.ModuleNodePicker";
-const DEFAULT_MODULE = "ComfyUI_ALEXZ_tools";
 const SIDEBAR_TAB_ID = "alexz-module-nodes";
+const DEFAULT_MODULE = "ComfyUI_ALEXZ_tools";
+const GROUP_LABELS = {
+    core: "Core_Nodes",
+    core_extras: "Core_Extras_Nodes",
+    api: "API_Nodes",
+    custom: "Custom_Nodes",
+};
 
 function injectStyles() {
     const styleId = "alexz-module-picker-style";
@@ -32,21 +38,19 @@ function injectStyles() {
         opacity: 0.95;
         margin-right: auto;
     }
-    .alexz-mod-picker-input {
+    .alexz-mod-picker-select {
         width: 100%;
     }
-    .alexz-mod-picker-module-select {
-        width: 100%;
-    }
-    .alexz-mod-picker-status {
+    .alexz-mod-picker-help {
         font-size: 12px;
         opacity: 0.8;
     }
     .alexz-mod-picker-group {
         border: 1px solid var(--border-color, #444);
-        border-radius: 6px;
-        padding: 7px;
-        margin-bottom: 8px;
+        border-radius: 7px;
+        padding: 8px;
+        margin-top: 2px;
+        background: var(--comfy-input-bg, rgba(255,255,255,0.03));
     }
     .alexz-mod-picker-group-title {
         font-size: 12px;
@@ -74,8 +78,9 @@ function injectStyles() {
     }
     .alexz-mod-picker-node-desc {
         font-size: 11px;
-        opacity: 0.8;
-        line-height: 1.25em;
+        opacity: 0.85;
+        line-height: 1.28em;
+        word-break: break-all;
     }
     .alexz-mod-picker-floating-btn {
         position: fixed;
@@ -99,10 +104,7 @@ function centerNode(node) {
 }
 
 function createNodeByInfo(nodeInfo) {
-    const candidates = [
-        nodeInfo.node_name,
-        nodeInfo.display_name,
-    ].filter(Boolean);
+    const candidates = [nodeInfo.node_name, nodeInfo.display_name].filter(Boolean);
     for (const name of candidates) {
         const node = LiteGraph.createNode(name);
         if (node) {
@@ -112,20 +114,8 @@ function createNodeByInfo(nodeInfo) {
     return null;
 }
 
-async function fetchModuleNodes(moduleName) {
-    const q = (moduleName || "").trim();
-    const resp = await api.fetchApi(
-        `/alexz_tools/module_nodes?module=${encodeURIComponent(q)}`,
-        { cache: "no-store" }
-    );
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-async function fetchModuleList() {
-    const resp = await api.fetchApi("/alexz_tools/module_list", {
+async function fetchNodeCatalog() {
+    const resp = await api.fetchApi("/alexz_tools/node_catalog", {
         cache: "no-store",
     });
     if (!resp.ok) {
@@ -147,7 +137,7 @@ function renderPicker(container) {
 
     const title = document.createElement("div");
     title.className = "alexz-mod-picker-title";
-    title.textContent = "Module Node Picker";
+    title.textContent = "Node Picker";
     head.appendChild(title);
 
     const refreshBtn = document.createElement("button");
@@ -155,169 +145,163 @@ function renderPicker(container) {
     refreshBtn.textContent = "Обновить";
     head.appendChild(refreshBtn);
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "alexz-mod-picker-input";
-    input.placeholder = "Введите модуль, например ComfyUI_ALEXZ_tools";
-    input.value = DEFAULT_MODULE;
-    input.setAttribute("list", "alexz-module-picker-list");
-    root.appendChild(input);
+    const groupSelect = document.createElement("select");
+    groupSelect.className = "alexz-mod-picker-select";
+    root.appendChild(groupSelect);
 
-    const dataList = document.createElement("datalist");
-    dataList.id = "alexz-module-picker-list";
-    root.appendChild(dataList);
+    const nodeSelect = document.createElement("select");
+    nodeSelect.className = "alexz-mod-picker-select";
+    root.appendChild(nodeSelect);
 
-    const moduleSelect = document.createElement("select");
-    moduleSelect.className = "alexz-mod-picker-module-select";
-    root.appendChild(moduleSelect);
+    const help = document.createElement("div");
+    help.className = "alexz-mod-picker-help";
+    root.appendChild(help);
 
-    const status = document.createElement("div");
-    status.className = "alexz-mod-picker-status";
-    status.textContent = "Введите имя python-модуля.";
-    root.appendChild(status);
+    const nodeList = document.createElement("div");
+    root.appendChild(nodeList);
 
-    const results = document.createElement("div");
-    root.appendChild(results);
+    const catalogByGroup = new Map();
 
-    let timer = null;
-
-    const renderResults = (payload) => {
-        results.innerHTML = "";
-        const groups = payload?.results || [];
-        if (!groups.length) {
-            status.textContent = payload?.query
-                ? "Модуль не найден или в нем нет нод."
-                : payload?.hint || "Введите имя модуля.";
-            return;
-        }
-        status.textContent = `Найдено модулей: ${groups.length}`;
-        for (const group of groups) {
-            const groupEl = document.createElement("div");
-            groupEl.className = "alexz-mod-picker-group";
-
-            const titleEl = document.createElement("div");
-            titleEl.className = "alexz-mod-picker-group-title";
-            titleEl.textContent = `${group.module} (${group.count})`;
-            groupEl.appendChild(titleEl);
-
-            for (const nodeInfo of group.nodes || []) {
-                const item = document.createElement("button");
-                item.type = "button";
-                item.className = "alexz-mod-picker-node";
-                item.onclick = () => {
-                    const node = createNodeByInfo(nodeInfo);
-                    if (!node) {
-                        status.textContent = `Не удалось создать ноду: ${nodeInfo.display_name}`;
-                        return;
-                    }
-                    app.graph.add(node);
-                    centerNode(node);
-                    app.canvas?.selectNode?.(node, false);
-                    app.graph.setDirtyCanvas(true, true);
-                    status.textContent = `Добавлена: ${nodeInfo.display_name}`;
-                };
-
-                const nameEl = document.createElement("div");
-                nameEl.className = "alexz-mod-picker-node-name";
-                nameEl.textContent = nodeInfo.display_name;
-                item.appendChild(nameEl);
-
-                const descEl = document.createElement("div");
-                descEl.className = "alexz-mod-picker-node-desc";
-                const category = nodeInfo.category ? ` [${nodeInfo.category}]` : "";
-                descEl.textContent = `${nodeInfo.annotation}${category}`;
-                item.appendChild(descEl);
-
-                groupEl.appendChild(item);
-            }
-            results.appendChild(groupEl);
-        }
+    const getNodesForSelectedGroup = () => {
+        const group = groupSelect.value;
+        return catalogByGroup.get(group) || [];
     };
 
-    const runSearch = async () => {
-        const moduleName = input.value.trim();
-        if (!moduleName) {
-            results.innerHTML = "";
-            status.textContent = "Выберите модуль из списка или введите вручную.";
+    const fillModuleSelect = () => {
+        const nodes = getNodesForSelectedGroup();
+        nodeSelect.innerHTML = "";
+        const grouped = new Map();
+        for (const node of nodes) {
+            const moduleName = node.module || "unknown";
+            if (!grouped.has(moduleName)) {
+                grouped.set(moduleName, []);
+            }
+            grouped.get(moduleName).push(node);
+        }
+        const modules = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+        if (modules.length === 0) {
+            const empty = document.createElement("option");
+            empty.value = "-1";
+            empty.textContent = "В этой группе нет модулей";
+            nodeSelect.appendChild(empty);
+            nodeSelect.value = "-1";
+            nodeList.innerHTML = "";
+            help.textContent = "Модули не найдены для выбранной группы.";
             return;
         }
-        status.textContent = "Загрузка...";
+        for (const moduleName of modules) {
+            const opt = document.createElement("option");
+            opt.value = moduleName;
+            opt.textContent = `${moduleName} (${(grouped.get(moduleName) || []).length})`;
+            nodeSelect.appendChild(opt);
+        }
+        if (modules.includes(DEFAULT_MODULE)) {
+            nodeSelect.value = DEFAULT_MODULE;
+        } else {
+            nodeSelect.value = modules[0];
+        }
+        renderNodeList();
+    };
+
+    const fillGroupSelect = (groups) => {
+        groupSelect.innerHTML = "";
+        groups.forEach((group) => {
+            const opt = document.createElement("option");
+            opt.value = group.id;
+            const label = GROUP_LABELS[group.id] || group.title || group.id;
+            opt.textContent = `${label} (${group.count})`;
+            groupSelect.appendChild(opt);
+            catalogByGroup.set(group.id, group.nodes || []);
+        });
+
+        if (catalogByGroup.has("custom")) {
+            groupSelect.value = "custom";
+        } else if (groups.length > 0) {
+            groupSelect.value = groups[0].id;
+        }
+        fillModuleSelect();
+    };
+
+    const renderNodeList = () => {
+        nodeList.innerHTML = "";
+        const selectedModule = nodeSelect.value;
+        const nodes = getNodesForSelectedGroup().filter(
+            (node) => (node.module || "unknown") === selectedModule
+        );
+        if (!nodes.length || selectedModule === "-1") {
+            help.textContent = "Выберите модуль, чтобы увидеть список нод.";
+            return;
+        }
+
+        help.textContent = `Модуль ${selectedModule}: нод ${nodes.length}. Кликните ноду для вставки в граф.`;
+
+        const groupEl = document.createElement("div");
+        groupEl.className = "alexz-mod-picker-group";
+
+        const groupTitle = document.createElement("div");
+        groupTitle.className = "alexz-mod-picker-group-title";
+        groupTitle.textContent = `${selectedModule} (${nodes.length})`;
+        groupEl.appendChild(groupTitle);
+
+        for (const nodeInfo of nodes) {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "alexz-mod-picker-node";
+            item.onclick = () => {
+                const node = createNodeByInfo(nodeInfo);
+                if (!node) {
+                    help.textContent = `Не удалось создать ноду: ${nodeInfo.display_name}`;
+                    return;
+                }
+                app.graph.add(node);
+                centerNode(node);
+                app.canvas?.selectNode?.(node, false);
+                app.graph.setDirtyCanvas(true, true);
+                help.textContent = `Добавлена: ${nodeInfo.display_name}`;
+            };
+
+            const nameEl = document.createElement("div");
+            nameEl.className = "alexz-mod-picker-node-name";
+            nameEl.textContent = nodeInfo.display_name;
+            item.appendChild(nameEl);
+
+            const descEl = document.createElement("div");
+            descEl.className = "alexz-mod-picker-node-desc";
+            descEl.textContent = `${nodeInfo.annotation} [${nodeInfo.category || "unknown"}]`;
+            item.appendChild(descEl);
+
+            groupEl.appendChild(item);
+        }
+        nodeList.appendChild(groupEl);
+    };
+
+    const loadCatalog = async () => {
+        help.textContent = "Загрузка списка нод...";
         try {
-            const payload = await fetchModuleNodes(moduleName);
-            renderResults(payload);
+            const payload = await fetchNodeCatalog();
+            catalogByGroup.clear();
+            const groups = payload?.groups || [];
+            fillGroupSelect(groups);
+            const summary = groups
+                .map((group) => {
+                    const label = GROUP_LABELS[group.id] || group.title || group.id;
+                    return `${label}=${group.count}`;
+                })
+                .join(", ");
+            help.textContent = `Группы: ${summary}.`;
         } catch (err) {
-            results.innerHTML = "";
-            status.textContent = `Ошибка запроса: ${String(err)}`;
+            help.textContent = `Ошибка загрузки: ${String(err)}`;
+            groupSelect.innerHTML = "";
+            nodeSelect.innerHTML = "";
+            nodeList.innerHTML = "";
         }
     };
 
-    const scheduleSearch = () => {
-        if (timer) {
-            clearTimeout(timer);
-        }
-        timer = setTimeout(runSearch, 200);
-    };
+    groupSelect.onchange = () => fillModuleSelect();
+    nodeSelect.onchange = () => renderNodeList();
+    refreshBtn.onclick = () => loadCatalog();
 
-    input.oninput = scheduleSearch;
-    input.onkeydown = (event) => {
-        if (event.key === "Enter") {
-            runSearch();
-        }
-    };
-    refreshBtn.onclick = runSearch;
-
-    const fillModuleDropdown = async () => {
-        try {
-            const payload = await fetchModuleList();
-            const modules = payload?.modules || [];
-
-            moduleSelect.innerHTML = "";
-            const topOption = document.createElement("option");
-            topOption.value = "";
-            topOption.textContent = "Выберите модуль из загруженных...";
-            moduleSelect.appendChild(topOption);
-
-            dataList.innerHTML = "";
-            for (const item of modules) {
-                const moduleName = item.module;
-                const label = `${moduleName} (${item.count})`;
-
-                const opt = document.createElement("option");
-                opt.value = moduleName;
-                opt.textContent = label;
-                moduleSelect.appendChild(opt);
-
-                const dl = document.createElement("option");
-                dl.value = moduleName;
-                dataList.appendChild(dl);
-            }
-
-            const hasDefault = modules.some((x) => x.module === DEFAULT_MODULE);
-            if (hasDefault) {
-                moduleSelect.value = DEFAULT_MODULE;
-                input.value = DEFAULT_MODULE;
-            }
-            status.textContent = `Загружено модулей: ${modules.length}`;
-        } catch (err) {
-            status.textContent = `Не удалось загрузить список модулей: ${String(err)}`;
-        }
-    };
-
-    moduleSelect.onchange = () => {
-        const val = moduleSelect.value;
-        if (!val) {
-            return;
-        }
-        input.value = val;
-        runSearch();
-    };
-
-    input.onchange = () => {
-        moduleSelect.value = input.value.trim();
-    };
-
-    fillModuleDropdown();
-    runSearch();
+    loadCatalog();
 }
 
 function activateSidebarTab() {
@@ -340,7 +324,7 @@ function attachFallbackButton() {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Module Nodes";
-    button.title = "Открыть поиск нод по модулю";
+    button.title = "Открыть подбор нод";
     button.onclick = () => {
         if (!activateSidebarTab()) {
             button.textContent = "Sidebar API недоступен";
@@ -369,7 +353,7 @@ app.registerExtension({
                 id: SIDEBAR_TAB_ID,
                 icon: "pi pi-sitemap",
                 title: "Module Nodes",
-                tooltip: "Поиск и вставка нод по python-модулю",
+                tooltip: "Выбор и вставка нод по группам Core/Custom",
                 type: "custom",
                 render: (container) => {
                     renderPicker(container);
