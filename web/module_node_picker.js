@@ -45,6 +45,66 @@ function injectStyles() {
         font-size: 12px;
         opacity: 0.8;
     }
+    .alexz-mod-picker-module-card {
+        border: 1px solid var(--border-color, #444);
+        border-radius: 7px;
+        padding: 8px;
+        background: var(--comfy-input-bg, rgba(255,255,255,0.03));
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .alexz-mod-picker-module-title {
+        font-size: 12px;
+        font-weight: 700;
+        word-break: break-all;
+    }
+    .alexz-mod-picker-module-meta {
+        font-size: 11px;
+        opacity: 0.9;
+        word-break: break-all;
+    }
+    .alexz-mod-picker-module-meta a {
+        color: var(--link-color, #87b5ff);
+        text-decoration: underline;
+    }
+    .alexz-mod-picker-module-desc {
+        font-size: 11px;
+        opacity: 0.85;
+        line-height: 1.28em;
+        white-space: pre-wrap;
+    }
+    .alexz-mod-picker-module-row {
+        font-size: 11px;
+        opacity: 0.9;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .alexz-mod-picker-module-label {
+        font-weight: 700;
+        opacity: 0.95;
+    }
+    .alexz-mod-picker-status {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--border-color, #555);
+        border-radius: 10px;
+        padding: 1px 7px;
+        font-size: 10px;
+        line-height: 1.4;
+        font-weight: 700;
+    }
+    .alexz-mod-picker-status.up-to-date {
+        color: #3dbb7e;
+    }
+    .alexz-mod-picker-status.can-update {
+        color: #f0b429;
+    }
+    .alexz-mod-picker-status.unknown {
+        color: #b3b3b3;
+    }
     .alexz-mod-picker-group {
         border: 1px solid var(--border-color, #444);
         border-radius: 7px;
@@ -124,6 +184,39 @@ async function fetchNodeCatalog() {
     return await resp.json();
 }
 
+async function fetchModuleInfo(group, moduleName) {
+    const resp = await api.fetchApi(
+        `/alexz_tools/module_info?group=${encodeURIComponent(group || "")}&module=${encodeURIComponent(moduleName || "")}`,
+        { cache: "no-store" }
+    );
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
+function fmtDate(iso) {
+    if (!iso) {
+        return "n/a";
+    }
+    try {
+        return new Date(iso).toLocaleString();
+    } catch (err) {
+        return String(iso);
+    }
+}
+
+function statusUi(info) {
+    const status = String(info?.update_status || "unknown");
+    if (status === "can_update") {
+        return { label: "Update available", cls: "can-update" };
+    }
+    if (status === "up_to_date") {
+        return { label: "Up to date", cls: "up-to-date" };
+    }
+    return { label: "Unknown", cls: "unknown" };
+}
+
 function renderPicker(container) {
     container.innerHTML = "";
 
@@ -157,6 +250,9 @@ function renderPicker(container) {
     help.className = "alexz-mod-picker-help";
     root.appendChild(help);
 
+    const moduleInfo = document.createElement("div");
+    root.appendChild(moduleInfo);
+
     const nodeList = document.createElement("div");
     root.appendChild(nodeList);
 
@@ -185,6 +281,7 @@ function renderPicker(container) {
             empty.textContent = "В этой группе нет модулей";
             nodeSelect.appendChild(empty);
             nodeSelect.value = "-1";
+            moduleInfo.innerHTML = "";
             nodeList.innerHTML = "";
             help.textContent = "Модули не найдены для выбранной группы.";
             return;
@@ -201,6 +298,7 @@ function renderPicker(container) {
             nodeSelect.value = modules[0];
         }
         renderNodeList();
+        loadModuleInfo();
     };
 
     const fillGroupSelect = (groups) => {
@@ -275,6 +373,99 @@ function renderPicker(container) {
         nodeList.appendChild(groupEl);
     };
 
+    const renderModuleInfo = (info) => {
+        moduleInfo.innerHTML = "";
+        if (!info || nodeSelect.value === "-1") {
+            return;
+        }
+
+        const card = document.createElement("div");
+        card.className = "alexz-mod-picker-module-card";
+
+        const titleEl = document.createElement("div");
+        titleEl.className = "alexz-mod-picker-module-title";
+        titleEl.textContent = info.title || info.module || nodeSelect.value;
+        card.appendChild(titleEl);
+
+        const authorEl = document.createElement("div");
+        authorEl.className = "alexz-mod-picker-module-meta";
+        if (info.author && info.owner_url) {
+            authorEl.innerHTML = `Owner: <a href="${info.owner_url}" target="_blank" rel="noopener noreferrer">${info.author}</a>`;
+        } else {
+            authorEl.textContent = `Owner: ${info.author || "unknown"}`;
+        }
+        card.appendChild(authorEl);
+
+        if (info.description) {
+            const descEl = document.createElement("div");
+            descEl.className = "alexz-mod-picker-module-desc";
+            descEl.textContent = info.description;
+            card.appendChild(descEl);
+        }
+
+        const hasInstalledMeta = Boolean(info.installed_updated_at || info.installed_commit_short);
+        if (hasInstalledMeta) {
+            const installedRow = document.createElement("div");
+            installedRow.className = "alexz-mod-picker-module-row";
+            const labelEl = document.createElement("span");
+            labelEl.className = "alexz-mod-picker-module-label";
+            labelEl.textContent = "Installed:";
+            const valueEl = document.createElement("span");
+            valueEl.textContent = `${info.installed_commit_short ? `${info.installed_commit_short} · ` : ""}${fmtDate(info.installed_updated_at)}`;
+            installedRow.appendChild(labelEl);
+            installedRow.appendChild(valueEl);
+            card.appendChild(installedRow);
+        }
+
+        if (info.remote_updated_at) {
+            const remoteRow = document.createElement("div");
+            remoteRow.className = "alexz-mod-picker-module-row";
+            const labelEl = document.createElement("span");
+            labelEl.className = "alexz-mod-picker-module-label";
+            labelEl.textContent = "Remote updated:";
+            const valueEl = document.createElement("span");
+            valueEl.textContent = fmtDate(info.remote_updated_at);
+            remoteRow.appendChild(labelEl);
+            remoteRow.appendChild(valueEl);
+            card.appendChild(remoteRow);
+        }
+
+        if (String(info.group || "") === "custom") {
+            const statusRow = document.createElement("div");
+            statusRow.className = "alexz-mod-picker-module-row";
+            const s = statusUi(info);
+            const labelEl = document.createElement("span");
+            labelEl.className = "alexz-mod-picker-module-label";
+            labelEl.textContent = "Status:";
+            const valueEl = document.createElement("span");
+            valueEl.className = `alexz-mod-picker-status ${s.cls}`;
+            valueEl.textContent = s.label;
+            statusRow.appendChild(labelEl);
+            statusRow.appendChild(valueEl);
+            card.appendChild(statusRow);
+        }
+
+        moduleInfo.appendChild(card);
+    };
+
+    const loadModuleInfo = async () => {
+        const selectedModule = nodeSelect.value;
+        const selectedGroup = groupSelect.value;
+        if (!selectedModule || selectedModule === "-1") {
+            moduleInfo.innerHTML = "";
+            return;
+        }
+        try {
+            const payload = await fetchModuleInfo(selectedGroup, selectedModule);
+            if (nodeSelect.value !== selectedModule || groupSelect.value !== selectedGroup) {
+                return;
+            }
+            renderModuleInfo(payload?.info || null);
+        } catch (err) {
+            moduleInfo.innerHTML = "";
+        }
+    };
+
     const loadCatalog = async () => {
         help.textContent = "Загрузка списка нод...";
         try {
@@ -293,12 +484,16 @@ function renderPicker(container) {
             help.textContent = `Ошибка загрузки: ${String(err)}`;
             groupSelect.innerHTML = "";
             nodeSelect.innerHTML = "";
+            moduleInfo.innerHTML = "";
             nodeList.innerHTML = "";
         }
     };
 
     groupSelect.onchange = () => fillModuleSelect();
-    nodeSelect.onchange = () => renderNodeList();
+    nodeSelect.onchange = () => {
+        renderNodeList();
+        loadModuleInfo();
+    };
     refreshBtn.onclick = () => loadCatalog();
 
     loadCatalog();

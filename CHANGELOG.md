@@ -1,5 +1,23 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.19 — 2026-02-07
+- Module Node Picker: `Remote updated` now prefers git upstream timestamp (`git log -1 @{u}`) for consistency with git-based update status.
+- ComfyUI-Manager `github-stats.json` timestamp is now used only as fallback when upstream git timestamp is unavailable.
+
+## 0.12.18 — 2026-02-07
+- Module Node Picker: added module update status block in module card (`Installed`, `Remote updated`, `Status`).
+- Module metadata backend now combines local git state + ComfyUI-Manager `github-stats.json` to infer `can_update` / `up_to_date` / `unknown`.
+- Added persistent module state cache (`module_state_cache.json`) for tracking last check/local change timestamps.
+
+## 0.12.17 — 2026-02-06
+- Module Node Picker: removed duplicated `Repository` line in module card.
+- Module card now shows owner (clickable GitHub link) + description only.
+
+## 0.12.16 — 2026-02-06
+- Module Node Picker: added module metadata card before node list (title, description, owner, repository link).
+- Added new API `GET /alexz_tools/module_info` used by sidebar picker.
+- For `Custom_Nodes`, metadata is resolved using ComfyUI-Manager `custom-node-list.json` + local git remote fallback for repository mapping.
+
 ## 0.12.15 — 2026-02-06
 - `Color Match To Reference`: added batch progress indication in console via `tqdm` (`ColorMatch[<preset>]`) during node execution.
 
