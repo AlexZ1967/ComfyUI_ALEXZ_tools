@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.25 — 2026-02-08
+- Updated remote-update marker in `Module Nodes` module list to plain red square `🟥` (without additional check mark).
+
+## 0.12.24 — 2026-02-08
+- Updated red update marker in `Module Nodes` module list to `🟥✔` (check mark on red square style).
+
+## 0.12.23 — 2026-02-08
+- Module list markers in `Module Nodes` were adjusted to a more compact style:
+- `✅` module updated between ComfyUI runs,
+- `🟥✔` update available on remote.
+
+## 0.12.22 — 2026-02-08
+- Module list in `Module Nodes` now shows status markers for `Custom_Nodes` modules:
+- `🟢✓` module updated between ComfyUI runs,
+- `🔴✓` update available on remote.
+- Marker state is loaded asynchronously per module and refreshed for the selected module after opening its info card.
+
 ## 0.12.21 — 2026-02-08
 - Startup module update detection remains enabled, but notifications were moved from console to `Module Nodes` widget.
 - Module card now shows `Updated between runs: <old> -> <new>` when tracked module commit changed between ComfyUI launches.

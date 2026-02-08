@@ -10,6 +10,8 @@ const GROUP_LABELS = {
     api: "API_Nodes",
     custom: "Custom_Nodes",
 };
+const MODULE_MARK_UPDATED = "✅";
+const MODULE_MARK_REMOTE_UPDATE = "🟥";
 
 function injectStyles() {
     const styleId = "alexz-module-picker-style";
@@ -220,6 +222,25 @@ function statusUi(info) {
     return { label: "Unknown", cls: "unknown" };
 }
 
+function moduleBadgesFromInfo(info) {
+    return {
+        updatedBetweenRuns: Boolean(info?.updated_between_runs),
+        hasRemoteUpdate: Boolean(info?.update_available) || String(info?.update_status) === "can_update",
+    };
+}
+
+function formatModuleOption(moduleName, count, badges) {
+    const marks = [];
+    if (badges?.updatedBetweenRuns) {
+        marks.push(MODULE_MARK_UPDATED);
+    }
+    if (badges?.hasRemoteUpdate) {
+        marks.push(MODULE_MARK_REMOTE_UPDATE);
+    }
+    const prefix = marks.length ? `${marks.join(" ")} ` : "";
+    return `${prefix}${moduleName} (${count})`;
+}
+
 function renderPicker(container) {
     container.innerHTML = "";
 
@@ -260,14 +281,67 @@ function renderPicker(container) {
     root.appendChild(nodeList);
 
     const catalogByGroup = new Map();
+    const moduleCounts = new Map();
+    const moduleOptions = new Map();
+    const moduleBadges = new Map();
+    let moduleBadgeLoadToken = 0;
 
     const getNodesForSelectedGroup = () => {
         const group = groupSelect.value;
         return catalogByGroup.get(group) || [];
     };
 
+    const setModuleOptionText = (moduleName) => {
+        const option = moduleOptions.get(moduleName);
+        if (!option) {
+            return;
+        }
+        const count = moduleCounts.get(moduleName) || 0;
+        const badges = moduleBadges.get(moduleName) || null;
+        option.textContent = formatModuleOption(moduleName, count, badges);
+    };
+
+    const loadModuleBadges = async (group, modules) => {
+        const token = ++moduleBadgeLoadToken;
+        if (group !== "custom" || !modules.length) {
+            return;
+        }
+
+        const queue = [...modules];
+        const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+            while (queue.length && token === moduleBadgeLoadToken) {
+                const moduleName = queue.shift();
+                if (!moduleName) {
+                    break;
+                }
+                try {
+                    const payload = await fetchModuleInfo(group, moduleName);
+                    if (token !== moduleBadgeLoadToken || groupSelect.value !== group) {
+                        return;
+                    }
+                    const badges = moduleBadgesFromInfo(payload?.info || {});
+                    if (badges.updatedBetweenRuns || badges.hasRemoteUpdate) {
+                        moduleBadges.set(moduleName, badges);
+                    } else {
+                        moduleBadges.delete(moduleName);
+                    }
+                    setModuleOptionText(moduleName);
+                } catch (err) {
+                    // Ignore per-module errors and keep list usable.
+                }
+            }
+        });
+
+        await Promise.all(workers);
+    };
+
     const fillModuleSelect = () => {
         const nodes = getNodesForSelectedGroup();
+        const selectedGroup = groupSelect.value;
+        moduleBadgeLoadToken += 1;
+        moduleCounts.clear();
+        moduleOptions.clear();
+        moduleBadges.clear();
         nodeSelect.innerHTML = "";
         const grouped = new Map();
         for (const node of nodes) {
@@ -292,7 +366,10 @@ function renderPicker(container) {
         for (const moduleName of modules) {
             const opt = document.createElement("option");
             opt.value = moduleName;
-            opt.textContent = `${moduleName} (${(grouped.get(moduleName) || []).length})`;
+            const count = (grouped.get(moduleName) || []).length;
+            moduleCounts.set(moduleName, count);
+            moduleOptions.set(moduleName, opt);
+            opt.textContent = formatModuleOption(moduleName, count, null);
             nodeSelect.appendChild(opt);
         }
         if (modules.includes(DEFAULT_MODULE)) {
@@ -302,6 +379,7 @@ function renderPicker(container) {
         }
         renderNodeList();
         loadModuleInfo();
+        loadModuleBadges(selectedGroup, modules);
     };
 
     const fillGroupSelect = (groups) => {
@@ -326,6 +404,7 @@ function renderPicker(container) {
     const renderNodeList = () => {
         nodeList.innerHTML = "";
         const selectedModule = nodeSelect.value;
+        const isCustomGroup = groupSelect.value === "custom";
         const nodes = getNodesForSelectedGroup().filter(
             (node) => (node.module || "unknown") === selectedModule
         );
@@ -335,6 +414,9 @@ function renderPicker(container) {
         }
 
         help.textContent = `Модуль ${selectedModule}: нод ${nodes.length}. Кликните ноду для вставки в граф.`;
+        if (isCustomGroup) {
+            help.textContent += ` Метки в списке модулей: ${MODULE_MARK_UPDATED} обновлен между запусками, ${MODULE_MARK_REMOTE_UPDATE} доступно обновление.`;
+        }
 
         const groupEl = document.createElement("div");
         groupEl.className = "alexz-mod-picker-group";
@@ -479,7 +561,17 @@ function renderPicker(container) {
             if (nodeSelect.value !== selectedModule || groupSelect.value !== selectedGroup) {
                 return;
             }
-            renderModuleInfo(payload?.info || null);
+            const info = payload?.info || null;
+            renderModuleInfo(info);
+            if (selectedGroup === "custom" && info) {
+                const badges = moduleBadgesFromInfo(info);
+                if (badges.updatedBetweenRuns || badges.hasRemoteUpdate) {
+                    moduleBadges.set(selectedModule, badges);
+                } else {
+                    moduleBadges.delete(selectedModule);
+                }
+                setModuleOptionText(selectedModule);
+            }
         } catch (err) {
             moduleInfo.innerHTML = "";
         }
