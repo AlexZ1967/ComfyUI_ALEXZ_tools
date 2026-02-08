@@ -31,6 +31,7 @@ _MODULE_INFO_TTL_SEC = 30.0
 _MANAGER_INDEX_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MANAGER_GITHUB_STATS_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MODULE_STATE_CACHE: dict[str, dict[str, Any]] | None = None
+_CUSTOM_MODULE_ALIAS_CACHE: dict[str, str] | None = None
 _LAZY_REFRESH_DONE = False
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/([^/]+)/([^/]+)", re.IGNORECASE)
 _MODULE_STATE_PATH = Path(__file__).resolve().with_name("module_state_cache.json")
@@ -151,22 +152,26 @@ def _module_root(node_cls: Any) -> str:
 
 def _classify_by_relative_module(node_cls: Any) -> tuple[str, str]:
     rel = getattr(node_cls, "RELATIVE_PYTHON_MODULE", None)
-    if not isinstance(rel, str) or not rel:
-        return ("core", _module_root(node_cls))
-    parts = [p for p in rel.split(".") if p]
-    if len(parts) >= 2:
-        root, module_name = parts[0], parts[1]
-    elif len(parts) == 1:
-        root, module_name = parts[0], parts[0]
-    else:
-        return ("core", _module_root(node_cls))
+    if isinstance(rel, str) and rel:
+        parts = [p for p in rel.split(".") if p]
+        if len(parts) >= 2:
+            root, module_name = parts[0], parts[1]
+        elif len(parts) == 1:
+            root, module_name = parts[0], parts[0]
+        else:
+            root, module_name = "", ""
 
-    if root == "custom_nodes":
-        return ("custom", module_name)
-    if root == "comfy_extras":
-        return ("core_extras", module_name)
-    if root == "comfy_api_nodes":
-        return ("api", module_name)
+        if root == "custom_nodes":
+            return ("custom", _canonical_custom_module_name(module_name))
+        if root == "comfy_extras":
+            return ("core_extras", module_name)
+        if root == "comfy_api_nodes":
+            return ("api", module_name)
+
+    source_hit = _classify_by_source_path(node_cls)
+    if source_hit is not None:
+        return source_hit
+
     module_name = getattr(node_cls, "__module__", "") or ""
     module_l = module_name.lower()
     if module_l.startswith("comfy_extras."):
@@ -208,6 +213,100 @@ def _custom_nodes_roots() -> list[Path]:
         except Exception:
             pass
     return [Path(__file__).resolve().parents[1]]
+
+
+def _discover_custom_modules() -> list[str]:
+    names: set[str] = set()
+    for root in _custom_nodes_roots():
+        if not root.exists():
+            continue
+        try:
+            entries = list(root.iterdir())
+        except Exception:
+            continue
+        for entry in entries:
+            if not entry.is_dir():
+                continue
+            name = entry.name
+            if not name or name.startswith(".") or name == "__pycache__":
+                continue
+            has_markers = (
+                (entry / "__init__.py").exists()
+                or (entry / "pyproject.toml").exists()
+                or any(entry.glob("*.py"))
+            )
+            if has_markers:
+                names.add(name)
+    return sorted(names, key=str.lower)
+
+
+def _normalize_module_token(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+
+def _custom_module_aliases() -> dict[str, str]:
+    global _CUSTOM_MODULE_ALIAS_CACHE
+    if _CUSTOM_MODULE_ALIAS_CACHE is not None:
+        return _CUSTOM_MODULE_ALIAS_CACHE
+
+    aliases: dict[str, str] = {}
+    for module_name in _discover_custom_modules():
+        aliases[module_name] = module_name
+        aliases[module_name.lower()] = module_name
+        norm = _normalize_module_token(module_name)
+        if norm and norm not in aliases:
+            aliases[norm] = module_name
+
+    _CUSTOM_MODULE_ALIAS_CACHE = aliases
+    return aliases
+
+
+def _canonical_custom_module_name(module_name: str) -> str:
+    name = (module_name or "").strip()
+    if not name:
+        return "unknown"
+
+    aliases = _custom_module_aliases()
+    direct = aliases.get(name) or aliases.get(name.lower())
+    if direct:
+        return direct
+
+    norm = _normalize_module_token(name)
+    if norm:
+        matched = aliases.get(norm)
+        if matched:
+            return matched
+    return name
+
+
+def _classify_by_source_path(node_cls: Any) -> tuple[str, str] | None:
+    source = _node_source_file(node_cls)
+    if not source:
+        return None
+
+    try:
+        src_path = Path(source).resolve()
+    except Exception:
+        return None
+
+    for root in _custom_nodes_roots():
+        try:
+            rel = src_path.relative_to(root.resolve())
+        except Exception:
+            continue
+        if rel.parts:
+            return ("custom", _canonical_custom_module_name(rel.parts[0]))
+
+    parts_l = [p.lower() for p in src_path.parts]
+    if "comfy_extras" in parts_l:
+        idx = parts_l.index("comfy_extras")
+        module_name = src_path.parts[idx + 1] if (idx + 1) < len(src_path.parts) else _module_root(node_cls)
+        return ("core_extras", module_name)
+    if "comfy_api_nodes" in parts_l:
+        idx = parts_l.index("comfy_api_nodes")
+        module_name = src_path.parts[idx + 1] if (idx + 1) < len(src_path.parts) else _module_root(node_cls)
+        return ("api", module_name)
+    return None
 
 
 def _normalize_repo_url(url: str | None) -> str | None:
@@ -527,22 +626,25 @@ def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str
     if not isinstance(tracker, dict):
         return
     startup_changes = tracker.get("startup_changes")
-    if not isinstance(startup_changes, dict):
-        return
-    group_changes = startup_changes.get(group)
-    if not isinstance(group_changes, dict):
-        return
-    entry = group_changes.get(module_name)
-    if not isinstance(entry, dict):
-        return
+    if isinstance(startup_changes, dict):
+        group_changes = startup_changes.get(group)
+        if isinstance(group_changes, dict):
+            entry = group_changes.get(module_name)
+            if isinstance(entry, dict):
+                new_nodes = entry.get("new_nodes")
+                upd_nodes = entry.get("updated_nodes")
+                result["new_nodes_between_runs"] = new_nodes if isinstance(new_nodes, list) else []
+                result["updated_nodes_between_runs"] = upd_nodes if isinstance(upd_nodes, list) else []
+                result["startup_node_update_at"] = entry.get("at") or ""
+                if result["new_nodes_between_runs"] or result["updated_nodes_between_runs"]:
+                    result["updated_between_runs"] = True
 
-    new_nodes = entry.get("new_nodes")
-    upd_nodes = entry.get("updated_nodes")
-    result["new_nodes_between_runs"] = new_nodes if isinstance(new_nodes, list) else []
-    result["updated_nodes_between_runs"] = upd_nodes if isinstance(upd_nodes, list) else []
-    result["startup_node_update_at"] = entry.get("at") or ""
-    if result["new_nodes_between_runs"] or result["updated_nodes_between_runs"]:
-        result["updated_between_runs"] = True
+    startup_new_modules = tracker.get("startup_new_modules")
+    if isinstance(startup_new_modules, dict):
+        group_new = startup_new_modules.get(group)
+        if isinstance(group_new, list) and module_name in group_new:
+            result["new_module_between_runs"] = True
+            result["updated_between_runs"] = True
 
 
 def _announce_tracked_module_updates() -> None:
@@ -593,8 +695,20 @@ def _announce_tracked_module_updates() -> None:
         tracker = {}
     prev_snapshots_raw = tracker.get("snapshots")
     prev_snapshots = prev_snapshots_raw if isinstance(prev_snapshots_raw, dict) else {}
+    prev_module_sets_raw = tracker.get("module_sets")
+    prev_module_sets = prev_module_sets_raw if isinstance(prev_module_sets_raw, dict) else {}
     current_snapshots = _build_node_snapshots()
     startup_changes: dict[str, dict[str, dict[str, Any]]] = {}
+    startup_new_modules: dict[str, list[str]] = {}
+
+    current_module_sets: dict[str, list[str]] = {}
+    for group_name, modules in current_snapshots.items():
+        if isinstance(modules, dict):
+            current_module_sets[group_name] = sorted(modules.keys(), key=str.lower)
+    custom_from_fs = _discover_custom_modules()
+    if custom_from_fs:
+        existing = set(current_module_sets.get("custom", []))
+        current_module_sets["custom"] = sorted(existing.union(custom_from_fs), key=str.lower)
 
     for group_name, modules in current_snapshots.items():
         if not isinstance(modules, dict):
@@ -627,10 +741,24 @@ def _announce_tracked_module_updates() -> None:
                     "at": now,
                 }
 
+    for group_name, current_list in current_module_sets.items():
+        prev_list_raw = prev_module_sets.get(group_name)
+        if not isinstance(prev_list_raw, list):
+            continue
+        prev_set = {x for x in prev_list_raw if isinstance(x, str)}
+        curr_set = {x for x in current_list if isinstance(x, str)}
+        new_modules = sorted(curr_set - prev_set, key=str.lower)
+        if new_modules:
+            startup_new_modules[group_name] = new_modules
+
     if prev_snapshots != current_snapshots:
+        changed = True
+    if prev_module_sets != current_module_sets:
         changed = True
     tracker["snapshots"] = current_snapshots
     tracker["startup_changes"] = startup_changes
+    tracker["module_sets"] = current_module_sets
+    tracker["startup_new_modules"] = startup_new_modules
     tracker["updated_at"] = now
     state["__node_tracker__"] = tracker
 
@@ -699,6 +827,7 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
         "new_nodes_between_runs": [],
         "updated_nodes_between_runs": [],
         "startup_node_update_at": "",
+        "new_module_between_runs": False,
         "source": "none",
     }
 
@@ -831,6 +960,25 @@ def _build_group_catalog() -> dict[str, list[dict[str, Any]]]:
     return grouped
 
 
+def _build_group_modules(grouped_nodes: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    module_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for group_name, nodes in grouped_nodes.items():
+        for node in nodes:
+            module_name = str(node.get("module") or "unknown")
+            module_counts[group_name][module_name] += 1
+
+    for module_name in _discover_custom_modules():
+        module_counts["custom"].setdefault(module_name, 0)
+
+    out: dict[str, list[dict[str, Any]]] = {}
+    for group_name, counts in module_counts.items():
+        out[group_name] = [
+            {"module": mod, "count": int(cnt)}
+            for mod, cnt in sorted(counts.items(), key=lambda kv: kv[0].lower())
+        ]
+    return out
+
+
 def _filter_modules(query: str, module_names: list[str]) -> list[str]:
     if not query:
         return module_names
@@ -843,7 +991,9 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
 
 def _refresh_module_runtime_state() -> dict[str, Any]:
     global _LAZY_REFRESH_DONE
+    global _CUSTOM_MODULE_ALIAS_CACHE
     _MODULE_INFO_CACHE.clear()
+    _CUSTOM_MODULE_ALIAS_CACHE = None
     _announce_tracked_module_updates()
     _LAZY_REFRESH_DONE = True
     return {"status": "ok", "refreshed_at": _now_iso()}
@@ -871,15 +1021,19 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         try:
             _ensure_runtime_state_ready()
             grouped = _build_group_catalog()
+            modules_by_group = _build_group_modules(grouped)
             groups = []
             for group_id, group_title in _GROUP_ORDER:
                 nodes = grouped.get(group_id, [])
+                modules = modules_by_group.get(group_id, [])
                 groups.append(
                     {
                         "id": group_id,
                         "title": group_title,
                         "count": len(nodes),
                         "nodes": nodes,
+                        "module_count": len(modules),
+                        "modules": modules,
                     }
                 )
             return web.json_response({"groups": groups})

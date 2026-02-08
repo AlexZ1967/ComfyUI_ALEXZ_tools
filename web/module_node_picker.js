@@ -290,6 +290,12 @@ function renderPicker(container) {
     nodeSelect.className = "alexz-mod-picker-select";
     root.appendChild(nodeSelect);
 
+    const moduleFilter = document.createElement("input");
+    moduleFilter.type = "text";
+    moduleFilter.className = "alexz-mod-picker-select";
+    moduleFilter.placeholder = "Фильтр модулей (например: Inpaint-Crop)";
+    root.appendChild(moduleFilter);
+
     const help = document.createElement("div");
     help.className = "alexz-mod-picker-help";
     root.appendChild(help);
@@ -301,6 +307,7 @@ function renderPicker(container) {
     root.appendChild(nodeList);
 
     const catalogByGroup = new Map();
+    const moduleCatalogByGroup = new Map();
     const moduleCounts = new Map();
     const moduleOptions = new Map();
     const moduleBadges = new Map();
@@ -328,6 +335,7 @@ function renderPicker(container) {
         moduleNodeDiffs.set(moduleName, {
             newNodes: new Set(newNodes),
             updatedNodes: new Set(updatedNodes),
+            markAllUpdated: Boolean(info?.new_module_between_runs),
         });
     };
 
@@ -368,6 +376,8 @@ function renderPicker(container) {
     const fillModuleSelect = () => {
         const nodes = getNodesForSelectedGroup();
         const selectedGroup = groupSelect.value;
+        const moduleEntries = moduleCatalogByGroup.get(selectedGroup) || [];
+        const filterValue = (moduleFilter.value || "").trim().toLowerCase();
         moduleBadgeLoadToken += 1;
         moduleCounts.clear();
         moduleOptions.clear();
@@ -382,22 +392,41 @@ function renderPicker(container) {
             }
             grouped.get(moduleName).push(node);
         }
-        const modules = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+        let modules = [];
+        if (moduleEntries.length) {
+            modules = moduleEntries
+                .map((entry) => String(entry?.module || "unknown"))
+                .sort((a, b) => a.localeCompare(b));
+        } else {
+            modules = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+        }
+        if (filterValue) {
+            modules = modules.filter((name) => name.toLowerCase().includes(filterValue));
+        }
         if (modules.length === 0) {
             const empty = document.createElement("option");
             empty.value = "-1";
-            empty.textContent = "В этой группе нет модулей";
+            empty.textContent = filterValue ? "Нет модулей по фильтру" : "В этой группе нет модулей";
             nodeSelect.appendChild(empty);
             nodeSelect.value = "-1";
             moduleInfo.innerHTML = "";
             nodeList.innerHTML = "";
-            help.textContent = "Модули не найдены для выбранной группы.";
+            help.textContent = filterValue
+                ? `Нет модулей по фильтру: "${moduleFilter.value}".`
+                : "Модули не найдены для выбранной группы.";
             return;
+        }
+        const countMap = new Map();
+        for (const entry of moduleEntries) {
+            const moduleName = String(entry?.module || "unknown");
+            countMap.set(moduleName, Number(entry?.count) || 0);
         }
         for (const moduleName of modules) {
             const opt = document.createElement("option");
             opt.value = moduleName;
-            const count = (grouped.get(moduleName) || []).length;
+            const count = countMap.has(moduleName)
+                ? (countMap.get(moduleName) || 0)
+                : (grouped.get(moduleName) || []).length;
             moduleCounts.set(moduleName, count);
             moduleOptions.set(moduleName, opt);
             opt.textContent = formatModuleOption(moduleName, count, null);
@@ -415,6 +444,7 @@ function renderPicker(container) {
 
     const fillGroupSelect = (groups) => {
         groupSelect.innerHTML = "";
+        moduleCatalogByGroup.clear();
         groups.forEach((group) => {
             const opt = document.createElement("option");
             opt.value = group.id;
@@ -422,6 +452,7 @@ function renderPicker(container) {
             opt.textContent = `${label} (${group.count})`;
             groupSelect.appendChild(opt);
             catalogByGroup.set(group.id, group.nodes || []);
+            moduleCatalogByGroup.set(group.id, group.modules || []);
         });
 
         if (catalogByGroup.has("custom")) {
@@ -438,8 +469,12 @@ function renderPicker(container) {
         const nodes = getNodesForSelectedGroup().filter(
             (node) => (node.module || "unknown") === selectedModule
         );
-        if (!nodes.length || selectedModule === "-1") {
+        if (selectedModule === "-1") {
             help.textContent = "Выберите модуль, чтобы увидеть список нод.";
+            return;
+        }
+        if (!nodes.length) {
+            help.textContent = `Модуль ${selectedModule}: загруженных нод не найдено (возможно, модуль не загрузился).`;
             return;
         }
 
@@ -449,6 +484,7 @@ function renderPicker(container) {
         const nodeDiff = moduleNodeDiffs.get(selectedModule) || {
             newNodes: new Set(),
             updatedNodes: new Set(),
+            markAllUpdated: false,
         };
 
         const groupEl = document.createElement("div");
@@ -463,7 +499,9 @@ function renderPicker(container) {
             const item = document.createElement("button");
             item.type = "button";
             item.className = "alexz-mod-picker-node";
-            if (nodeDiff.newNodes.has(nodeInfo.node_name)) {
+            if (nodeDiff.markAllUpdated) {
+                item.classList.add("alexz-mod-picker-node--updated");
+            } else if (nodeDiff.newNodes.has(nodeInfo.node_name)) {
                 item.classList.add("alexz-mod-picker-node--new");
             } else if (nodeDiff.updatedNodes.has(nodeInfo.node_name)) {
                 item.classList.add("alexz-mod-picker-node--updated");
@@ -568,7 +606,20 @@ function renderPicker(container) {
             card.appendChild(statusRow);
         }
 
-        if (info.updated_between_runs) {
+        if (info.new_module_between_runs) {
+            const newRow = document.createElement("div");
+            newRow.className = "alexz-mod-picker-module-row notice";
+            const labelEl = document.createElement("span");
+            labelEl.className = "alexz-mod-picker-module-label";
+            labelEl.textContent = "Detected between runs:";
+            const valueEl = document.createElement("span");
+            valueEl.textContent = "new module";
+            newRow.appendChild(labelEl);
+            newRow.appendChild(valueEl);
+            card.appendChild(newRow);
+        }
+
+        if (info.updated_between_runs && (info.startup_prev_commit_short || info.startup_new_commit_short)) {
             const updateRow = document.createElement("div");
             updateRow.className = "alexz-mod-picker-module-row notice";
             const labelEl = document.createElement("span");
@@ -641,6 +692,7 @@ function renderPicker(container) {
     };
 
     groupSelect.onchange = () => fillModuleSelect();
+    moduleFilter.oninput = () => fillModuleSelect();
     nodeSelect.onchange = () => {
         renderNodeList();
         loadModuleInfo();

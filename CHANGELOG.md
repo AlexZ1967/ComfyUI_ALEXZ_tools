@@ -1,5 +1,28 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.6 — 2026-02-08
+- `Module Nodes`: when a module is marked as `new module between runs`, all node cards in that module are now highlighted with green frame (`updated`) for consistent visual semantics.
+
+## 0.13.5 — 2026-02-08
+- Fixed `Module Nodes` new-module marker application: `startup_new_modules` is now applied even when there are no node-level `startup_changes` for the module.
+- Added regression tests for startup module-change tracking:
+  - new module marker without node diffs,
+  - `startup_new_modules` detection from module-set diff.
+
+## 0.13.4 — 2026-02-08
+- `Module Nodes`: added module-name filter field (substring search) above module dropdown for faster navigation in large module lists.
+- Improves discoverability of newly installed modules that may be hard to find by scrolling.
+
+## 0.13.3 — 2026-02-08
+- `Module Nodes` classification hardened for edge-case custom modules: if `RELATIVE_PYTHON_MODULE` is missing/ambiguous, group/module is now resolved by source file path.
+- Added canonicalization of custom module names against actual `custom_nodes` directory names (handles dashed/normalized naming differences).
+- This fixes cases where loaded third-party modules were visible in ComfyUI but not shown under `Custom_Nodes` in Node Picker.
+
+## 0.13.2 — 2026-02-08
+- `Module Nodes`: custom module list now includes installed directories from `ComfyUI/custom_nodes` even when their nodes are not loaded in runtime (shown as `(<0>)`).
+- Added startup detection for newly appeared modules between runs (`startup_new_modules`), reused by module marker `✅`.
+- Module card UX: new module now shows `Detected between runs: new module`; commit transition row is shown only for real commit-to-commit updates.
+
 ## 0.13.1 — 2026-02-08
 - Fixed `Module Nodes` startup markers disappearing after ComfyUI restart.
 - Removed duplicate early snapshot scan on import; now startup change detection runs once via lazy refresh on first Module Nodes API access.
