@@ -1,5 +1,10 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.7 — 2026-02-08
+- `Module Nodes`: added ComfyUI update check (git upstream) and top red warning banner when a newer ComfyUI version is available on GitHub (`behind > 0`).
+- Backend `node_catalog` now returns `comfyui` status block; refresh endpoint updates this status too.
+- Added regression test for ComfyUI update-status computation (`can_update` when behind).
+
 ## 0.13.6 — 2026-02-08
 - `Module Nodes`: when a module is marked as `new module between runs`, all node cards in that module are now highlighted with green frame (`updated`) for consistent visual semantics.
 

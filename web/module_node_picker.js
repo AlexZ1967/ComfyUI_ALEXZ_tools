@@ -47,6 +47,17 @@ function injectStyles() {
         font-size: 12px;
         opacity: 0.8;
     }
+    .alexz-mod-picker-comfy-alert {
+        border: 1px solid #b64040;
+        background: rgba(180, 64, 64, 0.16);
+        color: #ff6b6b;
+        border-radius: 7px;
+        padding: 7px 8px;
+        font-size: 12px;
+        line-height: 1.3;
+        font-weight: 700;
+        display: none;
+    }
     .alexz-mod-picker-module-card {
         border: 1px solid var(--border-color, #444);
         border-radius: 7px;
@@ -282,6 +293,10 @@ function renderPicker(container) {
     refreshBtn.textContent = "Обновить";
     head.appendChild(refreshBtn);
 
+    const comfyAlert = document.createElement("div");
+    comfyAlert.className = "alexz-mod-picker-comfy-alert";
+    root.appendChild(comfyAlert);
+
     const groupSelect = document.createElement("select");
     groupSelect.className = "alexz-mod-picker-select";
     root.appendChild(groupSelect);
@@ -313,6 +328,21 @@ function renderPicker(container) {
     const moduleBadges = new Map();
     const moduleNodeDiffs = new Map();
     let moduleBadgeLoadToken = 0;
+
+    const renderComfyAlert = (info) => {
+        const behind = Number(info?.behind);
+        const status = String(info?.update_status || "unknown");
+        if (status !== "can_update" || !Number.isFinite(behind) || behind <= 0) {
+            comfyAlert.style.display = "none";
+            comfyAlert.textContent = "";
+            return;
+        }
+        const branch = String(info?.branch || "unknown");
+        const local = String(info?.installed_commit_short || "unknown");
+        const remote = String(info?.remote_commit_short || "unknown");
+        comfyAlert.textContent = `Доступна новая версия ComfyUI на GitHub: branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
+        comfyAlert.style.display = "block";
+    };
 
     const getNodesForSelectedGroup = () => {
         const group = groupSelect.value;
@@ -674,6 +704,7 @@ function renderPicker(container) {
             const payload = await fetchNodeCatalog();
             catalogByGroup.clear();
             const groups = payload?.groups || [];
+            renderComfyAlert(payload?.comfyui || null);
             fillGroupSelect(groups);
             const summary = groups
                 .map((group) => {
@@ -684,6 +715,8 @@ function renderPicker(container) {
             help.textContent = `Группы: ${summary}.`;
         } catch (err) {
             help.textContent = `Ошибка загрузки: ${String(err)}`;
+            comfyAlert.style.display = "none";
+            comfyAlert.textContent = "";
             groupSelect.innerHTML = "";
             nodeSelect.innerHTML = "";
             moduleInfo.innerHTML = "";

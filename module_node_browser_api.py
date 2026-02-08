@@ -32,6 +32,8 @@ _MANAGER_INDEX_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MANAGER_GITHUB_STATS_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MODULE_STATE_CACHE: dict[str, dict[str, Any]] | None = None
 _CUSTOM_MODULE_ALIAS_CACHE: dict[str, str] | None = None
+_COMFYUI_STATUS_CACHE: tuple[float, dict[str, Any]] | None = None
+_COMFYUI_STATUS_TTL_SEC = 120.0
 _LAZY_REFRESH_DONE = False
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/([^/]+)/([^/]+)", re.IGNORECASE)
 _MODULE_STATE_PATH = Path(__file__).resolve().with_name("module_state_cache.json")
@@ -567,6 +569,88 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
     return {}
 
 
+def _comfyui_root() -> Path | None:
+    base = Path(__file__).resolve()
+    for candidate in (base.parents[2], *base.parents):
+        try:
+            if (candidate / "nodes.py").exists() and (candidate / ".git").exists():
+                return candidate
+        except Exception:
+            continue
+    return None
+
+
+def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
+    global _COMFYUI_STATUS_CACHE
+    now_ts = time.time()
+    if (
+        not force_refresh
+        and _COMFYUI_STATUS_CACHE is not None
+        and (now_ts - _COMFYUI_STATUS_CACHE[0]) < _COMFYUI_STATUS_TTL_SEC
+    ):
+        return dict(_COMFYUI_STATUS_CACHE[1])
+
+    result: dict[str, Any] = {
+        "path": "",
+        "repository": "https://github.com/comfyanonymous/ComfyUI",
+        "branch": "",
+        "upstream": "",
+        "installed_commit": "",
+        "installed_commit_short": "",
+        "installed_updated_at": "",
+        "remote_commit": "",
+        "remote_commit_short": "",
+        "remote_updated_at": "",
+        "ahead": None,
+        "behind": None,
+        "update_available": None,
+        "update_status": "unknown",
+    }
+
+    root = _comfyui_root()
+    if root is None:
+        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        return result
+
+    result["path"] = str(root)
+    is_git = _run_git(["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"])
+    if is_git != "true":
+        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        return result
+
+    result["branch"] = _run_git(["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"]) or ""
+    result["installed_commit"] = _run_git(["git", "-C", str(root), "rev-parse", "HEAD"]) or ""
+    result["installed_commit_short"] = _short_commit(result["installed_commit"]) if result["installed_commit"] else ""
+    result["installed_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI"]) or ""
+
+    upstream = _run_git(
+        ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
+    )
+    result["upstream"] = upstream or ""
+    if not upstream:
+        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        return result
+
+    # Keep upstream ref fresh to reflect actual GitHub state.
+    _run_git(["git", "-C", str(root), "fetch", "--quiet"], timeout=20.0)
+
+    result["remote_commit"] = _run_git(["git", "-C", str(root), "rev-parse", "@{u}"]) or ""
+    result["remote_commit_short"] = _short_commit(result["remote_commit"]) if result["remote_commit"] else ""
+    result["remote_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI", "@{u}"]) or ""
+
+    counts = _run_git(["git", "-C", str(root), "rev-list", "--left-right", "--count", "HEAD...@{u}"])
+    if counts:
+        parts = counts.split()
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            result["ahead"] = int(parts[0])
+            result["behind"] = int(parts[1])
+            result["update_available"] = result["behind"] > 0
+            result["update_status"] = "can_update" if result["behind"] > 0 else "up_to_date"
+
+    _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+    return result
+
+
 def _load_module_state() -> dict[str, dict[str, Any]]:
     global _MODULE_STATE_CACHE
     if _MODULE_STATE_CACHE is not None:
@@ -992,11 +1076,14 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
 def _refresh_module_runtime_state() -> dict[str, Any]:
     global _LAZY_REFRESH_DONE
     global _CUSTOM_MODULE_ALIAS_CACHE
+    global _COMFYUI_STATUS_CACHE
     _MODULE_INFO_CACHE.clear()
     _CUSTOM_MODULE_ALIAS_CACHE = None
+    _COMFYUI_STATUS_CACHE = None
     _announce_tracked_module_updates()
+    comfyui = _comfyui_git_status(force_refresh=True)
     _LAZY_REFRESH_DONE = True
-    return {"status": "ok", "refreshed_at": _now_iso()}
+    return {"status": "ok", "refreshed_at": _now_iso(), "comfyui": comfyui}
 
 
 def _ensure_runtime_state_ready() -> None:
@@ -1022,6 +1109,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _ensure_runtime_state_ready()
             grouped = _build_group_catalog()
             modules_by_group = _build_group_modules(grouped)
+            comfyui = _comfyui_git_status()
             groups = []
             for group_id, group_title in _GROUP_ORDER:
                 nodes = grouped.get(group_id, [])
@@ -1036,7 +1124,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                         "modules": modules,
                     }
                 )
-            return web.json_response({"groups": groups})
+            return web.json_response({"groups": groups, "comfyui": comfyui})
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Node catalog API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
