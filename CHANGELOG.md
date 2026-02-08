@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.1 — 2026-02-08
+- Fixed `Module Nodes` startup markers disappearing after ComfyUI restart.
+- Removed duplicate early snapshot scan on import; now startup change detection runs once via lazy refresh on first Module Nodes API access.
+
 ## 0.13.0 — 2026-02-08
 - Added new test node `ALEXZ Test Node` (`ALEXZTestNode`) in category `utils/debug`.
 - Node is intended for quick validation of package loading and Module Nodes change tracking.

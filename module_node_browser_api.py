@@ -857,13 +857,6 @@ def _ensure_runtime_state_ready() -> None:
     _LAZY_REFRESH_DONE = True
 
 
-if folder_paths is not None:
-    try:
-        _announce_tracked_module_updates()
-    except Exception as exc:  # pragma: no cover - startup diagnostic
-        _LOGGER.debug("Module update startup check failed: %s", exc)
-
-
 if PromptServer is not None and web is not None and getattr(PromptServer, "instance", None):
     @PromptServer.instance.routes.post("/alexz_tools/module_refresh")
     async def alexz_tools_module_refresh(request):
