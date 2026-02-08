@@ -31,6 +31,7 @@ _MODULE_INFO_TTL_SEC = 30.0
 _MANAGER_INDEX_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MANAGER_GITHUB_STATS_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MODULE_STATE_CACHE: dict[str, dict[str, Any]] | None = None
+_LAZY_REFRESH_DONE = False
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/([^/]+)/([^/]+)", re.IGNORECASE)
 _MODULE_STATE_PATH = Path(__file__).resolve().with_name("module_state_cache.json")
 _GROUP_ORDER = (
@@ -798,9 +799,19 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
 
 
 def _refresh_module_runtime_state() -> dict[str, Any]:
+    global _LAZY_REFRESH_DONE
     _MODULE_INFO_CACHE.clear()
     _announce_tracked_module_updates()
+    _LAZY_REFRESH_DONE = True
     return {"status": "ok", "refreshed_at": _now_iso()}
+
+
+def _ensure_runtime_state_ready() -> None:
+    global _LAZY_REFRESH_DONE
+    if _LAZY_REFRESH_DONE:
+        return
+    _refresh_module_runtime_state()
+    _LAZY_REFRESH_DONE = True
 
 
 if folder_paths is not None:
@@ -822,6 +833,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
     @PromptServer.instance.routes.get("/alexz_tools/node_catalog")
     async def alexz_tools_node_catalog(request):
         try:
+            _ensure_runtime_state_ready()
             grouped = _build_group_catalog()
             groups = []
             for group_id, group_title in _GROUP_ORDER:
@@ -846,6 +858,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         if not module_name:
             return web.json_response({"error": "module is required"}, status=400)
         try:
+            _ensure_runtime_state_ready()
             info = _resolve_module_info(group, module_name)
             return web.json_response({"group": group, "module": module_name, "info": info})
         except Exception as exc:  # pragma: no cover - diagnostic

@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.31 — 2026-02-08
+- Fixed startup detection timing for node/module changes in `Module Nodes`.
+- On first `Module Nodes` API access after ComfyUI start, backend now performs automatic runtime refresh of snapshots/statuses (same effect as pressing `Обновить` once).
+
 ## 0.12.30 — 2026-02-08
 - `Show/Save JSON` (`JsonDisplayAndSave`): removed output port `json_pretty`.
 - Node now works as UI/output-only formatter+saver (shows prettified JSON in UI and writes file when `output_path` is set).
