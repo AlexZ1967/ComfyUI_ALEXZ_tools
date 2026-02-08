@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.12.29
+Version: 0.12.30
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -179,5 +179,5 @@ Guide: [GUIDE_IMAGE_HISTOGRAM.md](GUIDE_IMAGE_HISTOGRAM.md)
 - Type name: JsonDisplayAndSave  
 - Category: utils/json  
 Inputs: `json_text`, optional `output_path`  
-Outputs: `json_pretty`
+Outputs: UI-only (без выходного порта)
 Guide: [GUIDE_JSON.md](GUIDE_JSON.md)

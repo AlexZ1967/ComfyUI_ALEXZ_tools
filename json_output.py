@@ -76,8 +76,8 @@ class JsonDisplayAndSave:
         }
 
     INPUT_IS_LIST = True
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("json_pretty",)
+    RETURN_TYPES = ()
+    RETURN_NAMES = ()
     FUNCTION = "display"
     CATEGORY = "utils/json"
     OUTPUT_NODE = True
@@ -99,4 +99,4 @@ class JsonDisplayAndSave:
 
             _LOGGER.info("Saved JSON to %s", output_path)
 
-        return {"ui": {"text": [text]}, "result": (text,)}
+        return {"ui": {"text": [text]}, "result": ()}

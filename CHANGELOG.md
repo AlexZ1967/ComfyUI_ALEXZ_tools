@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.30 — 2026-02-08
+- `Show/Save JSON` (`JsonDisplayAndSave`): removed output port `json_pretty`.
+- Node now works as UI/output-only formatter+saver (shows prettified JSON in UI and writes file when `output_path` is set).
+
 ## 0.12.29 — 2026-02-08
 - `Image Histogram Scope`: changed default value of `log_scale` to `False`.
 
