@@ -1,5 +1,16 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.28 — 2026-02-08
+- Added runtime refresh API `POST /alexz_tools/module_refresh` to recompute module/node status snapshots without restarting ComfyUI.
+- `Module Nodes` refresh button now triggers backend status refresh first, then reloads module and node lists.
+
+## 0.12.27 — 2026-02-08
+- Added node-level change tracking between ComfyUI runs for custom modules.
+- In `Module Nodes`, node cards are now highlighted by frame color:
+  - red frame = new node,
+  - green frame = updated node.
+- Node change detection is based on persisted module snapshots in `module_state_cache.json` (`node_name` + source signature).
+
 ## 0.12.26 — 2026-02-08
 - `Module Nodes`: red marker `🟥` is now shown only for git-confirmed updates (`git behind > 0`).
 - Removed Manager timestamp-based update inference from update status logic to avoid false-positive remote update markers.

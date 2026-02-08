@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import json
 import logging
 import re
 import subprocess
+import sys
 import time
+from hashlib import sha1
 from collections import defaultdict
 from datetime import datetime, timezone
 from itertools import islice
@@ -56,6 +59,76 @@ def _short_commit(commit: str | None) -> str:
     if not value:
         return "unknown"
     return value[:8]
+
+
+def _node_mappings() -> tuple[dict[str, Any], dict[str, str]]:
+    comfy_nodes = importlib.import_module("nodes")
+    class_map = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS", {}) or {}
+    display_map = getattr(comfy_nodes, "NODE_DISPLAY_NAME_MAPPINGS", {}) or {}
+    return class_map, display_map
+
+
+def _node_source_file(node_cls: Any) -> str:
+    source_file = ""
+    try:
+        source_file = inspect.getsourcefile(node_cls) or ""
+    except Exception:
+        source_file = ""
+    if source_file:
+        try:
+            return str(Path(source_file).resolve())
+        except Exception:
+            return source_file
+
+    module_name = getattr(node_cls, "__module__", "") or ""
+    module_obj = sys.modules.get(module_name)
+    module_file = getattr(module_obj, "__file__", "") if module_obj is not None else ""
+    if not module_file:
+        return ""
+    try:
+        return str(Path(module_file).resolve())
+    except Exception:
+        return module_file
+
+
+def _relative_to_custom_roots(path_text: str) -> str:
+    if not path_text:
+        return ""
+    try:
+        path_obj = Path(path_text).resolve()
+    except Exception:
+        return path_text
+    for root in _custom_nodes_roots():
+        try:
+            return str(path_obj.relative_to(root.resolve()))
+        except Exception:
+            continue
+    return str(path_obj)
+
+
+def _file_digest(path_text: str) -> str:
+    if not path_text:
+        return ""
+    try:
+        data = Path(path_text).read_bytes()
+        return sha1(data).hexdigest()[:12]
+    except Exception:
+        return ""
+
+
+def _build_custom_node_snapshots() -> dict[str, dict[str, dict[str, str]]]:
+    class_map, _ = _node_mappings()
+    snapshots: dict[str, dict[str, dict[str, str]]] = defaultdict(dict)
+    for node_name, node_cls in class_map.items():
+        group, module_bucket = _classify_by_relative_module(node_cls)
+        if group != "custom":
+            continue
+        source_file = _node_source_file(node_cls)
+        snapshots[module_bucket][node_name] = {
+            "sig": f"{getattr(node_cls, '__name__', '')}:{_file_digest(source_file)}",
+            "source": _relative_to_custom_roots(source_file),
+        }
+    return {k: dict(sorted(v.items(), key=lambda kv: kv[0].lower())) for k, v in snapshots.items()}
 
 
 def _module_root(node_cls: Any) -> str:
@@ -434,12 +507,17 @@ def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
     result["startup_prev_commit_short"] = _short_commit(startup_prev) if startup_prev else ""
     result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
     result["startup_update_at"] = entry.get("startup_update_at") or ""
+    startup_new_nodes = entry.get("startup_new_nodes")
+    startup_updated_nodes = entry.get("startup_updated_nodes")
+    result["new_nodes_between_runs"] = startup_new_nodes if isinstance(startup_new_nodes, list) else []
+    result["updated_nodes_between_runs"] = startup_updated_nodes if isinstance(startup_updated_nodes, list) else []
+    result["startup_node_update_at"] = entry.get("startup_node_update_at") or ""
     _save_module_state(state)
 
 
 def _announce_tracked_module_updates() -> None:
     state = _load_module_state()
-    if not isinstance(state, dict) or not state:
+    if not isinstance(state, dict):
         return
 
     now = _now_iso()
@@ -476,6 +554,42 @@ def _announce_tracked_module_updates() -> None:
             entry.pop("startup_new_commit", None)
             entry.pop("startup_update_at", None)
 
+        state[module_name] = entry
+
+    custom_snapshots = _build_custom_node_snapshots()
+    for module_name, current_snapshot in custom_snapshots.items():
+        entry = state.get(module_name, {})
+        if not isinstance(entry, dict):
+            entry = {}
+        prev_snapshot_raw = entry.get("node_snapshot")
+        prev_snapshot = prev_snapshot_raw if isinstance(prev_snapshot_raw, dict) else {}
+        prev_names = {k for k in prev_snapshot if isinstance(k, str)}
+        curr_names = {k for k in current_snapshot if isinstance(k, str)}
+
+        new_nodes: list[str] = []
+        updated_nodes: list[str] = []
+        if prev_snapshot:
+            new_nodes = sorted(curr_names - prev_names)
+            for node_name in sorted(curr_names & prev_names):
+                prev_node = prev_snapshot.get(node_name, {})
+                prev_sig = prev_node.get("sig") if isinstance(prev_node, dict) else None
+                curr_sig = current_snapshot.get(node_name, {}).get("sig")
+                if prev_sig != curr_sig:
+                    updated_nodes.append(node_name)
+
+        if new_nodes or updated_nodes:
+            entry["startup_new_nodes"] = new_nodes
+            entry["startup_updated_nodes"] = updated_nodes
+            entry["startup_node_update_at"] = now
+        else:
+            entry.pop("startup_new_nodes", None)
+            entry.pop("startup_updated_nodes", None)
+            entry.pop("startup_node_update_at", None)
+
+        if prev_snapshot != current_snapshot:
+            changed = True
+        entry["node_snapshot"] = current_snapshot
+        entry["node_snapshot_at"] = now
         state[module_name] = entry
 
     if changed:
@@ -540,6 +654,9 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
         "startup_prev_commit_short": "",
         "startup_new_commit_short": "",
         "startup_update_at": "",
+        "new_nodes_between_runs": [],
+        "updated_nodes_between_runs": [],
+        "startup_node_update_at": "",
         "source": "none",
     }
 
@@ -629,9 +746,7 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
 
 
 def _collect_nodes() -> list[dict[str, Any]]:
-    comfy_nodes = importlib.import_module("nodes")
-    class_map = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS", {}) or {}
-    display_map = getattr(comfy_nodes, "NODE_DISPLAY_NAME_MAPPINGS", {}) or {}
+    class_map, display_map = _node_mappings()
 
     items: list[dict[str, Any]] = []
     for node_name, node_cls in class_map.items():
@@ -682,6 +797,12 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
     return [name for name in module_names if q in name.lower()]
 
 
+def _refresh_module_runtime_state() -> dict[str, Any]:
+    _MODULE_INFO_CACHE.clear()
+    _announce_tracked_module_updates()
+    return {"status": "ok", "refreshed_at": _now_iso()}
+
+
 if folder_paths is not None:
     try:
         _announce_tracked_module_updates()
@@ -690,6 +811,14 @@ if folder_paths is not None:
 
 
 if PromptServer is not None and web is not None and getattr(PromptServer, "instance", None):
+    @PromptServer.instance.routes.post("/alexz_tools/module_refresh")
+    async def alexz_tools_module_refresh(request):
+        try:
+            return web.json_response(_refresh_module_runtime_state())
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("Module refresh API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
     @PromptServer.instance.routes.get("/alexz_tools/node_catalog")
     async def alexz_tools_node_catalog(request):
         try:

@@ -136,6 +136,14 @@ function injectStyles() {
     .alexz-mod-picker-node:hover {
         filter: brightness(1.12);
     }
+    .alexz-mod-picker-node.alexz-mod-picker-node--updated {
+        border-color: #3dbb7e;
+        box-shadow: inset 0 0 0 1px rgba(61, 187, 126, 0.35);
+    }
+    .alexz-mod-picker-node.alexz-mod-picker-node--new {
+        border-color: #d44f4f;
+        box-shadow: inset 0 0 0 1px rgba(212, 79, 79, 0.35);
+    }
     .alexz-mod-picker-node-name {
         font-size: 12px;
         font-weight: 700;
@@ -194,6 +202,17 @@ async function fetchModuleInfo(group, moduleName) {
         `/alexz_tools/module_info?group=${encodeURIComponent(group || "")}&module=${encodeURIComponent(moduleName || "")}`,
         { cache: "no-store" }
     );
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
+async function refreshModuleRuntimeState() {
+    const resp = await api.fetchApi("/alexz_tools/module_refresh", {
+        method: "POST",
+        cache: "no-store",
+    });
     if (!resp.ok) {
         throw new Error(`API ${resp.status}`);
     }
@@ -285,6 +304,7 @@ function renderPicker(container) {
     const moduleCounts = new Map();
     const moduleOptions = new Map();
     const moduleBadges = new Map();
+    const moduleNodeDiffs = new Map();
     let moduleBadgeLoadToken = 0;
 
     const getNodesForSelectedGroup = () => {
@@ -300,6 +320,15 @@ function renderPicker(container) {
         const count = moduleCounts.get(moduleName) || 0;
         const badges = moduleBadges.get(moduleName) || null;
         option.textContent = formatModuleOption(moduleName, count, badges);
+    };
+
+    const setModuleNodeDiffs = (moduleName, info) => {
+        const newNodes = Array.isArray(info?.new_nodes_between_runs) ? info.new_nodes_between_runs : [];
+        const updatedNodes = Array.isArray(info?.updated_nodes_between_runs) ? info.updated_nodes_between_runs : [];
+        moduleNodeDiffs.set(moduleName, {
+            newNodes: new Set(newNodes),
+            updatedNodes: new Set(updatedNodes),
+        });
     };
 
     const loadModuleBadges = async (group, modules) => {
@@ -343,6 +372,7 @@ function renderPicker(container) {
         moduleCounts.clear();
         moduleOptions.clear();
         moduleBadges.clear();
+        moduleNodeDiffs.clear();
         nodeSelect.innerHTML = "";
         const grouped = new Map();
         for (const node of nodes) {
@@ -417,7 +447,12 @@ function renderPicker(container) {
         help.textContent = `Модуль ${selectedModule}: нод ${nodes.length}. Кликните ноду для вставки в граф.`;
         if (isCustomGroup) {
             help.textContent += ` Метки в списке модулей: ${MODULE_MARK_UPDATED} обновлен между запусками, ${MODULE_MARK_REMOTE_UPDATE} доступно обновление.`;
+            help.textContent += " Рамка ноды: красная = новая, зеленая = обновленная.";
         }
+        const nodeDiff = moduleNodeDiffs.get(selectedModule) || {
+            newNodes: new Set(),
+            updatedNodes: new Set(),
+        };
 
         const groupEl = document.createElement("div");
         groupEl.className = "alexz-mod-picker-group";
@@ -431,6 +466,11 @@ function renderPicker(container) {
             const item = document.createElement("button");
             item.type = "button";
             item.className = "alexz-mod-picker-node";
+            if (nodeDiff.newNodes.has(nodeInfo.node_name)) {
+                item.classList.add("alexz-mod-picker-node--new");
+            } else if (nodeDiff.updatedNodes.has(nodeInfo.node_name)) {
+                item.classList.add("alexz-mod-picker-node--updated");
+            }
             item.onclick = () => {
                 const node = createNodeByInfo(nodeInfo);
                 if (!node) {
@@ -571,7 +611,9 @@ function renderPicker(container) {
                 } else {
                     moduleBadges.delete(selectedModule);
                 }
+                setModuleNodeDiffs(selectedModule, info);
                 setModuleOptionText(selectedModule);
+                renderNodeList();
             }
         } catch (err) {
             moduleInfo.innerHTML = "";
@@ -606,7 +648,18 @@ function renderPicker(container) {
         renderNodeList();
         loadModuleInfo();
     };
-    refreshBtn.onclick = () => loadCatalog();
+    refreshBtn.onclick = async () => {
+        refreshBtn.disabled = true;
+        help.textContent = "Обновление статусов модулей...";
+        try {
+            await refreshModuleRuntimeState();
+        } catch (err) {
+            help.textContent = `Ошибка обновления статусов: ${String(err)}`;
+        } finally {
+            refreshBtn.disabled = false;
+        }
+        await loadCatalog();
+    };
 
     loadCatalog();
 }
