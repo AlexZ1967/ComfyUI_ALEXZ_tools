@@ -37,6 +37,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self._orig_now_iso = self.api._now_iso
         self._orig_comfy_root = self.api._comfyui_root
         self._orig_run_git = self.api._run_git
+        self._orig_module_git_state = self.api._module_git_state
         self.api._MODULE_STATE_CACHE = {}
         self.api._COMFYUI_STATUS_CACHE = None
         self.api._save_module_state = lambda state: None
@@ -51,6 +52,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._now_iso = self._orig_now_iso
         self.api._comfyui_root = self._orig_comfy_root
         self.api._run_git = self._orig_run_git
+        self.api._module_git_state = self._orig_module_git_state
         self.api._MODULE_INFO_CACHE.clear()
 
     def test_new_module_marker_applies_without_node_diffs(self):
@@ -114,6 +116,34 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         status = self.api._comfyui_git_status(force_refresh=True)
         self.assertEqual(status.get("update_status"), "can_update")
         self.assertEqual(status.get("behind"), 3)
+
+    def test_unseen_module_update_detected_between_runs(self):
+        self.api._now_iso = lambda: "2026-02-08T00:00:00+00:00"
+        self.api._build_node_snapshots = lambda: {"custom": {"comfyui-AGSoft": {}}}
+        self.api._discover_custom_modules = lambda: ["comfyui-AGSoft"]
+
+        states = [
+            {"installed_commit": "old111", "installed_updated_at": "2026-02-01T00:00:00+00:00"},
+            {"installed_commit": "new222", "installed_updated_at": "2026-02-08T00:00:00+00:00"},
+        ]
+
+        def fake_module_git_state(_module_name):
+            return dict(states.pop(0))
+
+        self.api._module_git_state = fake_module_git_state
+
+        # First startup: baseline is recorded, no update marker yet.
+        self.api._announce_tracked_module_updates()
+        entry = self.api._MODULE_STATE_CACHE.get("comfyui-AGSoft", {})
+        self.assertEqual(entry.get("installed_commit"), "old111")
+        self.assertFalse(entry.get("startup_prev_commit"))
+        self.assertFalse(entry.get("startup_new_commit"))
+
+        # Second startup: changed commit is detected.
+        self.api._announce_tracked_module_updates()
+        entry = self.api._MODULE_STATE_CACHE.get("comfyui-AGSoft", {})
+        self.assertEqual(entry.get("startup_prev_commit"), "old111")
+        self.assertEqual(entry.get("startup_new_commit"), "new222")
 
 
 if __name__ == "__main__":

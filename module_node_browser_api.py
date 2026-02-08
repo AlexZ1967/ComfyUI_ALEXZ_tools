@@ -514,7 +514,7 @@ def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
 
 
 def _module_repo_url(module_name: str) -> str | None:
-    module_name = (module_name or "").strip()
+    module_name = _canonical_custom_module_name((module_name or "").strip())
     if not module_name:
         return None
     for root in _custom_nodes_roots():
@@ -528,7 +528,7 @@ def _module_repo_url(module_name: str) -> str | None:
 
 
 def _module_git_state(module_name: str) -> dict[str, Any]:
-    module_name = (module_name or "").strip()
+    module_name = _canonical_custom_module_name((module_name or "").strip())
     if not module_name:
         return {}
     for root in _custom_nodes_roots():
@@ -676,6 +676,7 @@ def _save_module_state(state: dict[str, dict[str, Any]]) -> None:
 
 
 def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
+    module_name = _canonical_custom_module_name(module_name)
     state = _load_module_state()
     now = _now_iso()
     entry = state.get(module_name, {})
@@ -739,40 +740,60 @@ def _announce_tracked_module_updates() -> None:
     now = _now_iso()
     changed = False
 
-    for module_name in sorted(state.keys()):
-        if module_name.startswith("__"):
+    known_modules = set(_discover_custom_modules())
+    for key in list(state.keys()):
+        if key.startswith("__"):
             continue
+        canonical = _canonical_custom_module_name(key)
+        known_modules.add(canonical)
+        if canonical != key:
+            src = state.get(key)
+            dst = state.get(canonical)
+            if isinstance(src, dict):
+                if not isinstance(dst, dict):
+                    state[canonical] = dict(src)
+                else:
+                    merged = dict(dst)
+                    for mk, mv in src.items():
+                        if mk not in merged or not merged.get(mk):
+                            merged[mk] = mv
+                    state[canonical] = merged
+                state.pop(key, None)
+                changed = True
+
+    for module_name in sorted(known_modules, key=str.lower):
         entry = state.get(module_name, {})
         if not isinstance(entry, dict):
-            continue
-
+            entry = {}
         prev_commit = (entry.get("installed_commit") or "").strip()
-        if not prev_commit:
-            continue
-
         git_state = _module_git_state(module_name)
         current_commit = (git_state.get("installed_commit") or "").strip()
-        if not current_commit:
-            continue
+        before = dict(entry)
 
         entry["last_checked_at"] = now
-
-        if current_commit != prev_commit:
-            entry["installed_commit"] = current_commit
+        if git_state:
+            entry["module_path"] = git_state.get("module_path") or entry.get("module_path")
+            entry["repository"] = git_state.get("repository") or entry.get("repository")
             entry["installed_updated_at"] = git_state.get("installed_updated_at") or entry.get("installed_updated_at")
             entry["remote_updated_at"] = git_state.get("remote_updated_at") or entry.get("remote_updated_at")
-            entry["last_local_change_at"] = now
-            entry["startup_prev_commit"] = prev_commit
-            entry["startup_new_commit"] = current_commit
-            entry["startup_update_at"] = now
-            changed = True
-        else:
-            # Show "updated between runs" only for one startup cycle after actual change.
-            entry.pop("startup_prev_commit", None)
-            entry.pop("startup_new_commit", None)
-            entry.pop("startup_update_at", None)
+
+        if current_commit:
+            if prev_commit and current_commit != prev_commit:
+                entry["installed_commit"] = current_commit
+                entry["last_local_change_at"] = now
+                entry["startup_prev_commit"] = prev_commit
+                entry["startup_new_commit"] = current_commit
+                entry["startup_update_at"] = now
+            else:
+                entry["installed_commit"] = current_commit
+                # Show update marker only for one startup cycle after actual change.
+                entry.pop("startup_prev_commit", None)
+                entry.pop("startup_new_commit", None)
+                entry.pop("startup_update_at", None)
 
         state[module_name] = entry
+        if entry != before:
+            changed = True
 
     tracker = state.get("__node_tracker__")
     if not isinstance(tracker, dict):
@@ -878,6 +899,11 @@ def _module_local_readme_summary(module_name: str) -> str | None:
 
 
 def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
+    group = (group or "").strip().lower()
+    module_name = (module_name or "").strip()
+    if group == "custom":
+        module_name = _canonical_custom_module_name(module_name)
+
     key = (group or "", module_name or "")
     now_ts = time.time()
     cached = _MODULE_INFO_CACHE.get(key)

@@ -1,5 +1,10 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.8 — 2026-02-08
+- `Module Nodes` update-tracking fixed for modules that were not previously in cache: startup scan now tracks all installed custom modules, not only modules already seen in `module_state_cache.json`.
+- Added custom-module name canonicalization in git/status paths to avoid case/alias duplicates (e.g. `comfyui-AGSoft` vs `ComfyUI-AGSoft`).
+- Added regression test for unseen-module commit change detection between runs.
+
 ## 0.13.7 — 2026-02-08
 - `Module Nodes`: added ComfyUI update check (git upstream) and top red warning banner when a newer ComfyUI version is available on GitHub (`behind > 0`).
 - Backend `node_catalog` now returns `comfyui` status block; refresh endpoint updates this status too.
