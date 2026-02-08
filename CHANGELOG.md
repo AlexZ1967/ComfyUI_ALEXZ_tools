@@ -1,5 +1,8 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.29 — 2026-02-08
+- `Image Histogram Scope`: changed default value of `log_scale` to `False`.
+
 ## 0.12.28 — 2026-02-08
 - Added runtime refresh API `POST /alexz_tools/module_refresh` to recompute module/node status snapshots without restarting ComfyUI.
 - `Module Nodes` refresh button now triggers backend status refresh first, then reloads module and node lists.

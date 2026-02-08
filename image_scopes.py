@@ -208,7 +208,7 @@ class ImageHistogramScope:
                 "bins": ("INT", {"default": 256, "min": 16, "max": 2048, "tooltip": "Количество бинов гистограммы. 64/128 быстрее, 256+ точнее."}),
                 "width": ("INT", {"default": 512, "min": 128, "max": 2048, "tooltip": "Ширина scope. Больше ширина = медленнее."}),
                 "height": ("INT", {"default": 256, "min": 64, "max": 1024, "tooltip": "Высота scope. Больше высота = больше VRAM/CPU."}),
-                "log_scale": ("BOOLEAN", {"default": True, "tooltip": "Логарифмическая шкала плотности. Немного медленнее."}),
+                "log_scale": ("BOOLEAN", {"default": False, "tooltip": "Логарифмическая шкала плотности. Немного медленнее."}),
             },
             "optional": {},
         }
