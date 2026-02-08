@@ -1,5 +1,14 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.21 — 2026-02-08
+- Startup module update detection remains enabled, but notifications were moved from console to `Module Nodes` widget.
+- Module card now shows `Updated between runs: <old> -> <new>` when tracked module commit changed between ComfyUI launches.
+
+## 0.12.20 — 2026-02-08
+- Module Node Picker backend: added startup check for tracked custom modules (`module_state_cache.json`) to detect manual updates between ComfyUI runs.
+- On startup, when tracked module commit changed, console now logs `ALEXZ_tools module updated: <module>: <old> -> <new>`.
+- Module git state optimized: `remote_head` now uses local upstream ref (`git rev-parse @{u}`), removing network `ls-remote` call.
+
 ## 0.12.19 — 2026-02-07
 - Module Node Picker: `Remote updated` now prefers git upstream timestamp (`git log -1 @{u}`) for consistency with git-based update status.
 - ComfyUI-Manager `github-stats.json` timestamp is now used only as fallback when upstream git timestamp is unavailable.

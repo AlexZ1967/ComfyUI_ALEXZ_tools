@@ -51,6 +51,13 @@ _ALEXZ_ANNOTATIONS = {
 }
 
 
+def _short_commit(commit: str | None) -> str:
+    value = (commit or "").strip()
+    if not value:
+        return "unknown"
+    return value[:8]
+
+
 def _module_root(node_cls: Any) -> str:
     module_name = getattr(node_cls, "__module__", "") or ""
     if not module_name:
@@ -359,7 +366,7 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
             "upstream": _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]),
             "ahead": None,
             "behind": None,
-            "remote_head": None,
+            "remote_head": _run_git(["git", "-C", str(module_dir), "rev-parse", "@{u}"]),
         }
 
         counts = _run_git(["git", "-C", str(module_dir), "rev-list", "--left-right", "--count", "HEAD...@{u}"])
@@ -369,11 +376,6 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
                 state["ahead"] = int(parts[0])
                 state["behind"] = int(parts[1])
 
-        branch = state.get("branch")
-        if branch and branch != "HEAD":
-            remote_line = _run_git(["git", "-C", str(module_dir), "ls-remote", "--heads", "origin", branch], timeout=4.0)
-            if remote_line:
-                state["remote_head"] = remote_line.split()[0]
         return state
     return {}
 
@@ -422,7 +424,58 @@ def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
     state[module_name] = entry
     result["last_checked_at"] = entry.get("last_checked_at")
     result["last_local_change_at"] = entry.get("last_local_change_at")
+    startup_prev = (entry.get("startup_prev_commit") or "").strip()
+    startup_new = (entry.get("startup_new_commit") or "").strip()
+    result["updated_between_runs"] = bool(startup_prev and startup_new)
+    result["startup_prev_commit_short"] = _short_commit(startup_prev) if startup_prev else ""
+    result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
+    result["startup_update_at"] = entry.get("startup_update_at") or ""
     _save_module_state(state)
+
+
+def _announce_tracked_module_updates() -> None:
+    state = _load_module_state()
+    if not isinstance(state, dict) or not state:
+        return
+
+    now = _now_iso()
+    changed = False
+
+    for module_name in sorted(state.keys()):
+        entry = state.get(module_name, {})
+        if not isinstance(entry, dict):
+            continue
+
+        prev_commit = (entry.get("installed_commit") or "").strip()
+        if not prev_commit:
+            continue
+
+        git_state = _module_git_state(module_name)
+        current_commit = (git_state.get("installed_commit") or "").strip()
+        if not current_commit:
+            continue
+
+        entry["last_checked_at"] = now
+
+        if current_commit != prev_commit:
+            entry["installed_commit"] = current_commit
+            entry["installed_updated_at"] = git_state.get("installed_updated_at") or entry.get("installed_updated_at")
+            entry["remote_updated_at"] = git_state.get("remote_updated_at") or entry.get("remote_updated_at")
+            entry["last_local_change_at"] = now
+            entry["startup_prev_commit"] = prev_commit
+            entry["startup_new_commit"] = current_commit
+            entry["startup_update_at"] = now
+            changed = True
+        else:
+            # Show "updated between runs" only for one startup cycle after actual change.
+            entry.pop("startup_prev_commit", None)
+            entry.pop("startup_new_commit", None)
+            entry.pop("startup_update_at", None)
+
+        state[module_name] = entry
+
+    if changed:
+        _save_module_state(state)
 
 
 def _module_local_readme_summary(module_name: str) -> str | None:
@@ -476,6 +529,10 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
         "update_status": "unknown",
         "last_checked_at": "",
         "last_local_change_at": "",
+        "updated_between_runs": False,
+        "startup_prev_commit_short": "",
+        "startup_new_commit_short": "",
+        "startup_update_at": "",
         "source": "none",
     }
 
@@ -622,6 +679,13 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
     if exact:
         return exact
     return [name for name in module_names if q in name.lower()]
+
+
+if folder_paths is not None:
+    try:
+        _announce_tracked_module_updates()
+    except Exception as exc:  # pragma: no cover - startup diagnostic
+        _LOGGER.debug("Module update startup check failed: %s", exc)
 
 
 if PromptServer is not None and web is not None and getattr(PromptServer, "instance", None):

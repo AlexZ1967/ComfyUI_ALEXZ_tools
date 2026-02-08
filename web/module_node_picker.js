@@ -82,6 +82,9 @@ function injectStyles() {
         align-items: center;
         flex-wrap: wrap;
     }
+    .alexz-mod-picker-module-row.notice {
+        color: #f0b429;
+    }
     .alexz-mod-picker-module-label {
         font-weight: 700;
         opacity: 0.95;
@@ -443,6 +446,22 @@ function renderPicker(container) {
             statusRow.appendChild(labelEl);
             statusRow.appendChild(valueEl);
             card.appendChild(statusRow);
+        }
+
+        if (info.updated_between_runs) {
+            const updateRow = document.createElement("div");
+            updateRow.className = "alexz-mod-picker-module-row notice";
+            const labelEl = document.createElement("span");
+            labelEl.className = "alexz-mod-picker-module-label";
+            labelEl.textContent = "Updated between runs:";
+            const valueEl = document.createElement("span");
+            const prev = info.startup_prev_commit_short || "unknown";
+            const next = info.startup_new_commit_short || "unknown";
+            const at = info.startup_update_at ? ` (${fmtDate(info.startup_update_at)})` : "";
+            valueEl.textContent = `${prev} -> ${next}${at}`;
+            updateRow.appendChild(labelEl);
+            updateRow.appendChild(valueEl);
+            card.appendChild(updateRow);
         }
 
         moduleInfo.appendChild(card);
