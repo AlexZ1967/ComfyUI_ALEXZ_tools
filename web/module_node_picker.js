@@ -223,9 +223,10 @@ function statusUi(info) {
 }
 
 function moduleBadgesFromInfo(info) {
+    const behind = Number(info?.git_behind);
     return {
         updatedBetweenRuns: Boolean(info?.updated_between_runs),
-        hasRemoteUpdate: Boolean(info?.update_available) || String(info?.update_status) === "can_update",
+        hasRemoteUpdate: Number.isFinite(behind) && behind > 0,
     };
 }
 

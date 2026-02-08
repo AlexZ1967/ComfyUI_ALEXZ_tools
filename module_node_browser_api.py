@@ -7,7 +7,7 @@ import re
 import subprocess
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
 from typing import Any
@@ -354,6 +354,9 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
         if is_git != "true":
             continue
 
+        upstream = _run_git(
+            ["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
+        )
         state: dict[str, Any] = {
             "module_path": str(module_dir),
             "repository": _normalize_repo_url(
@@ -363,7 +366,8 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
             "installed_updated_at": _run_git(["git", "-C", str(module_dir), "log", "-1", "--format=%cI"]),
             "remote_updated_at": _run_git(["git", "-C", str(module_dir), "log", "-1", "--format=%cI", "@{u}"]),
             "branch": _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "HEAD"]),
-            "upstream": _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]),
+            "upstream": upstream,
+            "has_upstream": bool(upstream),
             "ahead": None,
             "behind": None,
             "remote_head": _run_git(["git", "-C", str(module_dir), "rev-parse", "@{u}"]),
@@ -527,6 +531,9 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
         "remote_updated_at": "",
         "update_available": None,
         "update_status": "unknown",
+        "git_has_upstream": False,
+        "git_ahead": None,
+        "git_behind": None,
         "last_checked_at": "",
         "last_local_change_at": "",
         "updated_between_runs": False,
@@ -586,12 +593,15 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
         result["installed_commit_short"] = (result["installed_commit"] or "")[:8]
         result["installed_updated_at"] = git_state.get("installed_updated_at") or ""
         result["remote_updated_at"] = git_state.get("remote_updated_at") or ""
+        result["git_has_upstream"] = bool(git_state.get("has_upstream"))
+        result["git_ahead"] = git_state.get("ahead")
+        result["git_behind"] = git_state.get("behind")
         behind = git_state.get("behind")
         remote_head = git_state.get("remote_head")
         if isinstance(behind, int):
             result["update_available"] = behind > 0
             result["update_status"] = "can_update" if behind > 0 else "up_to_date"
-        elif remote_head and result["installed_commit"]:
+        elif result["git_has_upstream"] and remote_head and result["installed_commit"]:
             if remote_head == result["installed_commit"]:
                 result["update_available"] = False
                 result["update_status"] = "up_to_date"
@@ -612,15 +622,6 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
         if remote_dt is not None:
             if not result.get("remote_updated_at"):
                 result["remote_updated_at"] = _to_iso(remote_dt) or ""
-            if result["update_available"] is None:
-                local_dt = _parse_datetime(result.get("installed_updated_at"))
-                if local_dt is not None:
-                    # manager's last_update is coarse; treat >5 min as potential update
-                    has_update = remote_dt > (local_dt + timedelta(minutes=5))
-                    result["update_available"] = has_update
-                    result["update_status"] = "can_update" if has_update else "up_to_date"
-                else:
-                    result["update_status"] = "unknown"
 
     _remember_module_state(module_name, result)
     _MODULE_INFO_CACHE[key] = (now_ts, dict(result))

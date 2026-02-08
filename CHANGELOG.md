@@ -1,5 +1,10 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.26 — 2026-02-08
+- `Module Nodes`: red marker `🟥` is now shown only for git-confirmed updates (`git behind > 0`).
+- Removed Manager timestamp-based update inference from update status logic to avoid false-positive remote update markers.
+- Added git status fields in module info payload: `git_has_upstream`, `git_ahead`, `git_behind`.
+
 ## 0.12.25 — 2026-02-08
 - Updated remote-update marker in `Module Nodes` module list to plain red square `🟥` (without additional check mark).
 
