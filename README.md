@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.12.32
+Version: 0.13.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -53,6 +53,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 - [Image Histogram Scope](#image-histogram-scope)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
 - [Show/Save JSON](#showsave-json)
+- [ALEXZ Test Node](#alexz-test-node)
 
 ---
 
@@ -182,3 +183,14 @@ Guide: [GUIDE_IMAGE_HISTOGRAM.md](GUIDE_IMAGE_HISTOGRAM.md)
 Inputs: `json_text`, optional `output_path`  
 Outputs: UI-only (без выходного порта)
 Guide: [GUIDE_JSON.md](GUIDE_JSON.md)
+
+---
+
+## ALEXZ Test Node
+Простая тестовая нода для проверки загрузки пакета и отслеживания изменений в `Module Nodes`.
+
+- Display name: ALEXZ Test Node  
+- Type name: ALEXZTestNode  
+- Category: utils/debug  
+Inputs: `text`, `value`  
+Outputs: `text_out`, `value_out`

@@ -15,6 +15,7 @@ _NODE_SPECS = [
     ("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
     ("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
     ("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
+    ("ALEXZTestNode", "ALEXZ Test Node", ".test_node", "ALEXZTestNode"),
 ]
 
 NODE_CLASS_MAPPINGS = {}

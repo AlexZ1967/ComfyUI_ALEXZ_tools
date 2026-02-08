@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.0 — 2026-02-08
+- Added new test node `ALEXZ Test Node` (`ALEXZTestNode`) in category `utils/debug`.
+- Node is intended for quick validation of package loading and Module Nodes change tracking.
+
 ## 0.12.32 — 2026-02-08
 - Extended node change tracking to all Module Nodes categories (`Core_Nodes`, `Core_Extras_Nodes`, `API_Nodes`, `Custom_Nodes`), not only custom modules.
 - Node card frame highlighting (new/updated) now works for modules from all four categories.
