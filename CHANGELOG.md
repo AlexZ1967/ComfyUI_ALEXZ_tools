@@ -1,5 +1,10 @@
 # Changelog — ALEXZ_tools
 
+## 0.12.32 — 2026-02-08
+- Extended node change tracking to all Module Nodes categories (`Core_Nodes`, `Core_Extras_Nodes`, `API_Nodes`, `Custom_Nodes`), not only custom modules.
+- Node card frame highlighting (new/updated) now works for modules from all four categories.
+- Startup/runtime node snapshots are now stored by `group + module`, preventing cross-category collisions.
+
 ## 0.12.31 — 2026-02-08
 - Fixed startup detection timing for node/module changes in `Module Nodes`.
 - On first `Module Nodes` API access after ComfyUI start, backend now performs automatic runtime refresh of snapshots/statuses (same effect as pressing `Обновить` once).

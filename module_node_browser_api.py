@@ -117,19 +117,28 @@ def _file_digest(path_text: str) -> str:
         return ""
 
 
-def _build_custom_node_snapshots() -> dict[str, dict[str, dict[str, str]]]:
+def _build_node_snapshots() -> dict[str, dict[str, dict[str, dict[str, str]]]]:
     class_map, _ = _node_mappings()
-    snapshots: dict[str, dict[str, dict[str, str]]] = defaultdict(dict)
+    snapshots: dict[str, dict[str, dict[str, dict[str, str]]]] = defaultdict(lambda: defaultdict(dict))
+    digest_cache: dict[str, str] = {}
     for node_name, node_cls in class_map.items():
         group, module_bucket = _classify_by_relative_module(node_cls)
-        if group != "custom":
-            continue
         source_file = _node_source_file(node_cls)
-        snapshots[module_bucket][node_name] = {
-            "sig": f"{getattr(node_cls, '__name__', '')}:{_file_digest(source_file)}",
+        digest = digest_cache.get(source_file)
+        if digest is None:
+            digest = _file_digest(source_file)
+            digest_cache[source_file] = digest
+        snapshots[group][module_bucket][node_name] = {
+            "sig": f"{getattr(node_cls, '__name__', '')}:{digest}",
             "source": _relative_to_custom_roots(source_file),
         }
-    return {k: dict(sorted(v.items(), key=lambda kv: kv[0].lower())) for k, v in snapshots.items()}
+
+    out: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
+    for group, modules in snapshots.items():
+        out[group] = {}
+        for module_name, nodes in modules.items():
+            out[group][module_name] = dict(sorted(nodes.items(), key=lambda kv: kv[0].lower()))
+    return out
 
 
 def _module_root(node_cls: Any) -> str:
@@ -508,12 +517,31 @@ def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
     result["startup_prev_commit_short"] = _short_commit(startup_prev) if startup_prev else ""
     result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
     result["startup_update_at"] = entry.get("startup_update_at") or ""
-    startup_new_nodes = entry.get("startup_new_nodes")
-    startup_updated_nodes = entry.get("startup_updated_nodes")
-    result["new_nodes_between_runs"] = startup_new_nodes if isinstance(startup_new_nodes, list) else []
-    result["updated_nodes_between_runs"] = startup_updated_nodes if isinstance(startup_updated_nodes, list) else []
-    result["startup_node_update_at"] = entry.get("startup_node_update_at") or ""
     _save_module_state(state)
+
+
+def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str) -> None:
+    state = _load_module_state()
+    tracker = state.get("__node_tracker__")
+    if not isinstance(tracker, dict):
+        return
+    startup_changes = tracker.get("startup_changes")
+    if not isinstance(startup_changes, dict):
+        return
+    group_changes = startup_changes.get(group)
+    if not isinstance(group_changes, dict):
+        return
+    entry = group_changes.get(module_name)
+    if not isinstance(entry, dict):
+        return
+
+    new_nodes = entry.get("new_nodes")
+    upd_nodes = entry.get("updated_nodes")
+    result["new_nodes_between_runs"] = new_nodes if isinstance(new_nodes, list) else []
+    result["updated_nodes_between_runs"] = upd_nodes if isinstance(upd_nodes, list) else []
+    result["startup_node_update_at"] = entry.get("at") or ""
+    if result["new_nodes_between_runs"] or result["updated_nodes_between_runs"]:
+        result["updated_between_runs"] = True
 
 
 def _announce_tracked_module_updates() -> None:
@@ -525,6 +553,8 @@ def _announce_tracked_module_updates() -> None:
     changed = False
 
     for module_name in sorted(state.keys()):
+        if module_name.startswith("__"):
+            continue
         entry = state.get(module_name, {})
         if not isinstance(entry, dict):
             continue
@@ -557,41 +587,51 @@ def _announce_tracked_module_updates() -> None:
 
         state[module_name] = entry
 
-    custom_snapshots = _build_custom_node_snapshots()
-    for module_name, current_snapshot in custom_snapshots.items():
-        entry = state.get(module_name, {})
-        if not isinstance(entry, dict):
-            entry = {}
-        prev_snapshot_raw = entry.get("node_snapshot")
-        prev_snapshot = prev_snapshot_raw if isinstance(prev_snapshot_raw, dict) else {}
-        prev_names = {k for k in prev_snapshot if isinstance(k, str)}
-        curr_names = {k for k in current_snapshot if isinstance(k, str)}
+    tracker = state.get("__node_tracker__")
+    if not isinstance(tracker, dict):
+        tracker = {}
+    prev_snapshots_raw = tracker.get("snapshots")
+    prev_snapshots = prev_snapshots_raw if isinstance(prev_snapshots_raw, dict) else {}
+    current_snapshots = _build_node_snapshots()
+    startup_changes: dict[str, dict[str, dict[str, Any]]] = {}
 
-        new_nodes: list[str] = []
-        updated_nodes: list[str] = []
-        if prev_snapshot:
-            new_nodes = sorted(curr_names - prev_names)
-            for node_name in sorted(curr_names & prev_names):
-                prev_node = prev_snapshot.get(node_name, {})
-                prev_sig = prev_node.get("sig") if isinstance(prev_node, dict) else None
-                curr_sig = current_snapshot.get(node_name, {}).get("sig")
-                if prev_sig != curr_sig:
-                    updated_nodes.append(node_name)
+    for group_name, modules in current_snapshots.items():
+        if not isinstance(modules, dict):
+            continue
+        group_prev = prev_snapshots.get(group_name)
+        group_prev = group_prev if isinstance(group_prev, dict) else {}
+        for module_name, current_snapshot in modules.items():
+            if not isinstance(current_snapshot, dict):
+                continue
+            prev_snapshot_raw = group_prev.get(module_name)
+            prev_snapshot = prev_snapshot_raw if isinstance(prev_snapshot_raw, dict) else {}
+            prev_names = {k for k in prev_snapshot if isinstance(k, str)}
+            curr_names = {k for k in current_snapshot if isinstance(k, str)}
 
-        if new_nodes or updated_nodes:
-            entry["startup_new_nodes"] = new_nodes
-            entry["startup_updated_nodes"] = updated_nodes
-            entry["startup_node_update_at"] = now
-        else:
-            entry.pop("startup_new_nodes", None)
-            entry.pop("startup_updated_nodes", None)
-            entry.pop("startup_node_update_at", None)
+            new_nodes: list[str] = []
+            updated_nodes: list[str] = []
+            if prev_snapshot:
+                new_nodes = sorted(curr_names - prev_names)
+                for node_name in sorted(curr_names & prev_names):
+                    prev_node = prev_snapshot.get(node_name, {})
+                    prev_sig = prev_node.get("sig") if isinstance(prev_node, dict) else None
+                    curr_sig = current_snapshot.get(node_name, {}).get("sig")
+                    if prev_sig != curr_sig:
+                        updated_nodes.append(node_name)
 
-        if prev_snapshot != current_snapshot:
-            changed = True
-        entry["node_snapshot"] = current_snapshot
-        entry["node_snapshot_at"] = now
-        state[module_name] = entry
+            if new_nodes or updated_nodes:
+                startup_changes.setdefault(group_name, {})[module_name] = {
+                    "new_nodes": new_nodes,
+                    "updated_nodes": updated_nodes,
+                    "at": now,
+                }
+
+    if prev_snapshots != current_snapshots:
+        changed = True
+    tracker["snapshots"] = current_snapshots
+    tracker["startup_changes"] = startup_changes
+    tracker["updated_at"] = now
+    state["__node_tracker__"] = tracker
 
     if changed:
         _save_module_state(state)
@@ -672,6 +712,7 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
                 "api": "Built-in ComfyUI API nodes module.",
             }.get(group, "")
             result["source"] = "builtin"
+        _apply_node_change_info(result, group, module_name)
         _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
         return result
 
@@ -742,6 +783,7 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
                 result["remote_updated_at"] = _to_iso(remote_dt) or ""
 
     _remember_module_state(module_name, result)
+    _apply_node_change_info(result, group, module_name)
     _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
     return result
 

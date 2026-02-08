@@ -333,7 +333,7 @@ function renderPicker(container) {
 
     const loadModuleBadges = async (group, modules) => {
         const token = ++moduleBadgeLoadToken;
-        if (group !== "custom" || !modules.length) {
+        if (!modules.length) {
             return;
         }
 
@@ -435,7 +435,6 @@ function renderPicker(container) {
     const renderNodeList = () => {
         nodeList.innerHTML = "";
         const selectedModule = nodeSelect.value;
-        const isCustomGroup = groupSelect.value === "custom";
         const nodes = getNodesForSelectedGroup().filter(
             (node) => (node.module || "unknown") === selectedModule
         );
@@ -445,10 +444,8 @@ function renderPicker(container) {
         }
 
         help.textContent = `Модуль ${selectedModule}: нод ${nodes.length}. Кликните ноду для вставки в граф.`;
-        if (isCustomGroup) {
-            help.textContent += ` Метки в списке модулей: ${MODULE_MARK_UPDATED} обновлен между запусками, ${MODULE_MARK_REMOTE_UPDATE} доступно обновление.`;
-            help.textContent += " Рамка ноды: красная = новая, зеленая = обновленная.";
-        }
+        help.textContent += ` Метки в списке модулей: ${MODULE_MARK_UPDATED} обновлен между запусками, ${MODULE_MARK_REMOTE_UPDATE} доступно обновление.`;
+        help.textContent += " Рамка ноды: красная = новая, зеленая = обновленная.";
         const nodeDiff = moduleNodeDiffs.get(selectedModule) || {
             newNodes: new Set(),
             updatedNodes: new Set(),
@@ -604,7 +601,7 @@ function renderPicker(container) {
             }
             const info = payload?.info || null;
             renderModuleInfo(info);
-            if (selectedGroup === "custom" && info) {
+            if (info) {
                 const badges = moduleBadgesFromInfo(info);
                 if (badges.updatedBetweenRuns || badges.hasRemoteUpdate) {
                     moduleBadges.set(selectedModule, badges);
