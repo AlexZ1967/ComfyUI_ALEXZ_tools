@@ -1264,6 +1264,8 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
 
 
 if PromptServer is not None and web is not None and getattr(PromptServer, "instance", None):
+    _LOGGER.info("✅ Module Nodes widget backend loaded")
+
     @PromptServer.instance.routes.post("/alexz_tools/module_refresh")
     async def alexz_tools_module_refresh(request):
         try:

@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.15 — 2026-02-09
+- Startup load order adjusted: Module Nodes backend is initialized before node table import.
+- Added startup log line `✅ Module Nodes widget backend loaded` so widget registration is visible and appears first in package startup logs.
+
 ## 0.13.14 — 2026-02-09
 - `Module Nodes` refresh progress moved from console to widget status line (single-line progress with `current/total`, `remaining`, current module).
 - Refresh API switched to background job mode with status polling (`POST /alexz_tools/module_refresh`, `GET /alexz_tools/module_refresh_status`) to keep UI responsive.
