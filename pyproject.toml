@@ -1,6 +1,6 @@
 [project]
 name = "comfyui-alexz-tools"
-version = "0.13.12"
+version = "0.13.14"
 description = "Custom nodes for ComfyUI."
 
 [tool.comfy]

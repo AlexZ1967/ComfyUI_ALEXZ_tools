@@ -173,6 +173,20 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
 
         self.assertEqual(called, [])
 
+    def test_refresh_reports_progress_callback(self):
+        events = []
+        self.api._discover_custom_modules = lambda: ["modA"]
+        self.api._sync_module_upstream = lambda module_name, timeout=15.0: True
+        self.api._announce_tracked_module_updates = lambda: None
+        self.api._comfyui_git_status = lambda force_refresh=False: {"update_status": "unknown"}
+
+        self.api._refresh_module_runtime_state(sync_upstreams=True, progress_cb=lambda **kw: events.append(dict(kw)))
+
+        phases = [e.get("phase") for e in events]
+        self.assertIn("sync", phases)
+        self.assertIn("snapshots", phases)
+        self.assertIn("done", phases)
+
 
 if __name__ == "__main__":
     unittest.main()

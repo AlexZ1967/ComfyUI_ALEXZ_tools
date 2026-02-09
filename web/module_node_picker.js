@@ -47,6 +47,14 @@ function injectStyles() {
         font-size: 12px;
         opacity: 0.8;
     }
+    .alexz-mod-picker-refresh-line {
+        font-size: 12px;
+        opacity: 0.92;
+        min-height: 1.2em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .alexz-mod-picker-comfy-alert {
         border: 1px solid #b64040;
         background: rgba(180, 64, 64, 0.16);
@@ -230,6 +238,16 @@ async function refreshModuleRuntimeState() {
     return await resp.json();
 }
 
+async function fetchModuleRefreshStatus() {
+    const resp = await api.fetchApi("/alexz_tools/module_refresh_status", {
+        cache: "no-store",
+    });
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
 function fmtDate(iso) {
     if (!iso) {
         return "n/a";
@@ -311,6 +329,10 @@ function renderPicker(container) {
     moduleFilter.placeholder = "Фильтр модулей (например: Inpaint-Crop)";
     root.appendChild(moduleFilter);
 
+    const refreshLine = document.createElement("div");
+    refreshLine.className = "alexz-mod-picker-refresh-line";
+    root.appendChild(refreshLine);
+
     const help = document.createElement("div");
     help.className = "alexz-mod-picker-help";
     root.appendChild(help);
@@ -328,6 +350,7 @@ function renderPicker(container) {
     const moduleBadges = new Map();
     const moduleNodeDiffs = new Map();
     let moduleBadgeLoadToken = 0;
+    let refreshPollToken = 0;
 
     const renderComfyAlert = (info) => {
         const behind = Number(info?.behind);
@@ -347,6 +370,57 @@ function renderPicker(container) {
     const getNodesForSelectedGroup = () => {
         const group = groupSelect.value;
         return catalogByGroup.get(group) || [];
+    };
+
+    const setRefreshLine = (text) => {
+        refreshLine.textContent = text || "";
+    };
+
+    const formatRefreshLine = (refresh) => {
+        const phase = String(refresh?.phase || "");
+        const current = Number(refresh?.current || 0);
+        const total = Number(refresh?.total || 0);
+        const remaining = Number(refresh?.remaining || 0);
+        const moduleName = String(refresh?.module || "");
+        const error = String(refresh?.error || "");
+
+        if (phase === "sync") {
+            if (total > 0) {
+                const modulePart = moduleName ? ` (${moduleName})` : "";
+                return `Обновление модулей: ${current}/${total}, осталось ${remaining}${modulePart}`;
+            }
+            return "Обновление модулей: подготовка...";
+        }
+        if (phase === "snapshots") {
+            return "Обновление модулей: пересчет статусов...";
+        }
+        if (phase === "done") {
+            return "Обновление модулей: завершено.";
+        }
+        if (phase === "error") {
+            return `Обновление модулей: ошибка${error ? ` (${error})` : ""}.`;
+        }
+        return "Обновление модулей: запуск...";
+    };
+
+    const pollRefreshProgress = async () => {
+        const token = ++refreshPollToken;
+        while (token === refreshPollToken) {
+            let payload;
+            try {
+                payload = await fetchModuleRefreshStatus();
+            } catch (err) {
+                setRefreshLine(`Обновление модулей: ошибка статуса (${String(err)}).`);
+                return false;
+            }
+            const refresh = payload?.refresh || {};
+            setRefreshLine(formatRefreshLine(refresh));
+            if (!refresh?.running) {
+                return refresh?.phase !== "error";
+            }
+            await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+        return false;
     };
 
     const setModuleOptionText = (moduleName) => {
@@ -732,9 +806,14 @@ function renderPicker(container) {
     };
     refreshBtn.onclick = async () => {
         refreshBtn.disabled = true;
+        setRefreshLine("Обновление модулей: запуск...");
         help.textContent = "Обновление статусов модулей...";
         try {
             await refreshModuleRuntimeState();
+            const ok = await pollRefreshProgress();
+            if (!ok) {
+                help.textContent = "Обновление завершилось с ошибкой.";
+            }
         } catch (err) {
             help.textContent = `Ошибка обновления статусов: ${String(err)}`;
         } finally {

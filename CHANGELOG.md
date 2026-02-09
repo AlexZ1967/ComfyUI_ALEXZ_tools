@@ -1,5 +1,14 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.14 — 2026-02-09
+- `Module Nodes` refresh progress moved from console to widget status line (single-line progress with `current/total`, `remaining`, current module).
+- Refresh API switched to background job mode with status polling (`POST /alexz_tools/module_refresh`, `GET /alexz_tools/module_refresh_status`) to keep UI responsive.
+- Removed verbose console progress output for module refresh.
+- Added regression test for refresh progress callback emission.
+
+## 0.13.13 — 2026-02-09
+- Fixed duplicated refresh logs in ComfyUI console: progress lines are now emitted once per event.
+
 ## 0.13.12 — 2026-02-09
 - Added compact console progress logs for Module Nodes refresh:
   - startup initialization message,

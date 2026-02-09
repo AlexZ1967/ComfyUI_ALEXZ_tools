@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from hashlib import sha1
 from collections import defaultdict
@@ -36,6 +37,22 @@ _CUSTOM_MODULE_ALIAS_CACHE: dict[str, str] | None = None
 _COMFYUI_STATUS_CACHE: tuple[float, dict[str, Any]] | None = None
 _COMFYUI_STATUS_TTL_SEC = 120.0
 _LAZY_REFRESH_DONE = False
+_REFRESH_LOCK = threading.Lock()
+_REFRESH_THREAD: threading.Thread | None = None
+_REFRESH_STATUS: dict[str, Any] = {
+    "running": False,
+    "phase": "idle",
+    "current": 0,
+    "total": 0,
+    "remaining": 0,
+    "module": "",
+    "message": "",
+    "error": "",
+    "sync_upstreams": False,
+    "started_at": "",
+    "updated_at": "",
+    "refreshed_at": "",
+}
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/([^/]+)/([^/]+)", re.IGNORECASE)
 _MODULE_STATE_PATH = Path(__file__).resolve().with_name("module_state_cache.json")
 _GROUP_ORDER = (
@@ -44,12 +61,6 @@ _GROUP_ORDER = (
     ("api", "API_Nodes"),
     ("custom", "Custom_Nodes"),
 )
-
-
-def _console_info(message: str) -> None:
-    text = str(message)
-    print(text, flush=True)
-    _LOGGER.info(text)
 
 
 _ALEXZ_ANNOTATIONS = {
@@ -1132,29 +1143,67 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
     return [name for name in module_names if q in name.lower()]
 
 
-def _refresh_module_runtime_state(sync_upstreams: bool = False) -> dict[str, Any]:
+def _set_refresh_status(**kwargs: Any) -> None:
+    with _REFRESH_LOCK:
+        _REFRESH_STATUS.update(kwargs)
+        _REFRESH_STATUS["updated_at"] = _now_iso()
+
+
+def _refresh_status_snapshot() -> dict[str, Any]:
+    with _REFRESH_LOCK:
+        return dict(_REFRESH_STATUS)
+
+
+def _refresh_progress(
+    *,
+    phase: str,
+    current: int = 0,
+    total: int = 0,
+    remaining: int = 0,
+    module: str = "",
+    message: str = "",
+) -> None:
+    _set_refresh_status(
+        phase=phase,
+        current=int(current),
+        total=int(total),
+        remaining=max(0, int(remaining)),
+        module=module,
+        message=message,
+    )
+
+
+def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any | None = None) -> dict[str, Any]:
     global _LAZY_REFRESH_DONE
     global _CUSTOM_MODULE_ALIAS_CACHE
     global _COMFYUI_STATUS_CACHE
     _MODULE_INFO_CACHE.clear()
     _CUSTOM_MODULE_ALIAS_CACHE = None
     _COMFYUI_STATUS_CACHE = None
+    if progress_cb is None:
+        progress_cb = _refresh_progress
     if sync_upstreams:
         module_names = _discover_custom_modules()
         total = len(module_names)
-        _console_info(f"ALEXZ_tools Module refresh: syncing upstreams for {total} custom modules...")
+        progress_cb(phase="sync", current=0, total=total, remaining=total, message="sync_upstreams")
         for idx, module_name in enumerate(module_names, start=1):
             synced = _sync_module_upstream(module_name)
             status = "synced" if synced else "skip"
-            _console_info(f"ALEXZ_tools Module refresh [{idx}/{total}] {module_name}: {status}")
-        _console_info("ALEXZ_tools Module refresh: upstream sync complete.")
+            progress_cb(
+                phase="sync",
+                current=idx,
+                total=total,
+                remaining=total - idx,
+                module=module_name,
+                message=status,
+            )
     else:
-        _console_info("ALEXZ_tools Module refresh: fast mode (without upstream sync).")
+        progress_cb(phase="sync", current=0, total=0, remaining=0, message="fast_mode")
 
-    _console_info("ALEXZ_tools Module refresh: recomputing module snapshots...")
+    progress_cb(phase="snapshots", current=0, total=0, remaining=0, message="recompute_snapshots")
     _announce_tracked_module_updates()
     comfyui = _comfyui_git_status(force_refresh=True)
-    _console_info("ALEXZ_tools Module refresh: done.")
+    progress_cb(phase="done", current=0, total=0, remaining=0, message="done")
     _LAZY_REFRESH_DONE = True
     return {"status": "ok", "refreshed_at": _now_iso(), "comfyui": comfyui, "sync_upstreams": sync_upstreams}
 
@@ -1163,9 +1212,55 @@ def _ensure_runtime_state_ready() -> None:
     global _LAZY_REFRESH_DONE
     if _LAZY_REFRESH_DONE:
         return
-    _console_info("ALEXZ_tools Module refresh: initialize runtime state on first load.")
-    _refresh_module_runtime_state(sync_upstreams=False)
+    _refresh_module_runtime_state(sync_upstreams=False, progress_cb=None)
     _LAZY_REFRESH_DONE = True
+
+
+def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
+    global _REFRESH_THREAD
+    with _REFRESH_LOCK:
+        thread = _REFRESH_THREAD
+        if thread is not None and thread.is_alive():
+            return {"status": "running", "refresh": dict(_REFRESH_STATUS)}
+        _REFRESH_STATUS.update(
+            {
+                "running": True,
+                "phase": "starting",
+                "current": 0,
+                "total": 0,
+                "remaining": 0,
+                "module": "",
+                "message": "starting",
+                "error": "",
+                "sync_upstreams": bool(sync_upstreams),
+                "started_at": _now_iso(),
+                "updated_at": _now_iso(),
+                "refreshed_at": "",
+            }
+        )
+
+    def _runner() -> None:
+        global _REFRESH_THREAD
+        try:
+            result = _refresh_module_runtime_state(sync_upstreams=sync_upstreams, progress_cb=_refresh_progress)
+            _set_refresh_status(
+                running=False,
+                phase="done",
+                message="done",
+                module="",
+                refreshed_at=result.get("refreshed_at", ""),
+            )
+        except Exception as exc:
+            _set_refresh_status(running=False, phase="error", message="error", error=str(exc), module="")
+        finally:
+            with _REFRESH_LOCK:
+                _REFRESH_THREAD = None
+
+    thread = threading.Thread(target=_runner, name="alexz-module-refresh", daemon=True)
+    with _REFRESH_LOCK:
+        _REFRESH_THREAD = thread
+    thread.start()
+    return {"status": "started", "refresh": _refresh_status_snapshot()}
 
 
 if PromptServer is not None and web is not None and getattr(PromptServer, "instance", None):
@@ -1174,9 +1269,17 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         try:
             sync_raw = (request.query.get("sync_upstreams", "1") or "1").strip().lower()
             do_sync = sync_raw not in {"0", "false", "no", "off"}
-            return web.json_response(_refresh_module_runtime_state(sync_upstreams=do_sync))
+            return web.json_response(_start_refresh_job(sync_upstreams=do_sync))
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module refresh API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
+    @PromptServer.instance.routes.get("/alexz_tools/module_refresh_status")
+    async def alexz_tools_module_refresh_status(request):
+        try:
+            return web.json_response({"status": "ok", "refresh": _refresh_status_snapshot()})
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("Module refresh status API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
     @PromptServer.instance.routes.get("/alexz_tools/node_catalog")
