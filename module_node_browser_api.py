@@ -4,6 +4,7 @@ import importlib
 import inspect
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -43,6 +44,13 @@ _GROUP_ORDER = (
     ("api", "API_Nodes"),
     ("custom", "Custom_Nodes"),
 )
+
+
+def _console_info(message: str) -> None:
+    text = str(message)
+    print(text, flush=True)
+    _LOGGER.info(text)
+
 
 _ALEXZ_ANNOTATIONS = {
     "ImagePrepare_for_QwenEdit_outpaint": "Подготавливает изображение и latent под QwenEdit Outpaint.",
@@ -497,12 +505,16 @@ def _manager_index() -> dict[str, dict[str, dict[str, Any]]]:
 
 
 def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env.setdefault("GIT_ASKPASS", "echo")
     try:
         proc = subprocess.run(
             args,
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
             check=False,
         )
     except Exception:
@@ -567,6 +579,27 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
 
         return state
     return {}
+
+
+def _sync_module_upstream(module_name: str, timeout: float = 15.0) -> bool:
+    module_name = _canonical_custom_module_name((module_name or "").strip())
+    if not module_name:
+        return False
+    for root in _custom_nodes_roots():
+        module_dir = root / module_name
+        if not module_dir.exists():
+            continue
+        is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
+        if is_git != "true":
+            continue
+        upstream = _run_git(
+            ["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
+        )
+        if not upstream:
+            return False
+        _run_git(["git", "-C", str(module_dir), "fetch", "--quiet"], timeout=timeout)
+        return True
+    return False
 
 
 def _comfyui_root() -> Path | None:
@@ -1099,24 +1132,39 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
     return [name for name in module_names if q in name.lower()]
 
 
-def _refresh_module_runtime_state() -> dict[str, Any]:
+def _refresh_module_runtime_state(sync_upstreams: bool = False) -> dict[str, Any]:
     global _LAZY_REFRESH_DONE
     global _CUSTOM_MODULE_ALIAS_CACHE
     global _COMFYUI_STATUS_CACHE
     _MODULE_INFO_CACHE.clear()
     _CUSTOM_MODULE_ALIAS_CACHE = None
     _COMFYUI_STATUS_CACHE = None
+    if sync_upstreams:
+        module_names = _discover_custom_modules()
+        total = len(module_names)
+        _console_info(f"ALEXZ_tools Module refresh: syncing upstreams for {total} custom modules...")
+        for idx, module_name in enumerate(module_names, start=1):
+            synced = _sync_module_upstream(module_name)
+            status = "synced" if synced else "skip"
+            _console_info(f"ALEXZ_tools Module refresh [{idx}/{total}] {module_name}: {status}")
+        _console_info("ALEXZ_tools Module refresh: upstream sync complete.")
+    else:
+        _console_info("ALEXZ_tools Module refresh: fast mode (without upstream sync).")
+
+    _console_info("ALEXZ_tools Module refresh: recomputing module snapshots...")
     _announce_tracked_module_updates()
     comfyui = _comfyui_git_status(force_refresh=True)
+    _console_info("ALEXZ_tools Module refresh: done.")
     _LAZY_REFRESH_DONE = True
-    return {"status": "ok", "refreshed_at": _now_iso(), "comfyui": comfyui}
+    return {"status": "ok", "refreshed_at": _now_iso(), "comfyui": comfyui, "sync_upstreams": sync_upstreams}
 
 
 def _ensure_runtime_state_ready() -> None:
     global _LAZY_REFRESH_DONE
     if _LAZY_REFRESH_DONE:
         return
-    _refresh_module_runtime_state()
+    _console_info("ALEXZ_tools Module refresh: initialize runtime state on first load.")
+    _refresh_module_runtime_state(sync_upstreams=False)
     _LAZY_REFRESH_DONE = True
 
 
@@ -1124,7 +1172,9 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
     @PromptServer.instance.routes.post("/alexz_tools/module_refresh")
     async def alexz_tools_module_refresh(request):
         try:
-            return web.json_response(_refresh_module_runtime_state())
+            sync_raw = (request.query.get("sync_upstreams", "1") or "1").strip().lower()
+            do_sync = sync_raw not in {"0", "false", "no", "off"}
+            return web.json_response(_refresh_module_runtime_state(sync_upstreams=do_sync))
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module refresh API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)

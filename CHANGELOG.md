@@ -1,5 +1,24 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.12 — 2026-02-09
+- Added compact console progress logs for Module Nodes refresh:
+  - startup initialization message,
+  - per-module upstream sync progress (when enabled),
+  - snapshot recomputation and completion messages.
+
+## 0.13.11 — 2026-02-09
+- Hardened git subprocess calls with non-interactive environment (`GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS=echo`) to prevent UI/API hangs on credential/passphrase prompts during status refresh.
+
+## 0.13.10 — 2026-02-09
+- Fixed Node Picker freeze on initial open: startup catalog load no longer performs `git fetch` across all custom modules.
+- Upstream sync is now explicit in `POST /alexz_tools/module_refresh` (`sync_upstreams=1` by default), keeping first-load UI responsive.
+- Added regression test to ensure default refresh path does not sync upstreams unless requested.
+
+## 0.13.9 — 2026-02-09
+- `Module Nodes`: before status recomputation, backend now syncs custom-module upstream refs via `git fetch --quiet` (for modules with configured upstream).
+- Fixes false `up_to_date` states caused by stale local upstream refs when modules were updated on GitHub but not fetched locally.
+- Added regression test ensuring refresh triggers upstream sync for discovered custom modules.
+
 ## 0.13.8 — 2026-02-08
 - `Module Nodes` update-tracking fixed for modules that were not previously in cache: startup scan now tracks all installed custom modules, not only modules already seen in `module_state_cache.json`.
 - Added custom-module name canonicalization in git/status paths to avoid case/alias duplicates (e.g. `comfyui-AGSoft` vs `ComfyUI-AGSoft`).

@@ -38,6 +38,9 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self._orig_comfy_root = self.api._comfyui_root
         self._orig_run_git = self.api._run_git
         self._orig_module_git_state = self.api._module_git_state
+        self._orig_sync_module_upstream = self.api._sync_module_upstream
+        self._orig_announce_updates = self.api._announce_tracked_module_updates
+        self._orig_comfy_status = self.api._comfyui_git_status
         self.api._MODULE_STATE_CACHE = {}
         self.api._COMFYUI_STATUS_CACHE = None
         self.api._save_module_state = lambda state: None
@@ -53,6 +56,9 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._comfyui_root = self._orig_comfy_root
         self.api._run_git = self._orig_run_git
         self.api._module_git_state = self._orig_module_git_state
+        self.api._sync_module_upstream = self._orig_sync_module_upstream
+        self.api._announce_tracked_module_updates = self._orig_announce_updates
+        self.api._comfyui_git_status = self._orig_comfy_status
         self.api._MODULE_INFO_CACHE.clear()
 
     def test_new_module_marker_applies_without_node_diffs(self):
@@ -144,6 +150,28 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         entry = self.api._MODULE_STATE_CACHE.get("comfyui-AGSoft", {})
         self.assertEqual(entry.get("startup_prev_commit"), "old111")
         self.assertEqual(entry.get("startup_new_commit"), "new222")
+
+    def test_refresh_syncs_custom_module_upstreams(self):
+        called = []
+        self.api._discover_custom_modules = lambda: ["modA", "modB"]
+        self.api._sync_module_upstream = lambda module_name, timeout=15.0: called.append((module_name, timeout)) or True
+        self.api._announce_tracked_module_updates = lambda: None
+        self.api._comfyui_git_status = lambda force_refresh=False: {"update_status": "unknown"}
+
+        self.api._refresh_module_runtime_state(sync_upstreams=True)
+
+        self.assertEqual([x[0] for x in called], ["modA", "modB"])
+
+    def test_initial_refresh_does_not_sync_upstreams_by_default(self):
+        called = []
+        self.api._discover_custom_modules = lambda: ["modA"]
+        self.api._sync_module_upstream = lambda module_name, timeout=15.0: called.append((module_name, timeout)) or True
+        self.api._announce_tracked_module_updates = lambda: None
+        self.api._comfyui_git_status = lambda force_refresh=False: {"update_status": "unknown"}
+
+        self.api._refresh_module_runtime_state()
+
+        self.assertEqual(called, [])
 
 
 if __name__ == "__main__":
