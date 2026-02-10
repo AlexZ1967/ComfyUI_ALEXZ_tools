@@ -1,17 +1,28 @@
 /**
- * Module Node Picker tab relay helper.
+ * Module: web/module_node_picker_tab_relay.js
+ * Author: AlexZ1967
+ * Last updated: 2026-02-10
  *
- * Provides sidebar-tab visibility synchronization helpers that keep the picker
- * panel mounted/unmounted correctly across ComfyUI tab switches.
+ * Description:
+ *   Module Node Picker tab relay helper.
+ *
+ * Purpose:
+ *   Synchronizes panel attachment/visibility with sidebar tab state and reports diagnostics.
  */
 
 const TAB_RELAY_STATE_KEY = "__alexz_module_picker_tab_relay_state_v2__";
 
+/**
+ * Return Sidebar API object for current ComfyUI build shape.
+ */
 function getSidebarApi(app) {
     const manager = app?.extensionManager;
     return manager?.sidebarTab || manager || null;
 }
 
+/**
+ * Read currently active sidebar tab id in a version-tolerant way.
+ */
 function getActiveSidebarTabId(app) {
     const sidebar = getSidebarApi(app);
     if (!sidebar) {
@@ -21,6 +32,9 @@ function getActiveSidebarTabId(app) {
     return String(active || "");
 }
 
+/**
+ * Try to activate sidebar tab by id, returning success flag.
+ */
 function activateSidebarTab(app, tabId) {
     if (!tabId) {
         return false;
@@ -37,6 +51,10 @@ function activateSidebarTab(app, tabId) {
     }
 }
 
+/**
+ * Compatibility wrapper for explicit tab activation.
+ * Currently delegates to normal activation to avoid aggressive forcing.
+ */
 function forceActivateSidebarTab(app, tabId, ownSidebarTabId = "") {
     if (!tabId) {
         return false;
@@ -45,6 +63,9 @@ function forceActivateSidebarTab(app, tabId, ownSidebarTabId = "") {
     return activateSidebarTab(app, tabId);
 }
 
+/**
+ * Extract logical tab id from sidebar button attributes/classes.
+ */
 function extractTabIdFromButton(buttonEl) {
     if (!(buttonEl instanceof Element)) {
         return "";
@@ -70,6 +91,9 @@ function extractTabIdFromButton(buttonEl) {
     return "";
 }
 
+/**
+ * Resolve sidebar tab-like button element from DOM event target/path.
+ */
 function resolveSidebarButtonFromEvent(event) {
     const direct = event?.target;
     if (direct instanceof Element) {
@@ -99,6 +123,9 @@ function resolveSidebarButtonFromEvent(event) {
     return null;
 }
 
+/**
+ * Heuristic check whether event originates from sidebar-related UI context.
+ */
 function isSidebarContextEvent(event) {
     const direct = event?.target;
     if (direct instanceof Element) {
@@ -129,6 +156,9 @@ function isSidebarContextEvent(event) {
     return false;
 }
 
+/**
+ * Return selected state for this extension sidebar button.
+ */
 function isOwnButtonSelected(sidebarTabId) {
     const ownBtn = document.querySelector(`.${sidebarTabId}-tab-button`);
     if (!ownBtn) {
@@ -137,6 +167,9 @@ function isOwnButtonSelected(sidebarTabId) {
     return ownBtn.classList.contains("side-bar-button-selected");
 }
 
+/**
+ * Collect known sidebar tab descriptors from multiple ComfyUI API shapes.
+ */
 function collectSidebarTabDescriptors(app) {
     const sidebar = getSidebarApi(app);
     const pools = [
@@ -165,6 +198,9 @@ function collectSidebarTabDescriptors(app) {
     return out;
 }
 
+/**
+ * Check whether sidebar exposes tab with the requested id.
+ */
 function hasSidebarTabId(app, tabId) {
     if (!tabId) {
         return false;
@@ -173,6 +209,9 @@ function hasSidebarTabId(app, tabId) {
     return descriptors.some((x) => String(x.id || "") === String(tabId));
 }
 
+/**
+ * Infer tab id when clicked button has no stable id/class markers.
+ */
 function inferFallbackTabIdFromContext(app, event, sidebarTabId) {
     const knownNodesMapId = "easyuse_nodes_map";
     const descriptors = collectSidebarTabDescriptors(app);
@@ -218,6 +257,9 @@ function inferFallbackTabIdFromContext(app, event, sidebarTabId) {
     return "";
 }
 
+/**
+ * Infer target tab id from button metadata, title, and known variants.
+ */
 function inferTabIdFromButton(app, button) {
     const explicit = extractTabIdFromButton(button);
     if (explicit) {
@@ -247,6 +289,9 @@ function inferTabIdFromButton(app, button) {
     return "";
 }
 
+/**
+ * Return compact DOM snapshot of picker container children for diagnostics.
+ */
 function getContainerState(root) {
     const container = root?.parentElement;
     if (!(container instanceof Element)) {
@@ -275,6 +320,9 @@ function getContainerState(root) {
     return { childCount, childShort: out.slice(0, 10).join(" | ") || "n/a" };
 }
 
+/**
+ * Unbind all relay listeners/intervals and clear global relay state.
+ */
 export function unbindModuleNodesTabRelay() {
     const state = window[TAB_RELAY_STATE_KEY];
     if (!state) {
@@ -320,6 +368,10 @@ export function unbindModuleNodesTabRelay() {
     window[TAB_RELAY_STATE_KEY] = null;
 }
 
+/**
+ * Bind lightweight tab relay that keeps picker root attached only when its
+ * sidebar tab is active, while reporting diagnostics to callback.
+ */
 export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     unbindModuleNodesTabRelay();
 
@@ -330,6 +382,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     let relayTimer = 0;
     const homeContainer = root.parentElement instanceof Element ? root.parentElement : null;
 
+    /**
+     * Emit deduplicated diagnostics payload to panel callback.
+     */
     const emitDiag = (reason, clickedTabId = "") => {
         const ownSelected = isOwnButtonSelected(sidebarTabId);
         const containerState = getContainerState(root);
@@ -351,6 +406,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         onDiag?.(diag);
     };
 
+    /**
+     * Re-attach picker root into home container when needed.
+     */
     const ensureRootAttached = () => {
         if (root.isConnected) {
             return true;
@@ -362,6 +420,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         return false;
     };
 
+    /**
+     * Detach picker root from DOM when another sidebar tab should own panel area.
+     */
     const ensureRootDetached = () => {
         if (!root.isConnected) {
             return true;
@@ -372,6 +433,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         return true;
     };
 
+    /**
+     * Synchronize picker root visibility/attachment with current sidebar state.
+     */
     const syncVisibility = (reason, clickedTabId = "") => {
         const activeTabId = getActiveSidebarTabId(app);
         const ownSelected = isOwnButtonSelected(sidebarTabId);
@@ -385,6 +449,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         emitDiag(reason, clickedTabId);
     };
 
+    /**
+     * Reserved hook for force-switch fallback; intentionally disabled for safety.
+     */
     const maybeForceRecentTab = (reason) => {
         const activeTabId = getActiveSidebarTabId(app);
         const ownSelected = isOwnButtonSelected(sidebarTabId);
@@ -400,6 +467,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         return false;
     };
 
+    /**
+     * Process sidebar button interaction and schedule relay correction if needed.
+     */
     const processTabButton = (button) => {
         const tabId = inferTabIdFromButton(app, button);
         if (!tabId) {
@@ -440,6 +510,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         }
     };
 
+    /**
+     * Global event handler used to detect sidebar tab interactions.
+     */
     const handleEvent = (event) => {
         const direct = event?.target;
         if (direct instanceof Element && root.contains(direct)) {
@@ -471,6 +544,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         processTabButton(button);
     };
 
+    /**
+     * Bind direct handlers to discovered tab buttons (supports dynamic sidebars).
+     */
     const bindDirectButtonListeners = () => {
         const buttons = Array.from(document.querySelectorAll(".side-bar-button, [class*='-tab-button']"));
         for (const button of buttons) {

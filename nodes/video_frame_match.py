@@ -1,7 +1,13 @@
-"""Find Closest Video Frame node implementation.
+"""
+Module: nodes/video_frame_match.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Searches video frames for the closest match to a reference image using selected
-metrics and returns the best frame with matching metadata.
+Description:
+    Find Closest Video Frame node implementation.
+
+Purpose:
+    Searches a video for the frame that best matches a reference image using selected metrics.
 """
 
 import json

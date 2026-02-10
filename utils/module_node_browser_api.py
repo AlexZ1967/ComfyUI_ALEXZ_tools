@@ -1,7 +1,13 @@
-"""Backend API for Module Node Picker widget.
+"""
+Module: utils/module_node_browser_api.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Implements catalog, module info, refresh/update jobs, git status tracking, and
-requirements installation endpoints consumed by the frontend panel.
+Description:
+    Backend API for Module Node Picker widget.
+
+Purpose:
+    Implements catalog, module info, refresh/update jobs, git status tracking, and requirements installation routes.
 """
 
 from __future__ import annotations

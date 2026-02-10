@@ -1,7 +1,13 @@
-"""Regression tests for Module Node Picker backend tracking.
+"""
+Module: tests/test_module_browser_tracker.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Covers module update detection, state snapshot persistence, and helper logic
-used by refresh/update API routines.
+Description:
+    Regression tests for Module Node Picker backend tracking.
+
+Purpose:
+    Tests module update detection, state snapshot persistence, and refresh/update helper logic.
 """
 
 import importlib

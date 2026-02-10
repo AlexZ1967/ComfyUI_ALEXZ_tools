@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Documentation consistency checker.
+"""
+Module: utils/docs_check.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Validates that README/guides stay synchronized with current node input/output
-definitions and reports mismatches for maintenance.
+Description:
+    Documentation consistency checker.
+
+Purpose:
+    Validates README/guides against current node input/output definitions and reports mismatches.
 """
 
 import ast

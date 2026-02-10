@@ -1,7 +1,13 @@
-"""Match Video Cut Point node implementation.
+"""
+Module: nodes/video_cut_match.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Finds the best frame pair between the tail of one video and the head of another
-video to help build seamless continuation edits.
+Description:
+    Match Video Cut Point node implementation.
+
+Purpose:
+    Finds the best frame pair between video tail and video head to support seamless continuation edits.
 """
 
 import json

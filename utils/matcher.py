@@ -1,7 +1,13 @@
-"""OpenCV feature-matching helper functions.
+"""
+Module: utils/matcher.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Wraps detector creation, keypoint matching, and affine estimation utilities
-used by image/video alignment pipelines.
+Description:
+    OpenCV feature-matching helper functions.
+
+Purpose:
+    Wraps detector creation, keypoint matching, and affine estimation for alignment pipelines.
 """
 
 import numpy as np

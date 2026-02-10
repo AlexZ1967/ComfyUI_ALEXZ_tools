@@ -1,8 +1,13 @@
 /**
- * Show/Save JSON node frontend helper.
+ * Module: web/show_json.js
+ * Author: AlexZ1967
+ * Last updated: 2026-02-10
  *
- * Adds web-side behavior for JSON preview/output widgets so formatted JSON can
- * be inspected conveniently in the ComfyUI interface.
+ * Description:
+ *   Show/Save JSON node frontend helper.
+ *
+ * Purpose:
+ *   Adds readonly JSON preview behavior for the node in the ComfyUI web interface.
  */
 
 import { app } from "../../../scripts/app.js";
@@ -17,7 +22,9 @@ app.registerExtension({
             return;
         }
 
-        /** Handle `ensureWidget` workflow step. */
+        /**
+         * Lazily create and cache read-only multiline widget used for JSON preview.
+         */
         function ensureWidget() {
             if (this._jsonWidget) {
                 return this._jsonWidget;

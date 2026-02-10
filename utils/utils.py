@@ -1,7 +1,13 @@
-"""General tensor and image utility functions.
+"""
+Module: utils/utils.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Includes format conversion, resizing, difference computation, and shared helper
-operations used by multiple nodes.
+Description:
+    General tensor and image utility functions.
+
+Purpose:
+    Contains format conversion, resizing, difference computation, and shared helper operations.
 """
 
 import numpy as np

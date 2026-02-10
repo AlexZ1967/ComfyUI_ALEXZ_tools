@@ -1,6 +1,12 @@
-"""Shared utility package for ComfyUI_ALEXZ_tools.
+"""
+Module: utils/__init__.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Exposes helper modules for matching, alignment, color processing, browser API
-state tracking, and developer-facing documentation checks.
+Description:
+    Shared utility package for ComfyUI_ALEXZ_tools.
+
+Purpose:
+    Groups helper modules for matching, alignment, color processing, API backend, and docs checks.
 """
 

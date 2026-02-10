@@ -1,7 +1,13 @@
-"""Generate QR Code node implementation.
+"""
+Module: nodes/qr_code_generate.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Builds QR code images from user text or URL input with configurable size and
-error-correction level, returning a ComfyUI image tensor.
+Description:
+    Generate QR Code node implementation.
+
+Purpose:
+    Generates QR code image tensors from user text/URL input with configurable size and correction level.
 """
 
 import numpy as np

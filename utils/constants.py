@@ -1,7 +1,13 @@
-"""Centralized constants for ComfyUI_ALEXZ_tools.
+"""
+Module: utils/constants.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Defines default values, limits, and UI-facing labels reused across nodes and
-utility modules to keep behavior consistent.
+Description:
+    Centralized constants for ComfyUI_ALEXZ_tools.
+
+Purpose:
+    Defines default values, limits, and labels shared across nodes and utility modules.
 """
 
 DEFAULT_FEATURE_COUNT = 1500

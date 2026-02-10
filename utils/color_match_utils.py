@@ -1,7 +1,13 @@
-"""Color matching helper functions.
+"""
+Module: utils/color_match_utils.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Provides reusable color-transfer algorithms and mask/resize helpers used by
-color-related nodes and shared image normalization logic.
+Description:
+    Color matching helper functions.
+
+Purpose:
+    Provides reusable color-transfer algorithms and mask/resize helpers for color-processing nodes.
 """
 
 import numpy as np

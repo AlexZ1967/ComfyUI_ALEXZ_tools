@@ -1,7 +1,13 @@
-"""Node registry for ComfyUI_ALEXZ_tools.
+"""
+Module: nodes/__init__.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Imports node modules, builds `NODE_CLASS_MAPPINGS` and
-`NODE_DISPLAY_NAME_MAPPINGS`, and prints compact load status lines.
+Description:
+    Node registry for ComfyUI_ALEXZ_tools.
+
+Purpose:
+    Imports node modules, builds ComfyUI mapping dictionaries, and logs node load status.
 """
 
 import importlib

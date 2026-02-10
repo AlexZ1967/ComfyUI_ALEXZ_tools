@@ -1,7 +1,13 @@
-"""Smoke tests for node contracts and helper behavior.
+"""
+Module: tests/test_smoke_nodes.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Verifies that core node/helper interfaces still produce expected output shapes
-and stable JSON payload structure after refactors.
+Description:
+    Smoke tests for node contracts and helper behavior.
+
+Purpose:
+    Checks that core node/helper interfaces keep stable output shapes and JSON payload structure.
 """
 
 import importlib

@@ -1,7 +1,13 @@
-"""Align Overlay To Background node implementation.
+"""
+Module: nodes/image_align.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-This file defines the node that aligns an overlay image onto a background image
-using feature matching and outputs aligned preview plus transform metadata.
+Description:
+    Align Overlay To Background node implementation.
+
+Purpose:
+    Defines the node that aligns an overlay image to a background image and returns transform metadata.
 """
 
 import logging

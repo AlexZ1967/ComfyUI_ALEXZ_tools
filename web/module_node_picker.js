@@ -1,8 +1,13 @@
 /**
- * Module Node Picker frontend panel.
+ * Module: web/module_node_picker.js
+ * Author: AlexZ1967
+ * Last updated: 2026-02-10
  *
- * Renders the sidebar UI, fetches module/node catalogs, shows module metadata,
- * and triggers backend refresh/update actions for ComfyUI and custom modules.
+ * Description:
+ *   Module Node Picker frontend panel.
+ *
+ * Purpose:
+ *   Renders sidebar UI, loads module/node catalogs, and runs refresh/update actions for modules and ComfyUI.
  */
 
 import { app } from "../../../scripts/app.js";
@@ -29,7 +34,10 @@ const GROUP_LABELS = {
 const MODULE_MARK_UPDATED = "✅";
 const MODULE_MARK_REMOTE_UPDATE = "🟥";
 
-/** Handle `injectStyles` workflow step. */
+/**
+ * Inject the stylesheet used by the Module Node Picker panel.
+ * Safely no-ops when style tag is already present.
+ */
 function injectStyles() {
     const styleId = "alexz-module-picker-style";
     if (document.getElementById(styleId)) {
@@ -289,7 +297,10 @@ function injectStyles() {
     document.head.appendChild(style);
 }
 
-/** Handle `centerNode` workflow step. */
+/**
+ * Place a newly created node near the visible canvas center.
+ * Falls back to a fixed position if visible area is unavailable.
+ */
 function centerNode(node) {
     const area = app.canvas?.visible_area;
     if (area && area.length >= 4) {
@@ -302,7 +313,10 @@ function centerNode(node) {
     }
 }
 
-/** Handle `createNodeByInfo` workflow step. */
+/**
+ * Create a LiteGraph node from catalog metadata.
+ * Tries internal node name first, then display name as fallback.
+ */
 function createNodeByInfo(nodeInfo) {
     const candidates = [nodeInfo.node_name, nodeInfo.display_name].filter(Boolean);
     for (const name of candidates) {
@@ -314,7 +328,9 @@ function createNodeByInfo(nodeInfo) {
     return null;
 }
 
-/** Handle `fetchNodeCatalog` workflow step. */
+/**
+ * Fetch grouped node catalog data from backend API.
+ */
 async function fetchNodeCatalog() {
     const resp = await api.fetchApi("/alexz_tools/node_catalog", {
         cache: "no-store",
@@ -325,7 +341,9 @@ async function fetchNodeCatalog() {
     return await resp.json();
 }
 
-/** Handle `fetchModuleInfo` workflow step. */
+/**
+ * Fetch detailed info for a specific module, optionally forcing refresh/sync.
+ */
 async function fetchModuleInfo(group, moduleName, options = {}) {
     const forceRefresh = Boolean(options?.forceRefresh);
     const syncUpstream = Boolean(options?.syncUpstream);
@@ -342,7 +360,9 @@ async function fetchModuleInfo(group, moduleName, options = {}) {
     return await resp.json();
 }
 
-/** Handle `fetchComfyUIInfo` workflow step. */
+/**
+ * Fetch ComfyUI repository update status and metadata.
+ */
 async function fetchComfyUIInfo(forceRefresh = true) {
     const resp = await api.fetchApi(
         `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}`,
@@ -354,7 +374,9 @@ async function fetchComfyUIInfo(forceRefresh = true) {
     return await resp.json();
 }
 
-/** Handle `refreshModuleRuntimeState` workflow step. */
+/**
+ * Start backend refresh job that recomputes module/runtime snapshots.
+ */
 async function refreshModuleRuntimeState() {
     const resp = await api.fetchApi("/alexz_tools/module_refresh", {
         method: "POST",
@@ -366,7 +388,9 @@ async function refreshModuleRuntimeState() {
     return await resp.json();
 }
 
-/** Handle `fetchModuleRefreshStatus` workflow step. */
+/**
+ * Poll refresh job status from backend.
+ */
 async function fetchModuleRefreshStatus() {
     const resp = await api.fetchApi("/alexz_tools/module_refresh_status", {
         cache: "no-store",
@@ -377,7 +401,9 @@ async function fetchModuleRefreshStatus() {
     return await resp.json();
 }
 
-/** Handle `startModuleUpdate` workflow step. */
+/**
+ * Start backend update job for a single module, all modules, or ComfyUI.
+ */
 async function startModuleUpdate(scope, moduleName) {
     const resp = await api.fetchApi("/alexz_tools/module_update", {
         method: "POST",
@@ -394,7 +420,9 @@ async function startModuleUpdate(scope, moduleName) {
     return await resp.json();
 }
 
-/** Handle `fetchModuleUpdateStatus` workflow step. */
+/**
+ * Poll module-update job status from backend.
+ */
 async function fetchModuleUpdateStatus() {
     const resp = await api.fetchApi("/alexz_tools/module_update_status", {
         cache: "no-store",
@@ -405,7 +433,9 @@ async function fetchModuleUpdateStatus() {
     return await resp.json();
 }
 
-/** Handle `installModuleRequirements` workflow step. */
+/**
+ * Install requirements.txt for selected custom modules in current runtime env.
+ */
 async function installModuleRequirements(modules) {
     const resp = await api.fetchApi("/alexz_tools/module_install_requirements", {
         method: "POST",
@@ -419,7 +449,9 @@ async function installModuleRequirements(modules) {
     return await resp.json();
 }
 
-/** Handle `installComfyUIRequirements` workflow step. */
+/**
+ * Install ComfyUI requirements.txt in current runtime environment.
+ */
 async function installComfyUIRequirements() {
     const resp = await api.fetchApi("/alexz_tools/comfyui_install_requirements", {
         method: "POST",
@@ -431,7 +463,9 @@ async function installComfyUIRequirements() {
     return await resp.json();
 }
 
-/** Handle `fmtDate` workflow step. */
+/**
+ * Format ISO timestamp for local UI display.
+ */
 function fmtDate(iso) {
     if (!iso) {
         return "n/a";
@@ -443,7 +477,9 @@ function fmtDate(iso) {
     }
 }
 
-/** Handle `moduleBadgesFromInfo` workflow step. */
+/**
+ * Derive UI badge flags from module info payload.
+ */
 function moduleBadgesFromInfo(info) {
     const behind = Number(info?.git_behind);
     return {
@@ -452,7 +488,9 @@ function moduleBadgesFromInfo(info) {
     };
 }
 
-/** Handle `formatModuleOption` workflow step. */
+/**
+ * Build text shown in module select option with update badges and node count.
+ */
 function formatModuleOption(moduleName, count, badges) {
     const marks = [];
     if (badges?.updatedBetweenRuns) {
@@ -465,7 +503,9 @@ function formatModuleOption(moduleName, count, badges) {
     return `${prefix}${moduleName} (${count})`;
 }
 
-/** Handle `renderPicker` workflow step. */
+/**
+ * Render Module Node Picker UI and bind all panel event handlers.
+ */
 function renderPicker(container) {
     // Safety: clear any previous global tab-sync hooks before re-rendering.
     unbindContainerOwnershipSync();
@@ -569,7 +609,9 @@ function renderPicker(container) {
     let actionBusy = false;
     let expandedModule = "";
 
-    /** Handle `renderComfyAlert` workflow step. */
+    /**
+     * Render ComfyUI update alert block when upstream update is available.
+     */
     const renderComfyAlert = (info) => {
         const behind = Number(info?.behind);
         const status = String(info?.update_status || "unknown");
@@ -588,12 +630,17 @@ function renderPicker(container) {
         comfyAlert.style.display = "block";
     };
 
-    /** Handle `getNodesForSelectedGroup` workflow step. */
+    /**
+     * Return node catalog entries for currently selected group.
+     */
     const getNodesForSelectedGroup = () => {
         const group = groupSelect.value;
         return catalogByGroup.get(group) || [];
     };
 
+    /**
+     * Update the one-line status/progress text with optional color tone.
+     */
     const setRefreshLine = (text, tone = "neutral") => {
         refreshLine.textContent = text || "";
         refreshLine.classList.remove("alexz-mod-picker-refresh-line--ok", "alexz-mod-picker-refresh-line--warn");
@@ -603,6 +650,9 @@ function renderPicker(container) {
             refreshLine.classList.add("alexz-mod-picker-refresh-line--warn");
         }
     };
+    /**
+     * Render compact diagnostics block for tab-sync troubleshooting.
+     */
     const setDiagnosticText = (diag) => {
         const lines = [
             `diag.ts=${new Date().toLocaleTimeString()}`,
@@ -638,13 +688,17 @@ function renderPicker(container) {
         });
     }
 
-    /** Handle `setHelpText` workflow step. */
+    /**
+     * Replace help area with plain status/help text.
+     */
     const setHelpText = (text) => {
         help.innerHTML = "";
         help.textContent = text || "";
     };
 
-    /** Handle `setHelpModuleSummary` workflow step. */
+    /**
+     * Render expanded-module help summary with insertion hints and legend.
+     */
     const setHelpModuleSummary = (moduleName, nodeCount) => {
         help.innerHTML = "";
 
@@ -677,6 +731,9 @@ function renderPicker(container) {
         help.appendChild(hint3);
     };
 
+    /**
+     * Render collapsed-module hint shown before node list expansion.
+     */
     const setHelpModuleCardHint = (moduleName, nodeCount) => {
         help.innerHTML = "";
 
@@ -699,7 +756,9 @@ function renderPicker(container) {
         help.appendChild(hint);
     };
 
-    /** Handle `formatRefreshLine` workflow step. */
+    /**
+     * Convert backend refresh status payload into a one-line progress message.
+     */
     const formatRefreshLine = (refresh) => {
         const phase = String(refresh?.phase || "");
         const current = Number(refresh?.current || 0);
@@ -732,7 +791,9 @@ function renderPicker(container) {
         return { text: "Обновление статусов модулей: запуск...", tone: "neutral" };
     };
 
-    /** Handle `pollRefreshProgress` workflow step. */
+    /**
+     * Poll refresh status endpoint until job completes or fails.
+     */
     const pollRefreshProgress = async () => {
         const token = ++refreshPollToken;
         while (token === refreshPollToken) {
@@ -754,7 +815,9 @@ function renderPicker(container) {
         return false;
     };
 
-    /** Handle `setActionBusy` workflow step. */
+    /**
+     * Enable/disable actionable UI controls during long-running operations.
+     */
     const setActionBusy = (busy) => {
         actionBusy = Boolean(busy);
         refreshBtn.disabled = actionBusy;
@@ -766,7 +829,9 @@ function renderPicker(container) {
         }
     };
 
-    /** Handle `syncUpdateAllButton` workflow step. */
+    /**
+     * Toggle visibility and label of the global custom-nodes update button.
+     */
     const syncUpdateAllButton = () => {
         const show = groupSelect.value === "custom" && customModulesNeedUpdate > 0;
         if (!show) {
@@ -777,7 +842,9 @@ function renderPicker(container) {
         updateAllBtn.textContent = `Update all custom_nodes (${customModulesNeedUpdate})`;
     };
 
-    /** Handle `formatUpdateLine` workflow step. */
+    /**
+     * Convert module-update status payload into a one-line progress/result message.
+     */
     const formatUpdateLine = (update) => {
         const scope = String(update?.scope || "");
         const phase = String(update?.phase || "");
@@ -828,7 +895,9 @@ function renderPicker(container) {
         return { text: "Обновление модулей: подготовка...", tone: "neutral" };
     };
 
-    /** Handle `pollUpdateProgress` workflow step. */
+    /**
+     * Poll update status endpoint until module update job finishes.
+     */
     const pollUpdateProgress = async () => {
         const token = ++updatePollToken;
         while (token === updatePollToken) {
@@ -850,7 +919,9 @@ function renderPicker(container) {
         return null;
     };
 
-    /** Handle `maybeInstallChangedRequirements` workflow step. */
+    /**
+     * Ask user to install changed requirements.txt files and execute pip install.
+     */
     const maybeInstallChangedRequirements = async (update) => {
         const scope = String(update?.scope || "");
         if (scope === "comfyui") {
@@ -898,7 +969,10 @@ function renderPicker(container) {
         setRefreshLine(`Зависимости обновлены: ${installed} модулей.`, "ok");
     };
 
-    /** Handle `runModuleUpdate` workflow step. */
+    /**
+     * Run update flow (backend job + polling + optional requirements install)
+     * and then refresh catalog/module state in UI.
+     */
     const runModuleUpdate = async (scope, moduleName) => {
         setActionBusy(true);
         try {
@@ -948,7 +1022,9 @@ function renderPicker(container) {
         }
     };
 
-    /** Handle `setModuleOptionText` workflow step. */
+    /**
+     * Refresh module select option text for one module after badge updates.
+     */
     const setModuleOptionText = (moduleName) => {
         const option = moduleOptions.get(moduleName);
         if (!option) {
@@ -959,7 +1035,9 @@ function renderPicker(container) {
         option.textContent = formatModuleOption(moduleName, count, badges);
     };
 
-    /** Handle `setModuleNodeDiffs` workflow step. */
+    /**
+     * Cache node-level diff markers (new/updated) for selected module.
+     */
     const setModuleNodeDiffs = (moduleName, info) => {
         const newNodes = Array.isArray(info?.new_nodes_between_runs) ? info.new_nodes_between_runs : [];
         const updatedNodes = Array.isArray(info?.updated_nodes_between_runs) ? info.updated_nodes_between_runs : [];
@@ -970,7 +1048,9 @@ function renderPicker(container) {
         });
     };
 
-    /** Handle `loadModuleBadges` workflow step. */
+    /**
+     * Load module badges in parallel with bounded worker pool to keep UI responsive.
+     */
     const loadModuleBadges = async (group, modules) => {
         const token = ++moduleBadgeLoadToken;
         if (!modules.length) {
@@ -1005,7 +1085,9 @@ function renderPicker(container) {
         await Promise.all(workers);
     };
 
-    /** Handle `fillModuleSelect` workflow step. */
+    /**
+     * Populate module selector for current group with filtering and badge placeholders.
+     */
     const fillModuleSelect = (options = {}) => {
         const preferredModule = String(options?.preferredModule || "").trim();
         const autoExpandModule = String(options?.autoExpandModule || "").trim();
@@ -1090,7 +1172,9 @@ function renderPicker(container) {
         syncUpdateAllButton();
     };
 
-    /** Handle `fillGroupSelect` workflow step. */
+    /**
+     * Populate top-level group selector and propagate selection to module list.
+     */
     const fillGroupSelect = (groups, options = {}) => {
         const preferredGroup = String(options?.preferredGroup || "").trim();
         const preferredModule = String(options?.preferredModule || "").trim();
@@ -1120,7 +1204,9 @@ function renderPicker(container) {
         fillModuleSelect({ preferredModule, autoExpandModule });
     };
 
-    /** Handle `renderNodeList` workflow step. */
+    /**
+     * Render node cards for currently selected module and bind insertion actions.
+     */
     const renderNodeList = () => {
         nodeList.innerHTML = "";
         const selectedModule = nodeSelect.value;
@@ -1194,7 +1280,9 @@ function renderPicker(container) {
         nodeList.appendChild(groupEl);
     };
 
-    /** Handle `renderModuleInfo` workflow step. */
+    /**
+     * Render module metadata card, status rows, and per-module action buttons.
+     */
     const renderModuleInfo = (info) => {
         moduleInfo.innerHTML = "";
         if (!info || nodeSelect.value === "-1") {
@@ -1417,7 +1505,9 @@ function renderPicker(container) {
         moduleInfo.appendChild(card);
     };
 
-    /** Handle `loadModuleInfo` workflow step. */
+    /**
+     * Load and render module info for currently selected group/module.
+     */
     const loadModuleInfo = async (options = {}) => {
         const selectedModule = nodeSelect.value;
         const selectedGroup = groupSelect.value;
@@ -1457,7 +1547,9 @@ function renderPicker(container) {
         }
     };
 
-    /** Handle `loadCatalog` workflow step. */
+    /**
+     * Load full node catalog from backend and refresh picker UI state.
+     */
     const loadCatalog = async (options = {}) => {
         const preferredGroup = String(options?.preferredGroup || "").trim();
         const preferredModule = String(options?.preferredModule || "").trim();
@@ -1557,7 +1649,9 @@ function renderPicker(container) {
     loadCatalog();
 }
 
-/** Handle `unbindContainerOwnershipSync` workflow step. */
+/**
+ * Tear down legacy container-ownership sync listeners and observers.
+ */
 function unbindContainerOwnershipSync() {
     const state = window[CONTAINER_SYNC_STATE_KEY];
     if (!state) {
@@ -1579,7 +1673,10 @@ function unbindContainerOwnershipSync() {
     window[CONTAINER_SYNC_STATE_KEY] = null;
 }
 
-/** Handle `bindContainerOwnershipSync` workflow step. */
+/**
+ * Bind legacy sidebar/container sync logic used in compatibility mode.
+ * Keeps picker root hidden when another sidebar tab owns the container.
+ */
 function bindContainerOwnershipSync(container, root, onDiag) {
     unbindContainerOwnershipSync();
     // Ensure root is visible when binding ownership sync
@@ -1783,6 +1880,9 @@ function bindContainerOwnershipSync(container, root, onDiag) {
             lastDiag = sig;
         }
     };
+    /**
+     * Debounce sync execution to avoid excessive DOM work on rapid events.
+     */
     const scheduleSync = (clickedTabId = "") => {
         if (syncTimerId) {
             return;
@@ -1806,6 +1906,9 @@ function bindContainerOwnershipSync(container, root, onDiag) {
     const containerObserver = new MutationObserver(() => scheduleSync(""));
     containerObserver.observe(observedContainer, { childList: true });
     const sidebarObserver = null;
+    /**
+     * Track sidebar interactions and schedule ownership sync updates.
+     */
     const onInteraction = (event) => {
         const button = resolveSidebarButtonFromEvent(event);
         if (!button) {
@@ -1838,7 +1941,9 @@ function bindContainerOwnershipSync(container, root, onDiag) {
     sync();
 }
 
-/** Handle `attachFallbackButton` workflow step. */
+/**
+ * Attach fallback button when Sidebar API is unavailable.
+ */
 function attachFallbackButton() {
     cleanupFallbackButtons();
     const button = document.createElement("button");
@@ -1875,7 +1980,9 @@ function attachFallbackButton() {
     document.body.appendChild(button);
 }
 
-/** Handle `cleanupFallbackButtons` workflow step. */
+/**
+ * Remove all fallback buttons previously created by this extension.
+ */
 function cleanupFallbackButtons() {
     const byId = document.getElementById(FALLBACK_BUTTON_ID);
     if (byId && byId.parentNode) {

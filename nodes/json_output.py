@@ -1,7 +1,13 @@
-"""Show/Save JSON node implementation.
+"""
+Module: nodes/json_output.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Normalizes arbitrary input values to JSON, displays formatted text, and can
-optionally write the same payload to an output file.
+Description:
+    Show/Save JSON node implementation.
+
+Purpose:
+    Normalizes arbitrary input values to JSON, displays formatted output, and optionally saves it.
 """
 
 import json

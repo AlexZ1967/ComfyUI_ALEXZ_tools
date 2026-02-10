@@ -1,7 +1,13 @@
-"""Image alignment helper functions.
+"""
+Module: utils/alignment.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Contains feature-matching and affine-transform utilities used by alignment
-nodes, including JSON metadata formatting for external editors.
+Description:
+    Image alignment helper functions.
+
+Purpose:
+    Provides feature-matching and affine-transform utilities used by alignment nodes.
 """
 
 import json

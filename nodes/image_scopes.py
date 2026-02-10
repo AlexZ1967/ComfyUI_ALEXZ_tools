@@ -1,7 +1,13 @@
-"""Waveform and Histogram scope node implementations.
+"""
+Module: nodes/image_scopes.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Contains nodes that render RGB waveform and RGB histogram analysis images for
-visual color/exposure inspection inside ComfyUI.
+Description:
+    Waveform and Histogram scope node implementations.
+
+Purpose:
+    Renders RGB waveform and RGB histogram analysis images for visual inspection in ComfyUI.
 """
 
 import json

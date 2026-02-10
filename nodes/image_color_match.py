@@ -1,7 +1,13 @@
-"""Color Match To Reference node implementation.
+"""
+Module: nodes/image_color_match.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Contains color-transfer methods, quality metrics, and JSON export helpers used
-for matching source image grading to a reference image.
+Description:
+    Color Match To Reference node implementation.
+
+Purpose:
+    Implements color-transfer methods, quality metrics, and JSON export for image-to-reference matching.
 """
 
 import json

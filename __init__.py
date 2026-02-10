@@ -1,7 +1,13 @@
-"""ComfyUI_ALEXZ_tools package entrypoint.
+"""
+Module: __init__.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Initializes extension logging, registers backend APIs for the Module Node Picker
-widget, and exposes ComfyUI node mapping dictionaries.
+Description:
+    ComfyUI_ALEXZ_tools package entrypoint.
+
+Purpose:
+    Initializes extension logging, registers backend APIs, and exports node mappings.
 """
 
 import logging

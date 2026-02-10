@@ -1,5 +1,20 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.0 — 2026-02-10
+- Minor-version bump for large documentation/maintainability update across codebase.
+- Standardized module headers in project Python/JS files with unified metadata block:
+  - `Module`,
+  - `Author`,
+  - `Last updated`,
+  - `Description`,
+  - `Purpose`.
+- Expanded JS code comments to informative JSDoc-style descriptions for key functions and internal helpers in:
+  - `web/module_node_picker.js`,
+  - `web/module_node_picker_tab_relay.js`,
+  - `web/show_json.js`,
+  - `web/video_cut_match_upload.js`.
+- Updated package version in `pyproject.toml` and `README.md` to `0.16.0`.
+
 ## 0.15.11 — 2026-02-10
 - Simplified `README.md` section `UI Tool: Module Node Picker`: replaced long inline block with short description and links.
 - Added dedicated guide file `GUIde_Module_Node_Picker.md` with full widget usage and update workflow details.

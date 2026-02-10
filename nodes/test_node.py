@@ -1,7 +1,13 @@
-"""Minimal internal test node implementation.
+"""
+Module: nodes/test_node.py
+Author: AlexZ1967
+Last updated: 2026-02-10
 
-Provides a lightweight node used to verify extension loading and basic node
-execution during development and tracker tests.
+Description:
+    Internal test node implementation.
+
+Purpose:
+    Provides a lightweight node used to verify extension loading and execution paths.
 """
 
 class ALEXZTestNode:

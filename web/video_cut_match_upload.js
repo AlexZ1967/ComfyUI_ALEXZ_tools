@@ -1,8 +1,13 @@
 /**
- * Match Video Cut Point frontend upload helper.
+ * Module: web/video_cut_match_upload.js
+ * Author: AlexZ1967
+ * Last updated: 2026-02-10
  *
- * Adds UI support for selecting the second video input file required by the
- * VideoCutMatch node workflow.
+ * Description:
+ *   Match Video Cut Point frontend upload helper.
+ *
+ * Purpose:
+ *   Adds upload widgets for selecting and uploading both video inputs required by VideoCutMatch.
  */
 
 import { app } from "../../../scripts/app.js";
@@ -12,7 +17,9 @@ const EXT_NAME = "ALEXZ.Tools.VideoCutMatchUpload";
 const TARGET_NODES = new Set(["VideoCutMatch", "Match Video Cut Point"]);
 const VIDEO_ACCEPT = ["video/webm", "video/mp4", "video/x-matroska", "image/gif"];
 
-/** Handle `ensureOption` workflow step. */
+/**
+ * Ensure uploaded filename exists in widget options list.
+ */
 function ensureOption(widget, filename) {
     if (!widget?.options || !Array.isArray(widget.options.values)) {
         return;
@@ -22,7 +29,9 @@ function ensureOption(widget, filename) {
     }
 }
 
-/** Handle `setWidgetValue` workflow step. */
+/**
+ * Set widget value and trigger widget callback with uploaded filename.
+ */
 function setWidgetValue(widget, filename) {
     if (!widget) {
         return;
@@ -32,7 +41,9 @@ function setWidgetValue(widget, filename) {
     widget.callback?.(filename);
 }
 
-/** Handle `uploadVideoFile` workflow step. */
+/**
+ * Upload selected video file via ComfyUI upload endpoint and return stored path.
+ */
 async function uploadVideoFile(file) {
     const body = new FormData();
     const newFile = new File([file], file.name, {
@@ -56,7 +67,9 @@ async function uploadVideoFile(file) {
     return `${subfolder}${name}`;
 }
 
-/** Handle `addUploadWidget` workflow step. */
+/**
+ * Add file-upload button next to target video path widget on node instance.
+ */
 function addUploadWidget(node, widgetName, buttonLabel) {
     if (!node?.widgets?.length) {
         return;
