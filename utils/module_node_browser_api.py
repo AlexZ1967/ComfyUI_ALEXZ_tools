@@ -668,6 +668,23 @@ def _module_needs_update_now(module_name: str) -> bool:
     return bool(git_state.get("has_upstream") and remote_head and installed and remote_head != installed)
 
 
+def _module_worktree_signature(module_name: str) -> str:
+    """Return short signature of local uncommitted changes for module worktree."""
+    module_dir = _module_dir(module_name)
+    if module_dir is None:
+        return ""
+    is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
+    if is_git != "true":
+        return ""
+    status = _run_git(["git", "-C", str(module_dir), "status", "--porcelain"])
+    if not status:
+        return ""
+    lines = sorted(line.strip() for line in status.splitlines() if line.strip())
+    if not lines:
+        return ""
+    return sha1("\n".join(lines).encode("utf-8")).hexdigest()[:12]
+
+
 def _count_custom_modules_need_update() -> int:
     """Count custom modules that currently report available updates."""
     state = _load_module_state()
@@ -703,7 +720,11 @@ def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
     if isinstance(entry, dict):
         startup_prev = (entry.get("pending_prev_commit") or entry.get("startup_prev_commit") or "").strip()
         startup_new = (entry.get("pending_new_commit") or entry.get("startup_new_commit") or "").strip()
-        updated_between_runs = bool(startup_prev and startup_new)
+        updated_between_runs = (
+            bool(startup_prev and startup_new)
+            or bool(entry.get("pending_commit_change"))
+            or bool(entry.get("pending_local_change"))
+        )
         if group_name == "custom":
             update_available = bool(entry.get("update_available"))
 
@@ -1395,7 +1416,11 @@ def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
     result["last_local_change_at"] = entry.get("last_local_change_at")
     startup_prev = (entry.get("pending_prev_commit") or entry.get("startup_prev_commit") or "").strip()
     startup_new = (entry.get("pending_new_commit") or entry.get("startup_new_commit") or "").strip()
-    result["updated_between_runs"] = bool(startup_prev and startup_new)
+    result["updated_between_runs"] = (
+        bool(startup_prev and startup_new)
+        or bool(entry.get("pending_commit_change"))
+        or bool(entry.get("pending_local_change"))
+    )
     result["startup_prev_commit_short"] = _short_commit(startup_prev) if startup_prev else ""
     result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
     result["startup_update_at"] = entry.get("pending_update_at") or entry.get("startup_update_at") or ""
@@ -1450,6 +1475,8 @@ def _acknowledge_module_novelty(group: str, module_name: str) -> None:
             "pending_prev_commit",
             "pending_new_commit",
             "pending_update_at",
+            "pending_commit_change",
+            "pending_local_change",
             "startup_prev_commit",
             "startup_new_commit",
             "startup_update_at",
@@ -1503,6 +1530,8 @@ def _acknowledge_all_novelty() -> dict[str, Any]:
             "pending_prev_commit",
             "pending_new_commit",
             "pending_update_at",
+            "pending_commit_change",
+            "pending_local_change",
             "startup_prev_commit",
             "startup_new_commit",
             "startup_update_at",
@@ -1570,6 +1599,13 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, int]
 
         entry["last_checked_at"] = now
         needs_update = bool(entry.get("update_available"))
+        prev_worktree_sig = str(entry.get("worktree_signature") or "")
+        curr_worktree_sig = _module_worktree_signature(module_name)
+        if curr_worktree_sig != prev_worktree_sig:
+            if prev_worktree_sig:
+                entry["pending_local_change"] = True
+                entry["pending_update_at"] = now
+            entry["worktree_signature"] = curr_worktree_sig
         if git_state:
             entry["module_path"] = git_state.get("module_path") or entry.get("module_path")
             entry["repository"] = git_state.get("repository") or entry.get("repository")
@@ -1591,6 +1627,8 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, int]
                 entry["pending_prev_commit"] = prev_commit
                 entry["pending_new_commit"] = current_commit
                 entry["pending_update_at"] = now
+                entry["pending_commit_change"] = True
+                entry.pop("pending_local_change", None)
                 entry["startup_prev_commit"] = prev_commit
                 entry["startup_new_commit"] = current_commit
                 entry["startup_update_at"] = now

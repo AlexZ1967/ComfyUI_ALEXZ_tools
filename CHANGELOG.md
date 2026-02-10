@@ -11,6 +11,12 @@
   - `Обновить информацию о ComfyUI` clears ComfyUI novelty marker after local update detection,
   - then shows current local/remote status (including red update square if upstream is newer).
 - Startup behavior keeps cache-first policy, but now performs lightweight local change tracking to detect newly installed/updated modules between runs without forcing upstream refresh.
+- Added local worktree change tracking for custom modules:
+  - uncommitted git changes in module files are now detected between runs,
+  - module receives persistent `✅` marker until explicit acknowledge.
+- Added explicit local commit-change tracking:
+  - any changed module commit SHA between runs marks the module as updated,
+  - this does not depend on node-file changes and applies to module-wide updates.
 - Added tracker regression tests for persistent novelty markers and acknowledge flow (`tests/test_module_browser_tracker.py`), including global acknowledge and ComfyUI marker acknowledge.
 
 ## 0.16.3 — 2026-02-10

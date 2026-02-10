@@ -55,6 +55,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self._orig_comfy_root = self.api._comfyui_root
         self._orig_run_git = self.api._run_git
         self._orig_module_git_state = self.api._module_git_state
+        self._orig_module_worktree_signature = self.api._module_worktree_signature
         self._orig_sync_module_upstream = self.api._sync_module_upstream
         self._orig_announce_updates = self.api._announce_tracked_module_updates
         self._orig_comfy_status = self.api._comfyui_git_status
@@ -85,6 +86,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._comfyui_root = self._orig_comfy_root
         self.api._run_git = self._orig_run_git
         self.api._module_git_state = self._orig_module_git_state
+        self.api._module_worktree_signature = self._orig_module_worktree_signature
         self.api._sync_module_upstream = self._orig_sync_module_upstream
         self.api._announce_tracked_module_updates = self._orig_announce_updates
         self.api._comfyui_git_status = self._orig_comfy_status
@@ -227,6 +229,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         entry = self.api._MODULE_STATE_CACHE.get("comfyui-AGSoft", {})
         self.assertEqual(entry.get("startup_prev_commit"), "old111")
         self.assertEqual(entry.get("startup_new_commit"), "new222")
+        self.assertTrue(bool(entry.get("pending_commit_change")))
 
     def test_pending_update_marker_persists_until_acknowledge(self):
         """Ensure local update marker stays sticky across restarts until explicit acknowledge."""
@@ -311,6 +314,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
             "ComfyUI_B": {
                 "pending_prev_commit": "oldB",
                 "pending_new_commit": "newB",
+                "pending_local_change": True,
             },
         }
 
@@ -326,6 +330,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertFalse(entry_a.get("startup_new_commit"))
         self.assertFalse(entry_b.get("pending_prev_commit"))
         self.assertFalse(entry_b.get("pending_new_commit"))
+        self.assertFalse(entry_b.get("pending_local_change"))
 
         tracker = self.api._MODULE_STATE_CACHE.get("__node_tracker__", {})
         self.assertEqual(tracker.get("pending_changes"), {})
@@ -369,6 +374,56 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._COMFYUI_STATUS_CACHE = None
         info = self.api._comfyui_git_status(force_refresh=False)
         self.assertFalse(bool(info.get("updated_between_runs")))
+
+    def test_local_worktree_change_sets_persistent_module_marker(self):
+        """Ensure uncommitted local module change triggers sticky update marker."""
+        self.api._now_iso = lambda: "2026-02-10T20:00:00+00:00"
+        self.api._discover_custom_modules = lambda: ["ComfyUI_ALEXZ_tools"]
+        self.api._build_node_snapshots = lambda: {"custom": {"ComfyUI_ALEXZ_tools": {}}}
+        self.api._module_git_state = lambda _name: {"installed_commit": "same111", "installed_updated_at": "2026-02-10T19:00:00+00:00"}
+        self.api._module_worktree_signature = lambda _name: "dirty_sig"
+
+        self.api._MODULE_STATE_CACHE = {
+            "ComfyUI_ALEXZ_tools": {
+                "installed_commit": "same111",
+                "worktree_signature": "base_sig",
+            },
+            "__node_tracker__": {"snapshots": {"custom": {"ComfyUI_ALEXZ_tools": {}}}, "module_sets": {"custom": ["ComfyUI_ALEXZ_tools"]}},
+        }
+
+        self.api._announce_tracked_module_updates(local_only=True)
+
+        entry = self.api._MODULE_STATE_CACHE.get("ComfyUI_ALEXZ_tools", {})
+        self.assertTrue(bool(entry.get("pending_local_change")))
+        flags = self.api._cached_module_flags("custom", "ComfyUI_ALEXZ_tools")
+        self.assertTrue(bool(flags.get("updated_between_runs")))
+
+    def test_commit_change_without_node_delta_sets_module_marker(self):
+        """Ensure any local commit change marks module as updated even without node diff."""
+        self.api._now_iso = lambda: "2026-02-10T21:00:00+00:00"
+        self.api._discover_custom_modules = lambda: ["ComfyUI_ALEXZ_tools"]
+        self.api._build_node_snapshots = lambda: {"custom": {"ComfyUI_ALEXZ_tools": {}}}
+        self.api._module_worktree_signature = lambda _name: ""
+        self.api._module_git_state = lambda _name: {
+            "installed_commit": "new_commit_123",
+            "installed_updated_at": "2026-02-10T20:59:00+00:00",
+        }
+        self.api._MODULE_STATE_CACHE = {
+            "ComfyUI_ALEXZ_tools": {
+                "installed_commit": "old_commit_456",
+                "worktree_signature": "",
+            },
+            "__node_tracker__": {
+                "snapshots": {"custom": {"ComfyUI_ALEXZ_tools": {}}},
+                "module_sets": {"custom": ["ComfyUI_ALEXZ_tools"]},
+            },
+        }
+
+        self.api._announce_tracked_module_updates(local_only=True)
+        entry = self.api._MODULE_STATE_CACHE.get("ComfyUI_ALEXZ_tools", {})
+        self.assertTrue(bool(entry.get("pending_commit_change")))
+        flags = self.api._cached_module_flags("custom", "ComfyUI_ALEXZ_tools")
+        self.assertTrue(bool(flags.get("updated_between_runs")))
 
     def test_refresh_syncs_custom_module_upstreams(self):
         """Validate `test_refresh_syncs_custom_module_upstreams` behavior."""
