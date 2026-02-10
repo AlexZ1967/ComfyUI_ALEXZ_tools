@@ -1927,6 +1927,16 @@ def _resolve_module_info(
         result["installed_commit_short"] = (result["installed_commit"] or "")[:8]
         result["installed_updated_at"] = cache_entry.get("installed_updated_at") or ""
         result["remote_updated_at"] = cache_entry.get("remote_updated_at") or ""
+        startup_prev = (cache_entry.get("pending_prev_commit") or cache_entry.get("startup_prev_commit") or "").strip()
+        startup_new = (cache_entry.get("pending_new_commit") or cache_entry.get("startup_new_commit") or "").strip()
+        result["updated_between_runs"] = (
+            bool(startup_prev and startup_new)
+            or bool(cache_entry.get("pending_commit_change"))
+            or bool(cache_entry.get("pending_local_change"))
+        )
+        result["startup_prev_commit_short"] = _short_commit(startup_prev) if startup_prev else ""
+        result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
+        result["startup_update_at"] = cache_entry.get("pending_update_at") or cache_entry.get("startup_update_at") or ""
         update_available = cache_entry.get("update_available")
         if isinstance(update_available, bool):
             result["update_available"] = update_available

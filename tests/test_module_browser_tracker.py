@@ -425,6 +425,68 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         flags = self.api._cached_module_flags("custom", "ComfyUI_ALEXZ_tools")
         self.assertTrue(bool(flags.get("updated_between_runs")))
 
+    def test_new_custom_module_marker_persists_until_global_acknowledge(self):
+        """Ensure newly installed custom module stays marked until explicit global refresh/ack."""
+        self.api._now_iso = lambda: "2026-02-10T22:00:00+00:00"
+        self.api._MODULE_STATE_CACHE = {
+            "__node_tracker__": {
+                "snapshots": {"custom": {"ExistingModule": {}}},
+                "module_sets": {"custom": ["ExistingModule"]},
+            }
+        }
+        self.api._build_node_snapshots = lambda: {"custom": {"ExistingModule": {}}}
+        self.api._discover_custom_modules = lambda: ["ExistingModule", "NewModule"]
+        self.api._module_git_state = lambda _name: {}
+        self.api._module_worktree_signature = lambda _name: ""
+
+        self.api._announce_tracked_module_updates(local_only=True)
+        flags = self.api._cached_module_flags("custom", "NewModule")
+        self.assertTrue(bool(flags.get("updated_between_runs")))
+        self.assertTrue(bool(flags.get("new_module_between_runs")))
+
+        # Marker should still persist on subsequent startup pass until acknowledge.
+        self.api._announce_tracked_module_updates(local_only=True)
+        flags = self.api._cached_module_flags("custom", "NewModule")
+        self.assertTrue(bool(flags.get("updated_between_runs")))
+        self.assertTrue(bool(flags.get("new_module_between_runs")))
+
+        self.api._acknowledge_all_novelty()
+        flags = self.api._cached_module_flags("custom", "NewModule")
+        self.assertFalse(bool(flags.get("updated_between_runs")))
+        self.assertFalse(bool(flags.get("new_module_between_runs")))
+
+    def test_external_module_update_flow_matches_widget_contract(self):
+        """Ensure external module update marker persists, then is cleared by module-info refresh."""
+        self.api._now_iso = lambda: "2026-02-10T23:00:00+00:00"
+        self.api._discover_custom_modules = lambda: ["ComfyUI_ALEXZ_tools"]
+        self.api._build_node_snapshots = lambda: {"custom": {"ComfyUI_ALEXZ_tools": {}}}
+        self.api._module_worktree_signature = lambda _name: ""
+        states = [
+            {"installed_commit": "new_commit_123", "installed_updated_at": "2026-02-10T22:59:00+00:00"},
+            {"installed_commit": "new_commit_123", "installed_updated_at": "2026-02-10T22:59:00+00:00"},
+        ]
+        self.api._module_git_state = lambda _name: dict(states.pop(0))
+        self.api._MODULE_STATE_CACHE = {
+            "ComfyUI_ALEXZ_tools": {
+                "installed_commit": "old_commit_456",
+                "update_available": False,
+            },
+            "__node_tracker__": {
+                "snapshots": {"custom": {"ComfyUI_ALEXZ_tools": {}}},
+                "module_sets": {"custom": ["ComfyUI_ALEXZ_tools"]},
+            },
+        }
+
+        # Simulate startup after external update (without using widget update buttons).
+        self.api._announce_tracked_module_updates(local_only=True)
+        info = self.api._resolve_module_info("custom", "ComfyUI_ALEXZ_tools", force_refresh=True, cache_only=True)
+        self.assertTrue(bool(info.get("updated_between_runs")))
+
+        # Simulate explicit "Обновить информацию о модуле".
+        self.api._acknowledge_module_novelty("custom", "ComfyUI_ALEXZ_tools")
+        info = self.api._resolve_module_info("custom", "ComfyUI_ALEXZ_tools", force_refresh=True, cache_only=True)
+        self.assertFalse(bool(info.get("updated_between_runs")))
+
     def test_refresh_syncs_custom_module_upstreams(self):
         """Validate `test_refresh_syncs_custom_module_upstreams` behavior."""
         called = []
