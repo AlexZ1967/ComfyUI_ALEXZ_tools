@@ -1,5 +1,17 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.7 — 2026-02-10
+- Phase 1 continuation (frontend decomposition without UX changes):
+  - added API wrapper module `web/api/module_node_picker_api.js`,
+  - added UI formatting helper module `web/ui/module_node_picker_formatters.js`,
+  - added status-line helper module `web/ui/module_node_picker_status.js`,
+  - added help-panel helper module `web/ui/module_node_picker_help.js`,
+  - integrated both modules into `web/module_node_picker.js`.
+- Widget refresh UX parity:
+  - `Refresh Custom Nodes Info` now shows in-progress state directly in `Custom Nodes` card,
+  - `Refresh ComfyUI Info` now shows in-progress state directly in `ComfyUI` card.
+- `web/module_node_picker.js` reduced in size by moving API/display helpers out while preserving existing behavior.
+
 ## 0.16.6 — 2026-02-10
 - Started Phase 1 (frontend foundation) for Module Node Picker.
 - Added centralized picker state store: `web/state/store.js`.

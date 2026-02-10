@@ -11,11 +11,37 @@
  */
 
 import { app } from "../../../scripts/app.js";
-import { api } from "../../../scripts/api.js";
 import {
     bindModuleNodesTabRelay,
     unbindModuleNodesTabRelay,
 } from "./module_node_picker_tab_relay.js";
+import {
+    fetchNodeCatalog,
+    fetchModuleInfo,
+    fetchComfyUIInfo,
+    refreshModuleRuntimeState,
+    fetchModuleRefreshStatus,
+    acknowledgeAllModuleNovelty,
+    startModuleUpdate,
+    fetchModuleUpdateStatus,
+    installModuleRequirements,
+    installComfyUIRequirements,
+} from "./api/module_node_picker_api.js";
+import {
+    fmtDate,
+    moduleBadgesFromInfo,
+    moduleBadgesFromModuleEntry,
+    formatModuleOption,
+} from "./ui/module_node_picker_formatters.js";
+import {
+    formatRefreshLine,
+    formatUpdateLine,
+} from "./ui/module_node_picker_status.js";
+import {
+    renderHelpText,
+    renderHelpModuleSummary,
+    renderHelpModuleCardHint,
+} from "./ui/module_node_picker_help.js";
 import { createModuleNodePickerStore } from "./state/store.js";
 import { createModuleDiagnosticsLogger } from "./diagnostics/logger.js";
 
@@ -401,216 +427,6 @@ function createNodeByInfo(nodeInfo) {
         }
     }
     return null;
-}
-
-/**
- * Fetch grouped node catalog data from backend API.
- */
-async function fetchNodeCatalog(comfyMode = "releases") {
-    const mode = String(comfyMode || "releases").trim().toLowerCase() === "commits"
-        ? "commits"
-        : "releases";
-    const resp = await api.fetchApi(`/alexz_tools/node_catalog?cache_only=1&comfyui_mode=${mode}`, {
-        cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Fetch detailed info for a specific module, optionally forcing refresh/sync.
- */
-async function fetchModuleInfo(group, moduleName, options = {}) {
-    const forceRefresh = Boolean(options?.forceRefresh);
-    const syncUpstream = Boolean(options?.syncUpstream);
-    const cacheOnly = options?.cacheOnly === undefined
-        ? (!forceRefresh && !syncUpstream)
-        : Boolean(options?.cacheOnly);
-    const resp = await api.fetchApi(
-        `/alexz_tools/module_info?group=${encodeURIComponent(group || "")}` +
-        `&module=${encodeURIComponent(moduleName || "")}` +
-        `&refresh=${forceRefresh ? "1" : "0"}` +
-        `&sync_upstream=${syncUpstream ? "1" : "0"}` +
-        `&cache_only=${cacheOnly ? "1" : "0"}`,
-        { cache: "no-store" }
-    );
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Fetch ComfyUI repository update status and metadata.
- */
-async function fetchComfyUIInfo(forceRefresh = true, acknowledge = true, comfyMode = "releases") {
-    const mode = String(comfyMode || "releases").trim().toLowerCase() === "commits"
-        ? "commits"
-        : "releases";
-    const resp = await api.fetchApi(
-        `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}&acknowledge=${acknowledge ? "1" : "0"}&mode=${mode}`,
-        { cache: "no-store" }
-    );
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Start backend refresh job that recomputes module/runtime snapshots.
- */
-async function refreshModuleRuntimeState() {
-    const resp = await api.fetchApi("/alexz_tools/module_refresh", {
-        method: "POST",
-        cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Poll refresh job status from backend.
- */
-async function fetchModuleRefreshStatus() {
-    const resp = await api.fetchApi("/alexz_tools/module_refresh_status", {
-        cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Acknowledge/clear novelty markers for all modules after global refresh action.
- */
-async function acknowledgeAllModuleNovelty() {
-    const resp = await api.fetchApi("/alexz_tools/module_acknowledge_all", {
-        method: "POST",
-        cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Start backend update job for a single module, all modules, or ComfyUI.
- */
-async function startModuleUpdate(scope, moduleName) {
-    const resp = await api.fetchApi("/alexz_tools/module_update", {
-        method: "POST",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            scope: scope || "single",
-            module: moduleName || "",
-        }),
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Poll module-update job status from backend.
- */
-async function fetchModuleUpdateStatus() {
-    const resp = await api.fetchApi("/alexz_tools/module_update_status", {
-        cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Install requirements.txt for selected custom modules in current runtime env.
- */
-async function installModuleRequirements(modules) {
-    const resp = await api.fetchApi("/alexz_tools/module_install_requirements", {
-        method: "POST",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modules: Array.isArray(modules) ? modules : [] }),
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Install ComfyUI requirements.txt in current runtime environment.
- */
-async function installComfyUIRequirements() {
-    const resp = await api.fetchApi("/alexz_tools/comfyui_install_requirements", {
-        method: "POST",
-        cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
-}
-
-/**
- * Format ISO timestamp for local UI display.
- */
-function fmtDate(iso) {
-    if (!iso) {
-        return "n/a";
-    }
-    try {
-        return new Date(iso).toLocaleString();
-    } catch (err) {
-        return String(iso);
-    }
-}
-
-/**
- * Derive UI badge flags from module info payload.
- */
-function moduleBadgesFromInfo(info) {
-    const behind = Number(info?.git_behind);
-    const status = String(info?.update_status || "");
-    return {
-        updatedBetweenRuns: Boolean(info?.updated_between_runs),
-        hasRemoteUpdate: (Number.isFinite(behind) && behind > 0) || status === "can_update",
-    };
-}
-
-/**
- * Derive UI badge flags from lightweight module entry in node-catalog payload.
- */
-function moduleBadgesFromModuleEntry(entry) {
-    return {
-        updatedBetweenRuns: Boolean(entry?.updated_between_runs) || Boolean(entry?.new_module_between_runs),
-        hasRemoteUpdate: Boolean(entry?.update_available),
-    };
-}
-
-/**
- * Build text shown in module select option with update badges and node count.
- */
-function formatModuleOption(moduleName, count, badges) {
-    const marks = [];
-    if (badges?.updatedBetweenRuns) {
-        marks.push(MODULE_MARK_UPDATED);
-    }
-    if (badges?.hasRemoteUpdate) {
-        marks.push(MODULE_MARK_REMOTE_UPDATE);
-    }
-    const prefix = marks.length ? `${marks.join(" ")} ` : "";
-    return `${prefix}${moduleName} (${count})`;
 }
 
 /**
@@ -1137,103 +953,24 @@ function renderPicker(container) {
      * Replace help area with plain status/help text.
      */
     const setHelpText = (text) => {
-        help.innerHTML = "";
-        help.textContent = text || "";
+        renderHelpText(help, text);
     };
 
     /**
      * Render expanded-module help summary with insertion hints and legend.
      */
     const setHelpModuleSummary = (moduleName, nodeCount) => {
-        help.innerHTML = "";
-
-        const main = document.createElement("div");
-        main.className = "alexz-mod-picker-help-main";
-        main.append("Модуль ");
-        const moduleStrong = document.createElement("strong");
-        moduleStrong.textContent = String(moduleName || "unknown");
-        main.appendChild(moduleStrong);
-        main.append(": нод ");
-        const countStrong = document.createElement("strong");
-        countStrong.textContent = String(Math.max(0, Number(nodeCount) || 0));
-        main.appendChild(countStrong);
-        main.append(".");
-        help.appendChild(main);
-
-        const hint1 = document.createElement("div");
-        hint1.className = "alexz-mod-picker-help-hint";
-        hint1.textContent = "Кликните ноду для вставки в граф.";
-        help.appendChild(hint1);
-
-        const hint2 = document.createElement("div");
-        hint2.className = "alexz-mod-picker-help-hint";
-        hint2.textContent = `Метки модулей: ${MODULE_MARK_UPDATED} обновлен между запусками, ${MODULE_MARK_REMOTE_UPDATE} доступно обновление.`;
-        help.appendChild(hint2);
-
-        const hint3 = document.createElement("div");
-        hint3.className = "alexz-mod-picker-help-hint";
-        hint3.textContent = "Рамка ноды: красная = новая, зеленая = обновленная.";
-        help.appendChild(hint3);
+        renderHelpModuleSummary(help, moduleName, nodeCount, {
+            updatedMark: MODULE_MARK_UPDATED,
+            remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+        });
     };
 
     /**
      * Render collapsed-module hint shown before node list expansion.
      */
     const setHelpModuleCardHint = (moduleName, nodeCount) => {
-        help.innerHTML = "";
-
-        const main = document.createElement("div");
-        main.className = "alexz-mod-picker-help-main";
-        main.append("Модуль ");
-        const moduleStrong = document.createElement("strong");
-        moduleStrong.textContent = String(moduleName || "unknown");
-        main.appendChild(moduleStrong);
-        main.append(": нод ");
-        const countStrong = document.createElement("strong");
-        countStrong.textContent = String(Math.max(0, Number(nodeCount) || 0));
-        main.appendChild(countStrong);
-        main.append(".");
-        help.appendChild(main);
-
-        const hint = document.createElement("div");
-        hint.className = "alexz-mod-picker-help-hint";
-        hint.textContent = "Кликните карточку модуля, чтобы показать список нод.";
-        help.appendChild(hint);
-    };
-
-    /**
-     * Convert backend refresh status payload into a one-line progress message.
-     */
-    const formatRefreshLine = (refresh) => {
-        const phase = String(refresh?.phase || "");
-        const current = Number(refresh?.current || 0);
-        const total = Number(refresh?.total || 0);
-        const remaining = Number(refresh?.remaining || 0);
-        const modulesNeedUpdate = Number(refresh?.modules_need_update || 0);
-        const moduleName = String(refresh?.module || "");
-        const error = String(refresh?.error || "");
-
-        if (phase === "sync") {
-            if (total > 0) {
-                const modulePart = moduleName ? ` (${moduleName})` : "";
-                return { text: `Refreshing Custom Nodes: ${current}/${total}, remaining ${remaining}${modulePart}`, tone: "neutral" };
-            }
-            return { text: "Refreshing Custom Nodes: preparing...", tone: "neutral" };
-        }
-        if (phase === "snapshots") {
-            return { text: "Refreshing Custom Nodes: recomputing snapshots...", tone: "neutral" };
-        }
-        if (phase === "done") {
-            const count = Number.isFinite(modulesNeedUpdate) ? Math.max(0, modulesNeedUpdate) : 0;
-            if (count > 0) {
-                return { text: `${count} custom modules require update`, tone: "warn" };
-            }
-            return { text: "Custom Nodes: no updates required", tone: "ok" };
-        }
-        if (phase === "error") {
-            return { text: `Custom Nodes refresh failed${error ? ` (${error})` : ""}.`, tone: "warn" };
-        }
-        return { text: "Refreshing Custom Nodes: starting...", tone: "neutral" };
+        renderHelpModuleCardHint(help, moduleName, nodeCount);
     };
 
     /**
@@ -1302,58 +1039,6 @@ function renderPicker(container) {
         renderCustomAlert();
     };
 
-    /**
-     * Convert module-update status payload into a one-line progress/result message.
-     */
-    const formatUpdateLine = (update) => {
-        const scope = String(update?.scope || "");
-        const phase = String(update?.phase || "");
-        const current = Number(update?.current || 0);
-        const total = Number(update?.total || 0);
-        const remaining = Number(update?.remaining || 0);
-        const moduleName = String(update?.module || "");
-        const error = String(update?.error || "");
-        const updated = Number(update?.updated || 0);
-        const failed = Number(update?.failed || 0);
-        const requirementsChanged = Boolean(update?.requirements_changed);
-        const reqList = Array.isArray(update?.requirements_modules) ? update.requirements_modules : [];
-
-        if (phase === "update") {
-            const modulePart = moduleName ? ` (${moduleName})` : "";
-            if (total > 0) {
-                return { text: `Updating modules: ${current}/${total}, remaining ${remaining}${modulePart}`, tone: "neutral" };
-            }
-            return { text: "Updating modules: starting...", tone: "neutral" };
-        }
-        if (phase === "done") {
-            if (scope === "comfyui") {
-                if (failed > 0) {
-                    return { text: "ComfyUI update finished with errors.", tone: "warn" };
-                }
-                if (updated > 0 && requirementsChanged) {
-                    return { text: "ComfyUI updated. requirements.txt changed.", tone: "warn" };
-                }
-                if (updated > 0) {
-                    return { text: "ComfyUI updated.", tone: "ok" };
-                }
-                return { text: "ComfyUI already up to date.", tone: "ok" };
-            }
-            if (total <= 0) {
-                return { text: "No updates found.", tone: "ok" };
-            }
-            if (failed > 0) {
-                return { text: `Update finished: updated=${updated}, failed=${failed}.`, tone: "warn" };
-            }
-            if (reqList.length > 0) {
-                return { text: `Update finished: ${updated} module(s) updated, requirements changed.`, tone: "warn" };
-            }
-            return { text: `Update finished: ${updated} module(s) updated.`, tone: "ok" };
-        }
-        if (phase === "error") {
-            return { text: `Update failed${error ? ` (${error})` : ""}.`, tone: "warn" };
-        }
-        return { text: "Preparing update...", tone: "neutral" };
-    };
 
     /**
      * Poll update status endpoint until module update job finishes.
@@ -1517,7 +1202,10 @@ function renderPicker(container) {
         }
         const count = moduleCounts.get(moduleName) || 0;
         const badges = moduleBadges.get(moduleName) || null;
-        option.textContent = formatModuleOption(moduleName, count, badges);
+        option.textContent = formatModuleOption(moduleName, count, badges, {
+            updatedMark: MODULE_MARK_UPDATED,
+            remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+        });
     };
 
     /**
@@ -1603,7 +1291,10 @@ function renderPicker(container) {
             if (badges.updatedBetweenRuns || badges.hasRemoteUpdate) {
                 moduleBadges.set(moduleName, badges);
             }
-            opt.textContent = formatModuleOption(moduleName, count, badges);
+            opt.textContent = formatModuleOption(moduleName, count, badges, {
+                updatedMark: MODULE_MARK_UPDATED,
+                remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+            });
             nodeSelect.appendChild(opt);
         }
         if (preferredModule && modules.includes(preferredModule)) {
