@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.15.9 — 2026-02-10
+- Fixed sidebar content overlap for `Module Nodes` when switching to some third-party custom tabs (e.g. `NodesMap`, `PNG Info`) that append into shared sidebar container.
+- Added passive visibility sync: `Module Nodes` root is auto-hidden whenever active sidebar tab is not `alexz-module-nodes`.
+- This fix does not force tab switching and does not write to `activeSidebarTabId`; it only controls visibility of our own root.
+
+## 0.15.8 — 2026-02-10
+- Sidebar UX compatibility fix for `Module Nodes`:
+  - added cleanup of stale fallback button instances on startup,
+  - fallback button now has stable id (`alexz-module-nodes-fallback-btn`) and is deduplicated.
+- Changed sidebar tab icon for `Module Nodes` from `pi pi-sitemap` to `pi pi-th-large` to avoid visual/behavioral conflicts with `NodesMap` tabs that use sitemap icon.
+
+## 0.15.7 — 2026-02-10
+- Fixed sidebar switching issue in `Module Nodes`: removed direct write to `activeSidebarTabId/activeSidebarTab` from fallback open flow.
+- Added safe sidebar open call in fallback mode (`activateSidebarTab` only when API is provided by host).
+- Added frontend singleton guard for `module_node_picker.js` to prevent duplicate extension registration in repeated script-init scenarios.
+
 ## 0.15.6 — 2026-02-10
 - Module card now shows node-level change details as small lines:
   - `Обновлены ноды: ...`
