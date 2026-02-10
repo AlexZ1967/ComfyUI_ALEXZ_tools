@@ -1,5 +1,14 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.1 — 2026-02-10
+- Phase 0 guardrails: expanded backend contract baseline in `tests/test_phase0_baseline.py`.
+- Added regression checks for:
+  - module query filtering behavior (`exact` priority over `partial`),
+  - `module_nodes` payload shape built from catalog data,
+  - frontend tab-relay marker contract (critical relay reasons + diagnostics keys).
+- Extended `guedes/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md` with reproducible baseline steps and expected diagnostics fingerprints for the `Module Nodes -> NodesMap` empty-panel issue.
+- Added manual Phase 0 smoke checklist to known-issues guide for repeatable pre/post-refactor verification.
+
 ## 0.16.0 — 2026-02-10
 - Minor-version bump for large documentation/maintainability update across codebase.
 - Standardized module headers in project Python/JS files with unified metadata block:
