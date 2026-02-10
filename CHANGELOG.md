@@ -1,5 +1,10 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.8 — 2026-02-10
+- Module Node Picker: added backend console progress logs for `Refresh ComfyUI Info`.
+  - On manual refresh request, ComfyUI console now prints refresh start parameters (`mode`, `acknowledge`).
+  - After status collection, ComfyUI console prints refresh result summary (`update_status`, `update_available`, `local`, `remote`).
+
 ## 0.16.7 — 2026-02-10
 - Phase 1 continuation (frontend decomposition without UX changes):
   - added API wrapper module `web/api/module_node_picker_api.js`,

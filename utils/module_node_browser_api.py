@@ -2889,9 +2889,24 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             ack_raw = (request.query.get("acknowledge", "1") or "1").strip().lower()
             acknowledge = ack_raw not in {"0", "false", "no", "off"}
             mode = _normalize_comfyui_mode(request.query.get("mode", ""))
+            if force_refresh:
+                _LOGGER.info(
+                    "ComfyUI info refresh requested: mode=%s acknowledge=%s",
+                    mode,
+                    acknowledge,
+                )
             if force_refresh and acknowledge:
                 _acknowledge_comfyui_novelty()
             comfyui = _comfyui_git_status(force_refresh=force_refresh, mode=mode)
+            if force_refresh:
+                _LOGGER.info(
+                    "ComfyUI info refresh finished: update_status=%s update_available=%s local=%s remote=%s mode=%s",
+                    str(comfyui.get("update_status") or "unknown"),
+                    bool(comfyui.get("update_available")),
+                    str(comfyui.get("installed_commit_short") or "unknown"),
+                    str(comfyui.get("remote_commit_short") or "unknown"),
+                    str(comfyui.get("check_mode") or mode),
+                )
             return web.json_response({"status": "ok", "comfyui": comfyui})
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("ComfyUI info API error: %s", exc, exc_info=True)
