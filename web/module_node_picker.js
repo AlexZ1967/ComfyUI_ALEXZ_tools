@@ -110,6 +110,10 @@ function injectStyles() {
         flex-direction: column;
         gap: 4px;
     }
+    .alexz-mod-picker-module-card--updated {
+        border-color: #3dbb7e;
+        box-shadow: inset 0 0 0 1px rgba(61, 187, 126, 0.35);
+    }
     .alexz-mod-picker-module-card--clickable {
         cursor: pointer;
         transition: filter 0.12s ease;
@@ -135,6 +139,12 @@ function injectStyles() {
         font-size: 11px;
         opacity: 0.85;
         line-height: 1.28em;
+        white-space: pre-wrap;
+    }
+    .alexz-mod-picker-module-note {
+        font-size: 10px;
+        opacity: 0.8;
+        line-height: 1.25em;
         white-space: pre-wrap;
     }
     .alexz-mod-picker-module-row {
@@ -518,6 +528,7 @@ function renderPicker(container) {
     const moduleOptions = new Map();
     const moduleBadges = new Map();
     const moduleNodeDiffs = new Map();
+    const updatedModulesSession = new Set();
     let moduleBadgeLoadToken = 0;
     let refreshPollToken = 0;
     let updatePollToken = 0;
@@ -830,10 +841,37 @@ function renderPicker(container) {
             if (!update) {
                 return;
             }
+            const currentGroup = String(groupSelect.value || "").trim();
+            const currentModule = String(nodeSelect.value || "").trim();
+            const updatedNow = Array.isArray(update?.results)
+                ? update.results.filter((item) => String(item?.status || "") === "updated")
+                : [];
+            for (const item of updatedNow) {
+                const mod = String(item?.module || "").trim();
+                if (mod) {
+                    updatedModulesSession.add(mod);
+                }
+            }
             if (String(update.phase || "") === "done") {
                 await maybeInstallChangedRequirements(update);
             }
-            await loadCatalog();
+            let preferredGroup = currentGroup;
+            let preferredModule = currentModule;
+            let autoExpandModule = "";
+            if (scope === "single") {
+                preferredGroup = "custom";
+                preferredModule = String(moduleName || currentModule || "").trim();
+                if (updatedNow.some((item) => String(item?.module || "").trim() === preferredModule)) {
+                    autoExpandModule = preferredModule;
+                }
+            } else if (scope === "all" && currentGroup === "custom" && currentModule) {
+                preferredGroup = "custom";
+                preferredModule = currentModule;
+                if (updatedModulesSession.has(currentModule)) {
+                    autoExpandModule = currentModule;
+                }
+            }
+            await loadCatalog({ preferredGroup, preferredModule, autoExpandModule });
             await loadModuleInfo();
         } catch (err) {
             setRefreshLine(`Обновление модулей: ошибка (${String(err)}).`, "warn");
@@ -901,11 +939,14 @@ function renderPicker(container) {
     };
 
     /** Handle `fillModuleSelect` workflow step. */
-    const fillModuleSelect = () => {
+    const fillModuleSelect = (options = {}) => {
+        const preferredModule = String(options?.preferredModule || "").trim();
+        const autoExpandModule = String(options?.autoExpandModule || "").trim();
         const nodes = getNodesForSelectedGroup();
         const selectedGroup = groupSelect.value;
         const moduleEntries = moduleCatalogByGroup.get(selectedGroup) || [];
         const filterValue = (moduleFilter.value || "").trim().toLowerCase();
+        const previousSelectedModule = String(nodeSelect.value || "").trim();
         moduleBadgeLoadToken += 1;
         moduleCounts.clear();
         moduleOptions.clear();
@@ -961,20 +1002,33 @@ function renderPicker(container) {
             opt.textContent = formatModuleOption(moduleName, count, null);
             nodeSelect.appendChild(opt);
         }
-        if (modules.includes(DEFAULT_MODULE)) {
+        if (preferredModule && modules.includes(preferredModule)) {
+            nodeSelect.value = preferredModule;
+        } else if (previousSelectedModule && modules.includes(previousSelectedModule)) {
+            nodeSelect.value = previousSelectedModule;
+        } else if (modules.includes(DEFAULT_MODULE)) {
             nodeSelect.value = DEFAULT_MODULE;
         } else {
             nodeSelect.value = modules[0];
         }
-        expandedModule = "";
-        nodeList.innerHTML = "";
+        if (autoExpandModule && nodeSelect.value === autoExpandModule) {
+            expandedModule = autoExpandModule;
+        } else {
+            expandedModule = "";
+            nodeList.innerHTML = "";
+        }
+        renderNodeList();
         loadModuleInfo();
         loadModuleBadges(selectedGroup, modules);
         syncUpdateAllButton();
     };
 
     /** Handle `fillGroupSelect` workflow step. */
-    const fillGroupSelect = (groups) => {
+    const fillGroupSelect = (groups, options = {}) => {
+        const preferredGroup = String(options?.preferredGroup || "").trim();
+        const preferredModule = String(options?.preferredModule || "").trim();
+        const autoExpandModule = String(options?.autoExpandModule || "").trim();
+        const previousGroup = String(groupSelect.value || "").trim();
         groupSelect.innerHTML = "";
         moduleCatalogByGroup.clear();
         groups.forEach((group) => {
@@ -987,12 +1041,16 @@ function renderPicker(container) {
             moduleCatalogByGroup.set(group.id, group.modules || []);
         });
 
-        if (catalogByGroup.has("custom")) {
+        if (preferredGroup && catalogByGroup.has(preferredGroup)) {
+            groupSelect.value = preferredGroup;
+        } else if (previousGroup && catalogByGroup.has(previousGroup)) {
+            groupSelect.value = previousGroup;
+        } else if (catalogByGroup.has("custom")) {
             groupSelect.value = "custom";
         } else if (groups.length > 0) {
             groupSelect.value = groups[0].id;
         }
-        fillModuleSelect();
+        fillModuleSelect({ preferredModule, autoExpandModule });
     };
 
     /** Handle `renderNodeList` workflow step. */
@@ -1051,7 +1109,7 @@ function renderPicker(container) {
                 centerNode(node);
                 app.canvas?.selectNode?.(node, false);
                 app.graph.setDirtyCanvas(true, true);
-                setHelpText(`Добавлена: ${nodeInfo.display_name}`);
+                setHelpText(`Вставлена в граф: ${nodeInfo.display_name}`);
             };
 
             const nameEl = document.createElement("div");
@@ -1080,6 +1138,9 @@ function renderPicker(container) {
         card.className = "alexz-mod-picker-module-card";
         const selectedModule = nodeSelect.value;
         const nodeCount = moduleCounts.get(selectedModule) || 0;
+        if (updatedModulesSession.has(selectedModule)) {
+            card.classList.add("alexz-mod-picker-module-card--updated");
+        }
         if (selectedModule !== "-1" && nodeCount > 0) {
             card.classList.add("alexz-mod-picker-module-card--clickable");
             card.title = "Кликните, чтобы показать список нод";
@@ -1266,6 +1327,26 @@ function renderPicker(container) {
             card.appendChild(updateRow);
         }
 
+        const updatedNodes = Array.isArray(info.updated_nodes_between_runs)
+            ? info.updated_nodes_between_runs.filter(Boolean)
+            : [];
+        if (updatedNodes.length) {
+            const updatedLine = document.createElement("div");
+            updatedLine.className = "alexz-mod-picker-module-note";
+            updatedLine.textContent = `Обновлены ноды: ${updatedNodes.join(", ")}`;
+            card.appendChild(updatedLine);
+        }
+
+        const newNodes = Array.isArray(info.new_nodes_between_runs)
+            ? info.new_nodes_between_runs.filter(Boolean)
+            : [];
+        if (newNodes.length) {
+            const newLine = document.createElement("div");
+            newLine.className = "alexz-mod-picker-module-note";
+            newLine.textContent = `Добавлены ноды: ${newNodes.join(", ")}`;
+            card.appendChild(newLine);
+        }
+
         moduleInfo.appendChild(card);
     };
 
@@ -1310,7 +1391,10 @@ function renderPicker(container) {
     };
 
     /** Handle `loadCatalog` workflow step. */
-    const loadCatalog = async () => {
+    const loadCatalog = async (options = {}) => {
+        const preferredGroup = String(options?.preferredGroup || "").trim();
+        const preferredModule = String(options?.preferredModule || "").trim();
+        const autoExpandModule = String(options?.autoExpandModule || "").trim();
         setHelpText("Загрузка списка нод...");
         try {
             const payload = await fetchNodeCatalog();
@@ -1318,7 +1402,7 @@ function renderPicker(container) {
             const groups = payload?.groups || [];
             customModulesNeedUpdate = Number(payload?.custom_modules_need_update || 0);
             renderComfyAlert(payload?.comfyui || null);
-            fillGroupSelect(groups);
+            fillGroupSelect(groups, { preferredGroup, preferredModule, autoExpandModule });
             const summary = groups
                 .map((group) => {
                     const label = GROUP_LABELS[group.id] || group.title || group.id;

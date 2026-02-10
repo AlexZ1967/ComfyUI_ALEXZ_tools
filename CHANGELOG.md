@@ -1,5 +1,18 @@
 # Changelog — ALEXZ_tools
 
+## 0.15.6 — 2026-02-10
+- Module card now shows node-level change details as small lines:
+  - `Обновлены ноды: ...`
+  - `Добавлены ноды: ...`
+- These lines are rendered inside module card (after `Updated between runs`), not in external help area.
+- Changed node insert feedback text from `Добавлена: ...` to `Вставлена в граф: ...` to avoid confusion with update/change tracking.
+
+## 0.15.5 — 2026-02-10
+- `Module Nodes` update-flow UX fix: after `Update module`, selected module card is preserved (no reset to default module).
+- Updated module card now gets a green border highlight in current session.
+- After successful single-module update, node list for that module auto-expands.
+- Catalog/group/module reload logic now supports preferred group/module preservation during refresh.
+
 ## 0.15.4 — 2026-02-10
 - `Module Nodes` UX changed: selecting module now shows module card first; node list opens only when the module card is clicked.
 - Added clickable module-card visual state and help hint for card-to-node-list interaction.
