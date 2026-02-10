@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.15.0
+Version: 0.15.1
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -24,6 +24,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
   Linux: `sudo apt install ffmpeg`  
   Windows: `choco install ffmpeg`  
   macOS: `brew install ffmpeg`
+- Ноды дополнены UI-метаданными (`DESCRIPTION`, `OUTPUT_TOOLTIPS`, `SEARCH_ALIASES`) для совместимости с новым дизайном карточек (Nodes 2.0), при этом полностью совместимы со старым UI.
 
 ## UI Tool: Module Node Picker
 - В современных версиях ComfyUI инструмент появляется как вкладка `Module Nodes` в боковой панели (Sidebar).

@@ -115,6 +115,16 @@ class SmokeTests(unittest.TestCase):
         out, = node.generate("https://example.com", 256, "M")
         self.assertEqual(tuple(out.shape), (1, 256, 256, 3))
 
+    def test_node_ui_metadata_compat(self):
+        """Ensure loaded nodes expose metadata used by newer node-card UI."""
+        nodes_pkg = importlib.import_module("ComfyUI_ALEXZ_tools.nodes")
+        class_map = getattr(nodes_pkg, "NODE_CLASS_MAPPINGS", {})
+        self.assertIn("GenerateQRCode", class_map)
+        qr_cls = class_map["GenerateQRCode"]
+        self.assertTrue(bool(getattr(qr_cls, "DESCRIPTION", "")))
+        self.assertTrue(hasattr(qr_cls, "OUTPUT_TOOLTIPS"))
+        self.assertTrue(hasattr(qr_cls, "SEARCH_ALIASES"))
+
 
 if __name__ == "__main__":
     unittest.main()

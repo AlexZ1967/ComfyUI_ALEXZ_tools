@@ -1,5 +1,11 @@
 # Changelog — ALEXZ_tools
 
+## 0.15.1 — 2026-02-10
+- Added cross-UI node metadata compatibility for old and new node card design (Nodes 2.0).
+- Node registry now injects `DESCRIPTION`, `OUTPUT_TOOLTIPS`, and `SEARCH_ALIASES` for all package nodes (`nodes/__init__.py`).
+- Added smoke-test for UI metadata presence on loaded nodes (`tests/test_smoke_nodes.py`).
+- Updated `README.md` runtime notes to document Nodes 2.0 compatibility.
+
 ## 0.15.0 — 2026-02-10
 - Added new node `Generate QR Code` (`GenerateQRCode`) for QR generation from link/text.
 - New node inputs: `url`, `resolution`, `error_correction` (`L/M/Q/H`), output: `image`.
