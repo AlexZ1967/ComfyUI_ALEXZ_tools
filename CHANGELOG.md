@@ -1,6 +1,7 @@
 # Changelog — ALEXZ_tools
 
-## 0.13.19 — 2026-02-10
+## 0.14.0 — 2026-02-10
+- Minor-version bump due large internal refactor of project layout (`nodes/`, `guides/`, `utils/`).
 - `Remove Static Watermark from Video` migrated to ProPainter-only pipeline.
 - Removed `e2fgvi` and `e2fgvi_hq` execution paths and deleted `method` input from `VideoInpaintWatermark`.
 - Removed internal `e2fgvi` package from repository (`e2fgvi/*`).
