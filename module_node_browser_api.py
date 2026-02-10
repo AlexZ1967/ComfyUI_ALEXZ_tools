@@ -45,6 +45,7 @@ _REFRESH_STATUS: dict[str, Any] = {
     "current": 0,
     "total": 0,
     "remaining": 0,
+    "modules_need_update": 0,
     "module": "",
     "message": "",
     "error": "",
@@ -776,13 +777,14 @@ def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str
             result["updated_between_runs"] = True
 
 
-def _announce_tracked_module_updates() -> None:
+def _announce_tracked_module_updates() -> dict[str, int]:
     state = _load_module_state()
     if not isinstance(state, dict):
-        return
+        return {"modules_need_update": 0}
 
     now = _now_iso()
     changed = False
+    modules_need_update = 0
 
     known_modules = set(_discover_custom_modules())
     for key in list(state.keys()):
@@ -815,11 +817,19 @@ def _announce_tracked_module_updates() -> None:
         before = dict(entry)
 
         entry["last_checked_at"] = now
+        needs_update = False
         if git_state:
             entry["module_path"] = git_state.get("module_path") or entry.get("module_path")
             entry["repository"] = git_state.get("repository") or entry.get("repository")
             entry["installed_updated_at"] = git_state.get("installed_updated_at") or entry.get("installed_updated_at")
             entry["remote_updated_at"] = git_state.get("remote_updated_at") or entry.get("remote_updated_at")
+            behind = git_state.get("behind")
+            remote_head = (git_state.get("remote_head") or "").strip()
+            if isinstance(behind, int):
+                needs_update = behind > 0
+            elif git_state.get("has_upstream") and remote_head and current_commit:
+                needs_update = remote_head != current_commit
+            entry["update_available"] = bool(needs_update)
 
         if current_commit:
             if prev_commit and current_commit != prev_commit:
@@ -834,6 +844,9 @@ def _announce_tracked_module_updates() -> None:
                 entry.pop("startup_prev_commit", None)
                 entry.pop("startup_new_commit", None)
                 entry.pop("startup_update_at", None)
+
+        if needs_update:
+            modules_need_update += 1
 
         state[module_name] = entry
         if entry != before:
@@ -913,6 +926,7 @@ def _announce_tracked_module_updates() -> None:
 
     if changed:
         _save_module_state(state)
+    return {"modules_need_update": modules_need_update}
 
 
 def _module_local_readme_summary(module_name: str) -> str | None:
@@ -1160,6 +1174,7 @@ def _refresh_progress(
     current: int = 0,
     total: int = 0,
     remaining: int = 0,
+    modules_need_update: int = 0,
     module: str = "",
     message: str = "",
 ) -> None:
@@ -1168,6 +1183,7 @@ def _refresh_progress(
         current=int(current),
         total=int(total),
         remaining=max(0, int(remaining)),
+        modules_need_update=max(0, int(modules_need_update)),
         module=module,
         message=message,
     )
@@ -1201,11 +1217,27 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
         progress_cb(phase="sync", current=0, total=0, remaining=0, message="fast_mode")
 
     progress_cb(phase="snapshots", current=0, total=0, remaining=0, message="recompute_snapshots")
-    _announce_tracked_module_updates()
+    announce_summary = _announce_tracked_module_updates()
+    modules_need_update = 0
+    if isinstance(announce_summary, dict):
+        modules_need_update = max(0, int(announce_summary.get("modules_need_update", 0)))
     comfyui = _comfyui_git_status(force_refresh=True)
-    progress_cb(phase="done", current=0, total=0, remaining=0, message="done")
+    progress_cb(
+        phase="done",
+        current=0,
+        total=0,
+        remaining=0,
+        modules_need_update=modules_need_update,
+        message="done",
+    )
     _LAZY_REFRESH_DONE = True
-    return {"status": "ok", "refreshed_at": _now_iso(), "comfyui": comfyui, "sync_upstreams": sync_upstreams}
+    return {
+        "status": "ok",
+        "refreshed_at": _now_iso(),
+        "comfyui": comfyui,
+        "sync_upstreams": sync_upstreams,
+        "modules_need_update": modules_need_update,
+    }
 
 
 def _ensure_runtime_state_ready() -> None:
@@ -1229,6 +1261,7 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
                 "current": 0,
                 "total": 0,
                 "remaining": 0,
+                "modules_need_update": 0,
                 "module": "",
                 "message": "starting",
                 "error": "",
@@ -1249,6 +1282,7 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
                 message="done",
                 module="",
                 refreshed_at=result.get("refreshed_at", ""),
+                modules_need_update=max(0, int(result.get("modules_need_update", 0))),
             )
         except Exception as exc:
             _set_refresh_status(running=False, phase="error", message="error", error=str(exc), module="")

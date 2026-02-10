@@ -187,6 +187,19 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertIn("snapshots", phases)
         self.assertIn("done", phases)
 
+    def test_refresh_reports_modules_need_update_count(self):
+        events = []
+        self.api._discover_custom_modules = lambda: []
+        self.api._announce_tracked_module_updates = lambda: {"modules_need_update": 4}
+        self.api._comfyui_git_status = lambda force_refresh=False: {"update_status": "unknown"}
+
+        result = self.api._refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kw: events.append(dict(kw)))
+
+        self.assertEqual(result.get("modules_need_update"), 4)
+        done_events = [e for e in events if e.get("phase") == "done"]
+        self.assertTrue(done_events)
+        self.assertEqual(done_events[-1].get("modules_need_update"), 4)
+
 
 if __name__ == "__main__":
     unittest.main()

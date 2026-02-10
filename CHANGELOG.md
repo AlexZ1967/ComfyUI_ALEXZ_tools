@@ -1,5 +1,9 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.16 — 2026-02-09
+- Startup log order adjusted: first line is now always `ALEXZ_tools loading...`, followed by widget/backend and node load lines.
+- Removed duplicate package header logging from `nodes.py` to keep startup output clean.
+
 ## 0.13.15 — 2026-02-09
 - Startup load order adjusted: Module Nodes backend is initialized before node table import.
 - Added startup log line `✅ Module Nodes widget backend loaded` so widget registration is visible and appears first in package startup logs.

@@ -44,8 +44,24 @@ function injectStyles() {
         width: 100%;
     }
     .alexz-mod-picker-help {
-        font-size: 12px;
-        opacity: 0.8;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-height: 2.2em;
+    }
+    .alexz-mod-picker-help-main {
+        font-size: 13px;
+        line-height: 1.3;
+        opacity: 0.95;
+    }
+    .alexz-mod-picker-help-main strong {
+        font-weight: 700;
+    }
+    .alexz-mod-picker-help-hint {
+        font-size: 11px;
+        line-height: 1.3;
+        opacity: 0.78;
+        font-style: italic;
     }
     .alexz-mod-picker-refresh-line {
         font-size: 12px;
@@ -54,6 +70,14 @@ function injectStyles() {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    .alexz-mod-picker-refresh-line.alexz-mod-picker-refresh-line--ok {
+        color: #3dbb7e;
+        font-weight: 700;
+    }
+    .alexz-mod-picker-refresh-line.alexz-mod-picker-refresh-line--warn {
+        color: #ff6b6b;
+        font-weight: 700;
     }
     .alexz-mod-picker-comfy-alert {
         border: 1px solid #b64040;
@@ -308,7 +332,7 @@ function renderPicker(container) {
 
     const refreshBtn = document.createElement("button");
     refreshBtn.type = "button";
-    refreshBtn.textContent = "Обновить";
+    refreshBtn.textContent = "Обновить информацию о модулях";
     head.appendChild(refreshBtn);
 
     const comfyAlert = document.createElement("div");
@@ -372,8 +396,51 @@ function renderPicker(container) {
         return catalogByGroup.get(group) || [];
     };
 
-    const setRefreshLine = (text) => {
+    const setRefreshLine = (text, tone = "neutral") => {
         refreshLine.textContent = text || "";
+        refreshLine.classList.remove("alexz-mod-picker-refresh-line--ok", "alexz-mod-picker-refresh-line--warn");
+        if (tone === "ok") {
+            refreshLine.classList.add("alexz-mod-picker-refresh-line--ok");
+        } else if (tone === "warn") {
+            refreshLine.classList.add("alexz-mod-picker-refresh-line--warn");
+        }
+    };
+
+    const setHelpText = (text) => {
+        help.innerHTML = "";
+        help.textContent = text || "";
+    };
+
+    const setHelpModuleSummary = (moduleName, nodeCount) => {
+        help.innerHTML = "";
+
+        const main = document.createElement("div");
+        main.className = "alexz-mod-picker-help-main";
+        main.append("Модуль ");
+        const moduleStrong = document.createElement("strong");
+        moduleStrong.textContent = String(moduleName || "unknown");
+        main.appendChild(moduleStrong);
+        main.append(": нод ");
+        const countStrong = document.createElement("strong");
+        countStrong.textContent = String(Math.max(0, Number(nodeCount) || 0));
+        main.appendChild(countStrong);
+        main.append(".");
+        help.appendChild(main);
+
+        const hint1 = document.createElement("div");
+        hint1.className = "alexz-mod-picker-help-hint";
+        hint1.textContent = "Кликните ноду для вставки в граф.";
+        help.appendChild(hint1);
+
+        const hint2 = document.createElement("div");
+        hint2.className = "alexz-mod-picker-help-hint";
+        hint2.textContent = `Метки модулей: ${MODULE_MARK_UPDATED} обновлен между запусками, ${MODULE_MARK_REMOTE_UPDATE} доступно обновление.`;
+        help.appendChild(hint2);
+
+        const hint3 = document.createElement("div");
+        hint3.className = "alexz-mod-picker-help-hint";
+        hint3.textContent = "Рамка ноды: красная = новая, зеленая = обновленная.";
+        help.appendChild(hint3);
     };
 
     const formatRefreshLine = (refresh) => {
@@ -381,26 +448,31 @@ function renderPicker(container) {
         const current = Number(refresh?.current || 0);
         const total = Number(refresh?.total || 0);
         const remaining = Number(refresh?.remaining || 0);
+        const modulesNeedUpdate = Number(refresh?.modules_need_update || 0);
         const moduleName = String(refresh?.module || "");
         const error = String(refresh?.error || "");
 
         if (phase === "sync") {
             if (total > 0) {
                 const modulePart = moduleName ? ` (${moduleName})` : "";
-                return `Обновление модулей: ${current}/${total}, осталось ${remaining}${modulePart}`;
+                return { text: `Обновление статусов модулей: ${current}/${total}, осталось ${remaining}${modulePart}`, tone: "neutral" };
             }
-            return "Обновление модулей: подготовка...";
+            return { text: "Обновление статусов модулей: подготовка...", tone: "neutral" };
         }
         if (phase === "snapshots") {
-            return "Обновление модулей: пересчет статусов...";
+            return { text: "Обновление статусов модулей: пересчет...", tone: "neutral" };
         }
         if (phase === "done") {
-            return "Обновление модулей: завершено.";
+            const count = Number.isFinite(modulesNeedUpdate) ? Math.max(0, modulesNeedUpdate) : 0;
+            if (count > 0) {
+                return { text: `${count} модулей требуют обновления`, tone: "warn" };
+            }
+            return { text: "обновления не требуются", tone: "ok" };
         }
         if (phase === "error") {
-            return `Обновление модулей: ошибка${error ? ` (${error})` : ""}.`;
+            return { text: `Обновление статусов модулей: ошибка${error ? ` (${error})` : ""}.`, tone: "warn" };
         }
-        return "Обновление модулей: запуск...";
+        return { text: "Обновление статусов модулей: запуск...", tone: "neutral" };
     };
 
     const pollRefreshProgress = async () => {
@@ -410,11 +482,12 @@ function renderPicker(container) {
             try {
                 payload = await fetchModuleRefreshStatus();
             } catch (err) {
-                setRefreshLine(`Обновление модулей: ошибка статуса (${String(err)}).`);
+                setRefreshLine(`Обновление статусов модулей: ошибка статуса (${String(err)}).`, "warn");
                 return false;
             }
             const refresh = payload?.refresh || {};
-            setRefreshLine(formatRefreshLine(refresh));
+            const line = formatRefreshLine(refresh);
+            setRefreshLine(line.text, line.tone);
             if (!refresh?.running) {
                 return refresh?.phase !== "error";
             }
@@ -515,9 +588,9 @@ function renderPicker(container) {
             nodeSelect.value = "-1";
             moduleInfo.innerHTML = "";
             nodeList.innerHTML = "";
-            help.textContent = filterValue
+            setHelpText(filterValue
                 ? `Нет модулей по фильтру: "${moduleFilter.value}".`
-                : "Модули не найдены для выбранной группы.";
+                : "Модули не найдены для выбранной группы.");
             return;
         }
         const countMap = new Map();
@@ -574,17 +647,15 @@ function renderPicker(container) {
             (node) => (node.module || "unknown") === selectedModule
         );
         if (selectedModule === "-1") {
-            help.textContent = "Выберите модуль, чтобы увидеть список нод.";
+            setHelpText("Выберите модуль, чтобы увидеть список нод.");
             return;
         }
         if (!nodes.length) {
-            help.textContent = `Модуль ${selectedModule}: загруженных нод не найдено (возможно, модуль не загрузился).`;
+            setHelpText(`Модуль ${selectedModule}: загруженных нод не найдено (возможно, модуль не загрузился).`);
             return;
         }
 
-        help.textContent = `Модуль ${selectedModule}: нод ${nodes.length}. Кликните ноду для вставки в граф.`;
-        help.textContent += ` Метки в списке модулей: ${MODULE_MARK_UPDATED} обновлен между запусками, ${MODULE_MARK_REMOTE_UPDATE} доступно обновление.`;
-        help.textContent += " Рамка ноды: красная = новая, зеленая = обновленная.";
+        setHelpModuleSummary(selectedModule, nodes.length);
         const nodeDiff = moduleNodeDiffs.get(selectedModule) || {
             newNodes: new Set(),
             updatedNodes: new Set(),
@@ -613,14 +684,14 @@ function renderPicker(container) {
             item.onclick = () => {
                 const node = createNodeByInfo(nodeInfo);
                 if (!node) {
-                    help.textContent = `Не удалось создать ноду: ${nodeInfo.display_name}`;
+                    setHelpText(`Не удалось создать ноду: ${nodeInfo.display_name}`);
                     return;
                 }
                 app.graph.add(node);
                 centerNode(node);
                 app.canvas?.selectNode?.(node, false);
                 app.graph.setDirtyCanvas(true, true);
-                help.textContent = `Добавлена: ${nodeInfo.display_name}`;
+                setHelpText(`Добавлена: ${nodeInfo.display_name}`);
             };
 
             const nameEl = document.createElement("div");
@@ -773,7 +844,7 @@ function renderPicker(container) {
     };
 
     const loadCatalog = async () => {
-        help.textContent = "Загрузка списка нод...";
+        setHelpText("Загрузка списка нод...");
         try {
             const payload = await fetchNodeCatalog();
             catalogByGroup.clear();
@@ -786,9 +857,9 @@ function renderPicker(container) {
                     return `${label}=${group.count}`;
                 })
                 .join(", ");
-            help.textContent = `Группы: ${summary}.`;
+            setHelpText(`Группы: ${summary}.`);
         } catch (err) {
-            help.textContent = `Ошибка загрузки: ${String(err)}`;
+            setHelpText(`Ошибка загрузки: ${String(err)}`);
             comfyAlert.style.display = "none";
             comfyAlert.textContent = "";
             groupSelect.innerHTML = "";
@@ -806,16 +877,15 @@ function renderPicker(container) {
     };
     refreshBtn.onclick = async () => {
         refreshBtn.disabled = true;
-        setRefreshLine("Обновление модулей: запуск...");
-        help.textContent = "Обновление статусов модулей...";
+        setRefreshLine("Обновление статусов модулей: запуск...", "neutral");
         try {
             await refreshModuleRuntimeState();
             const ok = await pollRefreshProgress();
             if (!ok) {
-                help.textContent = "Обновление завершилось с ошибкой.";
+                setRefreshLine("Обновление статусов модулей: завершилось с ошибкой.", "warn");
             }
         } catch (err) {
-            help.textContent = `Ошибка обновления статусов: ${String(err)}`;
+            setRefreshLine(`Обновление статусов модулей: ошибка (${String(err)}).`, "warn");
         } finally {
             refreshBtn.disabled = false;
         }
