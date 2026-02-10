@@ -2,7 +2,7 @@
 
 Status: approved working plan for incremental implementation
 Date: 2026-02-10
-Source documents: `REFACTORING_GUIDE.md`, `VUE_INTEGRATION_FIX.md`, `PHASE_1_IMPLEMENTATION.md` (+ RU versions)
+Source documents: `GUIDE_REFACTORING.md`, `GUIDE_VUE_INTEGRATION_FIX.md`, `GUIDE_PHASE_1_IMPLEMENTATION.md` (+ RU versions)
 
 ## 1) Goal
 

@@ -23,67 +23,67 @@ NODE_DOCS = [
     {
         "file": "nodes/image_prepare.py",
         "class": "ImagePrepareForQwenEditOutpaint",
-        "guide": "guides/GUIDE_IMAGE_PREP.md",
+        "guide": "guids/GUIDE_IMAGE_PREP.md",
         "readme_heading": "## Image Prepare for QwenEdit Outpaint",
     },
     {
         "file": "nodes/image_align.py",
         "class": "ImageAlignOverlayToBackground",
-        "guide": "guides/GUIDE_ALIGN.md",
+        "guide": "guids/GUIDE_ALIGN.md",
         "readme_heading": "## Align Overlay To Background",
     },
     {
         "file": "nodes/image_color_match.py",
         "class": "ImageColorMatchToReference",
-        "guide": "guides/COLOR_MATCH_GUIDE.md",
+        "guide": "guids/GUIDE_COLOR_MATCH_DETAILED.md",
         "readme_heading": "## Color Match To Reference",
     },
     {
         "file": "nodes/video_frame_match.py",
         "class": "VideoFrameMatch",
-        "guide": "guides/GUIDE_VIDEO_FRAME_MATCH.md",
+        "guide": "guids/GUIDE_VIDEO_FRAME_MATCH.md",
         "readme_heading": "## Find Closest Video Frame",
     },
     {
         "file": "nodes/video_cut_match.py",
         "class": "VideoCutMatch",
-        "guide": "guides/GUIDE_VIDEO_CUT_MATCH.md",
+        "guide": "guids/GUIDE_VIDEO_CUT_MATCH.md",
         "readme_heading": "## Match Video Cut Point",
     },
     {
         "file": "nodes/image_difference.py",
         "class": "ImageDifference",
-        "guide": "guides/GUIDE_IMAGE_DIFFERENCE.md",
+        "guide": "guids/GUIDE_IMAGE_DIFFERENCE.md",
         "readme_heading": "## Image Difference",
     },
     {
         "file": "nodes/qr_code_generate.py",
         "class": "GenerateQRCode",
-        "guide": "guides/GUIDE_QR_CODE.md",
+        "guide": "guids/GUIDE_QR_CODE.md",
         "readme_heading": "## Generate QR Code",
     },
     {
         "file": "nodes/image_scopes.py",
         "class": "ImageWaveformScope",
-        "guide": "guides/GUIDE_IMAGE_WAVEFORM.md",
+        "guide": "guids/GUIDE_IMAGE_WAVEFORM.md",
         "readme_heading": "## Image Waveform Scope",
     },
     {
         "file": "nodes/image_scopes.py",
         "class": "ImageHistogramScope",
-        "guide": "guides/GUIDE_IMAGE_HISTOGRAM.md",
+        "guide": "guids/GUIDE_IMAGE_HISTOGRAM.md",
         "readme_heading": "## Image Histogram Scope",
     },
     {
         "file": "nodes/video_inpaint.py",
         "class": "VideoInpaintWatermark",
-        "guide": "guides/GUIDE_VIDEO_INPAINT.md",
+        "guide": "guids/GUIDE_VIDEO_INPAINT.md",
         "readme_heading": "## Remove Static Watermark from Video",
     },
     {
         "file": "nodes/json_output.py",
         "class": "JsonDisplayAndSave",
-        "guide": "guides/GUIDE_JSON.md",
+        "guide": "guids/GUIDE_JSON.md",
         "readme_heading": "## Show/Save JSON",
     },
 ]
@@ -100,7 +100,7 @@ TEMPLATE_SECTIONS = [
 ]
 
 EXTRA_GUIDES = [
-    "guides/GUIDE_COLOR_MATCH.md",
+    "guids/GUIDE_COLOR_MATCH.md",
 ]
 
 

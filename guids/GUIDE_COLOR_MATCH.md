@@ -1,6 +1,6 @@
 # Color Match To Reference — Quick Guide
 
-Полный развернутый гайд: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md).
+Полный развернутый гайд: [GUIDE_COLOR_MATCH_DETAILED.md](GUIDE_COLOR_MATCH_DETAILED.md).
 
 ## Назначение
 Быстрый выбор пресета для подгонки цвета `image` к `reference`.
