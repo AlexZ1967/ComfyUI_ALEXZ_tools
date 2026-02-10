@@ -32,6 +32,7 @@ const GROUP_LABELS = {
     api: "API_Nodes",
     custom: "Custom_Nodes",
 };
+const COMFY_GROUP_ORDER = ["core", "core_extras", "api"];
 const MODULE_MARK_UPDATED = "✅";
 const MODULE_MARK_REMOTE_UPDATE = "🟥";
 
@@ -56,14 +57,13 @@ function injectStyles() {
         overflow: auto;
     }
     .alexz-mod-picker-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        display: block;
     }
-    .alexz-mod-picker-head-actions {
+    .alexz-mod-picker-toolbar {
         display: flex;
         align-items: center;
         gap: 6px;
+        flex-wrap: wrap;
     }
     .alexz-mod-picker-debug-toggle {
         display: inline-flex;
@@ -81,7 +81,6 @@ function injectStyles() {
         font-size: 13px;
         font-weight: 700;
         opacity: 0.95;
-        margin-right: auto;
     }
     .alexz-mod-picker-select {
         width: 100%;
@@ -573,28 +572,28 @@ function renderPicker(container) {
     title.textContent = "Node Picker";
     head.appendChild(title);
 
-    const headActions = document.createElement("div");
-    headActions.className = "alexz-mod-picker-head-actions";
-    head.appendChild(headActions);
+    const toolbar = document.createElement("div");
+    toolbar.className = "alexz-mod-picker-toolbar";
+    root.appendChild(toolbar);
 
     const updateAllBtn = document.createElement("button");
     updateAllBtn.type = "button";
     updateAllBtn.textContent = "Update all custom_nodes";
     updateAllBtn.className = "alexz-mod-picker-btn-small";
     updateAllBtn.style.display = "none";
-    headActions.appendChild(updateAllBtn);
+    toolbar.appendChild(updateAllBtn);
 
     const refreshBtn = document.createElement("button");
     refreshBtn.type = "button";
     refreshBtn.textContent = "Обновить информацию о модулях";
     refreshBtn.className = "alexz-mod-picker-btn-small";
-    headActions.appendChild(refreshBtn);
+    toolbar.appendChild(refreshBtn);
 
     const comfyInfoBtn = document.createElement("button");
     comfyInfoBtn.type = "button";
     comfyInfoBtn.textContent = "Обновить информацию о ComfyUI";
     comfyInfoBtn.className = "alexz-mod-picker-btn-small";
-    headActions.appendChild(comfyInfoBtn);
+    toolbar.appendChild(comfyInfoBtn);
 
     const debugToggleLabel = document.createElement("label");
     debugToggleLabel.className = "alexz-mod-picker-debug-toggle";
@@ -602,7 +601,7 @@ function renderPicker(container) {
     debugToggle.type = "checkbox";
     debugToggleLabel.appendChild(debugToggle);
     debugToggleLabel.append("Debug");
-    headActions.appendChild(debugToggleLabel);
+    toolbar.appendChild(debugToggleLabel);
 
     const comfyAlert = document.createElement("div");
     comfyAlert.className = "alexz-mod-picker-comfy-alert";
@@ -616,6 +615,18 @@ function renderPicker(container) {
     comfyUpdateBtn.style.display = "none";
     comfyAlert.appendChild(comfyUpdateBtn);
     root.appendChild(comfyAlert);
+
+    const categorySelect = document.createElement("select");
+    categorySelect.className = "alexz-mod-picker-select";
+    const catComfy = document.createElement("option");
+    catComfy.value = "comfy";
+    catComfy.textContent = "ComfyUI Nodes";
+    categorySelect.appendChild(catComfy);
+    const catCustom = document.createElement("option");
+    catCustom.value = "custom";
+    catCustom.textContent = "Custom Nodes";
+    categorySelect.appendChild(catCustom);
+    root.appendChild(categorySelect);
 
     const groupSelect = document.createElement("select");
     groupSelect.className = "alexz-mod-picker-select";
@@ -698,6 +709,21 @@ function renderPicker(container) {
     let expandedModule = "";
 
     /**
+     * Return true when UI is currently in Custom Nodes mode.
+     */
+    const isCustomCategory = () => String(categorySelect.value || "") === "custom";
+
+    /**
+     * Return effective group id based on category/subgroup selection.
+     */
+    const getSelectedGroup = () => {
+        if (isCustomCategory()) {
+            return "custom";
+        }
+        return String(groupSelect.value || "").trim();
+    };
+
+    /**
      * Render ComfyUI update alert block when upstream update is available.
      */
     const renderComfyAlert = (info) => {
@@ -734,7 +760,7 @@ function renderPicker(container) {
      * Return node catalog entries for currently selected group.
      */
     const getNodesForSelectedGroup = () => {
-        const group = groupSelect.value;
+        const group = getSelectedGroup();
         return catalogByGroup.get(group) || [];
     };
 
@@ -933,7 +959,7 @@ function renderPicker(container) {
      * Toggle visibility and label of the global custom-nodes update button.
      */
     const syncUpdateAllButton = () => {
-        const show = groupSelect.value === "custom" && customModulesNeedUpdate > 0;
+        const show = isCustomCategory() && customModulesNeedUpdate > 0;
         if (!show) {
             updateAllBtn.style.display = "none";
             return;
@@ -1082,7 +1108,7 @@ function renderPicker(container) {
             if (!update) {
                 return;
             }
-            const currentGroup = String(groupSelect.value || "").trim();
+            const currentGroup = getSelectedGroup();
             const currentModule = String(nodeSelect.value || "").trim();
             const updatedNow = Array.isArray(update?.results)
                 ? update.results.filter((item) => String(item?.status || "") === "updated")
@@ -1155,7 +1181,7 @@ function renderPicker(container) {
         const preferredModule = String(options?.preferredModule || "").trim();
         const autoExpandModule = String(options?.autoExpandModule || "").trim();
         const nodes = getNodesForSelectedGroup();
-        const selectedGroup = groupSelect.value;
+        const selectedGroup = getSelectedGroup();
         const moduleEntries = moduleCatalogByGroup.get(selectedGroup) || [];
         const filterValue = (moduleFilter.value || "").trim().toLowerCase();
         const previousSelectedModule = String(nodeSelect.value || "").trim();
@@ -1247,28 +1273,43 @@ function renderPicker(container) {
         const preferredGroup = String(options?.preferredGroup || "").trim();
         const preferredModule = String(options?.preferredModule || "").trim();
         const autoExpandModule = String(options?.autoExpandModule || "").trim();
+        const previousCategory = String(categorySelect.value || "").trim();
         const previousGroup = String(groupSelect.value || "").trim();
-        groupSelect.innerHTML = "";
         moduleCatalogByGroup.clear();
         groups.forEach((group) => {
-            const opt = document.createElement("option");
-            opt.value = group.id;
-            const label = GROUP_LABELS[group.id] || group.title || group.id;
-            opt.textContent = `${label} (${group.count})`;
-            groupSelect.appendChild(opt);
             catalogByGroup.set(group.id, group.nodes || []);
             moduleCatalogByGroup.set(group.id, group.modules || []);
         });
-
-        if (preferredGroup && catalogByGroup.has(preferredGroup)) {
-            groupSelect.value = preferredGroup;
-        } else if (previousGroup && catalogByGroup.has(previousGroup)) {
-            groupSelect.value = previousGroup;
-        } else if (catalogByGroup.has("custom")) {
-            groupSelect.value = "custom";
-        } else if (groups.length > 0) {
-            groupSelect.value = groups[0].id;
+        const comfyGroups = COMFY_GROUP_ORDER.filter((groupId) => catalogByGroup.has(groupId));
+        groupSelect.innerHTML = "";
+        for (const groupId of comfyGroups) {
+            const opt = document.createElement("option");
+            const nodes = catalogByGroup.get(groupId) || [];
+            opt.value = groupId;
+            opt.textContent = `${GROUP_LABELS[groupId] || groupId} (${nodes.length})`;
+            groupSelect.appendChild(opt);
         }
+        if (preferredGroup === "custom") {
+            categorySelect.value = "custom";
+        } else if (preferredGroup && COMFY_GROUP_ORDER.includes(preferredGroup) && catalogByGroup.has(preferredGroup)) {
+            categorySelect.value = "comfy";
+        } else if (previousCategory === "comfy" || previousCategory === "custom") {
+            categorySelect.value = previousCategory;
+        } else if (catalogByGroup.has("custom")) {
+            categorySelect.value = "custom";
+        } else {
+            categorySelect.value = "comfy";
+        }
+        if (!isCustomCategory()) {
+            if (preferredGroup && comfyGroups.includes(preferredGroup)) {
+                groupSelect.value = preferredGroup;
+            } else if (previousGroup && comfyGroups.includes(previousGroup)) {
+                groupSelect.value = previousGroup;
+            } else if (comfyGroups.length > 0) {
+                groupSelect.value = comfyGroups[0];
+            }
+        }
+        groupSelect.style.display = isCustomCategory() ? "none" : "";
         fillModuleSelect({ preferredModule, autoExpandModule });
     };
 
@@ -1586,7 +1627,7 @@ function renderPicker(container) {
      */
     const loadModuleInfo = async (options = {}) => {
         const selectedModule = nodeSelect.value;
-        const selectedGroup = groupSelect.value;
+        const selectedGroup = getSelectedGroup();
         const forceRefresh = Boolean(options?.forceRefresh);
         const syncUpstream = Boolean(options?.syncUpstream);
         const throwOnError = Boolean(options?.throwOnError);
@@ -1599,7 +1640,7 @@ function renderPicker(container) {
                 forceRefresh,
                 syncUpstream,
             });
-            if (nodeSelect.value !== selectedModule || groupSelect.value !== selectedGroup) {
+            if (nodeSelect.value !== selectedModule || getSelectedGroup() !== selectedGroup) {
                 return;
             }
             const info = payload?.info || null;
@@ -1660,6 +1701,14 @@ function renderPicker(container) {
     };
 
     groupSelect.onchange = () => {
+        if (isCustomCategory()) {
+            return;
+        }
+        fillModuleSelect();
+        syncUpdateAllButton();
+    };
+    categorySelect.onchange = () => {
+        groupSelect.style.display = isCustomCategory() ? "none" : "";
         fillModuleSelect();
         syncUpdateAllButton();
     };
