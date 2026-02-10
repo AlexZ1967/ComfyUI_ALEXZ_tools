@@ -1,5 +1,11 @@
 # Changelog — ALEXZ_tools
 
+## 0.15.10 — 2026-02-10
+- Refactored `Module Nodes` sidebar switching logic: moved Tab Relay implementation from `web/module_node_picker.js` into a dedicated module `web/module_node_picker_tab_relay.js`.
+- Simplified relay lifecycle to explicit `bind/unbind` API and removed inlined high-risk reconnect logic from the main UI file.
+- Kept diagnostics output format (`diag.*`) compatible while reducing coupling between rendering and sidebar event handling.
+- Documented known `Module Nodes -> NodesMap` switching edge case and workaround in `README.md` (switch via another widget first).
+
 ## 0.15.9 — 2026-02-10
 - Fixed sidebar content overlap for `Module Nodes` when switching to some third-party custom tabs (e.g. `NodesMap`, `PNG Info`) that append into shared sidebar container.
 - Added passive visibility sync: `Module Nodes` root is auto-hidden whenever active sidebar tab is not `alexz-module-nodes`.

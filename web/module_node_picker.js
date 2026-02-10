@@ -5,6 +5,10 @@
 
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
+import {
+    bindModuleNodesTabRelay,
+    unbindModuleNodesTabRelay,
+} from "./module_node_picker_tab_relay.js";
 
 const EXT_NAME = "ALEXZ.Tools.ModuleNodePicker";
 const SIDEBAR_TAB_ID = "alexz-module-nodes";
@@ -14,7 +18,6 @@ const DEFAULT_MODULE = "ComfyUI_ALEXZ_tools";
 const CONTAINER_SYNC_STATE_KEY = "__alexz_module_nodes_container_sync_state__";
 const NODE_PICKER_DEBUG_KEY = "__alexz_module_picker_debug__";
 const NODE_PICKER_SIDEBAR_SYNC_KEY = "__alexz_module_picker_sidebar_sync__";
-const NODE_PICKER_TAB_RELAY_STATE_KEY = "__alexz_module_picker_tab_relay_state__";
 const GROUP_LABELS = {
     core: "Core_Nodes",
     core_extras: "Core_Extras_Nodes",
@@ -284,407 +287,6 @@ function injectStyles() {
     document.head.appendChild(style);
 }
 
-/** Parse sidebar tab id from button-like element classes. */
-function extractTabIdFromButtonElement(buttonEl) {
-    if (!(buttonEl instanceof Element)) {
-        return "";
-    }
-    for (const cls of Array.from(buttonEl.classList || [])) {
-        if (cls.endsWith("-tab-button")) {
-            return cls.slice(0, -"-tab-button".length);
-        }
-    }
-    return "";
-}
-
-/** Resolve sidebar tab button from a DOM event using closest/path fallback. */
-function resolveSidebarButtonFromEventObject(event) {
-    const directTarget = event?.target;
-    if (directTarget instanceof Element) {
-        const byClosest = directTarget.closest(".side-bar-button, [class*='-tab-button']");
-        if (byClosest) {
-            return byClosest;
-        }
-    }
-    if (typeof event?.composedPath === "function") {
-        for (const item of event.composedPath()) {
-            if (!(item instanceof Element)) {
-                continue;
-            }
-            if (item.classList?.contains("side-bar-button")) {
-                return item;
-            }
-            const tabId = extractTabIdFromButtonElement(item);
-            if (tabId) {
-                return item;
-            }
-        }
-    }
-    return null;
-}
-
-/** Remove lightweight tab relay listeners. */
-function unbindMinimalTabRelay() {
-    const state = window[NODE_PICKER_TAB_RELAY_STATE_KEY];
-    if (!state) {
-        return;
-    }
-    const timerId = Number(state.relayTimer || 0);
-    if (timerId) {
-        window.clearTimeout(timerId);
-    }
-    const intervalId = Number(state.visibilityInterval || 0);
-    if (intervalId) {
-        window.clearInterval(intervalId);
-    }
-    const bindIntervalId = Number(state.bindButtonsInterval || 0);
-    if (bindIntervalId) {
-        window.clearInterval(bindIntervalId);
-    }
-    const rootCheckId = Number(state.rootCheckInterval || 0);
-    if (rootCheckId) {
-        window.clearInterval(rootCheckId);
-    }
-    if (state.onPointerDown) {
-        document.removeEventListener("pointerdown", state.onPointerDown, true);
-    }
-    if (state.onMouseDown) {
-        document.removeEventListener("mousedown", state.onMouseDown, true);
-    }
-    if (state.onClick) {
-        document.removeEventListener("click", state.onClick, true);
-    }
-    if (state.onKeyUp) {
-        document.removeEventListener("keyup", state.onKeyUp, true);
-    }
-    if (Array.isArray(state.boundButtons)) {
-        for (const item of state.boundButtons) {
-            if (!item?.el || !item?.handler) {
-                continue;
-            }
-            item.el.removeEventListener("pointerdown", item.handler, true);
-            item.el.removeEventListener("click", item.handler, true);
-            item.el.removeEventListener("mousedown", item.handler, true);
-        }
-    }
-    window[NODE_PICKER_TAB_RELAY_STATE_KEY] = null;
-}
-
-/** Bind lightweight tab relay to ensure other sidebar tabs activate reliably. */
-function bindMinimalTabRelay(root, onDiag) {
-    unbindMinimalTabRelay();
-    let relayTimer = 0;
-    let visibilityInterval = 0;
-    let bindButtonsInterval = 0;
-    let lastDiagSig = "";
-    let lastClickedTabId = "";
-    let lastClickedTs = 0;
-    const boundButtons = [];
-
-    // Save container reference - will be updated if root changes parent
-    let savedContainer = root.parentElement;
-    const getActiveSidebarTabId = () => {
-        const manager = app.extensionManager;
-        const sidebar = manager?.sidebarTab || manager;
-        const active = sidebar?.activeSidebarTabId ?? sidebar?.activeSidebarTab ?? "";
-        return String(active || "");
-    };
-    const isOurButtonSelected = () => {
-        const ownBtn = document.querySelector(`.${SIDEBAR_TAB_ID}-tab-button`);
-        if (!ownBtn) {
-            return null;
-        }
-        return ownBtn.classList.contains("side-bar-button-selected");
-    };
-    const getLiveContainer = () => {
-        // Always use the saved container from bind time, not parent of root
-        // because Vue might move root around
-        if (savedContainer && savedContainer.isConnected) {
-            return savedContainer;
-        }
-        // Fallback: if saved container is gone, use root's parent
-        const parent = root.parentElement;
-        if (parent instanceof Element) {
-            return parent;
-        }
-        return null;
-    };
-    const getContainerState = () => {
-        const container = getLiveContainer();
-        if (!container) {
-            return {
-                childCount: 0,
-                childShort: "n/a",
-                hasForeignContent: false,
-            };
-        }
-        const out = [];
-        let foreign = false;
-        let childCount = 0;
-        for (const node of container.childNodes) {
-            childCount += 1;
-            if (node === root) {
-                out.push("ROOT");
-                continue;
-            }
-            if (node.nodeType === Node.TEXT_NODE) {
-                const txt = String(node.textContent || "").trim();
-                if (!txt) {
-                    out.push("TXT:blank");
-                    continue;
-                }
-                foreign = true;
-                out.push(`TXT:${txt.slice(0, 20)}`);
-                continue;
-            }
-            foreign = true;
-            if (node instanceof Element) {
-                const cls = String(node.className || "").trim();
-                out.push(cls ? `${node.nodeName}.${cls.split(/\s+/).slice(0, 2).join(".")}` : node.nodeName);
-            } else {
-                out.push(String(node.nodeName || "NODE"));
-            }
-        }
-        return {
-            childCount,
-            childShort: out.slice(0, 10).join(" | ") || "n/a",
-            hasForeignContent: foreign,
-        };
-    };
-    const emitDiag = (reason, clickedTabId = "") => {
-        const ownSelected = isOurButtonSelected();
-        const containerState = getContainerState();
-        const diag = {
-            reason,
-            activeTabId: getActiveSidebarTabId() || "n/a",
-            lastClickedTabId: clickedTabId || lastClickedTabId || "n/a",
-            ownBtnFound: ownSelected !== null,
-            ownBtnSelected: ownSelected,
-            rootDisplay: root.style.display || "",
-            childNodesCount: containerState.childCount,
-            childNodesShort: containerState.childShort,
-        };
-        const sig = JSON.stringify(diag);
-        if (sig === lastDiagSig) {
-            return;
-        }
-        lastDiagSig = sig;
-        onDiag?.(diag);
-    };
-    const syncRootVisibility = (reason, clickedTabId = "") => {
-        const ownSelected = isOurButtonSelected();
-        const containerState = getContainerState();
-        const activeTabId = getActiveSidebarTabId();
-        const clickedRecently = Boolean(
-            lastClickedTabId &&
-            lastClickedTabId !== SIDEBAR_TAB_ID &&
-            Date.now() - lastClickedTs < 1600
-        );
-
-        // Ensure root is in the DOM if it got disconnected OR moved to wrong parent
-        if (!root.isConnected || root.parentElement !== getLiveContainer()) {
-            console.warn("ALEXZ: syncRootVisibility - root is NOT in correct location, attempting to reconnect", {
-                isConnected: root.isConnected,
-                currentParent: root.parentElement?.className || root.parentElement?.tagName,
-                expectedParent: getLiveContainer()?.className,
-            });
-            const liveContainer = getLiveContainer();
-            if (liveContainer && liveContainer.isConnected) {
-                // Remove from wherever it is
-                if (root.parentElement) {
-                    try {
-                        root.parentElement.removeChild(root);
-                    } catch (e) {
-                        // Already removed
-                    }
-                }
-                // Add to correct location
-                liveContainer.appendChild(root);
-                console.log("ALEXZ: syncRootVisibility - root re-appended to correct location");
-            }
-        }
-
-        if (
-            reason === "relay_tick" &&
-            ownSelected === true &&
-            activeTabId === SIDEBAR_TAB_ID &&
-            clickedRecently
-        ) {
-            const manager = app.extensionManager;
-            const sidebar = manager?.sidebarTab || manager;
-            if (sidebar && typeof sidebar.activateSidebarTab === "function") {
-                try {
-                    sidebar.activateSidebarTab(lastClickedTabId);
-                    emitDiag("relay_tick_forced", lastClickedTabId);
-                    return;
-                } catch (_err) {
-                    // no-op: keep default behavior below
-                }
-            }
-        }
-        if (containerState.hasForeignContent) {
-            root.style.display = "none";
-            emitDiag("relay_foreign_content", clickedTabId);
-            return;
-        }
-        // Ensure visibility takes priority: if we're the selected button, always show
-        if (ownSelected === null) {
-            // Button not found yet - show by default to ensure widget appears
-            root.style.display = "";
-        } else if (ownSelected === false) {
-            root.style.display = "none";
-        } else if (ownSelected === true) {
-            root.style.display = "";
-        }
-        emitDiag(reason, clickedTabId);
-    };
-    const processTabButton = (button) => {
-        if (!(button instanceof Element)) {
-            return;
-        }
-        const tabId = extractTabIdFromButtonElement(button);
-        if (!tabId || tabId === SIDEBAR_TAB_ID) {
-            return;
-        }
-        lastClickedTabId = tabId;
-        lastClickedTs = Date.now();
-        // Only relay when our tab is currently selected. Otherwise we might
-        // interfere with normal navigation between other tabs.
-        if (isOurButtonSelected() !== true) {
-            return;
-        }
-        if (relayTimer) {
-            window.clearTimeout(relayTimer);
-        }
-        relayTimer = window.setTimeout(() => {
-            relayTimer = 0;
-            const activeTabId = getActiveSidebarTabId();
-            const ownSelected = isOurButtonSelected();
-            // If Comfy switched tab normally, do nothing.
-            if (activeTabId === tabId || ownSelected === false) {
-                syncRootVisibility("relay_native_ok", tabId);
-                return;
-            }
-            const manager = app.extensionManager;
-            const sidebar = manager?.sidebarTab || manager;
-            if (sidebar && typeof sidebar.activateSidebarTab === "function") {
-                try {
-                    sidebar.activateSidebarTab(tabId);
-                    window.setTimeout(() => syncRootVisibility("relay_forced", tabId), 40);
-                } catch (_err) {
-                    syncRootVisibility("relay_force_failed", tabId);
-                }
-            }
-            const liveState = window[NODE_PICKER_TAB_RELAY_STATE_KEY];
-            if (liveState) {
-                liveState.relayTimer = 0;
-            }
-        }, 45);
-        const liveState = window[NODE_PICKER_TAB_RELAY_STATE_KEY];
-        if (liveState) {
-            liveState.relayTimer = relayTimer;
-        }
-    };
-    const processTabClickLikeEvent = (event) => {
-        const button = resolveSidebarButtonFromEventObject(event);
-        if (!button) {
-            return;
-        }
-        processTabButton(button);
-    };
-    const bindDirectTabButtonListeners = () => {
-        const buttons = Array.from(document.querySelectorAll(".side-bar-button, [class*='-tab-button']"));
-        for (const button of buttons) {
-            if (!(button instanceof Element)) {
-                continue;
-            }
-            const tabId = extractTabIdFromButtonElement(button);
-            if (!tabId || tabId === SIDEBAR_TAB_ID) {
-                continue;
-            }
-            if (boundButtons.some((item) => item.el === button)) {
-                continue;
-            }
-            const handler = () => {
-                processTabButton(button);
-            };
-            button.addEventListener("pointerdown", handler, true);
-            button.addEventListener("mousedown", handler, true);
-            button.addEventListener("click", handler, true);
-            boundButtons.push({ el: button, handler });
-        }
-    };
-    const onPointerDown = (event) => {
-        processTabClickLikeEvent(event);
-    };
-    const onMouseDown = (event) => {
-        processTabClickLikeEvent(event);
-    };
-    const onClick = (event) => {
-        processTabClickLikeEvent(event);
-    };
-    const onKeyUp = () => {
-        syncRootVisibility("relay_keyup");
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("mousedown", onMouseDown, true);
-    document.addEventListener("click", onClick, true);
-    document.addEventListener("keyup", onKeyUp, true);
-
-    // Periodically check if root got moved to wrong parent and re-attach if needed
-    const rootCheckInterval = window.setInterval(() => {
-        const liveContainer = getLiveContainer();
-        const isDetached = !root.isConnected || (liveContainer && root.parentElement !== liveContainer);
-        if (isDetached && liveContainer && liveContainer.isConnected) {
-            // Root was detached or moved to wrong container, re-attach it immediately
-            if (root.parentElement && root.parentElement !== liveContainer) {
-                try {
-                    root.parentElement.removeChild(root);
-                } catch (e) {
-                    // Already removed
-                }
-            }
-            // Insert at the beginning to ensure visibility
-            if (liveContainer.firstChild && liveContainer.firstChild !== root) {
-                liveContainer.insertBefore(root, liveContainer.firstChild);
-                console.log("ALEXZ: rootCheckInterval - root moved to beginning");
-            } else if (!liveContainer.firstChild) {
-                liveContainer.appendChild(root);
-                console.log("ALEXZ: rootCheckInterval - root appended to empty container");
-            }
-            // Force display
-            root.style.display = "";
-            // Update saved container in case it changed
-            if (savedContainer !== liveContainer) {
-                savedContainer = liveContainer;
-            }
-        }
-    }, 50);  // Check every 50ms to catch Vue re-renders quickly
-
-    visibilityInterval = window.setInterval(() => {
-        if (!root.isConnected) {
-            return;
-        }
-        syncRootVisibility("relay_tick");
-    }, 200);
-    bindDirectTabButtonListeners();
-    bindButtonsInterval = window.setInterval(() => {
-        bindDirectTabButtonListeners();
-    }, 800);
-    syncRootVisibility("relay_init");
-    window[NODE_PICKER_TAB_RELAY_STATE_KEY] = {
-        onPointerDown,
-        onMouseDown,
-        onClick,
-        onKeyUp,
-        relayTimer: 0,
-        visibilityInterval,
-        bindButtonsInterval,
-        boundButtons,
-        rootCheckInterval,
-    };
-}
-
 /** Handle `centerNode` workflow step. */
 function centerNode(node) {
     const area = app.canvas?.visible_area;
@@ -865,56 +467,13 @@ function formatModuleOption(moduleName, count, badges) {
 function renderPicker(container) {
     // Safety: clear any previous global tab-sync hooks before re-rendering.
     unbindContainerOwnershipSync();
-    unbindMinimalTabRelay();
+    unbindModuleNodesTabRelay();
 
-    // Remove any old root elements from anywhere in the DOM
-    const oldRoots = document.querySelectorAll(".alexz-mod-picker");
-    for (const oldRoot of oldRoots) {
-        if (oldRoot.parentElement) {
-            oldRoot.parentElement.removeChild(oldRoot);
-        }
-    }
-
-    // DON'T use container.innerHTML = "" because it can trigger Vue re-renders
-    // Instead, remove children one by one to be safe
-    while (container.firstChild) {
-        container.removeChild(container.firstChild);
-    }
-
-    // Explicitly ensure container is visible on re-render to fix tab switching bug
-    container.style.display = "";
+    container.innerHTML = "";
 
     const root = document.createElement("div");
     root.className = "alexz-mod-picker";
-    root.style.display = "";  // Ensure root is visible initially
-    root.style.minHeight = "100px";  // Ensure it has minimum height
-
-    console.log("ALEXZ: renderPicker - about to append root to container", {
-        containerClass: container.className,
-        containerParent: container.parentElement?.className,
-    });
-
     container.appendChild(root);
-
-    console.log("ALEXZ: renderPicker - root appended", {
-        rootParent: root.parentElement?.className || root.parentElement?.tagName,
-        rootConnected: root.isConnected,
-        containerCheck: root.parentElement === container,
-    });
-
-    // Verify root is actually in the container
-    if (root.parentElement !== container) {
-        console.error("ALEXZ_tools: ERROR - root parent mismatch!", {
-            rootParent: root.parentElement?.className || root.parentElement?.tagName,
-            expectedContainer: container.className,
-            containerParent: container.parentElement?.className,
-        });
-        // Try to move it to correct location
-        if (root.parentElement) {
-            root.parentElement.removeChild(root);
-        }
-        container.appendChild(root);
-    }
 
     const head = document.createElement("div");
     head.className = "alexz-mod-picker-head";
@@ -1043,53 +602,28 @@ function renderPicker(container) {
         }
     };
     const setDiagnosticText = (diag) => {
-        const rootComputed = window.getComputedStyle(root);
-        const containerComputed = window.getComputedStyle(container);
-        const parentComputed = container.parentElement ? window.getComputedStyle(container.parentElement) : null;
-
-        // Find where root actually is in DOM
-        let rootActualParent = "?";
-        let rootActualPath = "?";
-        try {
-            if (root.parentElement) {
-                rootActualParent = root.parentElement.className || root.parentElement.tagName;
-            }
-            const rootNode = root.getRootNode?.();
-            if (rootNode && rootNode.nodeType === Node.DOCUMENT_NODE) {
-                rootActualPath = "in-document";
-            } else if (rootNode && rootNode.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
-                rootActualPath = "in-fragment";
-            } else {
-                rootActualPath = "unknown";
-            }
-        } catch (e) {
-            rootActualPath = "error";
-        }
-
         const lines = [
             `diag.ts=${new Date().toLocaleTimeString()}`,
             `diag.reason=${diag?.reason || "unknown"}`,
             `diag.active_tab=${diag?.activeTabId || "n/a"}`,
+            `diag.last_clicked_tab=${diag?.lastClickedTabId || "n/a"}`,
+            `diag.own_btn_found=${diag?.ownBtnFound ? "yes" : "no"}`,
             `diag.own_btn_selected=${diag?.ownBtnSelected === null ? "n/a" : (diag?.ownBtnSelected ? "yes" : "no")}`,
-            `diag.root: display=${rootComputed.display}, visibility=${rootComputed.visibility}`,
-            `diag.root: height=${rootComputed.height}, overflow=${rootComputed.overflow}`,
-            `diag.root_connected=${root.isConnected ? "yes" : "NO"}`,
-            `diag.root_parent=${rootActualParent}`,
-            `diag.root_path=${rootActualPath}`,
-            `diag.container: display=${containerComputed.display}`,
-            `diag.container_parent=${container.parentElement?.className || "no_parent"}`,
+            `diag.root_display=${diag?.rootDisplay || "n/a"}`,
+            `diag.child_nodes=${Number(diag?.childNodesCount || 0)}`,
+            `diag.child_nodes_short=${diag?.childNodesShort || "n/a"}`,
         ];
         diagnostics.textContent = lines.join("\n");
     };
     if (Boolean(window[NODE_PICKER_SIDEBAR_SYNC_KEY])) {
-        // Temporarily disabled: use bindMinimalTabRelay instead for better reliability
-        // bindContainerOwnershipSync(container, root, setDiagnosticText);
-        root.style.display = "";
-        bindMinimalTabRelay(root, setDiagnosticText);
+        bindContainerOwnershipSync(container, root, setDiagnosticText);
     } else {
-        // Initialize root visibility BEFORE binding Tab Relay
-        root.style.display = "";
-        bindMinimalTabRelay(root, setDiagnosticText);
+        bindModuleNodesTabRelay({
+            app,
+            root,
+            sidebarTabId: SIDEBAR_TAB_ID,
+            onDiag: setDiagnosticText,
+        });
         setDiagnosticText({
             reason: "sync_disabled",
             activeTabId: "n/a",
@@ -2033,9 +1567,6 @@ function unbindContainerOwnershipSync() {
     if (state.sidebarObserver && typeof state.sidebarObserver.disconnect === "function") {
         state.sidebarObserver.disconnect();
     }
-    if (state.rootCheckInterval) {
-        window.clearInterval(state.rootCheckInterval);
-    }
     if (state.onClick) {
         document.removeEventListener("click", state.onClick, true);
         document.removeEventListener("keyup", state.onClick, true);
@@ -2294,37 +1825,11 @@ function bindContainerOwnershipSync(container, root, onDiag) {
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keyup", onInteraction, true);
 
-    // Periodically check if root got detached from container and re-attach if needed
-    const rootCheckInterval = window.setInterval(() => {
-        const isDetached = !root.isConnected || root.parentElement !== container;
-        if (isDetached) {
-            // Root was detached, re-attach it to container immediately
-            if (root.parentElement && root.parentElement !== container) {
-                try {
-                    root.parentElement.removeChild(root);
-                } catch (e) {
-                    // Already removed or parent changed
-                }
-            }
-            if (container && container.isConnected) {
-                // Insert at the beginning to ensure visibility
-                if (container.firstChild && container.firstChild !== root) {
-                    container.insertBefore(root, container.firstChild);
-                } else if (!container.firstChild) {
-                    container.appendChild(root);
-                }
-                // Force display
-                root.style.display = "";
-            }
-        }
-    }, 100);
-
     window[CONTAINER_SYNC_STATE_KEY] = {
         containerObserver,
         sidebarObserver,
         onClick: onInteraction,
         onPointerDown,
-        rootCheckInterval,
     };
     // Always show root on initialization - sync will determine visibility on next tick
     root.style.display = "";

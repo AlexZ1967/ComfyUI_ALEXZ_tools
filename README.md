@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.15.9
+Version: 0.15.10
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -29,6 +29,8 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 ## UI Tool: Module Node Picker
 - В современных версиях ComfyUI инструмент появляется как вкладка `Module Nodes` в боковой панели (Sidebar).
 - В старых версиях, где Sidebar API недоступен, появляется fallback-кнопка `Module Nodes` в меню.
+- <span style="color:#ff4d4f"><strong>Known issue:</strong> в некоторых конфигурациях ComfyUI при прямом переключении `Module Nodes -> NodesMap` вкладка `NodesMap` может открыться пустой. На функциональность нод/виджета это не влияет.</span>
+- <span style="color:#ff4d4f"><strong>Workaround:</strong> переключитесь сначала на любой другой виджет (например `Workflows` или `PNG Info`), затем откройте `NodesMap` — после этого `NodesMap` отображается корректно.</span>
 - Интерфейс разбит на 2 dropdown:
   1) выбор группы `Core_Nodes`, `Core_Extras_Nodes`, `API_Nodes` или `Custom_Nodes`,
   2) выбор python-модуля из выбранной группы.
