@@ -11,7 +11,7 @@ except Exception:  # pragma: no cover - runtime dependency check
 
 
 def normalize_mask(mask: torch.Tensor) -> torch.Tensor:
-    """Execute `normalize_mask` routine."""
+    """Normalize mask shape to BCHW layout and float range [0, 1]."""
     mask = mask.float()
     max_val = float(mask.max()) if mask.numel() else 0.0
     if max_val > 1.0:
@@ -20,7 +20,7 @@ def normalize_mask(mask: torch.Tensor) -> torch.Tensor:
 
 
 def ensure_mask_batch(mask: torch.Tensor, frame_count: int) -> torch.Tensor:
-    """Execute `ensure_mask_batch` routine."""
+    """Ensure mask has a batch dimension matching image batches."""
     if mask.dim() == 2:
         mask = mask.unsqueeze(0)
     if mask.size(0) == 1 and frame_count > 1:
@@ -29,7 +29,7 @@ def ensure_mask_batch(mask: torch.Tensor, frame_count: int) -> torch.Tensor:
 
 
 def resize_mask_to_output(mask: torch.Tensor, height: int, width: int) -> torch.Tensor:
-    """Execute `resize_mask_to_output` routine."""
+    """Resize mask to output tensor spatial resolution."""
     if mask.shape[-2] == height and mask.shape[-1] == width:
         return mask
     if mask.dim() == 2:
@@ -40,7 +40,7 @@ def resize_mask_to_output(mask: torch.Tensor, height: int, width: int) -> torch.
 
 
 def resize_images_to_size(images: torch.Tensor, height: int, width: int) -> torch.Tensor:
-    """Execute `resize_images_to_size` routine."""
+    """Resize source and reference images to a shared target resolution."""
     if images.shape[1] == height and images.shape[2] == width:
         return images
     images_bchw = images.permute(0, 3, 1, 2)
@@ -54,7 +54,7 @@ def resize_images_to_size(images: torch.Tensor, height: int, width: int) -> torc
 
 
 def _match_mean_std_channel(src: np.ndarray, ref: np.ndarray, keep: np.ndarray, eps: float = 1e-6) -> np.ndarray:
-    """Internal helper: `_match_mean_std_channel`."""
+    """Match one channel to reference mean/std values."""
     src_keep = src[keep]
     ref_keep = ref[keep]
     if src_keep.size < 10 or ref_keep.size < 10:
@@ -68,7 +68,7 @@ def _match_mean_std_channel(src: np.ndarray, ref: np.ndarray, keep: np.ndarray, 
 
 
 def _match_linear_channel(src: np.ndarray, ref: np.ndarray, keep: np.ndarray, eps: float = 1e-6) -> np.ndarray:
-    """Internal helper: `_match_linear_channel`."""
+    """Match one channel using robust linear fit against reference values."""
     src_keep = src[keep]
     ref_keep = ref[keep]
     if src_keep.size < 10 or ref_keep.size < 10:
@@ -93,7 +93,7 @@ def _match_histogram_channel(
     bins: int,
     value_range: tuple[float, float],
 ) -> np.ndarray:
-    """Internal helper: `_match_histogram_channel`."""
+    """Match one channel using histogram CDF transfer."""
     src_keep = src[keep]
     ref_keep = ref[keep]
     if src_keep.size < 10 or ref_keep.size < 10:
@@ -115,21 +115,21 @@ def _match_histogram_channel(
 
 
 def _match_mean_std_rgb(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) -> np.ndarray:
-    """Internal helper: `_match_mean_std_rgb`."""
+    """Apply per-channel mean/std matching in RGB space."""
     for c in range(3):
         out_np[..., c] = _match_mean_std_channel(out_np[..., c], ref_np[..., c], keep)
     return out_np
 
 
 def _match_linear_rgb(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) -> np.ndarray:
-    """Internal helper: `_match_linear_rgb`."""
+    """Apply per-channel linear matching in RGB space."""
     for c in range(3):
         out_np[..., c] = _match_linear_channel(out_np[..., c], ref_np[..., c], keep)
     return out_np
 
 
 def _match_hist_rgb(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) -> np.ndarray:
-    """Internal helper: `_match_hist_rgb`."""
+    """Apply per-channel histogram matching in RGB space."""
     for c in range(3):
         out_np[..., c] = _match_histogram_channel(
             out_np[..., c], ref_np[..., c], keep, bins=256, value_range=(0.0, 1.0)
@@ -138,7 +138,7 @@ def _match_hist_rgb(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) ->
 
 
 def _pca_cov_transfer(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) -> np.ndarray:
-    """Internal helper: `_pca_cov_transfer`."""
+    """Transfer source color covariance to reference covariance via PCA transform."""
     src = out_np.reshape(-1, 3)
     tar = ref_np.reshape(-1, 3)
     if keep is not None and keep.shape[:2] == out_np.shape[:2]:
@@ -171,7 +171,7 @@ def _pca_cov_transfer(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) 
 
 
 def _match_lab_l(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, use_cdf: bool) -> np.ndarray:
-    """Internal helper: `_match_lab_l`."""
+    """Match only luminance channel in Lab space while preserving chroma."""
     if cv2 is None:
         return out_np
 
@@ -199,7 +199,7 @@ def _match_lab_l(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, use_c
 
 
 def _match_lab_full(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, use_cdf: bool) -> np.ndarray:
-    """Internal helper: `_match_lab_full`."""
+    """Match full Lab distribution and convert back to RGB."""
     if cv2 is None:
         return out_np
 
@@ -239,7 +239,7 @@ def apply_color_match(
     mask: torch.Tensor,
     mode: str,
 ) -> torch.Tensor:
-    """Execute `apply_color_match` routine."""
+    """Apply selected color-match mode and return corrected image tensor."""
     if mode == "none":
         return output_images
 

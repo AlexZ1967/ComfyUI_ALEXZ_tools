@@ -20,26 +20,26 @@ from ..utils.utils import ensure_hwc, normalize_to_reference
 _LOGGER = logging.getLogger("VideoFrameMatch")
 
 def _list_videos():
-    """Internal helper: `_list_videos`."""
+    """Return available video filenames from the ComfyUI input directory."""
     input_dir = folder_paths.get_input_directory()
     files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
     return folder_paths.filter_files_content_types(files, ["video"])
 
 
 def _to_tensor(frame_bgr: np.ndarray) -> torch.Tensor:
-    """Internal helper: `_to_tensor`."""
+    """Convert NumPy image data to normalized torch tensor in BCHW format."""
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     frame = torch.from_numpy(frame_rgb.astype(np.float32) / 255.0)
     return frame
 
 
 def _to_tensor_rgb(frame_rgb: np.ndarray) -> torch.Tensor:
-    """Internal helper: `_to_tensor_rgb`."""
+    """Convert BGR NumPy frame to normalized RGB torch tensor (BCHW)."""
     frame = torch.from_numpy(frame_rgb.astype(np.float32) / 255.0)
     return frame
 
 def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.Tensor:
-    """Internal helper: `_resize_to_match`."""
+    """Resize source tensor to match reference spatial resolution."""
     h, w = target_hw
     if frame.shape[0] == h and frame.shape[1] == w:
         return frame
@@ -51,7 +51,7 @@ def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.T
 
 
 def _downscale_max_side(frame: torch.Tensor, max_side: int) -> torch.Tensor:
-    """Internal helper: `_downscale_max_side`."""
+    """Downscale an image tensor so its longest side does not exceed the given limit."""
     h, w = frame.shape[:2]
     if max(h, w) <= max_side:
         return frame
@@ -69,18 +69,18 @@ def _downscale_max_side(frame: torch.Tensor, max_side: int) -> torch.Tensor:
 
 
 def _mse_score(a: torch.Tensor, b: torch.Tensor) -> float:
-    """Internal helper: `_mse_score`."""
+    """Compute mean-squared error distance between two tensors."""
     return float(torch.mean((a - b) ** 2).item())
 
 
 def _append_score(scores, index: int, score: float, limit: int = 500):
-    """Internal helper: `_append_score`."""
+    """Append score to rolling list while keeping maximum length."""
     if len(scores) < limit:
         scores.append({"index": index, "score": float(score)})
 
 
 def _update_top_matches(top_matches, index: int, score: float, limit: int = 5):
-    """Internal helper: `_update_top_matches`."""
+    """Insert candidate into sorted list of best frame matches."""
     item = {"index": int(index), "score": float(score)}
     if len(top_matches) < limit:
         top_matches.append(item)
@@ -92,7 +92,7 @@ def _update_top_matches(top_matches, index: int, score: float, limit: int = 5):
 
 
 def _confidence_from_top(top_matches) -> float:
-    """Internal helper: `_confidence_from_top`."""
+    """Estimate match confidence from separation between top candidate scores."""
     if len(top_matches) < 2:
         return 1.0 if len(top_matches) == 1 else 0.0
     best = float(top_matches[0]["score"])
@@ -103,7 +103,7 @@ def _confidence_from_top(top_matches) -> float:
 
 
 def _ffprobe_frames(video_path: str) -> int:
-    """Internal helper: `_ffprobe_frames`."""
+    """Read frame count metadata from ffprobe output."""
     probes = [
         [
             "ffprobe",
@@ -147,7 +147,7 @@ def _ffprobe_frames(video_path: str) -> int:
 
 
 def _ffprobe_stream_info(video_path: str) -> Tuple[int, int, float]:
-    """Internal helper: `_ffprobe_stream_info`."""
+    """Read video stream width/height/fps metadata using ffprobe."""
     cmd = [
         "ffprobe",
         "-v",
@@ -184,7 +184,7 @@ def _ffprobe_stream_info(video_path: str) -> Tuple[int, int, float]:
 
 
 def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int, width: int, height: int):
-    """Internal helper: `_iter_ffmpeg_tail_frames`."""
+    """Stream only tail frames from a video via ffmpeg stdout."""
     cmd = [
         "ffmpeg",
         "-v",
@@ -222,7 +222,7 @@ def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int
 
 
 def _get_total_frames(cap: cv2.VideoCapture, video_path: str) -> int:
-    """Internal helper: `_get_total_frames`."""
+    """Return total frame count for the input video file."""
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if total > 0:
         return total
@@ -230,7 +230,7 @@ def _get_total_frames(cap: cv2.VideoCapture, video_path: str) -> int:
 
 
 def _ffprobe_duration(video_path: str) -> float:
-    """Internal helper: `_ffprobe_duration`."""
+    """Read video duration metadata using ffprobe."""
     cmd = [
         "ffprobe",
         "-v",
@@ -259,7 +259,7 @@ _SSIM_WINDOW_CACHE = {}
 
 
 def _get_ssim_window(channels: int, device: torch.device, dtype: torch.dtype, size: int = 11, sigma: float = 1.5):
-    """Internal helper: `_get_ssim_window`."""
+    """Create a cached Gaussian window tensor used by SSIM."""
     key = (channels, device.type, str(dtype), size, sigma)
     if key in _SSIM_WINDOW_CACHE:
         return _SSIM_WINDOW_CACHE[key]
@@ -273,7 +273,7 @@ def _get_ssim_window(channels: int, device: torch.device, dtype: torch.dtype, si
 
 
 def _ssim_distance(a: torch.Tensor, b: torch.Tensor) -> float:
-    """Internal helper: `_ssim_distance`."""
+    """Compute SSIM-based distance where lower values are better matches."""
     a = a.permute(2, 0, 1).unsqueeze(0)
     b = b.permute(2, 0, 1).unsqueeze(0)
     channels = a.shape[1]
@@ -303,7 +303,7 @@ _LPIPS_CACHE = {}
 
 
 def _get_lpips_model(net: str, device: torch.device):
-    """Internal helper: `_get_lpips_model`."""
+    """Load and cache LPIPS model weights for perceptual scoring."""
     key = (net, device.type)
     if key in _LPIPS_CACHE:
         return _LPIPS_CACHE[key]
@@ -319,7 +319,7 @@ def _get_lpips_model(net: str, device: torch.device):
 
 
 def _lpips_distance(a: torch.Tensor, b: torch.Tensor, net: str, device: torch.device) -> float:
-    """Internal helper: `_lpips_distance`."""
+    """Compute LPIPS perceptual distance for two images."""
     model = _get_lpips_model(net, device)
     a = a.permute(2, 0, 1).unsqueeze(0).to(device)
     b = b.permute(2, 0, 1).unsqueeze(0).to(device)
@@ -336,7 +336,7 @@ def _compute_score(
     target: torch.Tensor,
     device: torch.device,
 ) -> float:
-    """Internal helper: `_compute_score`."""
+    """Compute similarity score for the selected metric (MSE, SSIM, or LPIPS variants)."""
     if metric == "mse":
         return _mse_score(frame, target)
     if metric == "ssim":
@@ -349,10 +349,10 @@ def _compute_score(
 
 
 class VideoFrameMatch:
-    """ComfyUI node class: `VideoFrameMatch`."""
+    """ComfyUI node that finds the closest frame in a video to a reference image."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         videos = sorted(_list_videos())
         return {
             "required": {
@@ -391,7 +391,7 @@ class VideoFrameMatch:
     CATEGORY = "video/utils"
 
     def match(self, image, video, max_frames, metric, normalize):
-        """Execute `match` routine."""
+        """Execute the node and return processed outputs for ComfyUI."""
         target = image[0] if isinstance(image, list) else image
         target = torch.clamp(ensure_hwc(target), 0.0, 1.0).float()
         h_t, w_t = target.shape[:2]
@@ -438,13 +438,13 @@ class VideoFrameMatch:
         )
 
         def _prepare_frame(frame_t: torch.Tensor):
-            """Internal helper: `_prepare_frame`."""
+            """Convert decoded frame to normalized tensor and resize to target shape."""
             frame_t = _resize_to_match(frame_t, (h_t, w_t))
             frame_metric = normalize_to_reference(frame_t, target, normalize) if normalize != "none" else frame_t
             return frame_t, frame_metric
 
         def _consider_candidate(frame_index: int, coarse_score: float, frame_rgb: np.ndarray):
-            """Internal helper: `_consider_candidate`."""
+            """Evaluate a candidate frame score and update current best/top matches."""
             item = {
                 "index": int(frame_index),
                 "coarse_score": float(coarse_score),

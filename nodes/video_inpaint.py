@@ -42,12 +42,12 @@ STREAM_STRIDE_DEFAULT = 1
 
 
 def _check_interrupt() -> None:
-    """Internal helper: `_check_interrupt`."""
+    """Raise an interrupt error when ComfyUI requests execution cancellation."""
     model_management.throw_exception_if_processing_interrupted()
 
 
 def _check_inputs(frames: torch.Tensor, masks: torch.Tensor) -> None:
-    """Internal helper: `_check_inputs`."""
+    """Validate frame and mask tensor shapes before running inpaint pipeline."""
     if frames.size(dim=0) <= 1:
         raise ValueError(f"Image length must be greater than 1, but got: {frames.size(dim=0)}")
     if masks.size(dim=0) != 1 and frames.size(dim=0) != masks.size(dim=0):
@@ -64,7 +64,7 @@ def _check_inputs(frames: torch.Tensor, masks: torch.Tensor) -> None:
 
 
 def _mask_to_bbox(mask: torch.Tensor) -> tuple[int, int, int, int, str]:
-    """Internal helper: `_mask_to_bbox`."""
+    """Convert binary mask into an expanded bounding box for inpaint cropping."""
     mask_np = mask.detach().cpu().numpy()
     if mask_np.ndim == 2:
         mask_np = mask_np[np.newaxis, ...]
@@ -85,7 +85,7 @@ def _pre_crop_inputs(
     mask: torch.Tensor,
     padding: int,
 ) -> tuple[torch.Tensor, torch.Tensor, tuple[int, int, int, int], str]:
-    """Internal helper: `_pre_crop_inputs`."""
+    """Prepare frames and mask tensors for crop-first inpaint processing."""
     mask = _normalize_mask(mask)
     mask = _ensure_mask_batch(mask, frames.size(dim=0))
     x0, y0, x1, y1, status = _mask_to_bbox(mask)
@@ -108,7 +108,7 @@ def _crop_frames_with_bbox(
     mask: torch.Tensor,
     bbox: tuple[int, int, int, int],
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Internal helper: `_crop_frames_with_bbox`."""
+    """Crop a frame batch to the selected bounding box region."""
     x0, y0, x1, y1 = bbox
     return frames[:, y0:y1, x0:x1, :], mask[:, y0:y1, x0:x1]
 
@@ -116,7 +116,7 @@ def _crop_frames_with_bbox(
 
 
 def _sanitize_prefix(prefix: str) -> str:
-    """Internal helper: `_sanitize_prefix`."""
+    """Sanitize filename prefix to keep saved outputs filesystem-safe."""
     if prefix is None:
         return "patch_"
     prefix = prefix.strip()
@@ -124,7 +124,7 @@ def _sanitize_prefix(prefix: str) -> str:
 
 
 def _sanitize_prefix_with_default(prefix: str, default: str) -> str:
-    """Internal helper: `_sanitize_prefix_with_default`."""
+    """Sanitize filename prefix and fallback to a default when empty."""
     if prefix is None:
         return default
     prefix = prefix.strip()
@@ -132,7 +132,7 @@ def _sanitize_prefix_with_default(prefix: str, default: str) -> str:
 
 
 def _ensure_dir(path: str) -> None:
-    """Internal helper: `_ensure_dir`."""
+    """Create directory (and parents) when it does not exist yet."""
     if not path:
         return
     os.makedirs(path, exist_ok=True)
@@ -146,7 +146,7 @@ def _save_rgba_sequence(
     label: str,
     start_index: int = 0,
 ) -> None:
-    """Internal helper: `_save_rgba_sequence`."""
+    """Save RGBA tensor batch to numbered PNG sequence on disk."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -176,7 +176,7 @@ def _save_rgba_frame(
     output_dir: str,
     filename: str,
 ) -> None:
-    """Internal helper: `_save_rgba_frame`."""
+    """Save a single RGBA frame tensor as PNG file."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -189,7 +189,7 @@ def _save_rgb_frame(
     output_dir: str,
     filename: str,
 ) -> None:
-    """Internal helper: `_save_rgb_frame`."""
+    """Save a single RGB frame tensor as PNG file."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -201,7 +201,7 @@ def _save_mask_frame(
     output_dir: str,
     filename: str,
 ) -> None:
-    """Internal helper: `_save_mask_frame`."""
+    """Save a single mask tensor as grayscale PNG file."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -209,7 +209,7 @@ def _save_mask_frame(
 
 
 def _save_transform_json(output_dir: str, prefix: str, transform_json: str) -> None:
-    """Internal helper: `_save_transform_json`."""
+    """Save crop/transform metadata to JSON file for downstream tools."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -220,7 +220,7 @@ def _save_transform_json(output_dir: str, prefix: str, transform_json: str) -> N
 
 
 def _list_numbered_frames(directory: str, prefix: str, label: str) -> list[str]:
-    """Internal helper: `_list_numbered_frames`."""
+    """List numerically ordered frame files from a directory."""
     if not directory:
         return []
     prefix = _sanitize_prefix(prefix)
@@ -238,7 +238,7 @@ def _list_numbered_frames(directory: str, prefix: str, label: str) -> list[str]:
 
 
 def _purge_cached_inputs(directory: str, prefix: str) -> None:
-    """Internal helper: `_purge_cached_inputs`."""
+    """Remove stale cached frame files before writing new input data."""
     if not directory:
         return
     prefix = _sanitize_prefix(prefix)
@@ -255,7 +255,7 @@ def _purge_cached_inputs(directory: str, prefix: str) -> None:
 
 
 def _load_rgba_frame(path: str) -> np.ndarray:
-    """Internal helper: `_load_rgba_frame`."""
+    """Load RGBA image file from disk into normalized torch tensor."""
     with Image.open(path) as img:
         img = img.convert("RGBA")
         return np.asarray(img, dtype=np.uint8)
@@ -267,7 +267,7 @@ def _build_preview_composite(
     prefix: str,
     index: int,
 ) -> torch.Tensor | None:
-    """Internal helper: `_build_preview_composite`."""
+    """Build side-by-side preview showing source, mask, and inpaint result."""
     if not cache_dir or not output_dir:
         return None
     prefix = _sanitize_prefix(prefix)
@@ -299,7 +299,7 @@ def _stream_write_fullframes(
     stream_stride: int,
     total_frames: int | None,
 ) -> None:
-    """Internal helper: `_stream_write_fullframes`."""
+    """Stream ffmpeg output directly into the full-frame video writer."""
     try:
         import cv2
     except ImportError as exc:
@@ -396,7 +396,7 @@ def _format_resolve_edit_position(
     overlay_width: int,
     overlay_height: int,
 ) -> dict:
-    """Internal helper: `_format_resolve_edit_position`."""
+    """Format frame index and fps to Resolve-compatible timeline position."""
     scale_x = (background_width * background_width) / max(1.0, float(overlay_width))
     scale_y = (background_height * background_height) / max(1.0, float(overlay_height))
     pos_x = (norm_x - 0.5) * scale_x
@@ -413,7 +413,7 @@ def _format_crop_json(
     background_height: int,
     status: str,
 ) -> str:
-    """Internal helper: `_format_crop_json`."""
+    """Build JSON payload describing crop transform and output placement."""
     payload = {
         "status": status,
         "overlay_scale": {"x": None, "y": None},
@@ -471,7 +471,7 @@ def _crop_outputs(
     background_width: int,
     background_height: int,
 ) -> tuple[torch.Tensor, torch.Tensor, str]:
-    """Internal helper: `_crop_outputs`."""
+    """Extract crop outputs and metadata from inpaint pipeline results."""
     mask = _normalize_mask(mask)
     mask = _ensure_mask_batch(mask, output_images.size(dim=0))
     mask = _resize_mask_to_output(mask, background_height, background_width)
@@ -507,7 +507,7 @@ def _compose_outputs_from_bbox(
     background_height: int,
     status: str,
 ) -> tuple[torch.Tensor, torch.Tensor, str]:
-    """Internal helper: `_compose_outputs_from_bbox`."""
+    """Composite cropped inpaint result back onto full-size output frames."""
     mask = _normalize_mask(mask)
     mask = _ensure_mask_batch(mask, output_images.size(dim=0))
     mask = _resize_mask_to_output(mask, output_images.shape[1], output_images.shape[2])
@@ -532,7 +532,7 @@ def _compose_outputs_from_bbox(
 
 
 class VideoInpaintWatermark:
-    """ComfyUI node class: `VideoInpaintWatermark`."""
+    """ComfyUI node that removes static watermarks from video frames."""
     def _stream_video(
         self,
         video: str,
@@ -556,7 +556,7 @@ class VideoInpaintWatermark:
         write_fullframes: bool,
         fullframe_prefix: str,
     ):
-        """Internal helper: `_stream_video`."""
+        """Stream the source video through ffmpeg and process frames chunk-by-chunk."""
         pre_crop = True
         width = 0
         height = 0
@@ -796,7 +796,7 @@ class VideoInpaintWatermark:
         inputs_already_cropped: bool = False,
         mask_is_ready: bool = False,
     ) -> int:
-        """Internal helper: `_process_stream_chunk`."""
+        """Process one streamed frame chunk through inpaint and compositing steps."""
         _check_interrupt()
         width = 0
         height = 0
@@ -908,7 +908,7 @@ class VideoInpaintWatermark:
 
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         input_dir = folder_paths.get_input_directory()
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         files = folder_paths.filter_files_content_types(files, ["video"])
@@ -966,7 +966,7 @@ class VideoInpaintWatermark:
         write_fullframes: bool,
         fullframe_prefix: str,
     ):
-        """Execute `inpaint` routine."""
+        """Run the watermark inpainting pipeline and return video/image outputs."""
         return self._stream_video(
             video=video,
             mask=mask,

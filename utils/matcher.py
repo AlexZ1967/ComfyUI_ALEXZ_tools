@@ -10,13 +10,13 @@ from .constants import MATCHER_TYPES
 
 
 def _ensure_cv2():
-    """Internal helper: `_ensure_cv2`."""
+    """Import OpenCV lazily and raise clear error if it is unavailable."""
     if cv2 is None:
         raise RuntimeError("opencv-python is required for feature alignment. Please install opencv-python.")
 
 
 def _create_detector(matcher_type, feature_count):
-    """Internal helper: `_create_detector`."""
+    """Create OpenCV feature detector/descriptor selected by method."""
     if matcher_type == "orb":
         return cv2.ORB_create(nfeatures=feature_count), cv2.NORM_HAMMING
     if matcher_type == "akaze":
@@ -40,7 +40,7 @@ def detect_and_match(
     color_mode,
     lab_channels,
 ):
-    """Execute `detect_and_match` routine."""
+    """Detect keypoints in both images and return robust feature matches."""
     _ensure_cv2()
 
     if lab_channels not in ("l", "lab"):
@@ -112,7 +112,7 @@ def detect_and_match(
 
 
 def estimate_affine(ov_points, bg_points, ransac_thresh, scale_mode, min_inliers):
-    """Execute `estimate_affine` routine."""
+    """Estimate affine transform from matched keypoints and reject outliers."""
     _ensure_cv2()
     if scale_mode == "preserve_aspect":
         matrix, inliers = cv2.estimateAffinePartial2D(

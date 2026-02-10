@@ -25,19 +25,19 @@ _LPIPS_CACHE = {}
 
 
 def _list_videos():
-    """Internal helper: `_list_videos`."""
+    """Return available video filenames from the ComfyUI input directory."""
     input_dir = folder_paths.get_input_directory()
     files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
     return folder_paths.filter_files_content_types(files, ["video"])
 
 
 def _to_tensor_rgb(frame_rgb: np.ndarray) -> torch.Tensor:
-    """Internal helper: `_to_tensor_rgb`."""
+    """Convert BGR NumPy frame to normalized RGB torch tensor (BCHW)."""
     return torch.from_numpy(frame_rgb.astype(np.float32) / 255.0)
 
 
 def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.Tensor:
-    """Internal helper: `_resize_to_match`."""
+    """Resize source tensor to match reference spatial resolution."""
     h, w = target_hw
     if frame.shape[0] == h and frame.shape[1] == w:
         return frame
@@ -51,7 +51,7 @@ def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.T
 
 
 def _downscale_max_side(frame: torch.Tensor, max_side: int) -> torch.Tensor:
-    """Internal helper: `_downscale_max_side`."""
+    """Downscale an image tensor so its longest side does not exceed the given limit."""
     h, w = frame.shape[:2]
     if max(h, w) <= max_side:
         return frame
@@ -68,12 +68,12 @@ def _downscale_max_side(frame: torch.Tensor, max_side: int) -> torch.Tensor:
 
 
 def _mse_score(a: torch.Tensor, b: torch.Tensor) -> float:
-    """Internal helper: `_mse_score`."""
+    """Compute mean-squared error distance between two tensors."""
     return float(torch.mean((a - b) ** 2).item())
 
 
 def _get_ssim_window(channels: int, device: torch.device, dtype: torch.dtype, size: int = 11, sigma: float = 1.5):
-    """Internal helper: `_get_ssim_window`."""
+    """Create a cached Gaussian window tensor used by SSIM."""
     key = (channels, device.type, str(dtype), size, sigma)
     if key in _SSIM_WINDOW_CACHE:
         return _SSIM_WINDOW_CACHE[key]
@@ -87,7 +87,7 @@ def _get_ssim_window(channels: int, device: torch.device, dtype: torch.dtype, si
 
 
 def _ssim_distance(a: torch.Tensor, b: torch.Tensor) -> float:
-    """Internal helper: `_ssim_distance`."""
+    """Compute SSIM-based distance where lower values are better matches."""
     a = a.permute(2, 0, 1).unsqueeze(0)
     b = b.permute(2, 0, 1).unsqueeze(0)
     channels = a.shape[1]
@@ -110,7 +110,7 @@ def _ssim_distance(a: torch.Tensor, b: torch.Tensor) -> float:
 
 
 def _lpips_model(net: str, device: torch.device):
-    """Internal helper: `_lpips_model`."""
+    """Load and cache LPIPS model weights for perceptual scoring."""
     key = (net, device.type)
     if key in _LPIPS_CACHE:
         return _LPIPS_CACHE[key]
@@ -126,7 +126,7 @@ def _lpips_model(net: str, device: torch.device):
 
 
 def _lpips_distance(a: torch.Tensor, b: torch.Tensor, net: str, device: torch.device) -> float:
-    """Internal helper: `_lpips_distance`."""
+    """Compute LPIPS perceptual distance for two images."""
     model = _lpips_model(net, device)
     aa = a.permute(2, 0, 1).unsqueeze(0).to(device) * 2.0 - 1.0
     bb = b.permute(2, 0, 1).unsqueeze(0).to(device) * 2.0 - 1.0
@@ -136,7 +136,7 @@ def _lpips_distance(a: torch.Tensor, b: torch.Tensor, net: str, device: torch.de
 
 
 def _compute_score(metric: str, a: torch.Tensor, b: torch.Tensor, device: torch.device) -> float:
-    """Internal helper: `_compute_score`."""
+    """Compute similarity score for the selected metric (MSE, SSIM, or LPIPS variants)."""
     if metric == "mse":
         return _mse_score(a, b)
     if metric == "ssim":
@@ -149,7 +149,7 @@ def _compute_score(metric: str, a: torch.Tensor, b: torch.Tensor, device: torch.
 
 
 def _update_top_pairs(top_pairs, item, limit: int):
-    """Internal helper: `_update_top_pairs`."""
+    """Insert candidate pair into fixed-size sorted list of best cut matches."""
     if len(top_pairs) < limit:
         top_pairs.append(item)
         top_pairs.sort(key=lambda x: x["score"])
@@ -160,7 +160,7 @@ def _update_top_pairs(top_pairs, item, limit: int):
 
 
 def _confidence_from_top_pairs(top_pairs) -> float:
-    """Internal helper: `_confidence_from_top_pairs`."""
+    """Estimate confidence from the spread between the best and next-best pair scores."""
     if len(top_pairs) < 2:
         return 1.0 if len(top_pairs) == 1 else 0.0
     best = float(top_pairs[0]["score"])
@@ -171,7 +171,7 @@ def _confidence_from_top_pairs(top_pairs) -> float:
 
 
 def _blend_window_from_confidence(confidence: float) -> int:
-    """Internal helper: `_blend_window_from_confidence`."""
+    """Map confidence value to a recommended blend-window size."""
     if confidence >= 0.25:
         return 4
     if confidence >= 0.12:
@@ -180,7 +180,7 @@ def _blend_window_from_confidence(confidence: float) -> int:
 
 
 def _ffprobe_frames(video_path: str) -> int:
-    """Internal helper: `_ffprobe_frames`."""
+    """Read frame count metadata from ffprobe output."""
     probes = [
         [
             "ffprobe",
@@ -224,7 +224,7 @@ def _ffprobe_frames(video_path: str) -> int:
 
 
 def _ffprobe_stream_info(video_path: str) -> Tuple[int, int, float]:
-    """Internal helper: `_ffprobe_stream_info`."""
+    """Read video stream width/height/fps metadata using ffprobe."""
     cmd = [
         "ffprobe",
         "-v",
@@ -261,7 +261,7 @@ def _ffprobe_stream_info(video_path: str) -> Tuple[int, int, float]:
 
 
 def _ffprobe_duration(video_path: str) -> float:
-    """Internal helper: `_ffprobe_duration`."""
+    """Read video duration metadata using ffprobe."""
     cmd = [
         "ffprobe",
         "-v",
@@ -287,7 +287,7 @@ def _ffprobe_duration(video_path: str) -> float:
 
 
 def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int, width: int, height: int):
-    """Internal helper: `_iter_ffmpeg_tail_frames`."""
+    """Stream only tail frames from a video via ffmpeg stdout."""
     cmd = [
         "ffmpeg",
         "-v",
@@ -325,7 +325,7 @@ def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int
 
 
 def _load_head_frames(video_path: str, max_frames: int):
-    """Internal helper: `_load_head_frames`."""
+    """Load first N frames from video and convert them to RGB tensors."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open video: {video_path}")
@@ -352,7 +352,7 @@ def _load_head_frames(video_path: str, max_frames: int):
 
 
 def _load_tail_frames(video_path: str, max_frames: int):
-    """Internal helper: `_load_tail_frames`."""
+    """Load last N frames from video and convert them to RGB tensors."""
     if max_frames <= 0:
         return _load_head_frames(video_path, 0)
 
@@ -415,10 +415,10 @@ def _load_tail_frames(video_path: str, max_frames: int):
 
 
 class VideoCutMatch:
-    """ComfyUI node class: `VideoCutMatch`."""
+    """ComfyUI node that finds the best cut point between two videos."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         videos = sorted(_list_videos())
         return {
             "required": {
@@ -487,7 +487,7 @@ class VideoCutMatch:
     CATEGORY = "video/utils"
 
     def match(self, video_a, video_b, search_tail_a, search_head_b, metric, normalize, top_k):
-        """Execute `match` routine."""
+        """Execute the node and return processed outputs for ComfyUI."""
         path_a = folder_paths.get_annotated_filepath(video_a)
         path_b = folder_paths.get_annotated_filepath(video_b)
         if not os.path.exists(path_a):

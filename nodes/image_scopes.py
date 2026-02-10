@@ -9,7 +9,7 @@ from ..utils.utils import ensure_hwc
 
 
 def _resize_width(img: torch.Tensor, width: int) -> torch.Tensor:
-    """Internal helper: `_resize_width`."""
+    """Resize image tensor to requested width while preserving aspect ratio."""
     h, w, _ = img.shape
     if w == width:
         return img
@@ -22,7 +22,7 @@ def _resize_width(img: torch.Tensor, width: int) -> torch.Tensor:
 
 
 def _build_waveform(img: torch.Tensor, mode: str, width: int, height: int, gain: float, log_scale: bool) -> torch.Tensor:
-    """Internal helper: `_build_waveform`."""
+    """Render RGB waveform scope image from input frame tensor."""
     img = torch.clamp(ensure_hwc(img).float(), 0.0, 1.0)
     img = _resize_width(img, int(width))
 
@@ -58,7 +58,7 @@ def _build_waveform(img: torch.Tensor, mode: str, width: int, height: int, gain:
 
 
 def _hist_counts(flat_channel: torch.Tensor, bins: int, log_scale: bool) -> torch.Tensor:
-    """Internal helper: `_hist_counts`."""
+    """Compute per-channel histogram counts for an RGB image."""
     hist = torch.histc(flat_channel, bins=bins, min=0.0, max=1.0)
     if log_scale:
         hist = torch.log1p(hist)
@@ -76,7 +76,7 @@ def _draw_hist_curve(
     blend: str = "add",
     thickness: int = 1,
 ) -> None:
-    """Internal helper: `_draw_hist_curve`."""
+    """Render one histogram curve onto the output canvas."""
     h, _, _ = canvas.shape
     width = max(1, x1 - x0)
     xs = torch.linspace(0, hist.numel() - 1, steps=width, device=hist.device)
@@ -101,7 +101,7 @@ def _draw_hist_curve(
 
 
 def _build_histogram(img: torch.Tensor, mode: str, bins: int, width: int, height: int, log_scale: bool):
-    """Internal helper: `_build_histogram`."""
+    """Render RGB histogram scope image from input frame tensor."""
     img = torch.clamp(ensure_hwc(img).float(), 0.0, 1.0)
     h, w = int(height), int(width)
     canvas = torch.zeros((h, w, 3), dtype=img.dtype, device=img.device)
@@ -178,10 +178,10 @@ def _build_histogram(img: torch.Tensor, mode: str, bins: int, width: int, height
 
 
 class ImageWaveformScope:
-    """ComfyUI node class: `ImageWaveformScope`."""
+    """ComfyUI node that renders an RGB waveform scope image."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "image": ("IMAGE", {"tooltip": "Входная картинка для waveform scope."}),
@@ -200,7 +200,7 @@ class ImageWaveformScope:
     CATEGORY = "image/analysis"
 
     def build(self, image, mode, width, height, gain, log_scale):
-        """Execute `build` routine."""
+        """Execute the node and return the generated scope image."""
         out = []
         for i in range(image.shape[0]):
             wf = _build_waveform(image[i], mode, int(width), int(height), float(gain), bool(log_scale))
@@ -209,10 +209,10 @@ class ImageWaveformScope:
 
 
 class ImageHistogramScope:
-    """ComfyUI node class: `ImageHistogramScope`."""
+    """ComfyUI node that renders an RGB histogram scope image."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "image": ("IMAGE", {"tooltip": "Входная картинка для histogram scope."}),
@@ -231,7 +231,7 @@ class ImageHistogramScope:
     CATEGORY = "image/analysis"
 
     def build(self, image, mode, bins, width, height, log_scale):
-        """Execute `build` routine."""
+        """Execute the node and return the generated scope image."""
         images = []
         infos = []
         for i in range(image.shape[0]):

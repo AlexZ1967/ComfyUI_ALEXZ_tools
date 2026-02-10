@@ -6,10 +6,10 @@ from ..utils.utils import ensure_hwc, image_difference
 
 
 class ImageDifference:
-    """ComfyUI node class: `ImageDifference`."""
+    """ComfyUI node that computes an absolute visual difference between two images."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "image_a": ("IMAGE", {"tooltip": "Первая картинка (эталон)."}),
@@ -24,7 +24,7 @@ class ImageDifference:
     CATEGORY = "image/utils"
 
     def diff(self, image_a, image_b):
-        """Execute `diff` routine."""
+        """Compute image difference and return the resulting visualization."""
         a = ensure_hwc(image_a[0] if isinstance(image_a, list) else image_a)
         b = ensure_hwc(image_b[0] if isinstance(image_b, list) else image_b)
         diff = image_difference(a, b)

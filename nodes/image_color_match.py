@@ -13,7 +13,7 @@ try:
     from tqdm.auto import tqdm
 except Exception:  # pragma: no cover - optional dependency
     def tqdm(iterable=None, **kwargs):
-        """Execute `tqdm` routine."""
+        """Fallback tqdm wrapper that returns the iterable unchanged when tqdm is unavailable."""
         return iterable if iterable is not None else []
 
 from ..utils import color_match_utils
@@ -27,7 +27,7 @@ _LPIPS_CACHE = {}
 
 
 def _resize_image(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
-    """Internal helper: `_resize_image`."""
+    """Resize an image tensor to target height and width using bilinear interpolation."""
     if img.shape[0] == h and img.shape[1] == w:
         return img
     out = F.interpolate(
@@ -40,7 +40,7 @@ def _resize_image(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
 
 
 def _linear_fit_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
-    """Internal helper: `_linear_fit_torch`."""
+    """Solve linear scale/offset coefficients that map source values to reference values."""
     if mask is not None:
         m = mask > 0.5
         img_sel = img[m]
@@ -58,7 +58,7 @@ def _linear_fit_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch
 
 
 def _mean_std_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
-    """Internal helper: `_mean_std_match`."""
+    """Match source channels to reference mean and standard deviation."""
     if mask is not None:
         m = mask > 0.5
         img_sel = img[m]
@@ -75,13 +75,13 @@ def _mean_std_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.T
 
 
 def _linear_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
-    """Internal helper: `_linear_match`."""
+    """Apply linear color matching with optional masking support."""
     scale, offset = _linear_fit_torch(img, ref, mask)
     return torch.clamp(img * scale + offset, 0.0, 1.0)
 
 
 def _lab_match_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor], mode: str):
-    """Internal helper: `_lab_match_torch`."""
+    """Match color statistics in Lab space and return corrected RGB tensor."""
     mask_t = torch.zeros((img.shape[0], img.shape[1]), dtype=img.dtype, device=img.device)
     if mask is not None:
         mask_t = normalize_mask(mask)
@@ -95,7 +95,7 @@ def _lab_match_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.
 
 
 def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float):
-    """Internal helper: `_perceptual_vgg`."""
+    """Optimize image parameters against VGG perceptual features for high-quality matching."""
     try:
         from torchvision.models import VGG19_Weights, vgg19
     except Exception as exc:  # pragma: no cover - runtime dependency check
@@ -114,7 +114,7 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
             p.requires_grad = False
 
         def prep(x):
-            """Execute `prep` routine."""
+            """Normalize and resize an image tensor for VGG feature extraction."""
             x = x.permute(2, 0, 1).unsqueeze(0)
             mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(1, 3, 1, 1)
             std = torch.tensor([0.229, 0.224, 0.225], device=device).view(1, 3, 1, 1)
@@ -151,7 +151,7 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
 
 
 def _perceptual_vgg_fast(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float, max_side: int = 256):
-    """Internal helper: `_perceptual_vgg_fast`."""
+    """Run a lightweight perceptual optimization pass tuned for speed."""
     h, w, _ = img.shape
     scale = 1.0
     if max(h, w) > max_side:
@@ -186,7 +186,7 @@ def _perceptual_vgg_fast(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: f
 
 
 def _ssim_window(channels: int, device: torch.device, dtype: torch.dtype, size: int = 11, sigma: float = 1.5):
-    """Internal helper: `_ssim_window`."""
+    """Create a Gaussian convolution window for SSIM computation."""
     key = (channels, device.type, str(dtype), size, sigma)
     if key in _SSIM_WINDOW_CACHE:
         return _SSIM_WINDOW_CACHE[key]
@@ -200,7 +200,7 @@ def _ssim_window(channels: int, device: torch.device, dtype: torch.dtype, size: 
 
 
 def _ssim_similarity(a: torch.Tensor, b: torch.Tensor) -> float:
-    """Internal helper: `_ssim_similarity`."""
+    """Compute SSIM similarity score for two image tensors."""
     a = a.permute(2, 0, 1).unsqueeze(0)
     b = b.permute(2, 0, 1).unsqueeze(0)
     channels = a.shape[1]
@@ -222,7 +222,7 @@ def _ssim_similarity(a: torch.Tensor, b: torch.Tensor) -> float:
 
 
 def _downscale_max_side(img: torch.Tensor, max_side: int = 256) -> torch.Tensor:
-    """Internal helper: `_downscale_max_side`."""
+    """Downscale an image tensor so its longest side does not exceed the given limit."""
     h, w = img.shape[:2]
     if max(h, w) <= max_side:
         return img
@@ -239,7 +239,7 @@ def _downscale_max_side(img: torch.Tensor, max_side: int = 256) -> torch.Tensor:
 
 
 def _lpips_model(device: torch.device):
-    """Internal helper: `_lpips_model`."""
+    """Load and cache LPIPS model weights for perceptual scoring."""
     key = ("alex", device.type)
     if key in _LPIPS_CACHE:
         return _LPIPS_CACHE[key]
@@ -253,7 +253,7 @@ def _lpips_model(device: torch.device):
 
 
 def _lpips_alex_distance(a: torch.Tensor, b: torch.Tensor) -> Optional[float]:
-    """Internal helper: `_lpips_alex_distance`."""
+    """Compute LPIPS AlexNet perceptual distance between image tensors."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = _lpips_model(device)
     if model is None:
@@ -268,7 +268,7 @@ def _lpips_alex_distance(a: torch.Tensor, b: torch.Tensor) -> Optional[float]:
 
 
 def _delta_e76_mean(a: torch.Tensor, b: torch.Tensor) -> Optional[float]:
-    """Internal helper: `_delta_e76_mean`."""
+    """Compute mean DeltaE76 color distance in Lab space."""
     if color_match_utils.cv2 is None:
         return None
     a_np = np.clip(a.detach().cpu().numpy().astype(np.float32), 0.0, 1.0)
@@ -280,7 +280,7 @@ def _delta_e76_mean(a: torch.Tensor, b: torch.Tensor) -> Optional[float]:
 
 
 def _quality_metrics(img: torch.Tensor, ref: torch.Tensor):
-    """Internal helper: `_quality_metrics`."""
+    """Compute quality metrics used for before/after color-match reporting."""
     mse = float(torch.mean((img - ref) ** 2).item())
     ssim = _ssim_similarity(img, ref)
     de = _delta_e76_mean(img, ref)
@@ -294,7 +294,7 @@ def _quality_metrics(img: torch.Tensor, ref: torch.Tensor):
 
 
 def _improvement_pct(before: dict, after: dict) -> dict:
-    """Internal helper: `_improvement_pct`."""
+    """Convert metric pairs into percentage-improvement values."""
     res = {}
     for k in ("mse", "delta_e76", "lpips_alex"):
         bv = before.get(k)
@@ -315,10 +315,10 @@ def _improvement_pct(before: dict, after: dict) -> dict:
 
 
 class ImageColorMatchToReference:
-    """ComfyUI node class: `ImageColorMatchToReference`."""
+    """ComfyUI node that matches image color grading to a reference frame."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "reference": ("IMAGE", {"tooltip": "Базовое изображение (образец)."}),
@@ -363,7 +363,7 @@ class ImageColorMatchToReference:
         preserve_alpha=True,
         strength=1.0,
     ):
-        """Execute `match` routine."""
+        """Execute the node and return processed outputs for ComfyUI."""
         batch_size = max(reference.shape[0], image.shape[0])
         matched_list = []
         json_list = []

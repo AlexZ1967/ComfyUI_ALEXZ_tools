@@ -24,10 +24,10 @@ _LATENT_CHANNELS = 4  # Стандартный VAE использует 4 кан
 
 
 class ImagePrepareForQwenEditOutpaint:
-    """ComfyUI node class: `ImagePrepareForQwenEditOutpaint`."""
+    """ComfyUI node that prepares an image for QwenEdit outpaint workflows."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "image": ("IMAGE", {"tooltip": "Исходное изображение для подготовки."}),
@@ -44,7 +44,7 @@ class ImagePrepareForQwenEditOutpaint:
     CATEGORY = "image/qwen"
 
     def prepare(self, image, aspect_ratio):
-        """Execute `prepare` routine."""
+        """Prepare the input image for outpaint usage and return transformed outputs."""
         samples = image.movedim(-1, 1)
         in_height = samples.shape[2]
         in_width = samples.shape[3]

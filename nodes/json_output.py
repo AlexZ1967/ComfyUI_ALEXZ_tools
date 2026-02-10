@@ -9,13 +9,13 @@ _LOGGER = logging.getLogger("JsonDisplayAndSave")
 
 
 class AnyType(str):
-    """Class definition: `AnyType`."""
+    """Sentinel string type that matches any ComfyUI connection type."""
     def __eq__(self, _other):
-        """Internal helper: `__eq__`."""
+        """Accept any type token in ComfyUI type-matching checks."""
         return True
 
     def __ne__(self, _other):
-        """Internal helper: `__ne__`."""
+        """Accept any type token in ComfyUI type-matching checks."""
         return False
 
 
@@ -23,7 +23,7 @@ any_type = AnyType("*")
 
 
 def _format_json_text(value):
-    """Internal helper: `_format_json_text`."""
+    """Serialize Python object to pretty or compact JSON string."""
     text = "{}"
     if value is None:
         return text
@@ -45,7 +45,7 @@ def _format_json_text(value):
 
 
 def _parse_json_string(value):
-    """Internal helper: `_parse_json_string`."""
+    """Parse JSON text into Python object and validate syntax."""
     if not isinstance(value, str):
         return value
     try:
@@ -65,17 +65,17 @@ def _parse_json_string(value):
 
 
 def _unwrap_singleton(value):
-    """Internal helper: `_unwrap_singleton`."""
+    """Unwrap one-element lists/tuples returned by some upstream nodes."""
     while isinstance(value, (list, tuple)) and len(value) == 1:
         value = value[0]
     return value
 
 
 class JsonDisplayAndSave:
-    """ComfyUI node class: `JsonDisplayAndSave`."""
+    """ComfyUI node that displays JSON text and optionally saves it to disk."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "json_text": (any_type, {"tooltip": "JSON строка или объект для отображения и сохранения."}),
@@ -93,7 +93,7 @@ class JsonDisplayAndSave:
     OUTPUT_NODE = True
 
     def display(self, json_text, output_path=None):
-        """Execute `display` routine."""
+        """Normalize JSON input, optionally save it, and return formatted JSON text."""
         text = _format_json_text(_unwrap_singleton(json_text))
 
         output_value = _unwrap_singleton(output_path)

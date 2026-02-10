@@ -1,10 +1,10 @@
 """Node implementation module: `nodes/test_node.py`."""
 class ALEXZTestNode:
-    """ComfyUI node class: `ALEXZTestNode`."""
+    """ComfyUI test node used to verify extension loading and execution."""
 
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "text": ("STRING", {"default": "hello", "tooltip": "Тестовый текст."}),
@@ -19,5 +19,5 @@ class ALEXZTestNode:
     CATEGORY = "utils/debug"
 
     def run(self, text, value):
-        """Execute `run` routine."""
+        """Execute this helper/test function and return its outputs."""
         return (f"ALEXZ_TEST: {text}", int(value))

@@ -18,10 +18,10 @@ _LOGGER = logging.getLogger("ImageAlignOverlayToBackground")
 
 
 class ImageAlignOverlayToBackground:
-    """ComfyUI node class: `ImageAlignOverlayToBackground`."""
+    """ComfyUI node that aligns an overlay image onto a background image."""
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "background": ("IMAGE", {"tooltip": "Фоновое изображение, в координатах которого выравниваем."}),
@@ -105,7 +105,7 @@ class ImageAlignOverlayToBackground:
         overlay_mask=None,
         use_color=None,
     ):
-        """Execute `align` routine."""
+        """Align the overlay image to the background and return transformed images and JSON."""
         if use_color is not None and use_color and color_mode == "gray":
             color_mode = "lab"
         if color_mode is None:

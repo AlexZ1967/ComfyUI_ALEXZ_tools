@@ -31,7 +31,7 @@ def align_overlay_to_background(
     lab_channels,
     logger,
 ):
-    """Execute `align_overlay_to_background` routine."""
+    """Align overlay to background and return compositing outputs plus transform metadata."""
     if cv2 is None:
         raise RuntimeError("opencv-python is required for this node. Please install opencv-python.")
 
@@ -140,7 +140,7 @@ def _align_overlay_to_background(
     color_mode,
     lab_channels,
 ):
-    """Internal helper: `_align_overlay_to_background`."""
+    """Estimate transform and align overlay image onto the background image."""
     if cv2 is None:
         raise RuntimeError("opencv-python is required for feature alignment. Please install opencv-python.")
 
@@ -178,7 +178,7 @@ def _align_overlay_to_background(
 
 
 def _remove_rotation(matrix, overlay_width, overlay_height, scale_mode):
-    """Internal helper: `_remove_rotation`."""
+    """Convert affine matrix to equivalent transform with separated rotation component."""
     a, b, tx = matrix[0]
     c, d, ty = matrix[1]
     scale_x = math.sqrt(a * a + c * c)
@@ -204,7 +204,7 @@ def _format_transform_json(
     background_height,
     status,
 ):
-    """Internal helper: `_format_transform_json`."""
+    """Build transform JSON for compositing in external editors."""
     payload = {
         "status": status,
         "overlay_scale": {"x": None, "y": None},
@@ -274,7 +274,7 @@ def _format_resolve_edit_position(
     overlay_width,
     overlay_height,
 ):
-    """Internal helper: `_format_resolve_edit_position`."""
+    """Format frame index and fps to Resolve-compatible timeline position."""
     scale_x = (background_width * background_width) / max(1.0, float(overlay_width))
     scale_y = (background_height * background_height) / max(1.0, float(overlay_height))
     pos_x = (norm_x - 0.5) * scale_x

@@ -98,7 +98,7 @@ EXTRA_GUIDES = [
 
 
 def _literal_str_tuple(node):
-    """Internal helper: `_literal_str_tuple`."""
+    """Normalize AST literal nodes into a tuple of strings."""
     if isinstance(node, (ast.Tuple, ast.List)):
         out = []
         for el in node.elts:
@@ -109,7 +109,7 @@ def _literal_str_tuple(node):
 
 
 def _find_class(tree, class_name):
-    """Internal helper: `_find_class`."""
+    """Find a class node by name inside parsed Python AST."""
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == class_name:
             return node
@@ -117,7 +117,7 @@ def _find_class(tree, class_name):
 
 
 def _parse_return_names(class_node):
-    """Internal helper: `_parse_return_names`."""
+    """Extract RETURN_NAMES tuple values from a class AST definition."""
     for stmt in class_node.body:
         if isinstance(stmt, ast.Assign):
             for tgt in stmt.targets:
@@ -127,7 +127,7 @@ def _parse_return_names(class_node):
 
 
 def _extract_dict_keys(dict_node):
-    """Internal helper: `_extract_dict_keys`."""
+    """Extract top-level dictionary keys from source snippet."""
     if not isinstance(dict_node, ast.Dict):
         return []
     out = []
@@ -138,7 +138,7 @@ def _extract_dict_keys(dict_node):
 
 
 def _parse_input_keys(class_node):
-    """Internal helper: `_parse_input_keys`."""
+    """Parse INPUT_TYPES keys and optional parameter keys from class source."""
     required = []
     optional = []
     for stmt in class_node.body:
@@ -158,12 +158,12 @@ def _parse_input_keys(class_node):
 
 
 def _read(path: Path):
-    """Internal helper: `_read`."""
+    """Read text file content using UTF-8 encoding."""
     return path.read_text(encoding="utf-8")
 
 
 def _section(text: str, heading: str):
-    """Internal helper: `_section`."""
+    """Extract text block between section headings in markdown files."""
     idx = text.find(heading)
     if idx < 0:
         return ""
@@ -175,7 +175,7 @@ def _section(text: str, heading: str):
 
 
 def main():
-    """Execute `main` routine."""
+    """Run docs consistency checks and print a pass/fail report."""
     issues = []
     readme_text = _read(README)
 

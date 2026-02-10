@@ -19,11 +19,11 @@ def _error_correction(level: str) -> int:
 
 
 class GenerateQRCode:
-    """ComfyUI node class: `GenerateQRCode`."""
+    """ComfyUI node that generates a QR code image from text or URL input."""
 
     @classmethod
     def INPUT_TYPES(cls):
-        """Execute `INPUT_TYPES` routine."""
+        """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
                 "url": ("STRING", {"default": "https://example.com", "multiline": False, "tooltip": "Ссылка или текст для QR-кода."}),
@@ -39,7 +39,7 @@ class GenerateQRCode:
     CATEGORY = "image/utils"
 
     def generate(self, url: str, resolution: int, error_correction: str):
-        """Execute `generate` routine."""
+        """Generate the QR code tensor and return it as an image output."""
         payload = (url or "").strip()
         if not payload:
             raise ValueError("`url` must not be empty.")
