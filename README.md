@@ -6,6 +6,7 @@ Version: 0.16.0
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
 
 Changelog: [CHANGELOG.md](CHANGELOG.md)
+Refactoring plan (RU): [PLAN_REFACTORING_ADOPTED_RU.md](refactoring_plan/PLAN_REFACTORING_ADOPTED_RU.md)
 
 ## Install
 1. Клонируйте в `ComfyUI/custom_nodes/`:  

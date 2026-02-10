@@ -2,7 +2,7 @@
 
 Статус: утвержденный рабочий план поэтапной реализации  
 Дата: 2026-02-10  
-Источник: `GUIDE_REFACTORING.md`, `GUIDE_VUE_INTEGRATION_FIX.md`, `GUIDE_PHASE_1_IMPLEMENTATION.md` (+ RU версии)
+Источник: `PROPOSAL_REFACTORING.md`, `PROPOSAL_VUE_INTEGRATION_FIX.md`, `PROPOSAL_PHASE_1_IMPLEMENTATION.md` (+ RU версии)
 
 ## 1) Цель
 
