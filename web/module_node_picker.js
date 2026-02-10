@@ -146,6 +146,11 @@ function injectStyles() {
         font-weight: 700;
         display: none;
     }
+    .alexz-mod-picker-comfy-alert.alexz-mod-picker-comfy-alert--ok {
+        border-color: #2e8f61;
+        background: rgba(61, 187, 126, 0.16);
+        color: #3dbb7e;
+    }
     .alexz-mod-picker-module-card {
         border: 1px solid var(--border-color, #444);
         border-radius: 7px;
@@ -345,7 +350,7 @@ function createNodeByInfo(nodeInfo) {
  * Fetch grouped node catalog data from backend API.
  */
 async function fetchNodeCatalog() {
-    const resp = await api.fetchApi("/alexz_tools/node_catalog", {
+    const resp = await api.fetchApi("/alexz_tools/node_catalog?cache_only=1", {
         cache: "no-store",
     });
     if (!resp.ok) {
@@ -360,11 +365,15 @@ async function fetchNodeCatalog() {
 async function fetchModuleInfo(group, moduleName, options = {}) {
     const forceRefresh = Boolean(options?.forceRefresh);
     const syncUpstream = Boolean(options?.syncUpstream);
+    const cacheOnly = options?.cacheOnly === undefined
+        ? (!forceRefresh && !syncUpstream)
+        : Boolean(options?.cacheOnly);
     const resp = await api.fetchApi(
         `/alexz_tools/module_info?group=${encodeURIComponent(group || "")}` +
         `&module=${encodeURIComponent(moduleName || "")}` +
         `&refresh=${forceRefresh ? "1" : "0"}` +
-        `&sync_upstream=${syncUpstream ? "1" : "0"}`,
+        `&sync_upstream=${syncUpstream ? "1" : "0"}` +
+        `&cache_only=${cacheOnly ? "1" : "0"}`,
         { cache: "no-store" }
     );
     if (!resp.ok) {
@@ -376,9 +385,9 @@ async function fetchModuleInfo(group, moduleName, options = {}) {
 /**
  * Fetch ComfyUI repository update status and metadata.
  */
-async function fetchComfyUIInfo(forceRefresh = true) {
+async function fetchComfyUIInfo(forceRefresh = true, acknowledge = true) {
     const resp = await api.fetchApi(
-        `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}`,
+        `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}&acknowledge=${acknowledge ? "1" : "0"}`,
         { cache: "no-store" }
     );
     if (!resp.ok) {
@@ -406,6 +415,20 @@ async function refreshModuleRuntimeState() {
  */
 async function fetchModuleRefreshStatus() {
     const resp = await api.fetchApi("/alexz_tools/module_refresh_status", {
+        cache: "no-store",
+    });
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
+/**
+ * Acknowledge/clear novelty markers for all modules after global refresh action.
+ */
+async function acknowledgeAllModuleNovelty() {
+    const resp = await api.fetchApi("/alexz_tools/module_acknowledge_all", {
+        method: "POST",
         cache: "no-store",
     });
     if (!resp.ok) {
@@ -495,9 +518,20 @@ function fmtDate(iso) {
  */
 function moduleBadgesFromInfo(info) {
     const behind = Number(info?.git_behind);
+    const status = String(info?.update_status || "");
     return {
         updatedBetweenRuns: Boolean(info?.updated_between_runs),
-        hasRemoteUpdate: Number.isFinite(behind) && behind > 0,
+        hasRemoteUpdate: (Number.isFinite(behind) && behind > 0) || status === "can_update",
+    };
+}
+
+/**
+ * Derive UI badge flags from lightweight module entry in node-catalog payload.
+ */
+function moduleBadgesFromModuleEntry(entry) {
+    return {
+        updatedBetweenRuns: Boolean(entry?.updated_between_runs) || Boolean(entry?.new_module_between_runs),
+        hasRemoteUpdate: Boolean(entry?.update_available),
     };
 }
 
@@ -657,7 +691,6 @@ function renderPicker(container) {
     const moduleBadges = new Map();
     const moduleNodeDiffs = new Map();
     const updatedModulesSession = new Set();
-    let moduleBadgeLoadToken = 0;
     let refreshPollToken = 0;
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
@@ -670,7 +703,19 @@ function renderPicker(container) {
     const renderComfyAlert = (info) => {
         const behind = Number(info?.behind);
         const status = String(info?.update_status || "unknown");
+        const updatedBetweenRuns = Boolean(info?.updated_between_runs);
+        comfyAlert.classList.remove("alexz-mod-picker-comfy-alert--ok");
         if (status !== "can_update" || !Number.isFinite(behind) || behind <= 0) {
+            if (updatedBetweenRuns) {
+                const prev = String(info?.startup_prev_commit_short || "unknown");
+                const next = String(info?.startup_new_commit_short || "unknown");
+                const at = info?.startup_update_at ? ` (${fmtDate(info.startup_update_at)})` : "";
+                comfyAlertText.textContent = `ComfyUI обновлен между запусками: ${prev} -> ${next}${at}.`;
+                comfyUpdateBtn.style.display = "none";
+                comfyAlert.style.display = "block";
+                comfyAlert.classList.add("alexz-mod-picker-comfy-alert--ok");
+                return;
+            }
             comfyAlert.style.display = "none";
             comfyAlertText.textContent = "";
             comfyUpdateBtn.style.display = "none";
@@ -1104,43 +1149,6 @@ function renderPicker(container) {
     };
 
     /**
-     * Load module badges in parallel with bounded worker pool to keep UI responsive.
-     */
-    const loadModuleBadges = async (group, modules) => {
-        const token = ++moduleBadgeLoadToken;
-        if (!modules.length) {
-            return;
-        }
-
-        const queue = [...modules];
-        const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
-            while (queue.length && token === moduleBadgeLoadToken) {
-                const moduleName = queue.shift();
-                if (!moduleName) {
-                    break;
-                }
-                try {
-                    const payload = await fetchModuleInfo(group, moduleName);
-                    if (token !== moduleBadgeLoadToken || groupSelect.value !== group) {
-                        return;
-                    }
-                    const badges = moduleBadgesFromInfo(payload?.info || {});
-                    if (badges.updatedBetweenRuns || badges.hasRemoteUpdate) {
-                        moduleBadges.set(moduleName, badges);
-                    } else {
-                        moduleBadges.delete(moduleName);
-                    }
-                    setModuleOptionText(moduleName);
-                } catch (err) {
-                    // Ignore per-module errors and keep list usable.
-                }
-            }
-        });
-
-        await Promise.all(workers);
-    };
-
-    /**
      * Populate module selector for current group with filtering and badge placeholders.
      */
     const fillModuleSelect = (options = {}) => {
@@ -1151,7 +1159,6 @@ function renderPicker(container) {
         const moduleEntries = moduleCatalogByGroup.get(selectedGroup) || [];
         const filterValue = (moduleFilter.value || "").trim().toLowerCase();
         const previousSelectedModule = String(nodeSelect.value || "").trim();
-        moduleBadgeLoadToken += 1;
         moduleCounts.clear();
         moduleOptions.clear();
         moduleBadges.clear();
@@ -1191,9 +1198,11 @@ function renderPicker(container) {
             return;
         }
         const countMap = new Map();
+        const entryMap = new Map();
         for (const entry of moduleEntries) {
             const moduleName = String(entry?.module || "unknown");
             countMap.set(moduleName, Number(entry?.count) || 0);
+            entryMap.set(moduleName, entry || {});
         }
         for (const moduleName of modules) {
             const opt = document.createElement("option");
@@ -1203,7 +1212,12 @@ function renderPicker(container) {
                 : (grouped.get(moduleName) || []).length;
             moduleCounts.set(moduleName, count);
             moduleOptions.set(moduleName, opt);
-            opt.textContent = formatModuleOption(moduleName, count, null);
+            const entry = entryMap.get(moduleName) || null;
+            const badges = moduleBadgesFromModuleEntry(entry);
+            if (badges.updatedBetweenRuns || badges.hasRemoteUpdate) {
+                moduleBadges.set(moduleName, badges);
+            }
+            opt.textContent = formatModuleOption(moduleName, count, badges);
             nodeSelect.appendChild(opt);
         }
         if (preferredModule && modules.includes(preferredModule)) {
@@ -1223,7 +1237,6 @@ function renderPicker(container) {
         }
         renderNodeList();
         loadModuleInfo();
-        loadModuleBadges(selectedGroup, modules);
         syncUpdateAllButton();
     };
 
@@ -1692,6 +1705,12 @@ function renderPicker(container) {
             const ok = await pollRefreshProgress();
             if (!ok) {
                 setRefreshLine("Обновление статусов модулей: завершилось с ошибкой.", "warn");
+            } else {
+                try {
+                    await acknowledgeAllModuleNovelty();
+                } catch (err) {
+                    setRefreshLine(`Статусы обновлены, но не удалось сбросить метки новизны: ${String(err)}`, "warn");
+                }
             }
         } catch (err) {
             setRefreshLine(`Обновление статусов модулей: ошибка (${String(err)}).`, "warn");

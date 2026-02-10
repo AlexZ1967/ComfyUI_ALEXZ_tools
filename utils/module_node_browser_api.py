@@ -41,7 +41,7 @@ except Exception:  # pragma: no cover - non-Comfy environment
 
 
 _LOGGER = logging.getLogger("ALEXZ_tools.ModuleBrowser")
-_MODULE_INFO_CACHE: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+_MODULE_INFO_CACHE: dict[tuple[str, str, bool], tuple[float, dict[str, Any]]] = {}
 _MODULE_INFO_TTL_SEC = 30.0
 _MANAGER_INDEX_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MANAGER_GITHUB_STATS_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
@@ -681,6 +681,54 @@ def _count_custom_modules_need_update() -> int:
     return count
 
 
+def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
+    """Return lightweight cached update flags for module dropdown badges."""
+    group_name = (group or "").strip().lower()
+    module = (module_name or "").strip()
+    if not module:
+        return {
+            "updated_between_runs": False,
+            "new_module_between_runs": False,
+            "update_available": False,
+        }
+
+    state = _load_module_state()
+    canonical = _canonical_custom_module_name(module) if group_name == "custom" else module
+    entry = state.get(canonical) if isinstance(state, dict) else None
+
+    updated_between_runs = False
+    new_module_between_runs = False
+    update_available = False
+
+    if isinstance(entry, dict):
+        startup_prev = (entry.get("pending_prev_commit") or entry.get("startup_prev_commit") or "").strip()
+        startup_new = (entry.get("pending_new_commit") or entry.get("startup_new_commit") or "").strip()
+        updated_between_runs = bool(startup_prev and startup_new)
+        if group_name == "custom":
+            update_available = bool(entry.get("update_available"))
+
+    tracker = state.get("__node_tracker__") if isinstance(state, dict) else None
+    if isinstance(tracker, dict):
+        startup_changes = tracker.get("pending_changes") or tracker.get("startup_changes")
+        if isinstance(startup_changes, dict):
+            group_changes = startup_changes.get(group_name)
+            if isinstance(group_changes, dict) and canonical in group_changes:
+                updated_between_runs = True
+
+        startup_new_modules = tracker.get("pending_new_modules") or tracker.get("startup_new_modules")
+        if isinstance(startup_new_modules, dict):
+            group_new = startup_new_modules.get(group_name)
+            if isinstance(group_new, list) and canonical in group_new:
+                new_module_between_runs = True
+                updated_between_runs = True
+
+    return {
+        "updated_between_runs": updated_between_runs,
+        "new_module_between_runs": new_module_between_runs,
+        "update_available": update_available,
+    }
+
+
 def _comfyui_requirements_path() -> Path | None:
     """Resolve requirements.txt path for the main ComfyUI repository."""
     root = _comfyui_root()
@@ -1091,15 +1139,53 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
         "update_status": "unknown",
     }
 
+    if not force_refresh:
+        state = _load_module_state()
+        cached_entry = state.get("__comfyui__") if isinstance(state, dict) else None
+        cached_status = cached_entry.get("status") if isinstance(cached_entry, dict) else None
+        if isinstance(cached_status, dict) and cached_status:
+            merged = dict(cached_status)
+            pending_prev = (
+                (cached_entry.get("pending_prev_commit") or cached_entry.get("startup_prev_commit") or "").strip()
+                if isinstance(cached_entry, dict)
+                else ""
+            )
+            pending_new = (
+                (cached_entry.get("pending_new_commit") or cached_entry.get("startup_new_commit") or "").strip()
+                if isinstance(cached_entry, dict)
+                else ""
+            )
+            pending_at = (
+                (cached_entry.get("pending_update_at") or cached_entry.get("startup_update_at") or "").strip()
+                if isinstance(cached_entry, dict)
+                else ""
+            )
+            merged["updated_between_runs"] = bool(pending_prev and pending_new)
+            merged["startup_prev_commit_short"] = _short_commit(pending_prev) if pending_prev else ""
+            merged["startup_new_commit_short"] = _short_commit(pending_new) if pending_new else ""
+            merged["startup_update_at"] = pending_at
+            _COMFYUI_STATUS_CACHE = (now_ts, dict(merged))
+            return merged
+        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        return result
+
     root = _comfyui_root()
     if root is None:
         _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        state = _load_module_state()
+        if isinstance(state, dict):
+            state["__comfyui__"] = {"status": dict(result), "updated_at": _now_iso()}
+            _save_module_state(state)
         return result
 
     result["path"] = str(root)
     is_git = _run_git(["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"])
     if is_git != "true":
         _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        state = _load_module_state()
+        if isinstance(state, dict):
+            state["__comfyui__"] = {"status": dict(result), "updated_at": _now_iso()}
+            _save_module_state(state)
         return result
 
     result["branch"] = _run_git(["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"]) or ""
@@ -1145,8 +1231,118 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
             result["update_available"] = True
             result["update_status"] = "can_update"
 
+    state = _load_module_state()
+    cached_entry = state.get("__comfyui__") if isinstance(state, dict) else None
+    if isinstance(cached_entry, dict):
+        pending_prev = (cached_entry.get("pending_prev_commit") or cached_entry.get("startup_prev_commit") or "").strip()
+        pending_new = (cached_entry.get("pending_new_commit") or cached_entry.get("startup_new_commit") or "").strip()
+        pending_at = (cached_entry.get("pending_update_at") or cached_entry.get("startup_update_at") or "").strip()
+        result["updated_between_runs"] = bool(pending_prev and pending_new)
+        result["startup_prev_commit_short"] = _short_commit(pending_prev) if pending_prev else ""
+        result["startup_new_commit_short"] = _short_commit(pending_new) if pending_new else ""
+        result["startup_update_at"] = pending_at
+
     _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+    state = _load_module_state()
+    if isinstance(state, dict):
+        prev_entry = state.get("__comfyui__")
+        entry = dict(prev_entry) if isinstance(prev_entry, dict) else {}
+        entry["status"] = dict(result)
+        entry["updated_at"] = _now_iso()
+        entry["installed_commit"] = result.get("installed_commit") or entry.get("installed_commit")
+        entry["installed_updated_at"] = result.get("installed_updated_at") or entry.get("installed_updated_at")
+        state["__comfyui__"] = entry
+        _save_module_state(state)
     return result
+
+
+def _track_comfyui_local_update() -> None:
+    """Track local ComfyUI commit changes between restarts without upstream sync."""
+    global _COMFYUI_STATUS_CACHE
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return
+    root = _comfyui_root()
+    if root is None:
+        return
+    is_git = _run_git(["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"])
+    if is_git != "true":
+        return
+
+    current_commit = _run_git(["git", "-C", str(root), "rev-parse", "HEAD"]) or ""
+    current_updated_at = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI"]) or ""
+    if not current_commit:
+        return
+
+    entry_raw = state.get("__comfyui__")
+    entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
+    status_raw = entry.get("status")
+    status = dict(status_raw) if isinstance(status_raw, dict) else {}
+    prev_commit = (
+        (entry.get("installed_commit") or status.get("installed_commit") or "").strip()
+    )
+    now = _now_iso()
+    changed = False
+
+    if prev_commit and prev_commit != current_commit:
+        entry["pending_prev_commit"] = prev_commit
+        entry["pending_new_commit"] = current_commit
+        entry["pending_update_at"] = now
+        entry["startup_prev_commit"] = prev_commit
+        entry["startup_new_commit"] = current_commit
+        entry["startup_update_at"] = now
+        changed = True
+
+    if entry.get("installed_commit") != current_commit:
+        entry["installed_commit"] = current_commit
+        changed = True
+    if entry.get("installed_updated_at") != current_updated_at:
+        entry["installed_updated_at"] = current_updated_at
+        changed = True
+
+    status.setdefault("repository", "https://github.com/comfyanonymous/ComfyUI")
+    status["path"] = str(root)
+    status["installed_commit"] = current_commit
+    status["installed_commit_short"] = _short_commit(current_commit)
+    status["installed_updated_at"] = current_updated_at
+    status.setdefault("update_status", "unknown")
+    entry["status"] = status
+    entry["updated_at"] = now
+    state["__comfyui__"] = entry
+
+    if changed:
+        _COMFYUI_STATUS_CACHE = None
+        _save_module_state(state)
+
+
+def _acknowledge_comfyui_novelty() -> dict[str, Any]:
+    """Clear pending ComfyUI novelty markers after explicit user refresh action."""
+    global _COMFYUI_STATUS_CACHE
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return {"status": "ok", "changed": False}
+    entry_raw = state.get("__comfyui__")
+    if not isinstance(entry_raw, dict):
+        return {"status": "ok", "changed": False}
+
+    entry = dict(entry_raw)
+    before = dict(entry)
+    for key in (
+        "pending_prev_commit",
+        "pending_new_commit",
+        "pending_update_at",
+        "startup_prev_commit",
+        "startup_new_commit",
+        "startup_update_at",
+    ):
+        entry.pop(key, None)
+
+    changed = entry != before
+    if changed:
+        _COMFYUI_STATUS_CACHE = None
+        state["__comfyui__"] = entry
+        _save_module_state(state)
+    return {"status": "ok", "changed": changed}
 
 
 def _load_module_state() -> dict[str, dict[str, Any]]:
@@ -1197,12 +1393,12 @@ def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
     state[module_name] = entry
     result["last_checked_at"] = entry.get("last_checked_at")
     result["last_local_change_at"] = entry.get("last_local_change_at")
-    startup_prev = (entry.get("startup_prev_commit") or "").strip()
-    startup_new = (entry.get("startup_new_commit") or "").strip()
+    startup_prev = (entry.get("pending_prev_commit") or entry.get("startup_prev_commit") or "").strip()
+    startup_new = (entry.get("pending_new_commit") or entry.get("startup_new_commit") or "").strip()
     result["updated_between_runs"] = bool(startup_prev and startup_new)
     result["startup_prev_commit_short"] = _short_commit(startup_prev) if startup_prev else ""
     result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
-    result["startup_update_at"] = entry.get("startup_update_at") or ""
+    result["startup_update_at"] = entry.get("pending_update_at") or entry.get("startup_update_at") or ""
     _save_module_state(state)
 
 
@@ -1212,7 +1408,7 @@ def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str
     tracker = state.get("__node_tracker__")
     if not isinstance(tracker, dict):
         return
-    startup_changes = tracker.get("startup_changes")
+    startup_changes = tracker.get("pending_changes") or tracker.get("startup_changes")
     if isinstance(startup_changes, dict):
         group_changes = startup_changes.get(group)
         if isinstance(group_changes, dict):
@@ -1226,7 +1422,7 @@ def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str
                 if result["new_nodes_between_runs"] or result["updated_nodes_between_runs"]:
                     result["updated_between_runs"] = True
 
-    startup_new_modules = tracker.get("startup_new_modules")
+    startup_new_modules = tracker.get("pending_new_modules") or tracker.get("startup_new_modules")
     if isinstance(startup_new_modules, dict):
         group_new = startup_new_modules.get(group)
         if isinstance(group_new, list) and module_name in group_new:
@@ -1234,7 +1430,105 @@ def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str
             result["updated_between_runs"] = True
 
 
-def _announce_tracked_module_updates() -> dict[str, int]:
+def _acknowledge_module_novelty(group: str, module_name: str) -> None:
+    """Clear pending novelty markers for one module after explicit user refresh."""
+    group_name = (group or "").strip().lower()
+    module = (module_name or "").strip()
+    if not module:
+        return
+    if group_name == "custom":
+        module = _canonical_custom_module_name(module)
+
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return
+
+    changed = False
+    entry = state.get(module)
+    if isinstance(entry, dict):
+        for key in (
+            "pending_prev_commit",
+            "pending_new_commit",
+            "pending_update_at",
+            "startup_prev_commit",
+            "startup_new_commit",
+            "startup_update_at",
+        ):
+            if key in entry:
+                entry.pop(key, None)
+                changed = True
+        state[module] = entry
+
+    tracker = state.get("__node_tracker__")
+    if isinstance(tracker, dict):
+        for pending_key, legacy_key in (("pending_changes", "startup_changes"), ("pending_new_modules", "startup_new_modules")):
+            bucket = tracker.get(pending_key)
+            if not isinstance(bucket, dict):
+                bucket = tracker.get(legacy_key)
+            if not isinstance(bucket, dict):
+                continue
+            group_bucket = bucket.get(group_name)
+            if isinstance(group_bucket, dict) and module in group_bucket:
+                group_bucket.pop(module, None)
+                changed = True
+            elif isinstance(group_bucket, list) and module in group_bucket:
+                bucket[group_name] = [x for x in group_bucket if x != module]
+                changed = True
+            updated_group_bucket = bucket.get(group_name)
+            if isinstance(updated_group_bucket, dict) and not updated_group_bucket:
+                bucket.pop(group_name, None)
+            if isinstance(updated_group_bucket, list) and not updated_group_bucket:
+                bucket.pop(group_name, None)
+            tracker[pending_key] = bucket
+        state["__node_tracker__"] = tracker
+
+    if changed:
+        _MODULE_INFO_CACHE.clear()
+        _save_module_state(state)
+
+
+def _acknowledge_all_novelty() -> dict[str, Any]:
+    """Clear pending novelty markers for all modules after explicit global refresh."""
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return {"status": "ok", "changed": False}
+
+    changed = False
+    cleared_modules = 0
+    for module_name, entry in list(state.items()):
+        if str(module_name).startswith("__") or not isinstance(entry, dict):
+            continue
+        before = dict(entry)
+        for key in (
+            "pending_prev_commit",
+            "pending_new_commit",
+            "pending_update_at",
+            "startup_prev_commit",
+            "startup_new_commit",
+            "startup_update_at",
+        ):
+            entry.pop(key, None)
+        if entry != before:
+            state[module_name] = entry
+            cleared_modules += 1
+            changed = True
+
+    tracker = state.get("__node_tracker__")
+    if isinstance(tracker, dict):
+        for key in ("pending_changes", "pending_new_modules", "startup_changes", "startup_new_modules"):
+            value = tracker.get(key)
+            if isinstance(value, dict) and value:
+                tracker[key] = {}
+                changed = True
+        state["__node_tracker__"] = tracker
+
+    if changed:
+        _MODULE_INFO_CACHE.clear()
+        _save_module_state(state)
+    return {"status": "ok", "changed": changed, "cleared_modules": cleared_modules}
+
+
+def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, int]:
     """Build per-module node-change info by comparing saved and current snapshots."""
     state = _load_module_state()
     if not isinstance(state, dict):
@@ -1275,33 +1569,33 @@ def _announce_tracked_module_updates() -> dict[str, int]:
         before = dict(entry)
 
         entry["last_checked_at"] = now
-        needs_update = False
+        needs_update = bool(entry.get("update_available"))
         if git_state:
             entry["module_path"] = git_state.get("module_path") or entry.get("module_path")
             entry["repository"] = git_state.get("repository") or entry.get("repository")
             entry["installed_updated_at"] = git_state.get("installed_updated_at") or entry.get("installed_updated_at")
-            entry["remote_updated_at"] = git_state.get("remote_updated_at") or entry.get("remote_updated_at")
-            behind = git_state.get("behind")
-            remote_head = (git_state.get("remote_head") or "").strip()
-            if isinstance(behind, int):
-                needs_update = behind > 0
-            elif git_state.get("has_upstream") and remote_head and current_commit:
-                needs_update = remote_head != current_commit
-            entry["update_available"] = bool(needs_update)
+            if not local_only:
+                entry["remote_updated_at"] = git_state.get("remote_updated_at") or entry.get("remote_updated_at")
+                behind = git_state.get("behind")
+                remote_head = (git_state.get("remote_head") or "").strip()
+                if isinstance(behind, int):
+                    needs_update = behind > 0
+                elif git_state.get("has_upstream") and remote_head and current_commit:
+                    needs_update = remote_head != current_commit
+                entry["update_available"] = bool(needs_update)
 
         if current_commit:
             if prev_commit and current_commit != prev_commit:
                 entry["installed_commit"] = current_commit
                 entry["last_local_change_at"] = now
+                entry["pending_prev_commit"] = prev_commit
+                entry["pending_new_commit"] = current_commit
+                entry["pending_update_at"] = now
                 entry["startup_prev_commit"] = prev_commit
                 entry["startup_new_commit"] = current_commit
                 entry["startup_update_at"] = now
             else:
                 entry["installed_commit"] = current_commit
-                # Show update marker only for one startup cycle after actual change.
-                entry.pop("startup_prev_commit", None)
-                entry.pop("startup_new_commit", None)
-                entry.pop("startup_update_at", None)
 
         if needs_update:
             modules_need_update += 1
@@ -1320,6 +1614,14 @@ def _announce_tracked_module_updates() -> dict[str, int]:
     current_snapshots = _build_node_snapshots()
     startup_changes: dict[str, dict[str, dict[str, Any]]] = {}
     startup_new_modules: dict[str, list[str]] = {}
+    pending_changes_raw = tracker.get("pending_changes")
+    pending_changes: dict[str, dict[str, dict[str, Any]]] = (
+        pending_changes_raw if isinstance(pending_changes_raw, dict) else {}
+    )
+    pending_new_modules_raw = tracker.get("pending_new_modules")
+    pending_new_modules: dict[str, list[str]] = (
+        pending_new_modules_raw if isinstance(pending_new_modules_raw, dict) else {}
+    )
 
     current_module_sets: dict[str, list[str]] = {}
     for group_name, modules in current_snapshots.items():
@@ -1360,6 +1662,18 @@ def _announce_tracked_module_updates() -> dict[str, int]:
                     "updated_nodes": updated_nodes,
                     "at": now,
                 }
+                existing_entry = pending_changes.setdefault(group_name, {}).get(module_name, {})
+                prev_new = existing_entry.get("new_nodes") if isinstance(existing_entry, dict) else []
+                prev_updated = existing_entry.get("updated_nodes") if isinstance(existing_entry, dict) else []
+                merged_new = sorted(set(prev_new if isinstance(prev_new, list) else []).union(new_nodes))
+                merged_updated = sorted(
+                    set(prev_updated if isinstance(prev_updated, list) else []).union(updated_nodes)
+                )
+                pending_changes.setdefault(group_name, {})[module_name] = {
+                    "new_nodes": merged_new,
+                    "updated_nodes": merged_updated,
+                    "at": now,
+                }
 
     for group_name, current_list in current_module_sets.items():
         prev_list_raw = prev_module_sets.get(group_name)
@@ -1370,6 +1684,9 @@ def _announce_tracked_module_updates() -> dict[str, int]:
         new_modules = sorted(curr_set - prev_set, key=str.lower)
         if new_modules:
             startup_new_modules[group_name] = new_modules
+            existing = pending_new_modules.get(group_name)
+            existing_list = existing if isinstance(existing, list) else []
+            pending_new_modules[group_name] = sorted(set(existing_list).union(new_modules), key=str.lower)
 
     if prev_snapshots != current_snapshots:
         changed = True
@@ -1379,6 +1696,8 @@ def _announce_tracked_module_updates() -> dict[str, int]:
     tracker["startup_changes"] = startup_changes
     tracker["module_sets"] = current_module_sets
     tracker["startup_new_modules"] = startup_new_modules
+    tracker["pending_changes"] = pending_changes
+    tracker["pending_new_modules"] = pending_new_modules
     tracker["updated_at"] = now
     state["__node_tracker__"] = tracker
 
@@ -1457,6 +1776,7 @@ def _resolve_module_info(
     *,
     force_refresh: bool = False,
     sync_upstream: bool = False,
+    cache_only: bool = False,
 ) -> dict[str, Any]:
     """Build complete module info payload with metadata, git state, and change markers."""
     group = (group or "").strip().lower()
@@ -1464,7 +1784,7 @@ def _resolve_module_info(
     if group == "custom":
         module_name = _canonical_custom_module_name(module_name)
 
-    key = (group or "", module_name or "")
+    key = (group or "", module_name or "", bool(cache_only))
     if force_refresh:
         _MODULE_INFO_CACHE.pop(key, None)
     now_ts = time.time()
@@ -1518,13 +1838,25 @@ def _resolve_module_info(
         _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
         return result
 
-    if sync_upstream:
+    if sync_upstream and not cache_only:
         _sync_module_upstream(module_name)
 
     manager_data = _manager_index()
     module_l = (module_name or "").lower()
-    git_state = _module_git_state(module_name)
-    repo_url = _module_repo_url(module_name) or git_state.get("repository")
+    state_cache = _load_module_state()
+    cache_entry = state_cache.get(module_name) if isinstance(state_cache, dict) else None
+
+    git_state: dict[str, Any] = {}
+    if not cache_only:
+        git_state = _module_git_state(module_name)
+
+    repo_url = None
+    if isinstance(cache_entry, dict):
+        repo_url = cache_entry.get("repository")
+    if not repo_url:
+        repo_url = git_state.get("repository") if git_state else None
+    if not repo_url and not cache_only:
+        repo_url = _module_repo_url(module_name)
     repo_gid = _github_id(repo_url)
     meta = None
     if repo_gid:
@@ -1551,7 +1883,19 @@ def _resolve_module_info(
         result["description"] = "No description found."
     if result["repository"]:
         result["owner_url"] = result["repository"]
-    if git_state:
+    if cache_only and isinstance(cache_entry, dict):
+        result["module_path"] = cache_entry.get("module_path") or ""
+        result["installed_commit"] = cache_entry.get("installed_commit") or ""
+        result["installed_commit_short"] = (result["installed_commit"] or "")[:8]
+        result["installed_updated_at"] = cache_entry.get("installed_updated_at") or ""
+        result["remote_updated_at"] = cache_entry.get("remote_updated_at") or ""
+        update_available = cache_entry.get("update_available")
+        if isinstance(update_available, bool):
+            result["update_available"] = update_available
+            result["update_status"] = "can_update" if update_available else "up_to_date"
+        result["last_checked_at"] = cache_entry.get("last_checked_at") or ""
+        result["last_local_change_at"] = cache_entry.get("last_local_change_at") or ""
+    elif git_state:
         result["module_path"] = git_state.get("module_path") or ""
         result["installed_commit"] = git_state.get("installed_commit") or ""
         result["installed_commit_short"] = (result["installed_commit"] or "")[:8]
@@ -1587,7 +1931,8 @@ def _resolve_module_info(
             if not result.get("remote_updated_at"):
                 result["remote_updated_at"] = _to_iso(remote_dt) or ""
 
-    _remember_module_state(module_name, result)
+    if not cache_only:
+        _remember_module_state(module_name, result)
     _apply_node_change_info(result, group, module_name)
     _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
     return result
@@ -1652,7 +1997,11 @@ def _build_group_modules(grouped_nodes: dict[str, list[dict[str, Any]]]) -> dict
     out: dict[str, list[dict[str, Any]]] = {}
     for group_name, counts in module_counts.items():
         out[group_name] = [
-            {"module": mod, "count": int(cnt)}
+            {
+                "module": mod,
+                "count": int(cnt),
+                **_cached_module_flags(group_name, mod),
+            }
             for mod, cnt in sorted(counts.items(), key=lambda kv: kv[0].lower())
         ]
     return out
@@ -1761,7 +2110,9 @@ def _ensure_runtime_state_ready() -> None:
     global _LAZY_REFRESH_DONE
     if _LAZY_REFRESH_DONE:
         return
-    _refresh_module_runtime_state(sync_upstreams=False, progress_cb=None)
+    _load_module_state()
+    _announce_tracked_module_updates(local_only=True)
+    _track_comfyui_local_update()
     _LAZY_REFRESH_DONE = True
 
 
@@ -2055,6 +2406,16 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module refresh status API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
+    @PromptServer.instance.routes.post("/alexz_tools/module_acknowledge_all")
+    async def alexz_tools_module_acknowledge_all(request):
+        """API route that clears novelty markers for all modules."""
+        try:
+            result = _acknowledge_all_novelty()
+            return web.json_response(result)
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("Module acknowledge-all API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
     @PromptServer.instance.routes.post("/alexz_tools/module_update")
     async def alexz_tools_module_update(request):
         """API route that starts asynchronous module update jobs."""
@@ -2152,8 +2513,12 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         module_name = (request.query.get("module", "") or "").strip()
         refresh_raw = (request.query.get("refresh", "0") or "0").strip().lower()
         sync_raw = (request.query.get("sync_upstream", "0") or "0").strip().lower()
+        cache_only_raw = (request.query.get("cache_only", "1") or "1").strip().lower()
         force_refresh = refresh_raw not in {"0", "false", "no", "off"}
         sync_upstream = sync_raw not in {"0", "false", "no", "off"}
+        cache_only = cache_only_raw not in {"0", "false", "no", "off"}
+        if force_refresh or sync_upstream:
+            cache_only = False
         if not module_name:
             return web.json_response({"error": "module is required"}, status=400)
         try:
@@ -2163,7 +2528,17 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                 module_name,
                 force_refresh=force_refresh,
                 sync_upstream=sync_upstream,
+                cache_only=cache_only,
             )
+            if force_refresh:
+                _acknowledge_module_novelty(group, module_name)
+                info = _resolve_module_info(
+                    group,
+                    module_name,
+                    force_refresh=True,
+                    sync_upstream=False,
+                    cache_only=True,
+                )
             return web.json_response({"group": group, "module": module_name, "info": info})
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module info API error: %s", exc, exc_info=True)
@@ -2175,6 +2550,10 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         try:
             refresh_raw = (request.query.get("refresh", "1") or "1").strip().lower()
             force_refresh = refresh_raw not in {"0", "false", "no", "off"}
+            ack_raw = (request.query.get("acknowledge", "1") or "1").strip().lower()
+            acknowledge = ack_raw not in {"0", "false", "no", "off"}
+            if force_refresh and acknowledge:
+                _acknowledge_comfyui_novelty()
             comfyui = _comfyui_git_status(force_refresh=force_refresh)
             return web.json_response({"status": "ok", "comfyui": comfyui})
         except Exception as exc:  # pragma: no cover - diagnostic

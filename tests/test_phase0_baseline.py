@@ -350,6 +350,62 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("diag.last_clicked_tab=", picker_text)
         self.assertIn("diag.child_nodes_short=", picker_text)
 
+    def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):
+        """Ensure non-forced ComfyUI status request returns cached/unknown data without git calls."""
+        orig_run_git = self.api._run_git
+        orig_comfy_cache = self.api._COMFYUI_STATUS_CACHE
+        orig_state_cache = self.api._MODULE_STATE_CACHE
+        self.api._COMFYUI_STATUS_CACHE = None
+        self.api._MODULE_STATE_CACHE = {}
+
+        def _fail_git(_args, timeout=2.0):
+            raise AssertionError("git must not be called in cache-only mode")
+
+        self.api._run_git = _fail_git
+        try:
+            status = self.api._comfyui_git_status(force_refresh=False)
+        finally:
+            self.api._run_git = orig_run_git
+            self.api._COMFYUI_STATUS_CACHE = orig_comfy_cache
+            self.api._MODULE_STATE_CACHE = orig_state_cache
+
+        self.assertEqual(status.get("update_status"), "unknown")
+
+    def test_module_info_cache_only_uses_state_snapshot(self):
+        """Ensure cache-only module info path serves state cache without git probing."""
+        orig_state_cache = self.api._MODULE_STATE_CACHE
+        orig_module_git_state = self.api._module_git_state
+        self.api._MODULE_STATE_CACHE = {
+            "ComfyUI_Test": {
+                "installed_commit": "abc12345ffff",
+                "installed_updated_at": "2026-02-10T10:00:00+00:00",
+                "remote_updated_at": "2026-02-10T11:00:00+00:00",
+                "update_available": True,
+                "repository": "https://github.com/example/repo",
+                "module_path": "/tmp/ComfyUI_Test",
+                "last_checked_at": "2026-02-10T12:00:00+00:00",
+            }
+        }
+
+        def _fail_git_state(_module_name):
+            raise AssertionError("git state must not be called in cache-only mode")
+
+        self.api._module_git_state = _fail_git_state
+        try:
+            info = self.api._resolve_module_info(
+                "custom",
+                "ComfyUI_Test",
+                force_refresh=True,
+                cache_only=True,
+            )
+        finally:
+            self.api._MODULE_STATE_CACHE = orig_state_cache
+            self.api._module_git_state = orig_module_git_state
+
+        self.assertEqual(info.get("installed_commit_short"), "abc12345")
+        self.assertEqual(info.get("update_status"), "can_update")
+        self.assertEqual(info.get("module_path"), "/tmp/ComfyUI_Test")
+
 
 if __name__ == "__main__":
     unittest.main()

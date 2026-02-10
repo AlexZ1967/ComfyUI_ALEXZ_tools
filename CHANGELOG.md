@@ -1,5 +1,33 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.4 — 2026-02-10
+- Module novelty markers are now sticky across ComfyUI restarts:
+  - updated modules stay marked (`✅`, green node frames),
+  - new modules/nodes keep red/new markers,
+  until explicit acknowledge.
+- Added explicit acknowledge semantics:
+  - `Обновить информацию о модуле` clears novelty markers for that module,
+  - `Обновить информацию о модулях` clears novelty markers for all modules,
+  - `Обновить информацию о ComfyUI` clears ComfyUI novelty marker after local update detection,
+  - then shows current local/remote status (including red update square if upstream is newer).
+- Startup behavior keeps cache-first policy, but now performs lightweight local change tracking to detect newly installed/updated modules between runs without forcing upstream refresh.
+- Added tracker regression tests for persistent novelty markers and acknowledge flow (`tests/test_module_browser_tracker.py`), including global acknowledge and ComfyUI marker acknowledge.
+
+## 0.16.3 — 2026-02-10
+- Module Node Picker startup behavior changed to cache-first mode:
+  - no automatic git/upstream status checks on widget load,
+  - module and ComfyUI status at startup is read from cached state.
+- Status checks are now triggered only by explicit widget actions:
+  - `Обновить информацию о модулях`,
+  - `Обновить информацию о модуле`,
+  - `Обновить информацию о ComfyUI`.
+- Frontend: removed automatic per-module badge probing on startup; badges are populated from `node_catalog` cache metadata.
+- Backend:
+  - `/alexz_tools/module_info` now supports `cache_only` mode (default on non-forced reads),
+  - ComfyUI status now persists in module state cache and is reused without git calls unless force refresh is requested,
+  - runtime-state initialization switched to lightweight cache bootstrap (no startup refresh job).
+- Added regression tests for cache-only status behavior in `tests/test_phase0_baseline.py`.
+
 ## 0.16.2 — 2026-02-10
 - Module Node Picker: diagnostics/debug output is now hidden by default.
 - Added `Debug` checkbox in picker header to enable/disable diagnostics block on demand.

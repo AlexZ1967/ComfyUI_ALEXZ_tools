@@ -228,6 +228,148 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(entry.get("startup_prev_commit"), "old111")
         self.assertEqual(entry.get("startup_new_commit"), "new222")
 
+    def test_pending_update_marker_persists_until_acknowledge(self):
+        """Ensure local update marker stays sticky across restarts until explicit acknowledge."""
+        self.api._now_iso = lambda: "2026-02-08T00:00:00+00:00"
+        self.api._build_node_snapshots = lambda: {"custom": {"comfyui-AGSoft": {}}}
+        self.api._discover_custom_modules = lambda: ["comfyui-AGSoft"]
+
+        states = [
+            {"installed_commit": "old111", "installed_updated_at": "2026-02-01T00:00:00+00:00"},
+            {"installed_commit": "new222", "installed_updated_at": "2026-02-08T00:00:00+00:00"},
+            {"installed_commit": "new222", "installed_updated_at": "2026-02-08T00:00:00+00:00"},
+        ]
+
+        def fake_module_git_state(_module_name):
+            return dict(states.pop(0))
+
+        self.api._module_git_state = fake_module_git_state
+
+        # Baseline.
+        self.api._announce_tracked_module_updates(local_only=True)
+        # Change detected.
+        self.api._announce_tracked_module_updates(local_only=True)
+        # Next startup with same commit should keep marker.
+        self.api._announce_tracked_module_updates(local_only=True)
+
+        entry = self.api._MODULE_STATE_CACHE.get("comfyui-AGSoft", {})
+        self.assertEqual(entry.get("pending_prev_commit"), "old111")
+        self.assertEqual(entry.get("pending_new_commit"), "new222")
+
+        self.api._acknowledge_module_novelty("custom", "comfyui-AGSoft")
+        entry = self.api._MODULE_STATE_CACHE.get("comfyui-AGSoft", {})
+        self.assertFalse(entry.get("pending_prev_commit"))
+        self.assertFalse(entry.get("pending_new_commit"))
+
+    def test_acknowledge_clears_pending_node_markers(self):
+        """Ensure per-module acknowledge clears pending node/new-module markers."""
+        self.api._MODULE_STATE_CACHE = {
+            "__node_tracker__": {
+                "pending_changes": {
+                    "custom": {
+                        "ComfyUI_Test": {
+                            "new_nodes": ["NodeA"],
+                            "updated_nodes": ["NodeB"],
+                            "at": "2026-02-08T00:00:00+00:00",
+                        }
+                    }
+                },
+                "pending_new_modules": {
+                    "custom": ["ComfyUI_Test"]
+                },
+            },
+            "ComfyUI_Test": {
+                "pending_prev_commit": "old111",
+                "pending_new_commit": "new222",
+            },
+        }
+
+        self.api._acknowledge_module_novelty("custom", "ComfyUI_Test")
+
+        entry = self.api._MODULE_STATE_CACHE.get("ComfyUI_Test", {})
+        self.assertFalse(entry.get("pending_prev_commit"))
+        self.assertFalse(entry.get("pending_new_commit"))
+        tracker = self.api._MODULE_STATE_CACHE.get("__node_tracker__", {})
+        self.assertEqual(tracker.get("pending_changes", {}).get("custom", {}), {})
+        self.assertEqual(tracker.get("pending_new_modules", {}).get("custom", []), [])
+
+    def test_acknowledge_all_clears_all_novelty_markers(self):
+        """Ensure global acknowledge clears novelty markers for every module."""
+        self.api._MODULE_STATE_CACHE = {
+            "__node_tracker__": {
+                "pending_changes": {"custom": {"ComfyUI_A": {"new_nodes": ["N1"], "updated_nodes": [], "at": "t"}}},
+                "pending_new_modules": {"custom": ["ComfyUI_B"]},
+                "startup_changes": {"custom": {"ComfyUI_A": {"new_nodes": ["N1"], "updated_nodes": [], "at": "t"}}},
+                "startup_new_modules": {"custom": ["ComfyUI_B"]},
+            },
+            "ComfyUI_A": {
+                "pending_prev_commit": "oldA",
+                "pending_new_commit": "newA",
+                "startup_prev_commit": "oldA",
+                "startup_new_commit": "newA",
+            },
+            "ComfyUI_B": {
+                "pending_prev_commit": "oldB",
+                "pending_new_commit": "newB",
+            },
+        }
+
+        result = self.api._acknowledge_all_novelty()
+        self.assertEqual(result.get("status"), "ok")
+        self.assertTrue(bool(result.get("changed")))
+
+        entry_a = self.api._MODULE_STATE_CACHE.get("ComfyUI_A", {})
+        entry_b = self.api._MODULE_STATE_CACHE.get("ComfyUI_B", {})
+        self.assertFalse(entry_a.get("pending_prev_commit"))
+        self.assertFalse(entry_a.get("pending_new_commit"))
+        self.assertFalse(entry_a.get("startup_prev_commit"))
+        self.assertFalse(entry_a.get("startup_new_commit"))
+        self.assertFalse(entry_b.get("pending_prev_commit"))
+        self.assertFalse(entry_b.get("pending_new_commit"))
+
+        tracker = self.api._MODULE_STATE_CACHE.get("__node_tracker__", {})
+        self.assertEqual(tracker.get("pending_changes"), {})
+        self.assertEqual(tracker.get("pending_new_modules"), {})
+        self.assertEqual(tracker.get("startup_changes"), {})
+        self.assertEqual(tracker.get("startup_new_modules"), {})
+
+    def test_comfyui_local_update_marker_persists_until_acknowledge(self):
+        """Ensure ComfyUI local update marker stays visible until explicit acknowledge."""
+        fake_root = os.path.join(os.getcwd(), "fake_comfy_cache")
+        self.api._MODULE_STATE_CACHE = {
+            "__comfyui__": {
+                "installed_commit": "old11111",
+                "status": {
+                    "installed_commit": "old11111",
+                    "update_status": "unknown",
+                },
+            }
+        }
+        self.api._comfyui_root = lambda: fake_root
+
+        def fake_run_git(args, timeout=2.0):
+            cmd = " ".join(args)
+            table = {
+                f"git -C {fake_root} rev-parse --is-inside-work-tree": "true",
+                f"git -C {fake_root} rev-parse HEAD": "new22222",
+                f"git -C {fake_root} log -1 --format=%cI": "2026-02-10T11:00:00+00:00",
+            }
+            return table.get(cmd)
+
+        self.api._run_git = fake_run_git
+        self.api._track_comfyui_local_update()
+        self.api._COMFYUI_STATUS_CACHE = None
+
+        info = self.api._comfyui_git_status(force_refresh=False)
+        self.assertTrue(bool(info.get("updated_between_runs")))
+        self.assertEqual(info.get("startup_prev_commit_short"), "old11111")
+        self.assertEqual(info.get("startup_new_commit_short"), "new22222")
+
+        self.api._acknowledge_comfyui_novelty()
+        self.api._COMFYUI_STATUS_CACHE = None
+        info = self.api._comfyui_git_status(force_refresh=False)
+        self.assertFalse(bool(info.get("updated_between_runs")))
+
     def test_refresh_syncs_custom_module_upstreams(self):
         """Validate `test_refresh_syncs_custom_module_upstreams` behavior."""
         called = []
