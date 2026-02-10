@@ -41,6 +41,8 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self._orig_sync_module_upstream = self.api._sync_module_upstream
         self._orig_announce_updates = self.api._announce_tracked_module_updates
         self._orig_comfy_status = self.api._comfyui_git_status
+        self._orig_module_needs_update_now = self.api._module_needs_update_now
+        self._orig_install_module_requirements = self.api._install_module_requirements
         self.api._MODULE_STATE_CACHE = {}
         self.api._COMFYUI_STATUS_CACHE = None
         self.api._save_module_state = lambda state: None
@@ -59,6 +61,8 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._sync_module_upstream = self._orig_sync_module_upstream
         self.api._announce_tracked_module_updates = self._orig_announce_updates
         self.api._comfyui_git_status = self._orig_comfy_status
+        self.api._module_needs_update_now = self._orig_module_needs_update_now
+        self.api._install_module_requirements = self._orig_install_module_requirements
         self.api._MODULE_INFO_CACHE.clear()
 
     def test_new_module_marker_applies_without_node_diffs(self):
@@ -199,6 +203,30 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         done_events = [e for e in events if e.get("phase") == "done"]
         self.assertTrue(done_events)
         self.assertEqual(done_events[-1].get("modules_need_update"), 4)
+
+    def test_resolve_update_targets_all_filters_modules(self):
+        self.api._discover_custom_modules = lambda: ["modA", "modB", "modC"]
+        self.api._sync_module_upstream = lambda module_name, timeout=15.0: True
+        self.api._module_needs_update_now = lambda module_name: module_name in {"modA", "modC"}
+
+        targets = self.api._resolve_update_targets("all", "")
+
+        self.assertEqual(targets, ["modA", "modC"])
+
+    def test_install_requirements_for_modules_aggregates_results(self):
+        def fake_install(module_name, timeout=1200.0):
+            if module_name == "modA":
+                return {"module": module_name, "status": "installed"}
+            return {"module": module_name, "status": "error"}
+
+        self.api._install_module_requirements = fake_install
+
+        result = self.api._install_requirements_for_modules(["modA", "modA", "modB", ""])
+
+        self.assertEqual(result.get("status"), "ok")
+        self.assertEqual(result.get("count"), 2)
+        self.assertEqual(result.get("installed"), 1)
+        self.assertEqual(result.get("failed"), 1)
 
 
 if __name__ == "__main__":

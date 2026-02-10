@@ -34,6 +34,11 @@ function injectStyles() {
         align-items: center;
         gap: 8px;
     }
+    .alexz-mod-picker-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
     .alexz-mod-picker-title {
         font-size: 13px;
         font-weight: 700;
@@ -152,6 +157,28 @@ function injectStyles() {
     }
     .alexz-mod-picker-status.unknown {
         color: #b3b3b3;
+    }
+    .alexz-mod-picker-action-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+    }
+    .alexz-mod-picker-btn-small {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--border-color, #555);
+        background: var(--comfy-input-bg, rgba(255,255,255,0.03));
+        cursor: pointer;
+    }
+    .alexz-mod-picker-btn-small:hover {
+        filter: brightness(1.08);
+    }
+    .alexz-mod-picker-btn-small[disabled] {
+        opacity: 0.55;
+        cursor: default;
+        filter: none;
     }
     .alexz-mod-picker-group {
         border: 1px solid var(--border-color, #444);
@@ -272,6 +299,45 @@ async function fetchModuleRefreshStatus() {
     return await resp.json();
 }
 
+async function startModuleUpdate(scope, moduleName) {
+    const resp = await api.fetchApi("/alexz_tools/module_update", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            scope: scope || "single",
+            module: moduleName || "",
+        }),
+    });
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
+async function fetchModuleUpdateStatus() {
+    const resp = await api.fetchApi("/alexz_tools/module_update_status", {
+        cache: "no-store",
+    });
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
+async function installModuleRequirements(modules) {
+    const resp = await api.fetchApi("/alexz_tools/module_install_requirements", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modules: Array.isArray(modules) ? modules : [] }),
+    });
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
 function fmtDate(iso) {
     if (!iso) {
         return "n/a";
@@ -330,10 +396,22 @@ function renderPicker(container) {
     title.textContent = "Node Picker";
     head.appendChild(title);
 
+    const headActions = document.createElement("div");
+    headActions.className = "alexz-mod-picker-head-actions";
+    head.appendChild(headActions);
+
+    const updateAllBtn = document.createElement("button");
+    updateAllBtn.type = "button";
+    updateAllBtn.textContent = "Update all custom_nodes";
+    updateAllBtn.className = "alexz-mod-picker-btn-small";
+    updateAllBtn.style.display = "none";
+    headActions.appendChild(updateAllBtn);
+
     const refreshBtn = document.createElement("button");
     refreshBtn.type = "button";
     refreshBtn.textContent = "Обновить информацию о модулях";
-    head.appendChild(refreshBtn);
+    refreshBtn.className = "alexz-mod-picker-btn-small";
+    headActions.appendChild(refreshBtn);
 
     const comfyAlert = document.createElement("div");
     comfyAlert.className = "alexz-mod-picker-comfy-alert";
@@ -375,6 +453,9 @@ function renderPicker(container) {
     const moduleNodeDiffs = new Map();
     let moduleBadgeLoadToken = 0;
     let refreshPollToken = 0;
+    let updatePollToken = 0;
+    let customModulesNeedUpdate = 0;
+    let actionBusy = false;
 
     const renderComfyAlert = (info) => {
         const behind = Number(info?.behind);
@@ -496,6 +577,125 @@ function renderPicker(container) {
         return false;
     };
 
+    const setActionBusy = (busy) => {
+        actionBusy = Boolean(busy);
+        refreshBtn.disabled = actionBusy;
+        updateAllBtn.disabled = actionBusy;
+    };
+
+    const syncUpdateAllButton = () => {
+        const show = groupSelect.value === "custom" && customModulesNeedUpdate > 0;
+        if (!show) {
+            updateAllBtn.style.display = "none";
+            return;
+        }
+        updateAllBtn.style.display = "";
+        updateAllBtn.textContent = `Update all custom_nodes (${customModulesNeedUpdate})`;
+    };
+
+    const formatUpdateLine = (update) => {
+        const phase = String(update?.phase || "");
+        const current = Number(update?.current || 0);
+        const total = Number(update?.total || 0);
+        const remaining = Number(update?.remaining || 0);
+        const moduleName = String(update?.module || "");
+        const error = String(update?.error || "");
+        const updated = Number(update?.updated || 0);
+        const failed = Number(update?.failed || 0);
+        const reqList = Array.isArray(update?.requirements_modules) ? update.requirements_modules : [];
+
+        if (phase === "update") {
+            const modulePart = moduleName ? ` (${moduleName})` : "";
+            if (total > 0) {
+                return { text: `Обновление модулей: ${current}/${total}, осталось ${remaining}${modulePart}`, tone: "neutral" };
+            }
+            return { text: "Обновление модулей: запуск...", tone: "neutral" };
+        }
+        if (phase === "done") {
+            if (total <= 0) {
+                return { text: "Обновления не найдены.", tone: "ok" };
+            }
+            if (failed > 0) {
+                return { text: `Обновление завершено: updated=${updated}, failed=${failed}.`, tone: "warn" };
+            }
+            if (reqList.length > 0) {
+                return { text: `Обновление завершено: ${updated} модулей обновлено, требуется обновить dependencies.`, tone: "warn" };
+            }
+            return { text: `Обновление завершено: ${updated} модулей обновлено.`, tone: "ok" };
+        }
+        if (phase === "error") {
+            return { text: `Обновление модулей: ошибка${error ? ` (${error})` : ""}.`, tone: "warn" };
+        }
+        return { text: "Обновление модулей: подготовка...", tone: "neutral" };
+    };
+
+    const pollUpdateProgress = async () => {
+        const token = ++updatePollToken;
+        while (token === updatePollToken) {
+            let payload;
+            try {
+                payload = await fetchModuleUpdateStatus();
+            } catch (err) {
+                setRefreshLine(`Обновление модулей: ошибка статуса (${String(err)}).`, "warn");
+                return null;
+            }
+            const update = payload?.update || {};
+            const line = formatUpdateLine(update);
+            setRefreshLine(line.text, line.tone);
+            if (!update?.running) {
+                return update;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 450));
+        }
+        return null;
+    };
+
+    const maybeInstallChangedRequirements = async (update) => {
+        const modules = Array.isArray(update?.requirements_modules) ? update.requirements_modules : [];
+        if (!modules.length) {
+            return;
+        }
+        const answer = window.confirm(
+            `В модуле(ях) ${modules.join(", ")} изменился requirements.txt.\n` +
+            "Обновить зависимости через pip в текущем окружении ComfyUI?"
+        );
+        if (!answer) {
+            setRefreshLine("requirements.txt изменился, установка зависимостей пропущена.", "warn");
+            return;
+        }
+        setRefreshLine("Установка зависимостей (pip) ...", "neutral");
+        const install = await installModuleRequirements(modules);
+        const failed = Number(install?.failed || 0);
+        const installed = Number(install?.installed || 0);
+        if (failed > 0) {
+            setRefreshLine(`Установка зависимостей завершена с ошибками: ok=${installed}, failed=${failed}.`, "warn");
+            return;
+        }
+        setRefreshLine(`Зависимости обновлены: ${installed} модулей.`, "ok");
+    };
+
+    const runModuleUpdate = async (scope, moduleName) => {
+        setActionBusy(true);
+        try {
+            setRefreshLine("Обновление модулей: запуск...", "neutral");
+            await startModuleUpdate(scope, moduleName);
+            const update = await pollUpdateProgress();
+            if (!update) {
+                return;
+            }
+            if (String(update.phase || "") === "done") {
+                await maybeInstallChangedRequirements(update);
+            }
+            await loadCatalog();
+            await loadModuleInfo();
+        } catch (err) {
+            setRefreshLine(`Обновление модулей: ошибка (${String(err)}).`, "warn");
+        } finally {
+            setActionBusy(false);
+            syncUpdateAllButton();
+        }
+    };
+
     const setModuleOptionText = (moduleName) => {
         const option = moduleOptions.get(moduleName);
         if (!option) {
@@ -591,6 +791,7 @@ function renderPicker(container) {
             setHelpText(filterValue
                 ? `Нет модулей по фильтру: "${moduleFilter.value}".`
                 : "Модули не найдены для выбранной группы.");
+            syncUpdateAllButton();
             return;
         }
         const countMap = new Map();
@@ -617,6 +818,7 @@ function renderPicker(container) {
         renderNodeList();
         loadModuleInfo();
         loadModuleBadges(selectedGroup, modules);
+        syncUpdateAllButton();
     };
 
     const fillGroupSelect = (groups) => {
@@ -779,6 +981,28 @@ function renderPicker(container) {
             statusRow.appendChild(labelEl);
             statusRow.appendChild(valueEl);
             card.appendChild(statusRow);
+
+            if (String(info.update_status || "") === "can_update") {
+                const actionRow = document.createElement("div");
+                actionRow.className = "alexz-mod-picker-action-row";
+                const updateBtn = document.createElement("button");
+                updateBtn.type = "button";
+                updateBtn.className = "alexz-mod-picker-btn-small";
+                updateBtn.textContent = "Update module";
+                updateBtn.disabled = actionBusy;
+                updateBtn.onclick = async () => {
+                    if (actionBusy) {
+                        return;
+                    }
+                    const moduleName = String(info.module || nodeSelect.value || "").trim();
+                    if (!moduleName) {
+                        return;
+                    }
+                    await runModuleUpdate("single", moduleName);
+                };
+                actionRow.appendChild(updateBtn);
+                card.appendChild(actionRow);
+            }
         }
 
         if (info.new_module_between_runs) {
@@ -849,6 +1073,7 @@ function renderPicker(container) {
             const payload = await fetchNodeCatalog();
             catalogByGroup.clear();
             const groups = payload?.groups || [];
+            customModulesNeedUpdate = Number(payload?.custom_modules_need_update || 0);
             renderComfyAlert(payload?.comfyui || null);
             fillGroupSelect(groups);
             const summary = groups
@@ -858,6 +1083,7 @@ function renderPicker(container) {
                 })
                 .join(", ");
             setHelpText(`Группы: ${summary}.`);
+            syncUpdateAllButton();
         } catch (err) {
             setHelpText(`Ошибка загрузки: ${String(err)}`);
             comfyAlert.style.display = "none";
@@ -866,17 +1092,27 @@ function renderPicker(container) {
             nodeSelect.innerHTML = "";
             moduleInfo.innerHTML = "";
             nodeList.innerHTML = "";
+            syncUpdateAllButton();
         }
     };
 
-    groupSelect.onchange = () => fillModuleSelect();
+    groupSelect.onchange = () => {
+        fillModuleSelect();
+        syncUpdateAllButton();
+    };
     moduleFilter.oninput = () => fillModuleSelect();
     nodeSelect.onchange = () => {
         renderNodeList();
         loadModuleInfo();
     };
+    updateAllBtn.onclick = async () => {
+        if (actionBusy) {
+            return;
+        }
+        await runModuleUpdate("all", "");
+    };
     refreshBtn.onclick = async () => {
-        refreshBtn.disabled = true;
+        setActionBusy(true);
         setRefreshLine("Обновление статусов модулей: запуск...", "neutral");
         try {
             await refreshModuleRuntimeState();
@@ -887,7 +1123,7 @@ function renderPicker(container) {
         } catch (err) {
             setRefreshLine(`Обновление статусов модулей: ошибка (${String(err)}).`, "warn");
         } finally {
-            refreshBtn.disabled = false;
+            setActionBusy(false);
         }
         await loadCatalog();
     };

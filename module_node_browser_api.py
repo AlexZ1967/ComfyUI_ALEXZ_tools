@@ -54,6 +54,27 @@ _REFRESH_STATUS: dict[str, Any] = {
     "updated_at": "",
     "refreshed_at": "",
 }
+_UPDATE_LOCK = threading.Lock()
+_UPDATE_THREAD: threading.Thread | None = None
+_UPDATE_STATUS: dict[str, Any] = {
+    "running": False,
+    "phase": "idle",
+    "scope": "",
+    "current": 0,
+    "total": 0,
+    "remaining": 0,
+    "module": "",
+    "message": "",
+    "error": "",
+    "updated": 0,
+    "up_to_date": 0,
+    "failed": 0,
+    "requirements_modules": [],
+    "results": [],
+    "started_at": "",
+    "updated_at": "",
+    "finished_at": "",
+}
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/([^/]+)/([^/]+)", re.IGNORECASE)
 _MODULE_STATE_PATH = Path(__file__).resolve().with_name("module_state_cache.json")
 _GROUP_ORDER = (
@@ -536,6 +557,167 @@ def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
     out = (proc.stdout or "").strip()
     return out or None
 
+
+def _run_command(args: list[str], timeout: float = 120.0, disable_git_prompt: bool = False) -> dict[str, Any]:
+    env = os.environ.copy()
+    if disable_git_prompt:
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        env.setdefault("GIT_ASKPASS", "echo")
+    try:
+        proc = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+            check=False,
+        )
+    except Exception as exc:
+        return {"ok": False, "returncode": -1, "stdout": "", "stderr": str(exc)}
+    return {
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "stdout": (proc.stdout or "").strip(),
+        "stderr": (proc.stderr or "").strip(),
+    }
+
+
+def _module_dir(module_name: str) -> Path | None:
+    module_name = _canonical_custom_module_name((module_name or "").strip())
+    if not module_name:
+        return None
+    for root in _custom_nodes_roots():
+        module_dir = root / module_name
+        if module_dir.exists() and module_dir.is_dir():
+            return module_dir
+    return None
+
+
+def _requirements_changed_between(module_dir: Path, before_commit: str, after_commit: str) -> bool:
+    before = (before_commit or "").strip()
+    after = (after_commit or "").strip()
+    if not before or not after or before == after:
+        return False
+    diff = _run_command(
+        ["git", "-C", str(module_dir), "diff", "--name-only", f"{before}..{after}", "--", "requirements.txt"],
+        timeout=20.0,
+        disable_git_prompt=True,
+    )
+    if not diff.get("ok"):
+        return False
+    changed_files = [line.strip().lower() for line in str(diff.get("stdout") or "").splitlines() if line.strip()]
+    return "requirements.txt" in changed_files
+
+
+def _module_needs_update_now(module_name: str) -> bool:
+    git_state = _module_git_state(module_name)
+    if not git_state:
+        return False
+    behind = git_state.get("behind")
+    if isinstance(behind, int):
+        return behind > 0
+    remote_head = (git_state.get("remote_head") or "").strip()
+    installed = (git_state.get("installed_commit") or "").strip()
+    return bool(git_state.get("has_upstream") and remote_head and installed and remote_head != installed)
+
+
+def _count_custom_modules_need_update() -> int:
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return 0
+    count = 0
+    for module_name in _discover_custom_modules():
+        entry = state.get(_canonical_custom_module_name(module_name))
+        if isinstance(entry, dict) and bool(entry.get("update_available")):
+            count += 1
+    return count
+
+
+def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, Any]:
+    module = _canonical_custom_module_name(module_name)
+    module_dir = _module_dir(module)
+    result: dict[str, Any] = {
+        "module": module,
+        "status": "error",
+        "message": "",
+        "updated": False,
+        "requirements_changed": False,
+        "before_commit": "",
+        "after_commit": "",
+    }
+    if module_dir is None:
+        result["status"] = "not_found"
+        result["message"] = "module directory not found"
+        return result
+
+    is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
+    if is_git != "true":
+        result["status"] = "no_git"
+        result["message"] = "not a git repository"
+        return result
+
+    upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+    if not upstream:
+        result["status"] = "no_upstream"
+        result["message"] = "upstream is not configured"
+        return result
+
+    before_commit = _run_git(["git", "-C", str(module_dir), "rev-parse", "HEAD"]) or ""
+    result["before_commit"] = before_commit
+    pull = _run_command(
+        ["git", "-C", str(module_dir), "pull", "--ff-only"],
+        timeout=timeout,
+        disable_git_prompt=True,
+    )
+    if not pull.get("ok"):
+        result["status"] = "error"
+        result["message"] = str(pull.get("stderr") or pull.get("stdout") or "git pull failed")
+        return result
+
+    after_commit = _run_git(["git", "-C", str(module_dir), "rev-parse", "HEAD"]) or ""
+    result["after_commit"] = after_commit
+    updated = bool(before_commit and after_commit and before_commit != after_commit)
+    result["updated"] = updated
+    if updated:
+        result["status"] = "updated"
+        result["message"] = "module updated"
+        result["requirements_changed"] = _requirements_changed_between(module_dir, before_commit, after_commit)
+    else:
+        result["status"] = "up_to_date"
+        result["message"] = "already up to date"
+    return result
+
+
+def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> dict[str, Any]:
+    module = _canonical_custom_module_name(module_name)
+    module_dir = _module_dir(module)
+    result: dict[str, Any] = {
+        "module": module,
+        "status": "error",
+        "message": "",
+        "requirements_path": "",
+    }
+    if module_dir is None:
+        result["status"] = "not_found"
+        result["message"] = "module directory not found"
+        return result
+
+    requirements_path = module_dir / "requirements.txt"
+    result["requirements_path"] = str(requirements_path)
+    if not requirements_path.exists():
+        result["status"] = "missing_requirements"
+        result["message"] = "requirements.txt not found"
+        return result
+
+    cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)]
+    run = _run_command(cmd, timeout=timeout)
+    if not run.get("ok"):
+        result["status"] = "error"
+        result["message"] = str(run.get("stderr") or run.get("stdout") or "pip install failed")
+        return result
+    result["status"] = "installed"
+    result["message"] = "requirements installed"
+    return result
 
 def _module_repo_url(module_name: str) -> str | None:
     module_name = _canonical_custom_module_name((module_name or "").strip())
@@ -1297,6 +1479,178 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
     return {"status": "started", "refresh": _refresh_status_snapshot()}
 
 
+def _set_update_status(**kwargs: Any) -> None:
+    with _UPDATE_LOCK:
+        _UPDATE_STATUS.update(kwargs)
+        _UPDATE_STATUS["updated_at"] = _now_iso()
+
+
+def _update_status_snapshot() -> dict[str, Any]:
+    with _UPDATE_LOCK:
+        return dict(_UPDATE_STATUS)
+
+
+def _resolve_update_targets(scope: str, module_name: str) -> list[str]:
+    scope_norm = (scope or "").strip().lower()
+    if scope_norm == "single":
+        canonical = _canonical_custom_module_name(module_name)
+        if not canonical or canonical == "unknown":
+            return []
+        return [canonical]
+
+    if scope_norm != "all":
+        return []
+
+    targets: list[str] = []
+    for mod in _discover_custom_modules():
+        _sync_module_upstream(mod)
+        if _module_needs_update_now(mod):
+            targets.append(_canonical_custom_module_name(mod))
+    # Keep order stable and deduplicate.
+    return list(dict.fromkeys(targets))
+
+
+def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
+    global _UPDATE_THREAD
+    scope_norm = (scope or "").strip().lower()
+    if scope_norm not in {"single", "all"}:
+        return {"status": "error", "error": "scope must be 'single' or 'all'"}
+
+    if scope_norm == "single":
+        canonical = _canonical_custom_module_name(module_name)
+        if _module_dir(canonical) is None:
+            return {"status": "error", "error": "module not found"}
+
+    with _REFRESH_LOCK:
+        if _REFRESH_THREAD is not None and _REFRESH_THREAD.is_alive():
+            return {"status": "error", "error": "module refresh is running"}
+
+    with _UPDATE_LOCK:
+        thread = _UPDATE_THREAD
+        if thread is not None and thread.is_alive():
+            return {"status": "running", "update": dict(_UPDATE_STATUS)}
+        _UPDATE_STATUS.update(
+            {
+                "running": True,
+                "phase": "starting",
+                "scope": scope_norm,
+                "current": 0,
+                "total": 0,
+                "remaining": 0,
+                "module": "",
+                "message": "starting",
+                "error": "",
+                "updated": 0,
+                "up_to_date": 0,
+                "failed": 0,
+                "requirements_modules": [],
+                "results": [],
+                "started_at": _now_iso(),
+                "updated_at": _now_iso(),
+                "finished_at": "",
+            }
+        )
+
+    def _runner() -> None:
+        global _UPDATE_THREAD
+        try:
+            targets = _resolve_update_targets(scope_norm, module_name)
+            total = len(targets)
+            _set_update_status(phase="update", total=total, remaining=total, message="running")
+            if total == 0:
+                _refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kwargs: None)
+                _set_update_status(
+                    running=False,
+                    phase="done",
+                    message="nothing_to_update",
+                    results=[],
+                    requirements_modules=[],
+                    finished_at=_now_iso(),
+                )
+                return
+
+            updated_count = 0
+            uptodate_count = 0
+            failed_count = 0
+            requirements_modules: list[str] = []
+            results: list[dict[str, Any]] = []
+
+            for idx, target in enumerate(targets, start=1):
+                _set_update_status(
+                    phase="update",
+                    current=idx - 1,
+                    total=total,
+                    remaining=total - idx + 1,
+                    module=target,
+                    message="pull",
+                )
+                item = _pull_custom_module(target)
+                results.append(item)
+                status = str(item.get("status") or "")
+                if status == "updated":
+                    updated_count += 1
+                elif status == "up_to_date":
+                    uptodate_count += 1
+                else:
+                    failed_count += 1
+                if bool(item.get("requirements_changed")):
+                    requirements_modules.append(target)
+                _set_update_status(
+                    phase="update",
+                    current=idx,
+                    total=total,
+                    remaining=total - idx,
+                    module=target,
+                    message=status or "done",
+                    updated=updated_count,
+                    up_to_date=uptodate_count,
+                    failed=failed_count,
+                    requirements_modules=requirements_modules,
+                    results=results,
+                )
+
+            _refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kwargs: None)
+            _set_update_status(
+                running=False,
+                phase="done",
+                message="done",
+                module="",
+                finished_at=_now_iso(),
+            )
+        except Exception as exc:
+            _set_update_status(running=False, phase="error", message="error", error=str(exc), module="", finished_at=_now_iso())
+        finally:
+            with _UPDATE_LOCK:
+                _UPDATE_THREAD = None
+
+    thread = threading.Thread(target=_runner, name="alexz-module-update", daemon=True)
+    with _UPDATE_LOCK:
+        _UPDATE_THREAD = thread
+    thread.start()
+    return {"status": "started", "update": _update_status_snapshot()}
+
+
+def _install_requirements_for_modules(modules: list[str]) -> dict[str, Any]:
+    if not isinstance(modules, list):
+        return {"status": "error", "error": "modules must be a list"}
+    canonical = [_canonical_custom_module_name(str(x)) for x in modules if str(x).strip()]
+    canonical = [x for x in dict.fromkeys(canonical) if x and x != "unknown"]
+    if not canonical:
+        return {"status": "ok", "count": 0, "results": []}
+
+    results: list[dict[str, Any]] = []
+    installed = 0
+    failed = 0
+    for module_name in canonical:
+        item = _install_module_requirements(module_name)
+        results.append(item)
+        if str(item.get("status")) == "installed":
+            installed += 1
+        else:
+            failed += 1
+    return {"status": "ok", "count": len(canonical), "installed": installed, "failed": failed, "results": results}
+
+
 if PromptServer is not None and web is not None and getattr(PromptServer, "instance", None):
     _LOGGER.info("✅ Module Nodes widget backend loaded")
 
@@ -1318,6 +1672,48 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module refresh status API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
+    @PromptServer.instance.routes.post("/alexz_tools/module_update")
+    async def alexz_tools_module_update(request):
+        try:
+            payload = {}
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+            scope = str(payload.get("scope") or request.query.get("scope") or "single").strip().lower()
+            module_name = str(payload.get("module") or request.query.get("module") or "").strip()
+            started = _start_module_update_job(scope=scope, module_name=module_name)
+            if started.get("status") == "error":
+                return web.json_response(started, status=400)
+            return web.json_response(started)
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("Module update API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
+    @PromptServer.instance.routes.get("/alexz_tools/module_update_status")
+    async def alexz_tools_module_update_status(request):
+        try:
+            return web.json_response({"status": "ok", "update": _update_status_snapshot()})
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("Module update status API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
+    @PromptServer.instance.routes.post("/alexz_tools/module_install_requirements")
+    async def alexz_tools_module_install_requirements(request):
+        try:
+            payload = {}
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+            modules = payload.get("modules")
+            result = _install_requirements_for_modules(modules if isinstance(modules, list) else [])
+            status_code = 200 if result.get("status") == "ok" else 400
+            return web.json_response(result, status=status_code)
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("Module requirements install API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
     @PromptServer.instance.routes.get("/alexz_tools/node_catalog")
     async def alexz_tools_node_catalog(request):
         try:
@@ -1325,6 +1721,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             grouped = _build_group_catalog()
             modules_by_group = _build_group_modules(grouped)
             comfyui = _comfyui_git_status()
+            custom_modules_need_update = _count_custom_modules_need_update()
             groups = []
             for group_id, group_title in _GROUP_ORDER:
                 nodes = grouped.get(group_id, [])
@@ -1339,7 +1736,13 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                         "modules": modules,
                     }
                 )
-            return web.json_response({"groups": groups, "comfyui": comfyui})
+            return web.json_response(
+                {
+                    "groups": groups,
+                    "comfyui": comfyui,
+                    "custom_modules_need_update": custom_modules_need_update,
+                }
+            )
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Node catalog API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
