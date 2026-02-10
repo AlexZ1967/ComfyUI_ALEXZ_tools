@@ -1,5 +1,17 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.17 — 2026-02-10
+- `Module Nodes`: added module update actions in UI:
+  - `Update module` in custom-module card (shown only when update is available),
+  - `Update all custom_nodes (N)` in header for `Custom_Nodes` group.
+- Added backend update APIs:
+  - `POST /alexz_tools/module_update`,
+  - `GET /alexz_tools/module_update_status`,
+  - `POST /alexz_tools/module_install_requirements`.
+- Update flow now performs `git pull --ff-only`; if `requirements.txt` changed between old/new commit, widget prompts to install dependencies.
+- Dependency install runs in current ComfyUI Python environment via `sys.executable -m pip install -r <module>/requirements.txt`.
+- `node_catalog` now returns `custom_modules_need_update` for dynamic visibility of `Update all`.
+
 ## 0.13.16 — 2026-02-09
 - Startup log order adjusted: first line is now always `ALEXZ_tools loading...`, followed by widget/backend and node load lines.
 - Removed duplicate package header logging from `nodes.py` to keep startup output clean.
