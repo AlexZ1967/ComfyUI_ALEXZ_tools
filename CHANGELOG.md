@@ -1,5 +1,11 @@
 # Changelog — ALEXZ_tools
 
+## 0.15.11 — 2026-02-10
+- Simplified `README.md` section `UI Tool: Module Node Picker`: replaced long inline block with short description and links.
+- Added dedicated guide file `GUIde_Module_Node_Picker.md` with full widget usage and update workflow details.
+- Added dedicated known-issues file `Known_issue_Module_Node_Picker.md` with `NodesMap` switching issue and workaround.
+- Documented why inline HTML color in GitHub README may not render (style sanitization), switched to badge-based emphasis in known-issues file.
+
 ## 0.15.10 — 2026-02-10
 - Refactored `Module Nodes` sidebar switching logic: moved Tab Relay implementation from `web/module_node_picker.js` into a dedicated module `web/module_node_picker_tab_relay.js`.
 - Simplified relay lifecycle to explicit `bind/unbind` API and removed inlined high-risk reconnect logic from the main UI file.
