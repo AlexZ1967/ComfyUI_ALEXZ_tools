@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.13.18
+Version: 0.13.19
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
@@ -110,13 +110,13 @@ Guide: [COLOR_MATCH_GUIDE.md](guides/COLOR_MATCH_GUIDE.md), кратко — [GU
 ---
 
 ## Remove Static Watermark from Video
-Инпейнтинг водяных знаков/объектов в видео (встроены ProPainter и E2FGVI; веса автозагружаются). Стриминг с кэшем, вывод preview и transform_json, опционально полноразмерные кадры.
+Инпейнтинг водяных знаков/объектов в видео на базе ProPainter (веса автозагружаются). Стриминг с кэшем, вывод preview и transform_json, опционально полноразмерные кадры.
 
 - Display name: Remove Static Watermark from Video  
 - Type name: VideoInpaintWatermark  
 - Category: video/inpaint
 
-Ключевые входы: mask, method (propainter/e2fgvi/e2fgvi_hq), mask_dilates/flow_mask_dilates, ref_stride, neighbor_length, subvideo_length, raft_iter, fp16, throughput_mode, crop_padding, color_match_mode, cache_dir, output_dir, output_name, video, preview_frame, write_fullframes.  
+Ключевые входы: mask, mask_dilates/flow_mask_dilates, ref_stride, neighbor_length, subvideo_length, raft_iter, fp16, throughput_mode, crop_padding, color_match_mode, cache_dir, output_dir, output_name, video, preview_frame, write_fullframes.  
 Выходы: `preview_image`, `transform_json`
 Guide: [GUIDE_VIDEO_INPAINT.md](guides/GUIDE_VIDEO_INPAINT.md)
 

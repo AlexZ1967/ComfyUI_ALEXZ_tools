@@ -3,7 +3,6 @@ import gc
 
 import glob
 import json
-import logging
 import os
 import re
 import shutil
@@ -34,18 +33,7 @@ from ..propainter.utils.image_utils import (
     prepare_frames_and_masks,
 )
 from ..propainter.utils.model_utils import initialize_models
-from ..e2fgvi.utils.image_utils import (
-    convert_image_to_frames as e2f_convert_frames,
-    convert_mask_to_frames as e2f_convert_masks,
-    dilate_masks as e2f_dilate_masks,
-    prepare_tensors as e2f_prepare_tensors,
-    resize_frames as e2f_resize_frames,
-    resize_masks as e2f_resize_masks,
-)
-from ..e2fgvi.utils.model_utils import load_model as e2f_load_model
 
-
-_LOGGER = logging.getLogger("VideoInpaintWatermark")
 
 STREAM_CHUNK_DEFAULT = 30
 STREAM_START_DEFAULT = 0
@@ -549,7 +537,6 @@ class VideoInpaintWatermark:
         self,
         video: str,
         mask: torch.Tensor,
-        method: str,
         mask_dilates: int,
         flow_mask_dilates: int,
         ref_stride: int,
@@ -733,7 +720,6 @@ class VideoInpaintWatermark:
             global_index = self._process_stream_chunk(
                 frames_chunk,
                 mask_chunk,
-                method,
                 mask_dilates,
                 flow_mask_dilates,
                 ref_stride,
@@ -787,7 +773,6 @@ class VideoInpaintWatermark:
         self,
         frames_buf: list[np.ndarray],
         mask: torch.Tensor,
-        method: str,
         mask_dilates: int,
         flow_mask_dilates: int,
         ref_stride: int,
@@ -834,107 +819,85 @@ class VideoInpaintWatermark:
         if cache_dir and pre_crop and not inputs_already_cropped:
             _save_rgba_sequence(frames, mask_full, cache_dir, output_name, "input_", start_index)
 
-        if method in ("e2fgvi", "e2fgvi_hq"):
-            rgba, out_mask, _transform_json = self._inpaint_e2fgvi(
-                frames=frames,
-                mask=mask_full,
-                method=method,
-                mask_dilates=mask_dilates,
-                ref_stride=ref_stride,
-                neighbor_length=neighbor_length,
-                fp16=fp16,
-                throughput_mode=throughput_mode,
-                pre_crop=pre_crop,
-                crop_bbox=bbox,
-                crop_status=status,
-                full_width=full_width,
-                full_height=full_height,
-                color_match_mode=color_match_mode,
-                output_dir="",
-                output_name=output_name,
-                save_only=False,
-                preview_frame=-1,
+        _check_inputs(frames, mask_full)
+        device = model_management.get_torch_device()
+
+        if cudnn_benchmark != "default" or tf32 != "default":
+            configure_cudnn(
+                benchmark=cudnn_benchmark == "enable",
+                allow_tf32=tf32 == "enable",
+            )
+
+        width = int(frames.shape[2])
+        height = int(frames.shape[1])
+
+        frames_np = convert_image_to_frames(frames)
+        video_length = frames.size(dim=0)
+        input_size = (frames_np[0].shape[1], frames_np[0].shape[0])
+
+        image_config = ImageConfig(
+            width, height, mask_dilates, flow_mask_dilates, input_size, video_length
+        )
+        inpaint_config = ProPainterConfig(
+            ref_stride=ref_stride,
+            neighbor_length=neighbor_length,
+            subvideo_length=subvideo_length,
+            raft_iter=raft_iter,
+            fp16=fp16,
+            video_length=video_length,
+            device=device,
+            process_size=image_config.process_size,
+            skip_empty_cache=throughput_mode == "enable",
+        )
+
+        frames_tensor, flow_masks_tensor, masks_dilated_tensor, original_frames = (
+            prepare_frames_and_masks(frames_np, mask_full, image_config, device)
+        )
+        models = initialize_models(device, inpaint_config.fp16)
+        updated_frames, updated_masks, pred_flows_bi = process_inpainting(
+            models,
+            frames_tensor,
+            flow_masks_tensor,
+            masks_dilated_tensor,
+            inpaint_config,
+        )
+        composed_frames = feature_propagation(
+            models.inpaint_model,
+            updated_frames,
+            updated_masks,
+            masks_dilated_tensor,
+            pred_flows_bi,
+            original_frames,
+            inpaint_config,
+        )
+        output_images, _flow_masks, _masks_dilated = handle_output(
+            composed_frames, flow_masks_tensor, masks_dilated_tensor
+        )
+        del frames_tensor, flow_masks_tensor, masks_dilated_tensor, updated_frames, updated_masks, pred_flows_bi
+        if torch.cuda.is_available() and throughput_mode != "enable":
+            torch.cuda.empty_cache()
+
+        if pre_crop:
+            crop_width = max(1, bbox[2] - bbox[0])
+            crop_height = max(1, bbox[3] - bbox[1])
+            output_images = _resize_images_to_size(output_images, crop_height, crop_width)
+            output_images = _apply_color_match(output_images, frames, mask_full, color_match_mode)
+            rgba, out_mask, _transform_json = _compose_outputs_from_bbox(
+                output_images,
+                mask_full,
+                bbox,
+                full_width,
+                full_height,
+                status,
             )
         else:
-            _check_inputs(frames, mask_full)
-            device = model_management.get_torch_device()
-
-            if cudnn_benchmark != "default" or tf32 != "default":
-                configure_cudnn(
-                    benchmark=cudnn_benchmark == "enable",
-                    allow_tf32=tf32 == "enable",
-                )
-
-            width = int(frames.shape[2])
-            height = int(frames.shape[1])
-
-            frames_np = convert_image_to_frames(frames)
-            video_length = frames.size(dim=0)
-            input_size = (frames_np[0].shape[1], frames_np[0].shape[0])
-
-            image_config = ImageConfig(
-                width, height, mask_dilates, flow_mask_dilates, input_size, video_length
+            output_images = _apply_color_match(output_images, frames, mask_full, color_match_mode)
+            rgba, out_mask, _transform_json = _crop_outputs(
+                output_images,
+                mask_full,
+                output_images.shape[2],
+                output_images.shape[1],
             )
-            inpaint_config = ProPainterConfig(
-                ref_stride=ref_stride,
-                neighbor_length=neighbor_length,
-                subvideo_length=subvideo_length,
-                raft_iter=raft_iter,
-                fp16=fp16,
-                video_length=video_length,
-                device=device,
-                process_size=image_config.process_size,
-                skip_empty_cache=throughput_mode == "enable",
-            )
-
-            frames_tensor, flow_masks_tensor, masks_dilated_tensor, original_frames = (
-                prepare_frames_and_masks(frames_np, mask_full, image_config, device)
-            )
-            models = initialize_models(device, inpaint_config.fp16)
-            updated_frames, updated_masks, pred_flows_bi = process_inpainting(
-                models,
-                frames_tensor,
-                flow_masks_tensor,
-                masks_dilated_tensor,
-                inpaint_config,
-            )
-            composed_frames = feature_propagation(
-                models.inpaint_model,
-                updated_frames,
-                updated_masks,
-                masks_dilated_tensor,
-                pred_flows_bi,
-                original_frames,
-                inpaint_config,
-            )
-            output_images, _flow_masks, _masks_dilated = handle_output(
-                composed_frames, flow_masks_tensor, masks_dilated_tensor
-            )
-            del frames_tensor, flow_masks_tensor, masks_dilated_tensor, updated_frames, updated_masks, pred_flows_bi
-            if torch.cuda.is_available() and throughput_mode != "enable":
-                torch.cuda.empty_cache()
-
-            if pre_crop:
-                crop_width = max(1, bbox[2] - bbox[0])
-                crop_height = max(1, bbox[3] - bbox[1])
-                output_images = _resize_images_to_size(output_images, crop_height, crop_width)
-                output_images = _apply_color_match(output_images, frames, mask_full, color_match_mode)
-                rgba, out_mask, _transform_json = _compose_outputs_from_bbox(
-                    output_images,
-                    mask_full,
-                    bbox,
-                    full_width,
-                    full_height,
-                    status,
-                )
-            else:
-                output_images = _apply_color_match(output_images, frames, mask_full, color_match_mode)
-                rgba, out_mask, _transform_json = _crop_outputs(
-                    output_images,
-                    mask_full,
-                    output_images.shape[2],
-                    output_images.shape[1],
-                )
 
         if output_dir:
             if save_count < rgba.size(dim=0):
@@ -952,7 +915,6 @@ class VideoInpaintWatermark:
         return {
             "required": {
                 "mask": ("MASK", {"tooltip": "Маска для удаления (1 кадр или batch)."}),
-                "method": (["propainter", "e2fgvi", "e2fgvi_hq"], {"default": "propainter", "tooltip": "Алгоритм инпейнтинга."}),
                 "mask_dilates": ("INT", {"default": 8, "min": 0, "max": 100, "tooltip": "Расширение маски (0-100, типично 4–12)."}),
                 "flow_mask_dilates": ("INT", {"default": 8, "min": 0, "max": 100, "tooltip": "Расширение flow-маски (0-100, типично 4–12)."}),
                 "ref_stride": ("INT", {"default": 10, "min": 1, "max": 100, "tooltip": "Шаг опорных кадров (1-100, типично 5–15)."}),
@@ -984,7 +946,6 @@ class VideoInpaintWatermark:
     def inpaint(
         self,
         mask: torch.Tensor,
-        method: str,
         mask_dilates: int,
         flow_mask_dilates: int,
         ref_stride: int,
@@ -1009,7 +970,6 @@ class VideoInpaintWatermark:
         return self._stream_video(
             video=video,
             mask=mask,
-            method=method,
             mask_dilates=mask_dilates,
             flow_mask_dilates=flow_mask_dilates,
             ref_stride=ref_stride,
@@ -1029,149 +989,3 @@ class VideoInpaintWatermark:
             write_fullframes=write_fullframes,
             fullframe_prefix=fullframe_prefix,
         )
-
-    def _inpaint_e2fgvi(
-        self,
-        frames: torch.Tensor,
-        mask: torch.Tensor,
-        method: str,
-        mask_dilates: int,
-        ref_stride: int,
-        neighbor_length: int,
-        fp16: str,
-        throughput_mode: str,
-        pre_crop: bool,
-        crop_bbox: tuple[int, int, int, int],
-        crop_status: str,
-        full_width: int,
-        full_height: int,
-        color_match_mode: str,
-        output_dir: str,
-        output_name: str,
-        save_only: bool,
-        preview_frame: int,
-    ):
-        """Internal helper: `_inpaint_e2fgvi`."""
-        device = model_management.get_torch_device()
-        frames_np = e2f_convert_frames(frames)
-        masks_np = e2f_convert_masks(mask)
-        width = 0
-        height = 0
-
-        if method == "e2fgvi":
-            target_size = (432, 240) if width <= 0 or height <= 0 else (width, height)
-        else:
-            target_size = None if width <= 0 or height <= 0 else (width, height)
-
-        if target_size is not None:
-            frames_np = e2f_resize_frames(frames_np, target_size)
-            masks_np = e2f_resize_masks(masks_np, target_size)
-
-        masks_np = e2f_dilate_masks(masks_np, mask_dilates)
-
-        imgs, masks, binary_masks, h, w = e2f_prepare_tensors(frames_np, masks_np, device)
-        video_length = imgs.size(dim=1)
-
-        model_name = "e2fgvi_hq" if method == "e2fgvi_hq" else "e2fgvi"
-        model = e2f_load_model(model_name, device, fp16 == "enable")
-
-        neighbor_stride = max(1, int(neighbor_length))
-        ref_length = max(1, int(ref_stride))
-        comp_frames = [None] * video_length
-
-        for f in range(0, video_length, neighbor_stride):
-            _check_interrupt()
-            neighbor_ids = list(
-                range(max(0, f - neighbor_stride), min(video_length, f + neighbor_stride + 1))
-            )
-            ref_ids = _get_ref_index(f, neighbor_ids, video_length, ref_length)
-            selected_imgs = imgs[:, neighbor_ids + ref_ids, :, :, :]
-            selected_masks = masks[:, neighbor_ids + ref_ids, :, :, :]
-            masked_imgs = selected_imgs * (1 - selected_masks)
-
-            mod_size_h = 60
-            mod_size_w = 108
-            h_pad = (mod_size_h - h % mod_size_h) % mod_size_h
-            w_pad = (mod_size_w - w % mod_size_w) % mod_size_w
-            if h_pad > 0:
-                masked_imgs = torch.cat([masked_imgs, torch.flip(masked_imgs, [3])], 3)
-                masked_imgs = masked_imgs[:, :, :, : h + h_pad, :]
-            if w_pad > 0:
-                masked_imgs = torch.cat([masked_imgs, torch.flip(masked_imgs, [4])], 4)
-                masked_imgs = masked_imgs[:, :, :, :, : w + w_pad]
-
-            with torch.inference_mode():
-                pred_imgs, _ = model(masked_imgs, len(neighbor_ids))
-
-            pred_imgs = pred_imgs[:, :, :h, :w]
-            pred_imgs = (pred_imgs + 1) / 2
-            pred_imgs = pred_imgs.cpu().permute(0, 2, 3, 1).numpy() * 255
-
-            for i, idx in enumerate(neighbor_ids):
-                img = pred_imgs[i].astype("uint8") * binary_masks[idx] + frames_np[idx] * (
-                    1 - binary_masks[idx]
-                )
-                if comp_frames[idx] is None:
-                    comp_frames[idx] = img
-                else:
-                    comp_frames[idx] = (
-                        comp_frames[idx].astype("float32") * 0.5 + img.astype("float32") * 0.5
-                    )
-                comp_frames[idx] = comp_frames[idx].astype("uint8")
-
-            if throughput_mode != "enable" and torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-        output_np = np.stack(comp_frames, axis=0).astype("float32") / 255.0
-        output_images = torch.from_numpy(output_np)
-        if pre_crop:
-            crop_width = max(1, crop_bbox[2] - crop_bbox[0])
-            crop_height = max(1, crop_bbox[3] - crop_bbox[1])
-            output_images = _resize_images_to_size(output_images, crop_height, crop_width)
-            output_images = _apply_color_match(output_images, frames, mask, color_match_mode)
-            rgba, out_mask, transform_json = _compose_outputs_from_bbox(
-                output_images,
-                mask,
-                crop_bbox,
-                full_width,
-                full_height,
-                crop_status,
-            )
-        else:
-            output_images = _apply_color_match(output_images, frames, mask, color_match_mode)
-            rgba, out_mask, transform_json = _crop_outputs(
-                output_images,
-                mask,
-                output_images.shape[2],
-                output_images.shape[1],
-            )
-        _LOGGER.info("Transform JSON: %s", transform_json)
-        if output_dir:
-            _save_rgba_sequence(rgba[..., :3], out_mask, output_dir, output_name, "")
-            _save_transform_json(output_dir, output_name, transform_json)
-        if save_only:
-            if preview_frame >= 0:
-                idx = max(0, min(int(preview_frame), rgba.size(dim=0) - 1))
-                return (rgba[idx : idx + 1], out_mask[idx : idx + 1], transform_json)
-            dummy_image = torch.zeros((1, 1, 1, 4), dtype=torch.float32)
-            dummy_mask = torch.zeros((1, 1, 1), dtype=torch.float32)
-            return (dummy_image, dummy_mask, transform_json)
-        return (rgba, out_mask, transform_json)
-
-
-def _get_ref_index(mid_neighbor_id, neighbor_ids, length, ref_length, ref_num=-1):
-    """Internal helper: `_get_ref_index`."""
-    ref_index = []
-    if ref_num == -1:
-        for i in range(0, length, ref_length):
-            if i not in neighbor_ids:
-                ref_index.append(i)
-    else:
-        start_idx = max(0, mid_neighbor_id - ref_length * (ref_num // 2))
-        end_idx = min(length, mid_neighbor_id + ref_length * (ref_num // 2))
-        for i in range(start_idx, end_idx + 1, ref_length):
-            if i not in neighbor_ids:
-                if len(ref_index) > ref_num:
-                    break
-                ref_index.append(i)
-    return ref_index

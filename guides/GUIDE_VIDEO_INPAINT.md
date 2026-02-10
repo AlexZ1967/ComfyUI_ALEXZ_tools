@@ -1,7 +1,7 @@
 # Remove Static Watermark from Video — Guide
 
 ## Назначение
-Удаление статичных водяных знаков/объектов из видео через inpaint (ProPainter / E2FGVI).
+Удаление статичных водяных знаков/объектов из видео через inpaint на базе ProPainter.
 
 ## Когда использовать
 - Нужно убрать логотип/штамп/объект в фиксированной области видео.
@@ -9,13 +9,12 @@
 
 ## Минимальный сценарий (3 шага)
 1. Подайте `video` и `mask` (белое = удалять).
-2. Стартуйте с `method=propainter`, `fp16=enable`, `mask_dilates=8`, `flow_mask_dilates=8`.
+2. Стартуйте с `fp16=enable`, `mask_dilates=8`, `flow_mask_dilates=8`.
 3. Проверьте `preview_image` и `transform_json.status`.
 
 ## Параметры
 | Параметр | Что делает | Рекомендация |
 |---|---|---|
-| `method` | Модель inpaint | `propainter` базово, `e2fgvi_hq` для сложных кейсов |
 | `mask_dilates` / `flow_mask_dilates` | Расширение маски | 8-12 для логотипов |
 | `neighbor_length` | Окно соседних кадров | 8-15 (больше = лучше, но медленнее) |
 | `subvideo_length` | Размер обрабатываемого блока | 40-120, снижайте при OOM |
@@ -51,8 +50,8 @@
 ## Типовые ошибки и решения
 - `status=empty_mask`: маска пустая или почти пустая.
 - OOM: уменьшайте `subvideo_length`/`neighbor_length`, включите `fp16`.
-- Артефакты на движении: увеличьте `raft_iter`, попробуйте `e2fgvi_hq`.
+- Артефакты на движении: увеличьте `raft_iter` и `neighbor_length`.
 
 ## Производительность
-- Самые дорогие параметры: `method`, `neighbor_length`, `raft_iter`, `subvideo_length`.
+- Самые дорогие параметры: `neighbor_length`, `raft_iter`, `subvideo_length`.
 - Для больших роликов используйте кэш (`cache_dir`) и ограниченный preview.

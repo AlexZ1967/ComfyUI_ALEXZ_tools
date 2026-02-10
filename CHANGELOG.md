@@ -1,5 +1,11 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.19 — 2026-02-10
+- `Remove Static Watermark from Video` migrated to ProPainter-only pipeline.
+- Removed `e2fgvi` and `e2fgvi_hq` execution paths and deleted `method` input from `VideoInpaintWatermark`.
+- Removed internal `e2fgvi` package from repository (`e2fgvi/*`).
+- Updated `README.md` and `guides/GUIDE_VIDEO_INPAINT.md` to match new ProPainter-only behavior.
+
 ## 0.13.18 — 2026-02-10
 - `Module Nodes`: added `Update ComfyUI` button in ComfyUI update alert (shown when `behind > 0`).
 - `Update ComfyUI` now runs `git pull --ff-only` for ComfyUI and then refreshes module/node snapshots.
