@@ -750,6 +750,7 @@ function renderPicker(container) {
     catCustom.value = "custom";
     catCustom.textContent = "Custom Nodes";
     categorySelect.appendChild(catCustom);
+    categorySelect.value = "custom";
     root.appendChild(categorySelect);
 
     const groupSelect = document.createElement("select");
@@ -821,6 +822,7 @@ function renderPicker(container) {
     let debugEnabled = loadDebugEnabled();
     const applyDebugUiState = () => {
         window[NODE_PICKER_DEBUG_KEY] = Boolean(debugEnabled);
+        debugCard.hidden = !debugEnabled;
         debugCard.style.display = debugEnabled ? "" : "none";
         debugToggle.textContent = debugEnabled ? "Debug: ON" : "Debug";
     };
@@ -1224,7 +1226,6 @@ function renderPicker(container) {
         refreshBtn.disabled = actionBusy;
         comfyInfoBtn.disabled = actionBusy;
         comfyModeSelect.disabled = actionBusy;
-        debugToggle.disabled = actionBusy;
         updateAllBtn.disabled = actionBusy;
         comfyUpdateBtn.disabled = actionBusy || comfyUpdateBtn.style.display === "none";
         for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
@@ -2105,7 +2106,7 @@ function renderPicker(container) {
         await loadCatalog();
     };
 
-    loadCatalog();
+    loadCatalog({ preferredGroup: "custom", preferredModule: DEFAULT_MODULE });
 }
 
 /**
