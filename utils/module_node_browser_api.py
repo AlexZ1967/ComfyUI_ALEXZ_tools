@@ -23,6 +23,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from hashlib import sha1
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -47,7 +49,7 @@ _MANAGER_INDEX_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MANAGER_GITHUB_STATS_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MODULE_STATE_CACHE: dict[str, dict[str, Any]] | None = None
 _CUSTOM_MODULE_ALIAS_CACHE: dict[str, str] | None = None
-_COMFYUI_STATUS_CACHE: tuple[float, dict[str, Any]] | None = None
+_COMFYUI_STATUS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _COMFYUI_STATUS_TTL_SEC = 120.0
 _LAZY_REFRESH_DONE = False
 _REFRESH_LOCK = threading.Lock()
@@ -489,6 +491,52 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _normalize_comfyui_mode(value: str | None) -> str:
+    """Normalize ComfyUI update-check mode to supported values."""
+    text = (value or "").strip().lower()
+    if text in {"commit", "commits", "git"}:
+        return "commits"
+    return "releases"
+
+
+def _github_latest_release(owner: str, repo: str, timeout: float = 8.0) -> dict[str, Any]:
+    """Fetch latest GitHub release metadata for a repository."""
+    owner_text = (owner or "").strip()
+    repo_text = (repo or "").strip()
+    if not owner_text or not repo_text:
+        return {}
+    url = f"https://api.github.com/repos/{owner_text}/{repo_text}/releases/latest"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "ALEXZ_tools-module-picker",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            payload = json.loads(body)
+    except urllib.error.HTTPError as exc:
+        if exc.code in {403, 404, 429}:
+            return {}
+        return {}
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    tag = str(payload.get("tag_name") or "").strip()
+    if not tag:
+        return {}
+    return {
+        "tag_name": tag,
+        "published_at": str(payload.get("published_at") or "").strip(),
+        "created_at": str(payload.get("created_at") or "").strip(),
+        "name": str(payload.get("name") or "").strip(),
+        "html_url": str(payload.get("html_url") or "").strip(),
+    }
+
+
 def _manager_github_stats() -> dict[str, dict[str, dict[str, Any]]]:
     """Load and cache module update timestamps from manager stats file."""
     global _MANAGER_GITHUB_STATS_CACHE
@@ -761,7 +809,7 @@ def _comfyui_requirements_path() -> Path | None:
 
 def _comfyui_needs_update_now() -> bool:
     """Check whether local ComfyUI commit is behind remote tracking commit."""
-    status = _comfyui_git_status(force_refresh=True)
+    status = _comfyui_git_status(force_refresh=True, mode="releases")
     behind = status.get("behind")
     if isinstance(behind, int):
         return behind > 0
@@ -842,6 +890,25 @@ def _git_resolve_remote_ref(
     if not remote_branch:
         return (None, None)
     return (f"{remote_name}/{remote_branch}", remote_branch)
+
+
+def _resolve_release_ref(repo_root: Path, remote_name: str, tag_name: str) -> tuple[str | None, str]:
+    """Resolve git reference for a release tag and ensure tag exists locally."""
+    tag_text = (tag_name or "").strip()
+    if not tag_text:
+        return (None, "")
+    tag_ref = f"refs/tags/{tag_text}"
+    if _git_ref_exists(repo_root, tag_ref):
+        commit = _run_git(["git", "-C", str(repo_root), "rev-list", "-n", "1", tag_ref]) or ""
+        return (tag_ref, commit)
+    # Fetch only the requested tag first; fallback to all tags.
+    _run_git(["git", "-C", str(repo_root), "fetch", "--quiet", remote_name, "tag", tag_text], timeout=20.0)
+    if not _git_ref_exists(repo_root, tag_ref):
+        _run_git(["git", "-C", str(repo_root), "fetch", "--quiet", remote_name, "--tags"], timeout=25.0)
+    if not _git_ref_exists(repo_root, tag_ref):
+        return (None, "")
+    commit = _run_git(["git", "-C", str(repo_root), "rev-list", "-n", "1", tag_ref]) or ""
+    return (tag_ref, commit)
 
 
 def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
@@ -1130,20 +1197,23 @@ def _comfyui_root() -> Path | None:
     return None
 
 
-def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
+def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> dict[str, Any]:
     """Collect local/remote git status summary for ComfyUI repository."""
     global _COMFYUI_STATUS_CACHE
+    mode_norm = _normalize_comfyui_mode(mode)
     now_ts = time.time()
+    cached_mode = _COMFYUI_STATUS_CACHE.get(mode_norm)
     if (
         not force_refresh
-        and _COMFYUI_STATUS_CACHE is not None
-        and (now_ts - _COMFYUI_STATUS_CACHE[0]) < _COMFYUI_STATUS_TTL_SEC
+        and cached_mode is not None
+        and (now_ts - cached_mode[0]) < _COMFYUI_STATUS_TTL_SEC
     ):
-        return dict(_COMFYUI_STATUS_CACHE[1])
+        return dict(cached_mode[1])
 
     result: dict[str, Any] = {
         "path": "",
         "repository": "https://github.com/comfyanonymous/ComfyUI",
+        "check_mode": mode_norm,
         "remote_name": "",
         "remote_ref": "",
         "branch": "",
@@ -1154,6 +1224,9 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
         "remote_commit": "",
         "remote_commit_short": "",
         "remote_updated_at": "",
+        "release_tag": "",
+        "release_name": "",
+        "release_url": "",
         "ahead": None,
         "behind": None,
         "update_available": None,
@@ -1163,9 +1236,19 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
     if not force_refresh:
         state = _load_module_state()
         cached_entry = state.get("__comfyui__") if isinstance(state, dict) else None
-        cached_status = cached_entry.get("status") if isinstance(cached_entry, dict) else None
+        status_by_mode = cached_entry.get("status_by_mode") if isinstance(cached_entry, dict) else None
+        cached_status: dict[str, Any] | None = None
+        if isinstance(status_by_mode, dict):
+            candidate = status_by_mode.get(mode_norm)
+            if isinstance(candidate, dict):
+                cached_status = candidate
+        if cached_status is None and isinstance(cached_entry, dict):
+            candidate = cached_entry.get("status")
+            if isinstance(candidate, dict):
+                cached_status = candidate
         if isinstance(cached_status, dict) and cached_status:
             merged = dict(cached_status)
+            merged["check_mode"] = str(merged.get("check_mode") or mode_norm)
             pending_prev = (
                 (cached_entry.get("pending_prev_commit") or cached_entry.get("startup_prev_commit") or "").strip()
                 if isinstance(cached_entry, dict)
@@ -1185,27 +1268,41 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
             merged["startup_prev_commit_short"] = _short_commit(pending_prev) if pending_prev else ""
             merged["startup_new_commit_short"] = _short_commit(pending_new) if pending_new else ""
             merged["startup_update_at"] = pending_at
-            _COMFYUI_STATUS_CACHE = (now_ts, dict(merged))
+            _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(merged))
             return merged
-        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
         return result
 
     root = _comfyui_root()
     if root is None:
-        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
         state = _load_module_state()
         if isinstance(state, dict):
-            state["__comfyui__"] = {"status": dict(result), "updated_at": _now_iso()}
+            entry_raw = state.get("__comfyui__")
+            entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
+            by_mode = dict(entry.get("status_by_mode")) if isinstance(entry.get("status_by_mode"), dict) else {}
+            by_mode[mode_norm] = dict(result)
+            entry["status_by_mode"] = by_mode
+            entry["status"] = dict(result)
+            entry["updated_at"] = _now_iso()
+            state["__comfyui__"] = entry
             _save_module_state(state)
         return result
 
     result["path"] = str(root)
     is_git = _run_git(["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"])
     if is_git != "true":
-        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
         state = _load_module_state()
         if isinstance(state, dict):
-            state["__comfyui__"] = {"status": dict(result), "updated_at": _now_iso()}
+            entry_raw = state.get("__comfyui__")
+            entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
+            by_mode = dict(entry.get("status_by_mode")) if isinstance(entry.get("status_by_mode"), dict) else {}
+            by_mode[mode_norm] = dict(result)
+            entry["status_by_mode"] = by_mode
+            entry["status"] = dict(result)
+            entry["updated_at"] = _now_iso()
+            state["__comfyui__"] = entry
             _save_module_state(state)
         return result
 
@@ -1221,36 +1318,60 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
     remote_name = _git_pick_remote(root, upstream)
     result["remote_name"] = remote_name or ""
     if not remote_name:
-        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
         return result
 
     # Keep remote refs fresh to reflect actual GitHub state.
     _run_git(["git", "-C", str(root), "fetch", "--quiet", remote_name], timeout=20.0)
-    remote_ref, _remote_branch = _git_resolve_remote_ref(root, remote_name, result["branch"], upstream)
-    result["remote_ref"] = remote_ref or ""
-    if not remote_ref:
-        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
-        return result
 
-    result["remote_commit"] = _run_git(["git", "-C", str(root), "rev-parse", remote_ref]) or ""
-    result["remote_commit_short"] = _short_commit(result["remote_commit"]) if result["remote_commit"] else ""
-    result["remote_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI", remote_ref]) or ""
-
-    counts = _run_git(["git", "-C", str(root), "rev-list", "--left-right", "--count", f"HEAD...{remote_ref}"])
-    if counts:
-        parts = counts.split()
-        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-            result["ahead"] = int(parts[0])
-            result["behind"] = int(parts[1])
-            result["update_available"] = result["behind"] > 0
-            result["update_status"] = "can_update" if result["behind"] > 0 else "up_to_date"
-    elif result["installed_commit"] and result["remote_commit"]:
-        if result["installed_commit"] == result["remote_commit"]:
-            result["update_available"] = False
-            result["update_status"] = "up_to_date"
+    remote_ref = ""
+    if mode_norm == "releases":
+        release = _github_latest_release("comfyanonymous", "ComfyUI")
+        tag_name = str(release.get("tag_name") or "").strip()
+        tag_ref, release_commit = _resolve_release_ref(root, remote_name, tag_name)
+        if tag_ref and release_commit:
+            remote_ref = tag_ref
+            result["remote_ref"] = tag_ref
+            result["release_tag"] = tag_name
+            result["release_name"] = str(release.get("name") or "").strip()
+            result["release_url"] = str(release.get("html_url") or "").strip()
+            result["remote_commit"] = release_commit
+            result["remote_commit_short"] = _short_commit(release_commit)
+            published = _parse_datetime(str(release.get("published_at") or release.get("created_at") or ""))
+            if published is not None:
+                result["remote_updated_at"] = _to_iso(published) or ""
+            if not result["remote_updated_at"]:
+                result["remote_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI", tag_ref]) or ""
         else:
-            result["update_available"] = True
-            result["update_status"] = "can_update"
+            mode_norm = "commits"
+            result["check_mode"] = "commits"
+
+    if mode_norm == "commits":
+        remote_ref, _remote_branch = _git_resolve_remote_ref(root, remote_name, result["branch"], upstream)
+        result["remote_ref"] = remote_ref or ""
+        if remote_ref:
+            result["remote_commit"] = _run_git(["git", "-C", str(root), "rev-parse", remote_ref]) or ""
+            result["remote_commit_short"] = _short_commit(result["remote_commit"]) if result["remote_commit"] else ""
+            result["remote_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI", remote_ref]) or ""
+
+    if result["remote_ref"] and result["remote_commit"]:
+        counts = _run_git(["git", "-C", str(root), "rev-list", "--left-right", "--count", f"HEAD...{result['remote_ref']}"])
+        if counts:
+            parts = counts.split()
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                result["ahead"] = int(parts[0])
+                result["behind"] = int(parts[1])
+                result["update_available"] = result["behind"] > 0
+                result["update_status"] = "can_update" if result["behind"] > 0 else "up_to_date"
+        elif result["installed_commit"] and result["remote_commit"]:
+            if result["installed_commit"] == result["remote_commit"]:
+                result["update_available"] = False
+                result["update_status"] = "up_to_date"
+            else:
+                # If exact counters are unavailable, assume remote difference requires update.
+                result["update_available"] = True
+                result["update_status"] = "can_update"
+                result["behind"] = 1
 
     state = _load_module_state()
     cached_entry = state.get("__comfyui__") if isinstance(state, dict) else None
@@ -1263,11 +1384,14 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
         result["startup_new_commit_short"] = _short_commit(pending_new) if pending_new else ""
         result["startup_update_at"] = pending_at
 
-    _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+    _COMFYUI_STATUS_CACHE[result["check_mode"]] = (now_ts, dict(result))
     state = _load_module_state()
     if isinstance(state, dict):
         prev_entry = state.get("__comfyui__")
         entry = dict(prev_entry) if isinstance(prev_entry, dict) else {}
+        by_mode = dict(entry.get("status_by_mode")) if isinstance(entry.get("status_by_mode"), dict) else {}
+        by_mode[result["check_mode"]] = dict(result)
+        entry["status_by_mode"] = by_mode
         entry["status"] = dict(result)
         entry["updated_at"] = _now_iso()
         entry["installed_commit"] = result.get("installed_commit") or entry.get("installed_commit")
@@ -1299,6 +1423,8 @@ def _track_comfyui_local_update() -> None:
     entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
     status_raw = entry.get("status")
     status = dict(status_raw) if isinstance(status_raw, dict) else {}
+    status_by_mode_raw = entry.get("status_by_mode")
+    status_by_mode = dict(status_by_mode_raw) if isinstance(status_by_mode_raw, dict) else {}
     prev_commit = (
         (entry.get("installed_commit") or status.get("installed_commit") or "").strip()
     )
@@ -1328,11 +1454,24 @@ def _track_comfyui_local_update() -> None:
     status["installed_updated_at"] = current_updated_at
     status.setdefault("update_status", "unknown")
     entry["status"] = status
+    for mode_name, mode_status_raw in status_by_mode.items():
+        if not isinstance(mode_status_raw, dict):
+            continue
+        mode_status = dict(mode_status_raw)
+        mode_status.setdefault("repository", "https://github.com/comfyanonymous/ComfyUI")
+        mode_status["path"] = str(root)
+        mode_status["installed_commit"] = current_commit
+        mode_status["installed_commit_short"] = _short_commit(current_commit)
+        mode_status["installed_updated_at"] = current_updated_at
+        mode_status.setdefault("update_status", "unknown")
+        status_by_mode[mode_name] = mode_status
+    if status_by_mode:
+        entry["status_by_mode"] = status_by_mode
     entry["updated_at"] = now
     state["__comfyui__"] = entry
 
     if changed:
-        _COMFYUI_STATUS_CACHE = None
+        _COMFYUI_STATUS_CACHE.clear()
         _save_module_state(state)
 
 
@@ -1360,7 +1499,7 @@ def _acknowledge_comfyui_novelty() -> dict[str, Any]:
 
     changed = entry != before
     if changed:
-        _COMFYUI_STATUS_CACHE = None
+        _COMFYUI_STATUS_CACHE.clear()
         state["__comfyui__"] = entry
         _save_module_state(state)
     return {"status": "ok", "changed": changed}
@@ -2108,7 +2247,7 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     global _COMFYUI_STATUS_CACHE
     _MODULE_INFO_CACHE.clear()
     _CUSTOM_MODULE_ALIAS_CACHE = None
-    _COMFYUI_STATUS_CACHE = None
+    _COMFYUI_STATUS_CACHE.clear()
     if progress_cb is None:
         progress_cb = _refresh_progress
     if sync_upstreams:
@@ -2524,10 +2663,11 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
     async def alexz_tools_node_catalog(request):
         """API route that returns grouped module and node catalog data."""
         try:
+            mode = _normalize_comfyui_mode(request.query.get("comfyui_mode", "") or request.query.get("mode", ""))
             _ensure_runtime_state_ready()
             grouped = _build_group_catalog()
             modules_by_group = _build_group_modules(grouped)
-            comfyui = _comfyui_git_status()
+            comfyui = _comfyui_git_status(mode=mode)
             custom_modules_need_update = _count_custom_modules_need_update()
             groups = []
             for group_id, group_title in _GROUP_ORDER:
@@ -2600,9 +2740,10 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             force_refresh = refresh_raw not in {"0", "false", "no", "off"}
             ack_raw = (request.query.get("acknowledge", "1") or "1").strip().lower()
             acknowledge = ack_raw not in {"0", "false", "no", "off"}
+            mode = _normalize_comfyui_mode(request.query.get("mode", ""))
             if force_refresh and acknowledge:
                 _acknowledge_comfyui_novelty()
-            comfyui = _comfyui_git_status(force_refresh=force_refresh)
+            comfyui = _comfyui_git_status(force_refresh=force_refresh, mode=mode)
             return web.json_response({"status": "ok", "comfyui": comfyui})
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("ComfyUI info API error: %s", exc, exc_info=True)

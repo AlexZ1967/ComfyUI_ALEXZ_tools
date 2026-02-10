@@ -25,6 +25,7 @@ const DEFAULT_MODULE = "ComfyUI_ALEXZ_tools";
 const CONTAINER_SYNC_STATE_KEY = "__alexz_module_nodes_container_sync_state__";
 const NODE_PICKER_DEBUG_KEY = "__alexz_module_picker_debug__";
 const NODE_PICKER_DEBUG_STORAGE_KEY = "alexz_module_picker_debug";
+const COMFYUI_CHECK_MODE_STORAGE_KEY = "alexz_comfyui_check_mode";
 const NODE_PICKER_SIDEBAR_SYNC_KEY = "__alexz_module_picker_sidebar_sync__";
 const GROUP_LABELS = {
     core: "Core_Nodes",
@@ -348,8 +349,11 @@ function createNodeByInfo(nodeInfo) {
 /**
  * Fetch grouped node catalog data from backend API.
  */
-async function fetchNodeCatalog() {
-    const resp = await api.fetchApi("/alexz_tools/node_catalog?cache_only=1", {
+async function fetchNodeCatalog(comfyMode = "releases") {
+    const mode = String(comfyMode || "releases").trim().toLowerCase() === "commits"
+        ? "commits"
+        : "releases";
+    const resp = await api.fetchApi(`/alexz_tools/node_catalog?cache_only=1&comfyui_mode=${mode}`, {
         cache: "no-store",
     });
     if (!resp.ok) {
@@ -384,9 +388,12 @@ async function fetchModuleInfo(group, moduleName, options = {}) {
 /**
  * Fetch ComfyUI repository update status and metadata.
  */
-async function fetchComfyUIInfo(forceRefresh = true, acknowledge = true) {
+async function fetchComfyUIInfo(forceRefresh = true, acknowledge = true, comfyMode = "releases") {
+    const mode = String(comfyMode || "releases").trim().toLowerCase() === "commits"
+        ? "commits"
+        : "releases";
     const resp = await api.fetchApi(
-        `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}&acknowledge=${acknowledge ? "1" : "0"}`,
+        `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}&acknowledge=${acknowledge ? "1" : "0"}&mode=${mode}`,
         { cache: "no-store" }
     );
     if (!resp.ok) {
@@ -595,6 +602,19 @@ function renderPicker(container) {
     comfyInfoBtn.className = "alexz-mod-picker-btn-small";
     toolbar.appendChild(comfyInfoBtn);
 
+    const comfyModeSelect = document.createElement("select");
+    comfyModeSelect.className = "alexz-mod-picker-btn-small";
+    comfyModeSelect.title = "Режим проверки обновлений ComfyUI";
+    const modeReleases = document.createElement("option");
+    modeReleases.value = "releases";
+    modeReleases.textContent = "ComfyUI check: releases";
+    comfyModeSelect.appendChild(modeReleases);
+    const modeCommits = document.createElement("option");
+    modeCommits.value = "commits";
+    modeCommits.textContent = "ComfyUI check: commits";
+    comfyModeSelect.appendChild(modeCommits);
+    toolbar.appendChild(comfyModeSelect);
+
     const debugToggleLabel = document.createElement("label");
     debugToggleLabel.className = "alexz-mod-picker-debug-toggle";
     const debugToggle = document.createElement("input");
@@ -662,6 +682,24 @@ function renderPicker(container) {
             return Boolean(window[NODE_PICKER_DEBUG_KEY]);
         }
     };
+
+    const loadComfyCheckMode = () => {
+        try {
+            const raw = window.localStorage?.getItem(COMFYUI_CHECK_MODE_STORAGE_KEY);
+            return String(raw || "releases").trim().toLowerCase() === "commits" ? "commits" : "releases";
+        } catch (_err) {
+            return "releases";
+        }
+    };
+    const saveComfyCheckMode = (mode) => {
+        const normalized = String(mode || "releases").trim().toLowerCase() === "commits" ? "commits" : "releases";
+        try {
+            window.localStorage?.setItem(COMFYUI_CHECK_MODE_STORAGE_KEY, normalized);
+        } catch (_err) {
+            // Ignore storage failures and keep runtime value only.
+        }
+    };
+    comfyModeSelect.value = loadComfyCheckMode();
     const saveDebugEnabled = (enabled) => {
         try {
             if (enabled) {
@@ -729,9 +767,11 @@ function renderPicker(container) {
     const renderComfyAlert = (info) => {
         const behind = Number(info?.behind);
         const status = String(info?.update_status || "unknown");
+        const mode = String(info?.check_mode || comfyModeSelect.value || "releases");
         const updatedBetweenRuns = Boolean(info?.updated_between_runs);
         comfyAlert.classList.remove("alexz-mod-picker-comfy-alert--ok");
-        if (status !== "can_update" || !Number.isFinite(behind) || behind <= 0) {
+        const canUpdate = status === "can_update" && (!Number.isFinite(behind) || behind > 0);
+        if (!canUpdate) {
             if (updatedBetweenRuns) {
                 const prev = String(info?.startup_prev_commit_short || "unknown");
                 const next = String(info?.startup_new_commit_short || "unknown");
@@ -750,7 +790,14 @@ function renderPicker(container) {
         const branch = String(info?.branch || "unknown");
         const local = String(info?.installed_commit_short || "unknown");
         const remote = String(info?.remote_commit_short || "unknown");
-        comfyAlertText.textContent = `ComfyUI требует обновления: branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
+        const releaseTag = String(info?.release_tag || "").trim();
+        if (mode === "releases" && releaseTag) {
+            comfyAlertText.textContent = `ComfyUI требует обновления: mode=releases, release=${releaseTag}, local=${local}, remote=${remote}.`;
+        } else if (Number.isFinite(behind) && behind > 0) {
+            comfyAlertText.textContent = `ComfyUI требует обновления: mode=commits, branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
+        } else {
+            comfyAlertText.textContent = `ComfyUI требует обновления: mode=${mode}, branch=${branch}, local=${local}, remote=${remote}.`;
+        }
         comfyUpdateBtn.style.display = "";
         comfyUpdateBtn.disabled = actionBusy;
         comfyAlert.style.display = "block";
@@ -1673,7 +1720,7 @@ function renderPicker(container) {
         const autoExpandModule = String(options?.autoExpandModule || "").trim();
         setHelpText("Загрузка списка нод...");
         try {
-            const payload = await fetchNodeCatalog();
+            const payload = await fetchNodeCatalog(comfyModeSelect.value);
             catalogByGroup.clear();
             const groups = payload?.groups || [];
             customModulesNeedUpdate = Number(payload?.custom_modules_need_update || 0);
@@ -1737,7 +1784,7 @@ function renderPicker(container) {
         setActionBusy(true);
         setRefreshLine("Обновление информации о ComfyUI...", "neutral");
         try {
-            const payload = await fetchComfyUIInfo(true);
+            const payload = await fetchComfyUIInfo(true, true, comfyModeSelect.value);
             renderComfyAlert(payload?.comfyui || null);
             const status = String(payload?.comfyui?.update_status || "unknown");
             if (status === "can_update") {
@@ -1753,6 +1800,10 @@ function renderPicker(container) {
             setActionBusy(false);
             syncUpdateAllButton();
         }
+    };
+    comfyModeSelect.onchange = async () => {
+        saveComfyCheckMode(comfyModeSelect.value);
+        await loadCatalog();
     };
     refreshBtn.onclick = async () => {
         setActionBusy(true);
