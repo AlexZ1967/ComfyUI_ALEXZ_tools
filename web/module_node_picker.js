@@ -110,6 +110,13 @@ function injectStyles() {
         flex-direction: column;
         gap: 4px;
     }
+    .alexz-mod-picker-module-card--clickable {
+        cursor: pointer;
+        transition: filter 0.12s ease;
+    }
+    .alexz-mod-picker-module-card--clickable:hover {
+        filter: brightness(1.08);
+    }
     .alexz-mod-picker-module-title {
         font-size: 12px;
         font-weight: 700;
@@ -516,6 +523,7 @@ function renderPicker(container) {
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
     let actionBusy = false;
+    let expandedModule = "";
 
     /** Handle `renderComfyAlert` workflow step. */
     const renderComfyAlert = (info) => {
@@ -591,6 +599,28 @@ function renderPicker(container) {
         help.appendChild(hint3);
     };
 
+    const setHelpModuleCardHint = (moduleName, nodeCount) => {
+        help.innerHTML = "";
+
+        const main = document.createElement("div");
+        main.className = "alexz-mod-picker-help-main";
+        main.append("Модуль ");
+        const moduleStrong = document.createElement("strong");
+        moduleStrong.textContent = String(moduleName || "unknown");
+        main.appendChild(moduleStrong);
+        main.append(": нод ");
+        const countStrong = document.createElement("strong");
+        countStrong.textContent = String(Math.max(0, Number(nodeCount) || 0));
+        main.appendChild(countStrong);
+        main.append(".");
+        help.appendChild(main);
+
+        const hint = document.createElement("div");
+        hint.className = "alexz-mod-picker-help-hint";
+        hint.textContent = "Кликните карточку модуля, чтобы показать список нод.";
+        help.appendChild(hint);
+    };
+
     /** Handle `formatRefreshLine` workflow step. */
     const formatRefreshLine = (refresh) => {
         const phase = String(refresh?.phase || "");
@@ -653,6 +683,9 @@ function renderPicker(container) {
         comfyInfoBtn.disabled = actionBusy;
         updateAllBtn.disabled = actionBusy;
         comfyUpdateBtn.disabled = actionBusy || comfyUpdateBtn.style.display === "none";
+        for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
+            btn.disabled = actionBusy;
+        }
     };
 
     /** Handle `syncUpdateAllButton` workflow step. */
@@ -933,7 +966,8 @@ function renderPicker(container) {
         } else {
             nodeSelect.value = modules[0];
         }
-        renderNodeList();
+        expandedModule = "";
+        nodeList.innerHTML = "";
         loadModuleInfo();
         loadModuleBadges(selectedGroup, modules);
         syncUpdateAllButton();
@@ -974,6 +1008,10 @@ function renderPicker(container) {
         }
         if (!nodes.length) {
             setHelpText(`Модуль ${selectedModule}: загруженных нод не найдено (возможно, модуль не загрузился).`);
+            return;
+        }
+        if (expandedModule !== selectedModule) {
+            setHelpModuleCardHint(selectedModule, nodes.length);
             return;
         }
 
@@ -1040,6 +1078,16 @@ function renderPicker(container) {
 
         const card = document.createElement("div");
         card.className = "alexz-mod-picker-module-card";
+        const selectedModule = nodeSelect.value;
+        const nodeCount = moduleCounts.get(selectedModule) || 0;
+        if (selectedModule !== "-1" && nodeCount > 0) {
+            card.classList.add("alexz-mod-picker-module-card--clickable");
+            card.title = "Кликните, чтобы показать список нод";
+            card.onclick = () => {
+                expandedModule = selectedModule;
+                renderNodeList();
+            };
+        }
 
         const titleEl = document.createElement("div");
         titleEl.className = "alexz-mod-picker-module-title";
@@ -1050,6 +1098,8 @@ function renderPicker(container) {
         authorEl.className = "alexz-mod-picker-module-meta";
         if (info.author && info.owner_url) {
             authorEl.innerHTML = `Owner: <a href="${info.owner_url}" target="_blank" rel="noopener noreferrer">${info.author}</a>`;
+            const ownerLink = authorEl.querySelector("a");
+            ownerLink?.addEventListener("click", (event) => event.stopPropagation());
         } else {
             authorEl.textContent = `Owner: ${info.author || "unknown"}`;
         }
@@ -1118,7 +1168,8 @@ function renderPicker(container) {
             refreshInfoBtn.className = "alexz-mod-picker-btn-small";
             refreshInfoBtn.textContent = "Обновить информацию о модуле";
             refreshInfoBtn.disabled = actionBusy;
-            refreshInfoBtn.onclick = async () => {
+            refreshInfoBtn.onclick = async (event) => {
+                event.stopPropagation();
                 if (actionBusy) {
                     return;
                 }
@@ -1142,7 +1193,8 @@ function renderPicker(container) {
                 updateBtn.className = "alexz-mod-picker-btn-small";
                 updateBtn.textContent = "Update module";
                 updateBtn.disabled = actionBusy;
-                updateBtn.onclick = async () => {
+                updateBtn.onclick = async (event) => {
+                    event.stopPropagation();
                     if (actionBusy) {
                         return;
                     }
@@ -1164,7 +1216,8 @@ function renderPicker(container) {
             refreshInfoBtn.className = "alexz-mod-picker-btn-small";
             refreshInfoBtn.textContent = "Обновить информацию о модуле";
             refreshInfoBtn.disabled = actionBusy;
-            refreshInfoBtn.onclick = async () => {
+            refreshInfoBtn.onclick = async (event) => {
+                event.stopPropagation();
                 if (actionBusy) {
                     return;
                 }
@@ -1293,7 +1346,8 @@ function renderPicker(container) {
     };
     moduleFilter.oninput = () => fillModuleSelect();
     nodeSelect.onchange = () => {
-        renderNodeList();
+        expandedModule = "";
+        nodeList.innerHTML = "";
         loadModuleInfo();
     };
     updateAllBtn.onclick = async () => {

@@ -1,5 +1,15 @@
 # Changelog — ALEXZ_tools
 
+## 0.15.4 — 2026-02-10
+- `Module Nodes` UX changed: selecting module now shows module card first; node list opens only when the module card is clicked.
+- Added clickable module-card visual state and help hint for card-to-node-list interaction.
+- Preserved module-card action buttons behavior (`Обновить информацию о модуле`, `Update module`) with click propagation blocked from opening node list unintentionally.
+
+## 0.15.3 — 2026-02-10
+- Fixed Module Nodes UI bug: module-card action buttons (`Обновить информацию о модуле`, `Update module`) no longer remain disabled after refresh/update action completes.
+- `setActionBusy` now synchronizes disabled state for module-card action-row buttons after async operations.
+- Module description sanitization improved: HTML wrapper lines (e.g. `<div align="center">`) are now removed from module card descriptions.
+
 ## 0.15.2 — 2026-02-10
 - `Module Nodes` UI: added dedicated top button `Обновить информацию о ComfyUI` (refreshes ComfyUI status without full module refresh).
 - Module card UI: added button `Обновить информацию о модуле` for targeted refresh of selected module info.

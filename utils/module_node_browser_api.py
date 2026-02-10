@@ -79,6 +79,7 @@ _UPDATE_STATUS: dict[str, Any] = {
     "finished_at": "",
 }
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/([^/]+)/([^/]+)", re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _MODULE_STATE_PATH = Path(__file__).resolve().parents[1] / "module_state_cache.json"
 _GROUP_ORDER = (
     ("core", "Core_Nodes"),
@@ -1271,12 +1272,48 @@ def _module_local_readme_summary(module_name: str) -> str | None:
                 continue
             for line in text.splitlines():
                 stripped = line.strip()
-                if not stripped or stripped.startswith("#") or stripped.startswith("!"):
+                if (
+                    not stripped
+                    or stripped.startswith("#")
+                    or stripped.startswith("!")
+                    or stripped.startswith("<")
+                ):
                     continue
                 if len(stripped) > 800:
                     stripped = stripped[:800] + "..."
                 return stripped
     return None
+
+
+def _sanitize_module_description(text: str) -> str:
+    """Normalize module description text for UI card rendering."""
+    value = str(text or "")
+    if not value:
+        return ""
+    out_lines: list[str] = []
+    for line in value.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Drop pure HTML marker lines such as `<div align="center">`.
+        if stripped.startswith("<"):
+            plain = _HTML_TAG_RE.sub("", stripped).strip()
+            if not plain:
+                continue
+            stripped = plain
+        else:
+            stripped = _HTML_TAG_RE.sub("", stripped).strip()
+            if not stripped:
+                continue
+        if stripped.startswith("!"):
+            continue
+        out_lines.append(stripped)
+    if not out_lines:
+        return ""
+    summary = out_lines[0]
+    if len(summary) > 800:
+        summary = summary[:800] + "..."
+    return summary
 
 
 def _resolve_module_info(
@@ -1365,12 +1402,12 @@ def _resolve_module_info(
     if meta is not None:
         result["title"] = meta.get("title") or module_name
         result["author"] = meta.get("author") or ""
-        result["description"] = meta.get("description") or ""
+        result["description"] = _sanitize_module_description(meta.get("description") or "")
         result["repository"] = meta.get("repository") or repo_url or ""
         result["source"] = "comfyui-manager"
     else:
         result["repository"] = repo_url or ""
-        result["description"] = _module_local_readme_summary(module_name) or ""
+        result["description"] = _sanitize_module_description(_module_local_readme_summary(module_name) or "")
         result["source"] = "local"
 
     if not result["author"] and repo_gid:

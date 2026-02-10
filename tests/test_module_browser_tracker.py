@@ -301,6 +301,16 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         result = self.api._install_comfyui_requirements()
         self.assertEqual(result.get("status"), "installed")
 
+    def test_sanitize_module_description_drops_html_lines(self):
+        """Validate HTML wrapper lines are removed from module descriptions."""
+        source = """
+        <div align="center">
+        My module does useful things.
+        </div>
+        """
+        cleaned = self.api._sanitize_module_description(source)
+        self.assertEqual(cleaned, "My module does useful things.")
+
     def test_force_refresh_module_info_syncs_upstream(self):
         """Validate `test_force_refresh_module_info_syncs_upstream` behavior."""
         calls = []
