@@ -688,6 +688,82 @@ def _comfyui_needs_update_now() -> bool:
     return bool(status.get("update_status") == "can_update")
 
 
+def _git_remote_names(repo_root: Path) -> list[str]:
+    """Internal helper: `_git_remote_names`."""
+    out = _run_git(["git", "-C", str(repo_root), "remote"])
+    if not out:
+        return []
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def _git_pick_remote(repo_root: Path, upstream: str | None) -> str | None:
+    """Internal helper: `_git_pick_remote`."""
+    upstream_text = (upstream or "").strip()
+    if upstream_text and "/" in upstream_text:
+        return upstream_text.split("/", 1)[0].strip() or None
+    remotes = _git_remote_names(repo_root)
+    if "origin" in remotes:
+        return "origin"
+    if "upstream" in remotes:
+        return "upstream"
+    return remotes[0] if remotes else None
+
+
+def _git_ref_exists(repo_root: Path, ref_name: str) -> bool:
+    """Internal helper: `_git_ref_exists`."""
+    ref = (ref_name or "").strip()
+    if not ref:
+        return False
+    return bool(_run_git(["git", "-C", str(repo_root), "rev-parse", "--verify", ref]))
+
+
+def _git_resolve_remote_ref(
+    repo_root: Path,
+    remote_name: str,
+    branch_name: str | None,
+    upstream: str | None,
+) -> tuple[str | None, str | None]:
+    """Internal helper: `_git_resolve_remote_ref`."""
+    upstream_text = (upstream or "").strip()
+    if upstream_text and "/" in upstream_text:
+        remote_branch = upstream_text.split("/", 1)[1].strip()
+        return (upstream_text, remote_branch or None)
+
+    branch = (branch_name or "").strip()
+    if branch and branch != "HEAD":
+        by_branch = f"{remote_name}/{branch}"
+        if _git_ref_exists(repo_root, by_branch):
+            return (by_branch, branch)
+
+    head_ref = _run_git(
+        ["git", "-C", str(repo_root), "symbolic-ref", "--quiet", f"refs/remotes/{remote_name}/HEAD"]
+    )
+    remote_branch = ""
+    if head_ref:
+        prefix = f"refs/remotes/{remote_name}/"
+        if head_ref.startswith(prefix):
+            remote_branch = head_ref[len(prefix) :].strip()
+
+    if not remote_branch:
+        remote_info = _run_git(["git", "-C", str(repo_root), "remote", "show", remote_name], timeout=8.0) or ""
+        for line in remote_info.splitlines():
+            text = line.strip()
+            if text.lower().startswith("head branch:"):
+                remote_branch = text.split(":", 1)[1].strip()
+                break
+
+    if not remote_branch:
+        for candidate in ("main", "master"):
+            ref = f"{remote_name}/{candidate}"
+            if _git_ref_exists(repo_root, ref):
+                remote_branch = candidate
+                break
+
+    if not remote_branch:
+        return (None, None)
+    return (f"{remote_name}/{remote_branch}", remote_branch)
+
+
 def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
     """Internal helper: `_pull_comfyui`."""
     root = _comfyui_root()
@@ -710,15 +786,47 @@ def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
         result["status"] = "no_git"
         result["message"] = "ComfyUI is not a git repository"
         return result
+    branch = _run_git(["git", "-C", root_str, "rev-parse", "--abbrev-ref", "HEAD"]) or ""
     upstream = _run_git(["git", "-C", root_str, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-    if not upstream:
-        result["status"] = "no_upstream"
-        result["message"] = "ComfyUI upstream is not configured"
+    remote_name = _git_pick_remote(root, upstream)
+    if not remote_name:
+        result["status"] = "no_remote"
+        result["message"] = "ComfyUI remote is not configured"
         return result
+
+    _run_git(["git", "-C", root_str, "fetch", "--quiet", remote_name], timeout=20.0)
+    remote_ref, remote_branch = _git_resolve_remote_ref(root, remote_name, branch, upstream)
+    if not remote_ref:
+        result["status"] = "no_upstream"
+        result["message"] = "ComfyUI upstream/default branch is not configured"
+        return result
+
+    if branch == "HEAD" and remote_branch:
+        checkout = _run_command(
+            ["git", "-C", root_str, "checkout", remote_branch],
+            timeout=timeout,
+            disable_git_prompt=True,
+        )
+        if not checkout.get("ok"):
+            checkout = _run_command(
+                ["git", "-C", root_str, "checkout", "-B", remote_branch, remote_ref],
+                timeout=timeout,
+                disable_git_prompt=True,
+            )
+        if not checkout.get("ok"):
+            result["status"] = "error"
+            result["message"] = str(checkout.get("stderr") or checkout.get("stdout") or "git checkout failed")
+            return result
 
     before_commit = _run_git(["git", "-C", root_str, "rev-parse", "HEAD"]) or ""
     result["before_commit"] = before_commit
-    pull = _run_command(["git", "-C", root_str, "pull", "--ff-only"], timeout=timeout, disable_git_prompt=True)
+    if upstream:
+        pull_cmd = ["git", "-C", root_str, "pull", "--ff-only"]
+    else:
+        pull_cmd = ["git", "-C", root_str, "pull", "--ff-only", remote_name]
+        if remote_branch:
+            pull_cmd.append(remote_branch)
+    pull = _run_command(pull_cmd, timeout=timeout, disable_git_prompt=True)
     if not pull.get("ok"):
         result["status"] = "error"
         result["message"] = str(pull.get("stderr") or pull.get("stdout") or "git pull failed")
@@ -956,6 +1064,8 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
     result: dict[str, Any] = {
         "path": "",
         "repository": "https://github.com/comfyanonymous/ComfyUI",
+        "remote_name": "",
+        "remote_ref": "",
         "branch": "",
         "upstream": "",
         "installed_commit": "",
@@ -990,18 +1100,25 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
         ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
     )
     result["upstream"] = upstream or ""
-    if not upstream:
+    remote_name = _git_pick_remote(root, upstream)
+    result["remote_name"] = remote_name or ""
+    if not remote_name:
         _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
         return result
 
-    # Keep upstream ref fresh to reflect actual GitHub state.
-    _run_git(["git", "-C", str(root), "fetch", "--quiet"], timeout=20.0)
+    # Keep remote refs fresh to reflect actual GitHub state.
+    _run_git(["git", "-C", str(root), "fetch", "--quiet", remote_name], timeout=20.0)
+    remote_ref, _remote_branch = _git_resolve_remote_ref(root, remote_name, result["branch"], upstream)
+    result["remote_ref"] = remote_ref or ""
+    if not remote_ref:
+        _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
+        return result
 
-    result["remote_commit"] = _run_git(["git", "-C", str(root), "rev-parse", "@{u}"]) or ""
+    result["remote_commit"] = _run_git(["git", "-C", str(root), "rev-parse", remote_ref]) or ""
     result["remote_commit_short"] = _short_commit(result["remote_commit"]) if result["remote_commit"] else ""
-    result["remote_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI", "@{u}"]) or ""
+    result["remote_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI", remote_ref]) or ""
 
-    counts = _run_git(["git", "-C", str(root), "rev-list", "--left-right", "--count", "HEAD...@{u}"])
+    counts = _run_git(["git", "-C", str(root), "rev-list", "--left-right", "--count", f"HEAD...{remote_ref}"])
     if counts:
         parts = counts.split()
         if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
@@ -1009,6 +1126,13 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
             result["behind"] = int(parts[1])
             result["update_available"] = result["behind"] > 0
             result["update_status"] = "can_update" if result["behind"] > 0 else "up_to_date"
+    elif result["installed_commit"] and result["remote_commit"]:
+        if result["installed_commit"] == result["remote_commit"]:
+            result["update_available"] = False
+            result["update_status"] = "up_to_date"
+        else:
+            result["update_available"] = True
+            result["update_status"] = "can_update"
 
     _COMFYUI_STATUS_CACHE = (now_ts, dict(result))
     return result

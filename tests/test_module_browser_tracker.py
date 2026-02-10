@@ -148,11 +148,12 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
                 "git -C " + os.path.join(os.getcwd(), "fake_comfy") + " log -1 --format=%cI": "2026-02-08T01:00:00+00:00",
                 "git -C " + os.path.join(os.getcwd(), "fake_comfy")
                 + " rev-parse --abbrev-ref --symbolic-full-name @{u}": "origin/master",
-                "git -C " + os.path.join(os.getcwd(), "fake_comfy") + " fetch --quiet": "",
-                "git -C " + os.path.join(os.getcwd(), "fake_comfy") + " rev-parse @{u}": "bbbbbbbb22222222",
+                "git -C " + os.path.join(os.getcwd(), "fake_comfy") + " fetch --quiet origin": "",
+                "git -C " + os.path.join(os.getcwd(), "fake_comfy") + " rev-parse origin/master": "bbbbbbbb22222222",
                 "git -C " + os.path.join(os.getcwd(), "fake_comfy")
-                + " log -1 --format=%cI @{u}": "2026-02-08T02:00:00+00:00",
-                "git -C " + os.path.join(os.getcwd(), "fake_comfy") + " rev-list --left-right --count HEAD...@{u}": "0 3",
+                + " log -1 --format=%cI origin/master": "2026-02-08T02:00:00+00:00",
+                "git -C " + os.path.join(os.getcwd(), "fake_comfy")
+                + " rev-list --left-right --count HEAD...origin/master": "0 3",
             }
             return table.get(cmd)
 
@@ -160,6 +161,36 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         status = self.api._comfyui_git_status(force_refresh=True)
         self.assertEqual(status.get("update_status"), "can_update")
         self.assertEqual(status.get("behind"), 3)
+
+    def test_comfyui_update_status_detached_without_upstream(self):
+        """Validate fallback update check via `origin/HEAD` when `@{u}` is missing."""
+        fake_root = os.path.join(os.getcwd(), "fake_comfy_detached")
+        self.api._comfyui_root = lambda: fake_root
+
+        def fake_run_git(args, timeout=2.0):
+            """Execute `fake_run_git` routine."""
+            cmd = " ".join(args)
+            table = {
+                f"git -C {fake_root} rev-parse --is-inside-work-tree": "true",
+                f"git -C {fake_root} rev-parse --abbrev-ref HEAD": "HEAD",
+                f"git -C {fake_root} rev-parse HEAD": "aaaaaaaa11111111",
+                f"git -C {fake_root} log -1 --format=%cI": "2026-02-08T01:00:00+00:00",
+                f"git -C {fake_root} rev-parse --abbrev-ref --symbolic-full-name @{{u}}": None,
+                f"git -C {fake_root} remote": "origin",
+                f"git -C {fake_root} fetch --quiet origin": "",
+                f"git -C {fake_root} symbolic-ref --quiet refs/remotes/origin/HEAD": "refs/remotes/origin/main",
+                f"git -C {fake_root} rev-parse --verify origin/main": "bbbbbbbb22222222",
+                f"git -C {fake_root} rev-parse origin/main": "bbbbbbbb22222222",
+                f"git -C {fake_root} log -1 --format=%cI origin/main": "2026-02-08T02:00:00+00:00",
+                f"git -C {fake_root} rev-list --left-right --count HEAD...origin/main": "0 2",
+            }
+            return table.get(cmd)
+
+        self.api._run_git = fake_run_git
+        status = self.api._comfyui_git_status(force_refresh=True)
+        self.assertEqual(status.get("update_status"), "can_update")
+        self.assertEqual(status.get("behind"), 2)
+        self.assertEqual(status.get("remote_ref"), "origin/main")
 
     def test_unseen_module_update_detected_between_runs(self):
         """Validate `test_unseen_module_update_detected_between_runs` behavior."""
