@@ -82,6 +82,8 @@
 
 ## Phase 1 — База frontend (Store + Diagnostics)
 
+Статус: 🚧 в работе (старт 2026-02-10)
+
 Результат:
 - Добавляем `web/state/store.js`:
   - единый source of truth для UI-состояния picker;

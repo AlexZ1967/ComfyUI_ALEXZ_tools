@@ -82,6 +82,8 @@ Exit criteria:
 
 ## Phase 1 — Frontend Foundation (Store + Diagnostics)
 
+Status: 🚧 in progress (started 2026-02-10)
+
 Deliverables:
 - Add `web/state/store.js`:
   - single source of truth for picker UI state

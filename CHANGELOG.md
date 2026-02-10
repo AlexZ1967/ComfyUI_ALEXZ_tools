@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.6 — 2026-02-10
+- Started Phase 1 (frontend foundation) for Module Node Picker.
+- Added centralized picker state store: `web/state/store.js`.
+  - persisted minimal keys: selected group, selected module, debug flag,
+  - subscribe/unsubscribe API for incremental migration away from scattered local state.
+- Added diagnostics logger module: `web/diagnostics/logger.js`.
+  - levels: `info`, `warn`, `error`,
+  - bounded in-memory entries,
+  - runtime debug toggle support.
+- Integrated Phase 1 foundation into `web/module_node_picker.js` without UX changes:
+  - debug state now sourced from centralized store,
+  - selected group/module now persisted through store,
+  - diagnostics and sync logging routed through shared logger.
+- Updated refactoring plan status:
+  - `Phase 1` marked as **in progress** in RU/EN adopted plan documents.
+
 ## 0.16.5 — 2026-02-10
 - Fixed dependency-update flow for ComfyUI and custom modules:
   - if `requirements.txt` changes after update, pending install state is now persisted in cache and survives restart;

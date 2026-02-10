@@ -16,6 +16,8 @@ import {
     bindModuleNodesTabRelay,
     unbindModuleNodesTabRelay,
 } from "./module_node_picker_tab_relay.js";
+import { createModuleNodePickerStore } from "./state/store.js";
+import { createModuleDiagnosticsLogger } from "./diagnostics/logger.js";
 
 const EXT_NAME = "ALEXZ.Tools.ModuleNodePicker";
 const SIDEBAR_TAB_ID = "alexz-module-nodes";
@@ -25,6 +27,8 @@ const DEFAULT_MODULE = "ComfyUI_ALEXZ_tools";
 const CONTAINER_SYNC_STATE_KEY = "__alexz_module_nodes_container_sync_state__";
 const NODE_PICKER_DEBUG_KEY = "__alexz_module_picker_debug__";
 const NODE_PICKER_DEBUG_STORAGE_KEY = "alexz_module_picker_debug";
+const NODE_PICKER_SELECTED_GROUP_STORAGE_KEY = "alexz_module_picker_selected_group";
+const NODE_PICKER_SELECTED_MODULE_STORAGE_KEY = "alexz_module_picker_selected_module";
 const COMFYUI_CHECK_MODE_STORAGE_KEY = "alexz_comfyui_check_mode";
 const NODE_PICKER_SIDEBAR_SYNC_KEY = "__alexz_module_picker_sidebar_sync__";
 const GROUP_LABELS = {
@@ -785,17 +789,19 @@ function renderPicker(container) {
     processActions.className = "alexz-mod-picker-status-card-actions";
     processHost.appendChild(processActions);
 
-    const loadDebugEnabled = () => {
-        try {
-            const raw = window.localStorage?.getItem(NODE_PICKER_DEBUG_STORAGE_KEY);
-            if (raw === null || raw === undefined) {
-                return Boolean(window[NODE_PICKER_DEBUG_KEY]);
-            }
-            return raw === "1" || raw === "true";
-        } catch (_err) {
-            return Boolean(window[NODE_PICKER_DEBUG_KEY]);
-        }
-    };
+    const pickerStore = createModuleNodePickerStore({
+        defaultSelectedGroup: "custom",
+        defaultSelectedModule: DEFAULT_MODULE,
+        defaultDebugEnabled: Boolean(window[NODE_PICKER_DEBUG_KEY]),
+        selectedGroupStorageKey: NODE_PICKER_SELECTED_GROUP_STORAGE_KEY,
+        selectedModuleStorageKey: NODE_PICKER_SELECTED_MODULE_STORAGE_KEY,
+        debugStorageKey: NODE_PICKER_DEBUG_STORAGE_KEY,
+    });
+    const diagnosticsLogger = createModuleDiagnosticsLogger({
+        namespace: "ALEXZ_tools Node Picker",
+        maxEntries: 200,
+        debugEnabled: Boolean(pickerStore.get("debugEnabled")),
+    });
 
     const loadComfyCheckMode = () => {
         try {
@@ -814,29 +820,22 @@ function renderPicker(container) {
         }
     };
     comfyModeSelect.value = loadComfyCheckMode();
-    const saveDebugEnabled = (enabled) => {
-        try {
-            if (enabled) {
-                window.localStorage?.setItem(NODE_PICKER_DEBUG_STORAGE_KEY, "1");
-            } else {
-                window.localStorage?.removeItem(NODE_PICKER_DEBUG_STORAGE_KEY);
-            }
-        } catch (_err) {
-            // Ignore storage failures and keep runtime flag only.
-        }
-    };
-    let debugEnabled = loadDebugEnabled();
+
+    let debugEnabled = Boolean(pickerStore.get("debugEnabled"));
     const applyDebugUiState = () => {
         window[NODE_PICKER_DEBUG_KEY] = Boolean(debugEnabled);
+        diagnosticsLogger.setDebugEnabled(Boolean(debugEnabled));
         debugCard.hidden = !debugEnabled;
         debugCard.style.display = debugEnabled ? "block" : "none";
         debugToggle.textContent = debugEnabled ? "Debug: ON" : "Debug";
     };
+    pickerStore.subscribe("debugEnabled", (value) => {
+        debugEnabled = Boolean(value);
+        applyDebugUiState();
+    });
     applyDebugUiState();
     debugToggle.addEventListener("click", () => {
-        debugEnabled = !debugEnabled;
-        applyDebugUiState();
-        saveDebugEnabled(Boolean(debugEnabled));
+        pickerStore.set({ debugEnabled: !Boolean(pickerStore.get("debugEnabled")) });
     });
     debugCopyBtn.addEventListener("click", async () => {
         try {
@@ -921,6 +920,20 @@ function renderPicker(container) {
             return "custom";
         }
         return String(groupSelect.value || "").trim();
+    };
+
+    /**
+     * Persist currently selected group/module into picker store.
+     */
+    const syncPickerSelectionState = () => {
+        const partial = {
+            selectedGroup: getSelectedGroup() || "custom",
+        };
+        const selectedModule = String(nodeSelect.value || "").trim();
+        if (selectedModule && selectedModule !== "-1") {
+            partial.selectedModule = selectedModule;
+        }
+        pickerStore.set(partial);
     };
 
     /**
@@ -1078,7 +1091,7 @@ function renderPicker(container) {
         } else if (tone === "warn") {
             refreshLine.classList.add("alexz-mod-picker-refresh-line--warn");
         }
-        console.log(`[ALEXZ_tools] ${value}`);
+        diagnosticsLogger.info(value, null, { forceConsole: true });
     };
     /**
      * Render compact diagnostics block for tab-sync troubleshooting.
@@ -1098,7 +1111,7 @@ function renderPicker(container) {
         diagnostics.textContent = lines.join("\n");
     };
     if (Boolean(window[NODE_PICKER_SIDEBAR_SYNC_KEY])) {
-        bindContainerOwnershipSync(container, root, setDiagnosticText);
+        bindContainerOwnershipSync(container, root, setDiagnosticText, diagnosticsLogger);
     } else {
         bindModuleNodesTabRelay({
             app,
@@ -1543,6 +1556,7 @@ function renderPicker(container) {
             empty.textContent = filterValue ? "Нет модулей по фильтру" : "В этой группе нет модулей";
             nodeSelect.appendChild(empty);
             nodeSelect.value = "-1";
+            pickerStore.set({ selectedGroup: getSelectedGroup() || "custom" });
             moduleInfo.innerHTML = "";
             nodeList.innerHTML = "";
             setHelpText(filterValue
@@ -1589,6 +1603,7 @@ function renderPicker(container) {
             expandedModule = "";
             nodeList.innerHTML = "";
         }
+        syncPickerSelectionState();
         renderNodeList();
         loadModuleInfo();
         syncUpdateAllButton();
@@ -1638,6 +1653,7 @@ function renderPicker(container) {
             }
         }
         groupSelect.style.display = isCustomCategory() ? "none" : "";
+        pickerStore.set({ selectedGroup: getSelectedGroup() || "custom" });
         fillModuleSelect({ preferredModule, autoExpandModule });
     };
 
@@ -2116,11 +2132,13 @@ function renderPicker(container) {
         if (isCustomCategory()) {
             return;
         }
+        pickerStore.set({ selectedGroup: getSelectedGroup() || "custom" });
         fillModuleSelect();
         syncUpdateAllButton();
     };
     categorySelect.onchange = () => {
         groupSelect.style.display = isCustomCategory() ? "none" : "";
+        pickerStore.set({ selectedGroup: getSelectedGroup() || "custom" });
         fillModuleSelect();
         syncUpdateAllButton();
     };
@@ -2128,6 +2146,7 @@ function renderPicker(container) {
     nodeSelect.onchange = () => {
         expandedModule = "";
         nodeList.innerHTML = "";
+        syncPickerSelectionState();
         loadModuleInfo();
     };
     updateAllBtn.onclick = async () => {
@@ -2208,7 +2227,12 @@ function renderPicker(container) {
         await loadCatalog();
     };
 
-    loadCatalog({ preferredGroup: "custom", preferredModule: DEFAULT_MODULE });
+    const startupGroup = String(pickerStore.get("selectedGroup") || "custom").trim();
+    const startupModule = String(pickerStore.get("selectedModule") || DEFAULT_MODULE).trim();
+    loadCatalog({
+        preferredGroup: startupGroup || "custom",
+        preferredModule: startupModule || DEFAULT_MODULE,
+    });
 }
 
 /**
@@ -2239,7 +2263,7 @@ function unbindContainerOwnershipSync() {
  * Bind legacy sidebar/container sync logic used in compatibility mode.
  * Keeps picker root hidden when another sidebar tab owns the container.
  */
-function bindContainerOwnershipSync(container, root, onDiag) {
+function bindContainerOwnershipSync(container, root, onDiag, diagnosticsLogger = null) {
     unbindContainerOwnershipSync();
     // Ensure root is visible when binding ownership sync
     root.style.display = "";
@@ -2371,7 +2395,12 @@ function bindContainerOwnershipSync(container, root, onDiag) {
         return false;
     };
     let lastDiag = "";
-    const isDebugLoggingEnabled = () => Boolean(window[NODE_PICKER_DEBUG_KEY]);
+    const isDebugLoggingEnabled = () => {
+        if (diagnosticsLogger && typeof diagnosticsLogger.isDebugEnabled === "function") {
+            return diagnosticsLogger.isDebugEnabled();
+        }
+        return Boolean(window[NODE_PICKER_DEBUG_KEY]);
+    };
     const sync = () => {
         const liveContainer = getLiveContainer();
         if (!root.isConnected || !liveContainer?.isConnected) {
@@ -2438,7 +2467,11 @@ function bindContainerOwnershipSync(container, root, onDiag) {
         onDiag?.(diag);
         const sig = JSON.stringify(diag);
         if (sig !== lastDiag && isDebugLoggingEnabled()) {
-            console.log("ALEXZ_tools Node Picker sync:", diag);
+            if (diagnosticsLogger && typeof diagnosticsLogger.info === "function") {
+                diagnosticsLogger.info("sync", diag);
+            } else {
+                console.log("ALEXZ_tools Node Picker sync:", diag);
+            }
             lastDiag = sig;
         }
     };
