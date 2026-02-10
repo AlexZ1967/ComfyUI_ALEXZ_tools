@@ -1,5 +1,10 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.2 — 2026-02-10
+- Module Node Picker: diagnostics/debug output is now hidden by default.
+- Added `Debug` checkbox in picker header to enable/disable diagnostics block on demand.
+- Debug toggle also controls internal debug logging flag and persists between sessions via `localStorage`.
+
 ## 0.16.1 — 2026-02-10
 - Phase 0 guardrails: expanded backend contract baseline in `tests/test_phase0_baseline.py`.
 - Added regression checks for:

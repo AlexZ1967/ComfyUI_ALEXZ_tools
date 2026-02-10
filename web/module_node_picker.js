@@ -24,6 +24,7 @@ const FALLBACK_BUTTON_ID = "alexz-module-nodes-fallback-btn";
 const DEFAULT_MODULE = "ComfyUI_ALEXZ_tools";
 const CONTAINER_SYNC_STATE_KEY = "__alexz_module_nodes_container_sync_state__";
 const NODE_PICKER_DEBUG_KEY = "__alexz_module_picker_debug__";
+const NODE_PICKER_DEBUG_STORAGE_KEY = "alexz_module_picker_debug";
 const NODE_PICKER_SIDEBAR_SYNC_KEY = "__alexz_module_picker_sidebar_sync__";
 const GROUP_LABELS = {
     core: "Core_Nodes",
@@ -63,6 +64,18 @@ function injectStyles() {
         display: flex;
         align-items: center;
         gap: 6px;
+    }
+    .alexz-mod-picker-debug-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        opacity: 0.9;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .alexz-mod-picker-debug-toggle input {
+        margin: 0;
     }
     .alexz-mod-picker-title {
         font-size: 13px;
@@ -549,6 +562,14 @@ function renderPicker(container) {
     comfyInfoBtn.className = "alexz-mod-picker-btn-small";
     headActions.appendChild(comfyInfoBtn);
 
+    const debugToggleLabel = document.createElement("label");
+    debugToggleLabel.className = "alexz-mod-picker-debug-toggle";
+    const debugToggle = document.createElement("input");
+    debugToggle.type = "checkbox";
+    debugToggleLabel.appendChild(debugToggle);
+    debugToggleLabel.append("Debug");
+    headActions.appendChild(debugToggleLabel);
+
     const comfyAlert = document.createElement("div");
     comfyAlert.className = "alexz-mod-picker-comfy-alert";
     const comfyAlertText = document.createElement("div");
@@ -584,6 +605,40 @@ function renderPicker(container) {
     diagnostics.className = "alexz-mod-picker-diag";
     diagnostics.textContent = "diag: waiting for sidebar sync...";
     root.appendChild(diagnostics);
+
+    const loadDebugEnabled = () => {
+        try {
+            const raw = window.localStorage?.getItem(NODE_PICKER_DEBUG_STORAGE_KEY);
+            if (raw === null || raw === undefined) {
+                return Boolean(window[NODE_PICKER_DEBUG_KEY]);
+            }
+            return raw === "1" || raw === "true";
+        } catch (_err) {
+            return Boolean(window[NODE_PICKER_DEBUG_KEY]);
+        }
+    };
+    const saveDebugEnabled = (enabled) => {
+        try {
+            if (enabled) {
+                window.localStorage?.setItem(NODE_PICKER_DEBUG_STORAGE_KEY, "1");
+            } else {
+                window.localStorage?.removeItem(NODE_PICKER_DEBUG_STORAGE_KEY);
+            }
+        } catch (_err) {
+            // Ignore storage failures and keep runtime flag only.
+        }
+    };
+    const applyDebugUiState = () => {
+        const enabled = Boolean(debugToggle.checked);
+        window[NODE_PICKER_DEBUG_KEY] = enabled;
+        diagnostics.style.display = enabled ? "" : "none";
+    };
+    debugToggle.checked = loadDebugEnabled();
+    applyDebugUiState();
+    debugToggle.addEventListener("change", () => {
+        applyDebugUiState();
+        saveDebugEnabled(Boolean(debugToggle.checked));
+    });
 
     const help = document.createElement("div");
     help.className = "alexz-mod-picker-help";
