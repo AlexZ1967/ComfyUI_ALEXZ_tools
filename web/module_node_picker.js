@@ -902,8 +902,10 @@ function renderPicker(container) {
         }
         if (normalized === "comfy") {
             comfyAlert.appendChild(processHost);
+            comfyAlert.style.display = "block";
         } else if (normalized === "custom") {
             customAlert.appendChild(processHost);
+            customAlert.style.display = "block";
         }
     };
 
@@ -1250,6 +1252,22 @@ function renderPicker(container) {
             const refresh = payload?.refresh || {};
             const line = formatRefreshLine(refresh);
             setRefreshLine(line.text, line.tone);
+            if (processTarget === "custom") {
+                customAlert.style.display = "block";
+                customAlert.classList.remove(
+                    "alexz-mod-picker-status-card--warn",
+                    "alexz-mod-picker-status-card--ok",
+                    "alexz-mod-picker-status-card--neutral"
+                );
+                if (line.tone === "warn") {
+                    customAlert.classList.add("alexz-mod-picker-status-card--warn");
+                } else if (line.tone === "ok") {
+                    customAlert.classList.add("alexz-mod-picker-status-card--ok");
+                } else {
+                    customAlert.classList.add("alexz-mod-picker-status-card--neutral");
+                }
+                customAlertText.textContent = line.text;
+            }
             if (!refresh?.running) {
                 return refresh?.phase !== "error";
             }
@@ -2175,9 +2193,17 @@ function renderPicker(container) {
             return;
         }
         setActionBusy(true);
-        setProcessTarget("");
+        setProcessTarget("comfy");
         setProcessAction("", "", null);
-        setRefreshLine("", "neutral");
+        setRefreshLine("Refreshing ComfyUI info...", "neutral");
+        comfyAlert.style.display = "block";
+        comfyAlert.classList.remove(
+            "alexz-mod-picker-status-card--warn",
+            "alexz-mod-picker-status-card--ok",
+            "alexz-mod-picker-status-card--neutral"
+        );
+        comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
+        comfyAlertText.textContent = "Refreshing ComfyUI info...";
         try {
             const payload = await fetchComfyUIInfo(true, true, comfyModeSelect.value);
             renderComfyAlert(payload?.comfyui || null);
@@ -2207,6 +2233,14 @@ function renderPicker(container) {
         setProcessTarget("custom");
         setProcessAction("", "", null);
         setRefreshLine("Refreshing Custom Nodes info...", "neutral");
+        customAlert.style.display = "block";
+        customAlert.classList.remove(
+            "alexz-mod-picker-status-card--warn",
+            "alexz-mod-picker-status-card--ok",
+            "alexz-mod-picker-status-card--neutral"
+        );
+        customAlert.classList.add("alexz-mod-picker-status-card--neutral");
+        customAlertText.textContent = "Refreshing Custom Nodes info...";
         try {
             await refreshModuleRuntimeState();
             const ok = await pollRefreshProgress();
