@@ -82,7 +82,7 @@ Exit criteria:
 
 ## Phase 1 — Frontend Foundation (Store + Diagnostics)
 
-Status: 🚧 in progress (started 2026-02-10)
+Status: ✅ completed (2026-02-11)
 
 Deliverables:
 - Add `web/state/store.js`:
@@ -94,6 +94,13 @@ Deliverables:
   - bounded memory log buffer
   - opt-in debug mode
 - Integrate these modules into `web/module_node_picker.js` without changing UI behavior.
+- Extracted large picker sections into focused modules while preserving behavior:
+  - UI: `web/ui/module_node_picker_renderers.js`, `web/ui/module_node_picker_alerts.js`,
+    `web/ui/module_node_picker_process.js`, `web/ui/module_node_picker_catalog.js`
+  - orchestration: `web/orchestration/module_node_picker_update_flow.js`,
+    `web/orchestration/module_node_picker_data_flow.js`,
+    `web/orchestration/module_node_picker_actions.js`,
+    `web/orchestration/module_node_picker_bindings.js`
 
 Exit criteria:
 - No UX regressions.

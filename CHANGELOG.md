@@ -1,5 +1,18 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.9 — 2026-02-11
+- Phase 1 continuation (frontend decomposition without UX changes):
+  - added node/module card renderer module: `web/ui/module_node_picker_renderers.js`,
+  - added top alert-card renderer module: `web/ui/module_node_picker_alerts.js`,
+  - added inline process/progress controller module: `web/ui/module_node_picker_process.js`,
+  - added catalog/group/module selector module: `web/ui/module_node_picker_catalog.js`,
+  - added update-flow orchestration module: `web/orchestration/module_node_picker_update_flow.js`,
+  - added catalog/module-info data-flow module: `web/orchestration/module_node_picker_data_flow.js`,
+  - added module/card/top-refresh actions module: `web/orchestration/module_node_picker_actions.js`,
+  - added event-binding/startup-load module: `web/orchestration/module_node_picker_bindings.js`.
+- `web/module_node_picker.js` now delegates large UI blocks to modular helpers while preserving existing behavior and API calls.
+- Verified with JS syntax checks (`node --check`) and regression tests (`34 passed`).
+
 ## 0.16.8 — 2026-02-10
 - Module Node Picker: added backend console progress logs for `Refresh ComfyUI Info`.
   - On manual refresh request, ComfyUI console now prints refresh start parameters (`mode`, `acknowledge`).

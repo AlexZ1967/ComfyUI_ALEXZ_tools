@@ -82,7 +82,7 @@
 
 ## Phase 1 — База frontend (Store + Diagnostics)
 
-Статус: 🚧 в работе (старт 2026-02-10)
+Статус: ✅ выполнено (2026-02-11)
 
 Результат:
 - Добавляем `web/state/store.js`:
@@ -94,6 +94,13 @@
   - ограниченный буфер логов в памяти;
   - opt-in debug режим.
 - Интегрируем эти модули в `web/module_node_picker.js` без изменения видимого поведения.
+- Вынесены крупные части picker в отдельные модули при сохранении поведения:
+  - UI: `web/ui/module_node_picker_renderers.js`, `web/ui/module_node_picker_alerts.js`,
+    `web/ui/module_node_picker_process.js`, `web/ui/module_node_picker_catalog.js`
+  - orchestration: `web/orchestration/module_node_picker_update_flow.js`,
+    `web/orchestration/module_node_picker_data_flow.js`,
+    `web/orchestration/module_node_picker_actions.js`,
+    `web/orchestration/module_node_picker_bindings.js`
 
 Критерии выхода:
 - Нет UX-регрессий.

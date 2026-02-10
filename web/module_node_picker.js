@@ -42,6 +42,42 @@ import {
     renderHelpModuleSummary,
     renderHelpModuleCardHint,
 } from "./ui/module_node_picker_help.js";
+import {
+    renderNodeListPanel,
+    renderModuleInfoCard,
+} from "./ui/module_node_picker_renderers.js";
+import {
+    renderComfyAlertCard,
+    renderCustomAlertCard,
+} from "./ui/module_node_picker_alerts.js";
+import { createProcessUiController } from "./ui/module_node_picker_process.js";
+import {
+    fillModuleSelectUi,
+    fillGroupSelectUi,
+} from "./ui/module_node_picker_catalog.js";
+import {
+    pollRefreshProgressLoop,
+    pollUpdateProgressLoop,
+    runInstallComfyUIRequirementsFlow,
+    maybeInstallChangedRequirementsFlow,
+    runModuleUpdateFlow,
+} from "./orchestration/module_node_picker_update_flow.js";
+import {
+    updateModuleOptionText,
+    cacheModuleNodeDiffs,
+    loadModuleInfoFlow,
+    loadCatalogFlow,
+} from "./orchestration/module_node_picker_data_flow.js";
+import {
+    runRefreshModuleInfoAction,
+    runInstallSingleModuleRequirementsAction,
+    runRefreshComfyUIInfoAction,
+    runRefreshCustomNodesInfoAction,
+} from "./orchestration/module_node_picker_actions.js";
+import {
+    bindModuleNodePickerEvents,
+    runModuleNodePickerStartupLoad,
+} from "./orchestration/module_node_picker_bindings.js";
 import { createModuleNodePickerStore } from "./state/store.js";
 import { createModuleDiagnosticsLogger } from "./diagnostics/logger.js";
 
@@ -684,7 +720,6 @@ function renderPicker(container) {
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
     let customStatusChecked = false;
-    let processTarget = "";
     let actionBusy = false;
     let expandedModule = "";
 
@@ -706,23 +741,21 @@ function renderPicker(container) {
         });
     };
 
+    const processUi = createProcessUiController({
+        processHost,
+        refreshLine,
+        processActions,
+        comfyAlert,
+        customAlert,
+        diagnosticsLogger,
+        defaultTarget: () => "custom",
+    });
+
     /**
      * Mount progress inline block into the selected top status card.
      */
     const setProcessTarget = (target) => {
-        const normalized = String(target || "").trim().toLowerCase();
-        processTarget = normalized;
-        const parent = processHost.parentElement;
-        if (parent) {
-            parent.removeChild(processHost);
-        }
-        if (normalized === "comfy") {
-            comfyAlert.appendChild(processHost);
-            comfyAlert.style.display = "block";
-        } else if (normalized === "custom") {
-            customAlert.appendChild(processHost);
-            customAlert.style.display = "block";
-        }
+        processUi.setTarget(target);
     };
 
     /**
@@ -758,95 +791,30 @@ function renderPicker(container) {
      * Render ComfyUI status card based on selected update-check mode.
      */
     const renderComfyAlert = (info) => {
-        const behind = Number(info?.behind);
-        const status = String(info?.update_status || "unknown");
-        const mode = String(info?.check_mode || comfyModeSelect.value || "releases");
-        const branch = String(info?.branch || "unknown");
-        const local = String(info?.installed_commit_short || "unknown");
-        const remote = String(info?.remote_commit_short || "unknown");
-        const releaseTag = String(info?.release_tag || "").trim();
-        const canUpdate = status === "can_update" && (!Number.isFinite(behind) || behind > 0);
-        const requirementsPending = Boolean(info?.requirements_update_pending);
-        const requirementsPendingAt = info?.requirements_pending_updated_at
-            ? ` (${fmtDate(info.requirements_pending_updated_at)})`
-            : "";
-
-        comfyAlert.classList.remove(
-            "alexz-mod-picker-status-card--warn",
-            "alexz-mod-picker-status-card--ok",
-            "alexz-mod-picker-status-card--neutral"
-        );
-        comfyAlert.style.display = "block";
-
-        if (canUpdate) {
-            comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
-            if (mode === "releases" && releaseTag) {
-                comfyAlertText.textContent = `ComfyUI requires update (releases): release=${releaseTag}, local=${local}, remote=${remote}.`;
-            } else if (Number.isFinite(behind) && behind > 0) {
-                comfyAlertText.textContent = `ComfyUI requires update (commits): branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
-            } else {
-                comfyAlertText.textContent = `ComfyUI requires update: mode=${mode}, branch=${branch}, local=${local}, remote=${remote}.`;
-            }
-            if (requirementsPending) {
-                comfyAlertText.textContent += ` requirements.txt install is pending${requirementsPendingAt}.`;
-                comfyInstallReqBtn.style.display = "";
-                comfyInstallReqBtn.disabled = actionBusy;
-            } else {
-                comfyInstallReqBtn.style.display = "none";
-            }
-            comfyUpdateBtn.style.display = "";
-            comfyUpdateBtn.disabled = actionBusy;
-            return;
-        }
-
-        if (requirementsPending) {
-            comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
-            comfyAlertText.textContent = `ComfyUI requirements.txt install is pending${requirementsPendingAt}.`;
-            comfyUpdateBtn.style.display = "none";
-            comfyInstallReqBtn.style.display = "";
-            comfyInstallReqBtn.disabled = actionBusy;
-            return;
-        }
-
-        comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
-        if (Boolean(info?.updated_between_runs)) {
-            const prev = String(info?.startup_prev_commit_short || "unknown");
-            const next = String(info?.startup_new_commit_short || "unknown");
-            const at = info?.startup_update_at ? ` (${fmtDate(info.startup_update_at)})` : "";
-            comfyAlertText.textContent = `ComfyUI updated between runs: ${prev} -> ${next}${at}. No updates required.`;
-        } else {
-            comfyAlertText.textContent = `ComfyUI is up to date (${mode} check).`;
-        }
-        comfyUpdateBtn.style.display = "none";
-        comfyInstallReqBtn.style.display = "none";
+        renderComfyAlertCard({
+            info,
+            comfyMode: comfyModeSelect.value,
+            actionBusy,
+            fmtDate,
+            comfyAlert,
+            comfyAlertText,
+            comfyUpdateBtn,
+            comfyInstallReqBtn,
+        });
     };
 
     /**
      * Render Custom Nodes status card and global update button.
      */
     const renderCustomAlert = () => {
-        if (customModulesNeedUpdate <= 0 && !customStatusChecked) {
-            customAlert.style.display = "none";
-            updateAllBtn.style.display = "none";
-            return;
-        }
-        customAlert.classList.remove(
-            "alexz-mod-picker-status-card--warn",
-            "alexz-mod-picker-status-card--ok",
-            "alexz-mod-picker-status-card--neutral"
-        );
-        customAlert.style.display = "block";
-        if (customModulesNeedUpdate > 0) {
-            customAlert.classList.add("alexz-mod-picker-status-card--warn");
-            customAlertText.textContent = `${customModulesNeedUpdate} custom modules require update.`;
-            updateAllBtn.textContent = `Update Custom Nodes (${customModulesNeedUpdate})`;
-            updateAllBtn.style.display = "";
-            updateAllBtn.disabled = actionBusy;
-            return;
-        }
-        customAlert.classList.add("alexz-mod-picker-status-card--neutral");
-        customAlertText.textContent = "Custom Nodes: no updates required.";
-        updateAllBtn.style.display = "none";
+        renderCustomAlertCard({
+            customModulesNeedUpdate,
+            customStatusChecked,
+            actionBusy,
+            customAlert,
+            customAlertText,
+            updateAllBtn,
+        });
     };
 
     /**
@@ -861,55 +829,14 @@ function renderPicker(container) {
      * Show a process action row with optional button (e.g., install requirements).
      */
     const setProcessAction = (label, btnText, onClick) => {
-        processActions.innerHTML = "";
-        if (!label) {
-            if (!refreshLine.textContent) {
-                processHost.style.display = "none";
-            }
-            return;
-        }
-        if (!processHost.parentElement) {
-            setProcessTarget(processTarget || "custom");
-        }
-        processHost.style.display = "";
-        const labelEl = document.createElement("div");
-        labelEl.textContent = label;
-        processActions.appendChild(labelEl);
-        if (!btnText || typeof onClick !== "function") {
-            return;
-        }
-        const actionBtn = document.createElement("button");
-        actionBtn.type = "button";
-        actionBtn.className = "alexz-mod-picker-btn-small";
-        actionBtn.textContent = btnText;
-        actionBtn.disabled = actionBusy;
-        actionBtn.onclick = onClick;
-        processActions.appendChild(actionBtn);
+        processUi.setAction(label, btnText, onClick, actionBusy);
     };
 
     /**
      * Update inline process text with optional color tone.
      */
     const setRefreshLine = (text, tone = "neutral") => {
-        const value = String(text || "");
-        refreshLine.textContent = value;
-        refreshLine.classList.remove("alexz-mod-picker-refresh-line--ok", "alexz-mod-picker-refresh-line--warn");
-        if (!value) {
-            if (!processActions.children.length) {
-                processHost.style.display = "none";
-            }
-            return;
-        }
-        if (!processHost.parentElement) {
-            setProcessTarget(processTarget || "custom");
-        }
-        processHost.style.display = "";
-        if (tone === "ok") {
-            refreshLine.classList.add("alexz-mod-picker-refresh-line--ok");
-        } else if (tone === "warn") {
-            refreshLine.classList.add("alexz-mod-picker-refresh-line--warn");
-        }
-        diagnosticsLogger.info(value, null, { forceConsole: true });
+        processUi.setLine(text, tone);
     };
     /**
      * Render compact diagnostics block for tab-sync troubleshooting.
@@ -978,39 +905,16 @@ function renderPicker(container) {
      */
     const pollRefreshProgress = async () => {
         const token = ++refreshPollToken;
-        while (token === refreshPollToken) {
-            let payload;
-            try {
-                payload = await fetchModuleRefreshStatus();
-            } catch (err) {
-                setRefreshLine(`Custom Nodes refresh status failed (${String(err)}).`, "warn");
-                return false;
-            }
-            const refresh = payload?.refresh || {};
-            const line = formatRefreshLine(refresh);
-            setRefreshLine(line.text, line.tone);
-            if (processTarget === "custom") {
-                customAlert.style.display = "block";
-                customAlert.classList.remove(
-                    "alexz-mod-picker-status-card--warn",
-                    "alexz-mod-picker-status-card--ok",
-                    "alexz-mod-picker-status-card--neutral"
-                );
-                if (line.tone === "warn") {
-                    customAlert.classList.add("alexz-mod-picker-status-card--warn");
-                } else if (line.tone === "ok") {
-                    customAlert.classList.add("alexz-mod-picker-status-card--ok");
-                } else {
-                    customAlert.classList.add("alexz-mod-picker-status-card--neutral");
-                }
-                customAlertText.textContent = line.text;
-            }
-            if (!refresh?.running) {
-                return refresh?.phase !== "error";
-            }
-            await new Promise((resolve) => setTimeout(resolve, 400));
-        }
-        return false;
+        return pollRefreshProgressLoop({
+            isTokenActive: () => token === refreshPollToken,
+            fetchModuleRefreshStatus,
+            formatRefreshLine,
+            setRefreshLine,
+            getProcessTarget: () => processUi.getTarget(),
+            customAlert,
+            customAlertText,
+            sleepMs: 400,
+        });
     };
 
     /**
@@ -1027,9 +931,7 @@ function renderPicker(container) {
         for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
             btn.disabled = actionBusy;
         }
-        for (const btn of processActions.querySelectorAll(".alexz-mod-picker-btn-small")) {
-            btn.disabled = actionBusy;
-        }
+        processUi.setButtonsDisabled(actionBusy);
     };
 
     /**
@@ -1045,92 +947,43 @@ function renderPicker(container) {
      */
     const pollUpdateProgress = async () => {
         const token = ++updatePollToken;
-        while (token === updatePollToken) {
-            let payload;
-            try {
-                payload = await fetchModuleUpdateStatus();
-            } catch (err) {
-                setRefreshLine(`Update status failed (${String(err)}).`, "warn");
-                return null;
-            }
-            const update = payload?.update || {};
-            const line = formatUpdateLine(update);
-            setRefreshLine(line.text, line.tone);
-            if (!update?.running) {
-                return update;
-            }
-            await new Promise((resolve) => setTimeout(resolve, 450));
-        }
-        return null;
+        return pollUpdateProgressLoop({
+            isTokenActive: () => token === updatePollToken,
+            fetchModuleUpdateStatus,
+            formatUpdateLine,
+            setRefreshLine,
+            sleepMs: 450,
+        });
     };
 
     /**
      * Install ComfyUI requirements and refresh ComfyUI status card.
      */
     const installComfyUIRequirementsFlow = async () => {
-        setActionBusy(true);
-        setProcessTarget("comfy");
-        try {
-            setRefreshLine("Installing ComfyUI dependencies (pip)...", "neutral");
-            const install = await installComfyUIRequirements();
-            if (String(install?.status || "") !== "installed") {
-                setRefreshLine("ComfyUI dependencies install failed.", "warn");
-                return;
-            }
-            const comfyPayload = await fetchComfyUIInfo(false, false, comfyModeSelect.value);
-            renderComfyAlert(comfyPayload?.comfyui || null);
-            setRefreshLine("ComfyUI dependencies installed.", "ok");
-            setProcessAction("", "", null);
-        } finally {
-            setActionBusy(false);
-            syncUpdateAllButton();
-        }
+        return runInstallComfyUIRequirementsFlow({
+            setActionBusy,
+            setProcessTarget,
+            setRefreshLine,
+            installComfyUIRequirements,
+            fetchComfyUIInfo,
+            getComfyMode: () => comfyModeSelect.value,
+            renderComfyAlert,
+            setProcessAction,
+            syncUpdateAllButton,
+        });
     };
 
     /**
      * Offer one-click requirements installation when updated modules changed requirements.txt.
      */
     const maybeInstallChangedRequirements = async (update) => {
-        const scope = String(update?.scope || "");
-        if (scope === "comfyui") {
-            if (!Boolean(update?.requirements_changed)) {
-                return;
-            }
-            setRefreshLine("ComfyUI requirements.txt changed. Install dependencies?", "warn");
-            setProcessAction(
-                "ComfyUI requirements were updated after pull.",
-                "Install ComfyUI requirements",
-                installComfyUIRequirementsFlow
-            );
-            return;
-        }
-
-        const modules = Array.isArray(update?.requirements_modules) ? update.requirements_modules : [];
-        if (!modules.length) {
-            return;
-        }
-        setRefreshLine("Custom module requirements changed. Install dependencies?", "warn");
-        setProcessAction(
-            `requirements.txt changed for: ${modules.join(", ")}.`,
-            "Install updated requirements",
-            async () => {
-                setActionBusy(true);
-                try {
-                    setRefreshLine("Installing updated dependencies (pip)...", "neutral");
-                    const install = await installModuleRequirements(modules);
-                    const failed = Number(install?.failed || 0);
-                    const installed = Number(install?.installed || 0);
-                    if (failed > 0) {
-                        setRefreshLine(`Dependencies install finished with errors: ok=${installed}, failed=${failed}.`, "warn");
-                        return;
-                    }
-                    setRefreshLine(`Dependencies installed: ${installed} module(s).`, "ok");
-                    setProcessAction("", "", null);
-                } finally {
-                    setActionBusy(false);
-                }
-            }
-        );
+        return maybeInstallChangedRequirementsFlow(update, {
+            setRefreshLine,
+            setProcessAction,
+            installComfyUIRequirementsFlow,
+            installModuleRequirements,
+            setActionBusy,
+        });
     };
 
     /**
@@ -1138,86 +991,101 @@ function renderPicker(container) {
      * and then refresh catalog/module state in UI.
      */
     const runModuleUpdate = async (scope, moduleName) => {
-        setActionBusy(true);
-        try {
-            if (String(scope || "") === "comfyui") {
-                setProcessTarget("comfy");
-            } else {
-                setProcessTarget("custom");
-            }
-            setProcessAction("", "", null);
-            setRefreshLine("Starting update...", "neutral");
-            await startModuleUpdate(scope, moduleName);
-            const update = await pollUpdateProgress();
-            if (!update) {
-                return;
-            }
-            const currentGroup = getSelectedGroup();
-            const currentModule = String(nodeSelect.value || "").trim();
-            const updatedNow = Array.isArray(update?.results)
-                ? update.results.filter((item) => String(item?.status || "") === "updated")
-                : [];
-            for (const item of updatedNow) {
-                const mod = String(item?.module || "").trim();
-                if (mod) {
-                    updatedModulesSession.add(mod);
-                }
-            }
-            if (String(update.phase || "") === "done") {
-                await maybeInstallChangedRequirements(update);
-            }
-            let preferredGroup = currentGroup;
-            let preferredModule = currentModule;
-            let autoExpandModule = "";
-            if (scope === "single") {
-                preferredGroup = "custom";
-                preferredModule = String(moduleName || currentModule || "").trim();
-                if (updatedNow.some((item) => String(item?.module || "").trim() === preferredModule)) {
-                    autoExpandModule = preferredModule;
-                }
-            } else if (scope === "all" && currentGroup === "custom" && currentModule) {
-                preferredGroup = "custom";
-                preferredModule = currentModule;
-                if (updatedModulesSession.has(currentModule)) {
-                    autoExpandModule = currentModule;
-                }
-            }
-            await loadCatalog({ preferredGroup, preferredModule, autoExpandModule });
-            await loadModuleInfo();
-        } catch (err) {
-            setRefreshLine(`Update failed (${String(err)}).`, "warn");
-        } finally {
-            setActionBusy(false);
-            syncUpdateAllButton();
-        }
+        return runModuleUpdateFlow(scope, moduleName, {
+            setActionBusy,
+            setProcessTarget,
+            setProcessAction,
+            setRefreshLine,
+            startModuleUpdate,
+            pollUpdateProgress,
+            getSelectedGroup,
+            getSelectedModule: () => String(nodeSelect.value || "").trim(),
+            onMarkUpdatedModule: (mod) => updatedModulesSession.add(mod),
+            isModuleMarkedUpdated: (mod) => updatedModulesSession.has(String(mod || "").trim()),
+            maybeInstallChangedRequirements,
+            loadCatalog,
+            loadModuleInfo,
+            syncUpdateAllButton,
+        });
     };
 
     /**
      * Refresh module select option text for one module after badge updates.
      */
     const setModuleOptionText = (moduleName) => {
-        const option = moduleOptions.get(moduleName);
-        if (!option) {
-            return;
-        }
-        const count = moduleCounts.get(moduleName) || 0;
-        const badges = moduleBadges.get(moduleName) || null;
-        option.textContent = formatModuleOption(moduleName, count, badges, {
-            updatedMark: MODULE_MARK_UPDATED,
-            remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
-        });
+        updateModuleOptionText(
+            {
+                moduleOptions,
+                moduleCounts,
+                moduleBadges,
+                formatModuleOption,
+                marks: {
+                    updatedMark: MODULE_MARK_UPDATED,
+                    remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+                },
+            },
+            moduleName
+        );
     };
 
     /**
      * Cache node-level diff markers (new/updated) for selected module.
      */
     const setModuleNodeDiffs = (moduleName, info) => {
-        const newNodes = Array.isArray(info?.new_nodes_between_runs) ? info.new_nodes_between_runs : [];
-        const updatedNodes = Array.isArray(info?.updated_nodes_between_runs) ? info.updated_nodes_between_runs : [];
-        moduleNodeDiffs.set(moduleName, {
-            newNodes: new Set(newNodes),
-            updatedNodes: new Set(updatedNodes),
-            markAllUpdated: Boolean(info?.new_module_between_runs),
+        cacheModuleNodeDiffs(
+            {
+                moduleNodeDiffs,
+            },
+            moduleName,
+            info
+        );
+    };
+
+    /**
+     * Load and render module info for currently selected group/module.
+     */
+    const loadModuleInfo = async (options = {}) => {
+        return loadModuleInfoFlow(options, {
+            getSelectedModule: () => String(nodeSelect.value || ""),
+            getSelectedGroup,
+            fetchModuleInfo,
+            clearModuleInfo: () => {
+                moduleInfo.innerHTML = "";
+            },
+            renderModuleInfo,
+            moduleBadgesFromInfo,
+            moduleBadges,
+            setModuleNodeDiffs,
+            setModuleOptionText,
+            renderNodeList,
+        });
+    };
+
+    /**
+     * Load full node catalog from backend and refresh picker UI state.
+     */
+    const loadCatalog = async (options = {}) => {
+        return loadCatalogFlow(options, {
+            fetchNodeCatalog,
+            getComfyMode: () => comfyModeSelect.value,
+            catalogByGroup,
+            setCustomModulesNeedUpdate: (value) => {
+                customModulesNeedUpdate = Number(value || 0);
+            },
+            renderComfyAlert,
+            fillGroupSelect,
+            groupLabels: GROUP_LABELS,
+            setHelpText,
+            syncUpdateAllButton,
+            comfyAlert,
+            comfyAlertText,
+            comfyUpdateBtn,
+            groupSelect,
+            nodeSelect,
+            clearModuleInfo: () => {
+                moduleInfo.innerHTML = "";
+            },
+            nodeList,
         });
     };
 
@@ -1225,738 +1093,212 @@ function renderPicker(container) {
      * Populate module selector for current group with filtering and badge placeholders.
      */
     const fillModuleSelect = (options = {}) => {
-        const preferredModule = String(options?.preferredModule || "").trim();
-        const autoExpandModule = String(options?.autoExpandModule || "").trim();
-        const nodes = getNodesForSelectedGroup();
-        const selectedGroup = getSelectedGroup();
-        const moduleEntries = moduleCatalogByGroup.get(selectedGroup) || [];
-        const filterValue = (moduleFilter.value || "").trim().toLowerCase();
-        const previousSelectedModule = String(nodeSelect.value || "").trim();
-        moduleCounts.clear();
-        moduleOptions.clear();
-        moduleBadges.clear();
-        moduleNodeDiffs.clear();
-        nodeSelect.innerHTML = "";
-        const grouped = new Map();
-        for (const node of nodes) {
-            const moduleName = node.module || "unknown";
-            if (!grouped.has(moduleName)) {
-                grouped.set(moduleName, []);
-            }
-            grouped.get(moduleName).push(node);
-        }
-        let modules = [];
-        if (moduleEntries.length) {
-            modules = moduleEntries
-                .map((entry) => String(entry?.module || "unknown"))
-                .sort((a, b) => a.localeCompare(b));
-        } else {
-            modules = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
-        }
-        if (filterValue) {
-            modules = modules.filter((name) => name.toLowerCase().includes(filterValue));
-        }
-        if (modules.length === 0) {
-            const empty = document.createElement("option");
-            empty.value = "-1";
-            empty.textContent = filterValue ? "Нет модулей по фильтру" : "В этой группе нет модулей";
-            nodeSelect.appendChild(empty);
-            nodeSelect.value = "-1";
-            pickerStore.set({ selectedGroup: getSelectedGroup() || "custom" });
-            moduleInfo.innerHTML = "";
-            nodeList.innerHTML = "";
-            setHelpText(filterValue
-                ? `Нет модулей по фильтру: "${moduleFilter.value}".`
-                : "Модули не найдены для выбранной группы.");
-            syncUpdateAllButton();
-            return;
-        }
-        const countMap = new Map();
-        const entryMap = new Map();
-        for (const entry of moduleEntries) {
-            const moduleName = String(entry?.module || "unknown");
-            countMap.set(moduleName, Number(entry?.count) || 0);
-            entryMap.set(moduleName, entry || {});
-        }
-        for (const moduleName of modules) {
-            const opt = document.createElement("option");
-            opt.value = moduleName;
-            const count = countMap.has(moduleName)
-                ? (countMap.get(moduleName) || 0)
-                : (grouped.get(moduleName) || []).length;
-            moduleCounts.set(moduleName, count);
-            moduleOptions.set(moduleName, opt);
-            const entry = entryMap.get(moduleName) || null;
-            const badges = moduleBadgesFromModuleEntry(entry);
-            if (badges.updatedBetweenRuns || badges.hasRemoteUpdate) {
-                moduleBadges.set(moduleName, badges);
-            }
-            opt.textContent = formatModuleOption(moduleName, count, badges, {
+        fillModuleSelectUi({
+            options,
+            nodes: getNodesForSelectedGroup(),
+            selectedGroup: getSelectedGroup(),
+            moduleEntries: moduleCatalogByGroup.get(getSelectedGroup()) || [],
+            moduleFilterValue: moduleFilter.value,
+            moduleFilterRaw: moduleFilter.value,
+            previousSelectedModule: nodeSelect.value,
+            moduleCounts,
+            moduleOptions,
+            moduleBadges,
+            moduleNodeDiffs,
+            nodeSelect,
+            moduleInfo,
+            nodeList,
+            pickerStore,
+            getSelectedGroup,
+            setHelpText,
+            syncUpdateAllButton,
+            moduleBadgesFromModuleEntry,
+            formatModuleOption,
+            marks: {
                 updatedMark: MODULE_MARK_UPDATED,
                 remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
-            });
-            nodeSelect.appendChild(opt);
-        }
-        if (preferredModule && modules.includes(preferredModule)) {
-            nodeSelect.value = preferredModule;
-        } else if (previousSelectedModule && modules.includes(previousSelectedModule)) {
-            nodeSelect.value = previousSelectedModule;
-        } else if (modules.includes(DEFAULT_MODULE)) {
-            nodeSelect.value = DEFAULT_MODULE;
-        } else {
-            nodeSelect.value = modules[0];
-        }
-        if (autoExpandModule && nodeSelect.value === autoExpandModule) {
-            expandedModule = autoExpandModule;
-        } else {
-            expandedModule = "";
-            nodeList.innerHTML = "";
-        }
-        syncPickerSelectionState();
-        renderNodeList();
-        loadModuleInfo();
-        syncUpdateAllButton();
+            },
+            defaultModule: DEFAULT_MODULE,
+            setExpandedModule: (value) => {
+                expandedModule = String(value || "").trim();
+            },
+            syncPickerSelectionState,
+            renderNodeList,
+            loadModuleInfo,
+        });
     };
 
     /**
      * Populate top-level group selector and propagate selection to module list.
      */
     const fillGroupSelect = (groups, options = {}) => {
-        const preferredGroup = String(options?.preferredGroup || "").trim();
-        const preferredModule = String(options?.preferredModule || "").trim();
-        const autoExpandModule = String(options?.autoExpandModule || "").trim();
-        const previousCategory = String(categorySelect.value || "").trim();
-        const previousGroup = String(groupSelect.value || "").trim();
-        moduleCatalogByGroup.clear();
-        groups.forEach((group) => {
-            catalogByGroup.set(group.id, group.nodes || []);
-            moduleCatalogByGroup.set(group.id, group.modules || []);
+        fillGroupSelectUi({
+            groups,
+            options,
+            previousCategory: categorySelect.value,
+            previousGroup: groupSelect.value,
+            catalogByGroup,
+            moduleCatalogByGroup,
+            comfyGroupOrder: COMFY_GROUP_ORDER,
+            groupLabels: GROUP_LABELS,
+            groupSelect,
+            categorySelect,
+            isCustomCategory,
+            pickerStore,
+            getSelectedGroup,
+            fillModuleSelect,
         });
-        const comfyGroups = COMFY_GROUP_ORDER.filter((groupId) => catalogByGroup.has(groupId));
-        groupSelect.innerHTML = "";
-        for (const groupId of comfyGroups) {
-            const opt = document.createElement("option");
-            const nodes = catalogByGroup.get(groupId) || [];
-            opt.value = groupId;
-            opt.textContent = `${GROUP_LABELS[groupId] || groupId} (${nodes.length})`;
-            groupSelect.appendChild(opt);
-        }
-        if (preferredGroup === "custom") {
-            categorySelect.value = "custom";
-        } else if (preferredGroup && COMFY_GROUP_ORDER.includes(preferredGroup) && catalogByGroup.has(preferredGroup)) {
-            categorySelect.value = "comfy";
-        } else if (previousCategory === "comfy" || previousCategory === "custom") {
-            categorySelect.value = previousCategory;
-        } else if (catalogByGroup.has("custom")) {
-            categorySelect.value = "custom";
-        } else {
-            categorySelect.value = "comfy";
-        }
-        if (!isCustomCategory()) {
-            if (preferredGroup && comfyGroups.includes(preferredGroup)) {
-                groupSelect.value = preferredGroup;
-            } else if (previousGroup && comfyGroups.includes(previousGroup)) {
-                groupSelect.value = previousGroup;
-            } else if (comfyGroups.length > 0) {
-                groupSelect.value = comfyGroups[0];
-            }
-        }
-        groupSelect.style.display = isCustomCategory() ? "none" : "";
-        pickerStore.set({ selectedGroup: getSelectedGroup() || "custom" });
-        fillModuleSelect({ preferredModule, autoExpandModule });
+    };
+
+    /**
+     * Refresh one module card metadata and keep the result inline in the card.
+     */
+    const refreshModuleInfoFlow = async (moduleName, syncUpstream) => {
+        return runRefreshModuleInfoAction(moduleName, syncUpstream, {
+            setProcessTarget,
+            setRefreshLine,
+            setProcessAction,
+            setModuleInlineStatus,
+            setActionBusy,
+            loadModuleInfo,
+            syncUpdateAllButton,
+        });
+    };
+
+    /**
+     * Install requirements for a single custom module and refresh card state.
+     */
+    const installSingleModuleRequirementsFlow = async (moduleName) => {
+        return runInstallSingleModuleRequirementsAction(moduleName, {
+            setProcessTarget,
+            setRefreshLine,
+            setProcessAction,
+            setModuleInlineStatus,
+            setActionBusy,
+            installModuleRequirements,
+            loadModuleInfo,
+            syncUpdateAllButton,
+        });
     };
 
     /**
      * Render node cards for currently selected module and bind insertion actions.
      */
     const renderNodeList = () => {
-        nodeList.innerHTML = "";
-        const selectedModule = nodeSelect.value;
-        const nodes = getNodesForSelectedGroup().filter(
-            (node) => (node.module || "unknown") === selectedModule
-        );
-        if (selectedModule === "-1") {
-            setHelpText("Выберите модуль, чтобы увидеть список нод.");
-            return;
-        }
-        if (!nodes.length) {
-            setHelpText(`Модуль ${selectedModule}: загруженных нод не найдено (возможно, модуль не загрузился).`);
-            return;
-        }
-        if (expandedModule !== selectedModule) {
-            setHelpModuleCardHint(selectedModule, nodes.length);
-            return;
-        }
-
-        setHelpModuleSummary(selectedModule, nodes.length);
-        const nodeDiff = moduleNodeDiffs.get(selectedModule) || {
-            newNodes: new Set(),
-            updatedNodes: new Set(),
-            markAllUpdated: false,
-        };
-
-        const groupEl = document.createElement("div");
-        groupEl.className = "alexz-mod-picker-group";
-
-        const groupTitle = document.createElement("div");
-        groupTitle.className = "alexz-mod-picker-group-title";
-        groupTitle.textContent = `${selectedModule} (${nodes.length})`;
-        groupEl.appendChild(groupTitle);
-
-        for (const nodeInfo of nodes) {
-            const item = document.createElement("button");
-            item.type = "button";
-            item.className = "alexz-mod-picker-node";
-            if (nodeDiff.markAllUpdated) {
-                item.classList.add("alexz-mod-picker-node--updated");
-            } else if (nodeDiff.newNodes.has(nodeInfo.node_name)) {
-                item.classList.add("alexz-mod-picker-node--new");
-            } else if (nodeDiff.updatedNodes.has(nodeInfo.node_name)) {
-                item.classList.add("alexz-mod-picker-node--updated");
-            }
-            item.onclick = () => {
-                const node = createNodeByInfo(nodeInfo);
-                if (!node) {
-                    setHelpText(`Не удалось создать ноду: ${nodeInfo.display_name}`);
-                    return;
-                }
-                app.graph.add(node);
-                centerNode(node);
-                app.canvas?.selectNode?.(node, false);
-                app.graph.setDirtyCanvas(true, true);
-                setHelpText(`Вставлена в граф: ${nodeInfo.display_name}`);
-            };
-
-            const nameEl = document.createElement("div");
-            nameEl.className = "alexz-mod-picker-node-name";
-            nameEl.textContent = nodeInfo.display_name;
-            item.appendChild(nameEl);
-
-            const descEl = document.createElement("div");
-            descEl.className = "alexz-mod-picker-node-desc";
-            descEl.textContent = `${nodeInfo.annotation} [${nodeInfo.category || "unknown"}]`;
-            item.appendChild(descEl);
-
-            groupEl.appendChild(item);
-        }
-        nodeList.appendChild(groupEl);
+        renderNodeListPanel({
+            nodeListEl: nodeList,
+            selectedModule: nodeSelect.value,
+            getNodesForSelectedGroup,
+            expandedModule,
+            setHelpText,
+            setHelpModuleCardHint,
+            setHelpModuleSummary,
+            moduleNodeDiffs,
+            createNodeByInfo,
+            app,
+            centerNode,
+        });
     };
 
     /**
      * Render module metadata card, status rows, and per-module action buttons.
      */
     const renderModuleInfo = (info) => {
-        moduleInfo.innerHTML = "";
-        if (!info || nodeSelect.value === "-1") {
-            return;
-        }
-
-        const card = document.createElement("div");
-        card.className = "alexz-mod-picker-module-card";
-        const selectedModule = nodeSelect.value;
+        const selectedModule = String(nodeSelect.value || "").trim();
         const nodeCount = moduleCounts.get(selectedModule) || 0;
-        if (
-            updatedModulesSession.has(selectedModule)
-            || Boolean(info?.updated_between_runs)
-            || Boolean(info?.new_module_between_runs)
-        ) {
-            card.classList.add("alexz-mod-picker-module-card--updated");
-        }
-        if (selectedModule !== "-1" && nodeCount > 0) {
-            card.classList.add("alexz-mod-picker-module-card--clickable");
-            card.title = "Кликните, чтобы показать список нод";
-            card.onclick = () => {
-                expandedModule = selectedModule;
+        renderModuleInfoCard({
+            moduleInfoEl: moduleInfo,
+            info,
+            selectedModule,
+            nodeCount,
+            isModuleUpdated:
+                updatedModulesSession.has(selectedModule)
+                || Boolean(info?.updated_between_runs)
+                || Boolean(info?.new_module_between_runs),
+            actionBusy,
+            inlineStatus: moduleInlineStatus.get(selectedModule) || null,
+            fmtDate,
+            onExpandModule: (moduleName) => {
+                expandedModule = String(moduleName || "").trim();
                 renderNodeList();
-            };
-        }
-
-        const titleEl = document.createElement("div");
-        titleEl.className = "alexz-mod-picker-module-title";
-        titleEl.textContent = info.title || info.module || nodeSelect.value;
-        card.appendChild(titleEl);
-
-        const authorEl = document.createElement("div");
-        authorEl.className = "alexz-mod-picker-module-meta";
-        if (info.author && info.owner_url) {
-            authorEl.innerHTML = `Owner: <a href="${info.owner_url}" target="_blank" rel="noopener noreferrer">${info.author}</a>`;
-            const ownerLink = authorEl.querySelector("a");
-            ownerLink?.addEventListener("click", (event) => event.stopPropagation());
-        } else {
-            authorEl.textContent = `Owner: ${info.author || "unknown"}`;
-        }
-        card.appendChild(authorEl);
-
-        if (info.description) {
-            const descEl = document.createElement("div");
-            descEl.className = "alexz-mod-picker-module-desc";
-            descEl.textContent = info.description;
-            card.appendChild(descEl);
-        }
-
-        const hasInstalledMeta = Boolean(info.installed_updated_at || info.installed_commit_short);
-        if (hasInstalledMeta) {
-            const installedRow = document.createElement("div");
-            installedRow.className = "alexz-mod-picker-module-row";
-            const labelEl = document.createElement("span");
-            labelEl.className = "alexz-mod-picker-module-label";
-            labelEl.textContent = "Installed:";
-            const valueEl = document.createElement("span");
-            valueEl.textContent = `${info.installed_commit_short ? `${info.installed_commit_short} · ` : ""}${fmtDate(info.installed_updated_at)}`;
-            installedRow.appendChild(labelEl);
-            installedRow.appendChild(valueEl);
-            card.appendChild(installedRow);
-        }
-
-        if (info.remote_updated_at) {
-            const remoteRow = document.createElement("div");
-            remoteRow.className = "alexz-mod-picker-module-row";
-            const labelEl = document.createElement("span");
-            labelEl.className = "alexz-mod-picker-module-label";
-            labelEl.textContent = "Remote updated:";
-            const valueEl = document.createElement("span");
-            valueEl.textContent = fmtDate(info.remote_updated_at);
-            remoteRow.appendChild(labelEl);
-            remoteRow.appendChild(valueEl);
-            card.appendChild(remoteRow);
-        }
-
-        if (String(info.group || "") === "custom") {
-            const requirementsPending = Boolean(info?.requirements_update_pending);
-            const requirementsPendingAt = info?.requirements_pending_updated_at
-                ? ` (${fmtDate(info.requirements_pending_updated_at)})`
-                : "";
-
-            const statusRow = document.createElement("div");
-            statusRow.className = "alexz-mod-picker-module-row";
-            const labelEl = document.createElement("span");
-            labelEl.className = "alexz-mod-picker-module-label";
-            labelEl.textContent = "Status:";
-            const valueEl = document.createElement("span");
-            const updateStatus = String(info.update_status || "unknown");
-            if (updateStatus === "can_update") {
-                statusRow.classList.add("warn");
-                valueEl.textContent = "модуль требует обновления";
-            } else if (updateStatus === "up_to_date") {
-                statusRow.classList.add("ok");
-                valueEl.textContent = "модуль актуален";
-            } else {
-                valueEl.textContent = "статус неизвестен";
-            }
-            statusRow.appendChild(labelEl);
-            statusRow.appendChild(valueEl);
-            card.appendChild(statusRow);
-
-            if (requirementsPending) {
-                const reqRow = document.createElement("div");
-                reqRow.className = "alexz-mod-picker-module-row warn";
-                const reqLabel = document.createElement("span");
-                reqLabel.className = "alexz-mod-picker-module-label";
-                reqLabel.textContent = "Requirements:";
-                const reqValue = document.createElement("span");
-                reqValue.textContent = `requirements.txt install pending${requirementsPendingAt}`;
-                reqRow.appendChild(reqLabel);
-                reqRow.appendChild(reqValue);
-                card.appendChild(reqRow);
-            }
-
-            const actionRow = document.createElement("div");
-            actionRow.className = "alexz-mod-picker-action-row";
-
-            const refreshInfoBtn = document.createElement("button");
-            refreshInfoBtn.type = "button";
-            refreshInfoBtn.className = "alexz-mod-picker-btn-small";
-            refreshInfoBtn.textContent = "Обновить информацию о модуле";
-            refreshInfoBtn.disabled = actionBusy;
-            refreshInfoBtn.onclick = async (event) => {
-                event.stopPropagation();
-                if (actionBusy) {
-                    return;
-                }
-                const moduleName = String(info.module || nodeSelect.value || "").trim();
-                setProcessTarget("");
-                setRefreshLine("", "neutral");
-                setProcessAction("", "", null);
-                setModuleInlineStatus(moduleName, "Refreshing module info...", "neutral");
-                setActionBusy(true);
-                try {
-                    await loadModuleInfo({ forceRefresh: true, syncUpstream: true, throwOnError: true });
-                    setModuleInlineStatus(moduleName, "Module info updated.", "ok");
-                } catch (err) {
-                    setModuleInlineStatus(moduleName, `Failed to refresh module info: ${String(err)}`, "warn");
-                } finally {
-                    await loadModuleInfo({ forceRefresh: false, syncUpstream: false });
-                    setActionBusy(false);
-                    syncUpdateAllButton();
-                }
-            };
-            actionRow.appendChild(refreshInfoBtn);
-
-            if (updateStatus === "can_update") {
-                const updateBtn = document.createElement("button");
-                updateBtn.type = "button";
-                updateBtn.className = "alexz-mod-picker-btn-small";
-                updateBtn.textContent = "Update module";
-                updateBtn.disabled = actionBusy;
-                updateBtn.onclick = async (event) => {
-                    event.stopPropagation();
-                    if (actionBusy) {
-                        return;
-                    }
-                    const moduleName = String(info.module || nodeSelect.value || "").trim();
-                    if (!moduleName) {
-                        return;
-                    }
-                    await runModuleUpdate("single", moduleName);
-                };
-                actionRow.appendChild(updateBtn);
-            }
-
-            if (requirementsPending) {
-                const installReqBtn = document.createElement("button");
-                installReqBtn.type = "button";
-                installReqBtn.className = "alexz-mod-picker-btn-small";
-                installReqBtn.textContent = "Install module requirements";
-                installReqBtn.disabled = actionBusy;
-                installReqBtn.onclick = async (event) => {
-                    event.stopPropagation();
-                    if (actionBusy) {
-                        return;
-                    }
-                    const moduleName = String(info.module || nodeSelect.value || "").trim();
-                    if (!moduleName) {
-                        return;
-                    }
-                    setProcessTarget("custom");
-                    setRefreshLine(`Installing requirements for ${moduleName}...`, "neutral");
-                    setProcessAction("", "", null);
-                    setModuleInlineStatus(moduleName, "Installing module requirements...", "neutral");
-                    setActionBusy(true);
-                    try {
-                        const install = await installModuleRequirements([moduleName]);
-                        const failed = Number(install?.failed || 0);
-                        const installed = Number(install?.installed || 0);
-                        if (failed > 0 || installed <= 0) {
-                            setModuleInlineStatus(moduleName, "Module requirements install failed.", "warn");
-                        } else {
-                            setModuleInlineStatus(moduleName, "Module requirements installed.", "ok");
-                        }
-                    } catch (err) {
-                        setModuleInlineStatus(moduleName, `Module requirements install failed: ${String(err)}`, "warn");
-                    } finally {
-                        await loadModuleInfo({ forceRefresh: false, syncUpstream: false });
-                        setActionBusy(false);
-                        syncUpdateAllButton();
-                    }
-                };
-                actionRow.appendChild(installReqBtn);
-            }
-            card.appendChild(actionRow);
-        }
-        if (String(info.group || "") !== "custom") {
-            const actionRow = document.createElement("div");
-            actionRow.className = "alexz-mod-picker-action-row";
-            const refreshInfoBtn = document.createElement("button");
-            refreshInfoBtn.type = "button";
-            refreshInfoBtn.className = "alexz-mod-picker-btn-small";
-            refreshInfoBtn.textContent = "Обновить информацию о модуле";
-            refreshInfoBtn.disabled = actionBusy;
-            refreshInfoBtn.onclick = async (event) => {
-                event.stopPropagation();
-                if (actionBusy) {
-                    return;
-                }
-                const moduleName = String(info.module || nodeSelect.value || "").trim();
-                setProcessTarget("");
-                setRefreshLine("", "neutral");
-                setProcessAction("", "", null);
-                setModuleInlineStatus(moduleName, "Refreshing module info...", "neutral");
-                setActionBusy(true);
-                try {
-                    await loadModuleInfo({ forceRefresh: true, syncUpstream: false, throwOnError: true });
-                    setModuleInlineStatus(moduleName, "Module info updated.", "ok");
-                } catch (err) {
-                    setModuleInlineStatus(moduleName, `Failed to refresh module info: ${String(err)}`, "warn");
-                } finally {
-                    await loadModuleInfo({ forceRefresh: false, syncUpstream: false });
-                    setActionBusy(false);
-                    syncUpdateAllButton();
-                }
-            };
-            actionRow.appendChild(refreshInfoBtn);
-            card.appendChild(actionRow);
-        }
-
-        if (info.new_module_between_runs) {
-            const newRow = document.createElement("div");
-            newRow.className = "alexz-mod-picker-module-row notice";
-            const labelEl = document.createElement("span");
-            labelEl.className = "alexz-mod-picker-module-label";
-            labelEl.textContent = "Detected between runs:";
-            const valueEl = document.createElement("span");
-            valueEl.textContent = "new module";
-            newRow.appendChild(labelEl);
-            newRow.appendChild(valueEl);
-            card.appendChild(newRow);
-        }
-
-        if (info.updated_between_runs) {
-            const updateRow = document.createElement("div");
-            updateRow.className = "alexz-mod-picker-module-row notice";
-            const labelEl = document.createElement("span");
-            labelEl.className = "alexz-mod-picker-module-label";
-            labelEl.textContent = "Updated between runs:";
-            const valueEl = document.createElement("span");
-            const prev = info.startup_prev_commit_short || "unknown";
-            const next = info.startup_new_commit_short || "unknown";
-            const at = info.startup_update_at ? ` (${fmtDate(info.startup_update_at)})` : "";
-            if (info.startup_prev_commit_short || info.startup_new_commit_short) {
-                valueEl.textContent = `${prev} -> ${next}${at}`;
-            } else {
-                valueEl.textContent = `local changes detected${at}`;
-            }
-            updateRow.appendChild(labelEl);
-            updateRow.appendChild(valueEl);
-            card.appendChild(updateRow);
-        }
-
-        const updatedNodes = Array.isArray(info.updated_nodes_between_runs)
-            ? info.updated_nodes_between_runs.filter(Boolean)
-            : [];
-        if (updatedNodes.length) {
-            const updatedLine = document.createElement("div");
-            updatedLine.className = "alexz-mod-picker-module-note";
-            updatedLine.textContent = `Обновлены ноды: ${updatedNodes.join(", ")}`;
-            card.appendChild(updatedLine);
-        }
-
-        const newNodes = Array.isArray(info.new_nodes_between_runs)
-            ? info.new_nodes_between_runs.filter(Boolean)
-            : [];
-        if (newNodes.length) {
-            const newLine = document.createElement("div");
-            newLine.className = "alexz-mod-picker-module-note";
-            newLine.textContent = `Добавлены ноды: ${newNodes.join(", ")}`;
-            card.appendChild(newLine);
-        }
-
-        const inlineStatus = moduleInlineStatus.get(selectedModule);
-        if (inlineStatus && inlineStatus.text) {
-            const statusLine = document.createElement("div");
-            statusLine.className = "alexz-mod-picker-module-note";
-            if (inlineStatus.tone === "ok") {
-                statusLine.classList.add("alexz-mod-picker-module-note--ok");
-            } else if (inlineStatus.tone === "warn") {
-                statusLine.classList.add("alexz-mod-picker-module-note--warn");
-            }
-            statusLine.textContent = inlineStatus.text;
-            card.appendChild(statusLine);
-        }
-
-        moduleInfo.appendChild(card);
+            },
+            onRefreshModuleInfo: refreshModuleInfoFlow,
+            onUpdateModule: async (moduleName) => runModuleUpdate("single", moduleName),
+            onInstallModuleRequirements: installSingleModuleRequirementsFlow,
+        });
     };
 
-    /**
-     * Load and render module info for currently selected group/module.
-     */
-    const loadModuleInfo = async (options = {}) => {
-        const selectedModule = nodeSelect.value;
-        const selectedGroup = getSelectedGroup();
-        const forceRefresh = Boolean(options?.forceRefresh);
-        const syncUpstream = Boolean(options?.syncUpstream);
-        const throwOnError = Boolean(options?.throwOnError);
-        if (!selectedModule || selectedModule === "-1") {
-            moduleInfo.innerHTML = "";
-            return;
-        }
-        try {
-            const payload = await fetchModuleInfo(selectedGroup, selectedModule, {
-                forceRefresh,
-                syncUpstream,
-            });
-            if (nodeSelect.value !== selectedModule || getSelectedGroup() !== selectedGroup) {
-                return;
-            }
-            const info = payload?.info || null;
-            renderModuleInfo(info);
-            if (info) {
-                const badges = moduleBadgesFromInfo(info);
-                if (badges.updatedBetweenRuns || badges.hasRemoteUpdate) {
-                    moduleBadges.set(selectedModule, badges);
-                } else {
-                    moduleBadges.delete(selectedModule);
-                }
-                setModuleNodeDiffs(selectedModule, info);
-                setModuleOptionText(selectedModule);
-                renderNodeList();
-            }
-        } catch (err) {
-            moduleInfo.innerHTML = "";
-            if (throwOnError) {
-                throw err;
-            }
-        }
+    const refreshComfyUIInfoFlow = async () => {
+        return runRefreshComfyUIInfoAction({
+            setActionBusy,
+            setProcessTarget,
+            setProcessAction,
+            setRefreshLine,
+            comfyAlert,
+            comfyAlertText,
+            comfyUpdateBtn,
+            comfyInstallReqBtn,
+            fetchComfyUIInfo,
+            getComfyMode: () => comfyModeSelect.value,
+            renderComfyAlert,
+            syncUpdateAllButton,
+        });
     };
 
-    /**
-     * Load full node catalog from backend and refresh picker UI state.
-     */
-    const loadCatalog = async (options = {}) => {
-        const preferredGroup = String(options?.preferredGroup || "").trim();
-        const preferredModule = String(options?.preferredModule || "").trim();
-        const autoExpandModule = String(options?.autoExpandModule || "").trim();
-        setHelpText("Загрузка списка нод...");
-        try {
-            const payload = await fetchNodeCatalog(comfyModeSelect.value);
-            catalogByGroup.clear();
-            const groups = payload?.groups || [];
-            customModulesNeedUpdate = Number(payload?.custom_modules_need_update || 0);
-            renderComfyAlert(payload?.comfyui || null);
-            fillGroupSelect(groups, { preferredGroup, preferredModule, autoExpandModule });
-            const summary = groups
-                .map((group) => {
-                    const label = GROUP_LABELS[group.id] || group.title || group.id;
-                    return `${label}=${group.count}`;
-                })
-                .join(", ");
-            setHelpText(`Группы: ${summary}.`);
-            syncUpdateAllButton();
-        } catch (err) {
-            setHelpText(`Ошибка загрузки: ${String(err)}`);
-            comfyAlert.classList.remove("alexz-mod-picker-status-card--warn", "alexz-mod-picker-status-card--ok");
-            comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
-            comfyAlert.style.display = "block";
-            comfyAlertText.textContent = "ComfyUI status unavailable (catalog load failed).";
-            comfyUpdateBtn.style.display = "none";
-            customModulesNeedUpdate = 0;
-            groupSelect.innerHTML = "";
-            nodeSelect.innerHTML = "";
-            moduleInfo.innerHTML = "";
-            nodeList.innerHTML = "";
-            syncUpdateAllButton();
-        }
+    const refreshCustomNodesInfoFlow = async () => {
+        return runRefreshCustomNodesInfoAction({
+            setActionBusy,
+            setProcessTarget,
+            setProcessAction,
+            setRefreshLine,
+            customAlert,
+            customAlertText,
+            refreshModuleRuntimeState,
+            pollRefreshProgress,
+            acknowledgeAllModuleNovelty,
+            loadCatalog,
+        });
     };
 
-    groupSelect.onchange = () => {
-        if (isCustomCategory()) {
-            return;
-        }
-        pickerStore.set({ selectedGroup: getSelectedGroup() || "custom" });
-        fillModuleSelect();
-        syncUpdateAllButton();
-    };
-    categorySelect.onchange = () => {
-        groupSelect.style.display = isCustomCategory() ? "none" : "";
-        pickerStore.set({ selectedGroup: getSelectedGroup() || "custom" });
-        fillModuleSelect();
-        syncUpdateAllButton();
-    };
-    moduleFilter.oninput = () => fillModuleSelect();
-    nodeSelect.onchange = () => {
-        expandedModule = "";
-        nodeList.innerHTML = "";
-        syncPickerSelectionState();
-        loadModuleInfo();
-    };
-    updateAllBtn.onclick = async () => {
-        if (actionBusy) {
-            return;
-        }
-        customStatusChecked = true;
-        setProcessTarget("custom");
-        await runModuleUpdate("all", "");
-    };
-    comfyUpdateBtn.onclick = async () => {
-        if (actionBusy) {
-            return;
-        }
-        setProcessTarget("comfy");
-        await runModuleUpdate("comfyui", "");
-    };
-    comfyInstallReqBtn.onclick = async () => {
-        if (actionBusy) {
-            return;
-        }
-        await installComfyUIRequirementsFlow();
-    };
-    comfyInfoBtn.onclick = async () => {
-        if (actionBusy) {
-            return;
-        }
-        setActionBusy(true);
-        setProcessTarget("comfy");
-        setProcessAction("", "", null);
-        setRefreshLine("Refreshing ComfyUI info...", "neutral");
-        comfyAlert.style.display = "block";
-        comfyAlert.classList.remove(
-            "alexz-mod-picker-status-card--warn",
-            "alexz-mod-picker-status-card--ok",
-            "alexz-mod-picker-status-card--neutral"
-        );
-        comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
-        comfyAlertText.textContent = "Refreshing ComfyUI info...";
-        try {
-            const payload = await fetchComfyUIInfo(true, true, comfyModeSelect.value);
-            renderComfyAlert(payload?.comfyui || null);
-        } catch (err) {
-            comfyAlert.classList.remove(
-                "alexz-mod-picker-status-card--warn",
-                "alexz-mod-picker-status-card--ok",
-                "alexz-mod-picker-status-card--neutral"
-            );
-            comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
-            comfyAlert.style.display = "block";
-            comfyAlertText.textContent = `Failed to refresh ComfyUI info: ${String(err)}`;
-            comfyUpdateBtn.style.display = "none";
-            comfyInstallReqBtn.style.display = "none";
-        } finally {
-            setActionBusy(false);
-            syncUpdateAllButton();
-        }
-    };
-    comfyModeSelect.onchange = async () => {
-        saveComfyCheckMode(comfyModeSelect.value);
-        await loadCatalog();
-    };
-    refreshBtn.onclick = async () => {
-        customStatusChecked = true;
-        setActionBusy(true);
-        setProcessTarget("custom");
-        setProcessAction("", "", null);
-        setRefreshLine("Refreshing Custom Nodes info...", "neutral");
-        customAlert.style.display = "block";
-        customAlert.classList.remove(
-            "alexz-mod-picker-status-card--warn",
-            "alexz-mod-picker-status-card--ok",
-            "alexz-mod-picker-status-card--neutral"
-        );
-        customAlert.classList.add("alexz-mod-picker-status-card--neutral");
-        customAlertText.textContent = "Refreshing Custom Nodes info...";
-        try {
-            await refreshModuleRuntimeState();
-            const ok = await pollRefreshProgress();
-            if (!ok) {
-                setRefreshLine("Custom Nodes refresh finished with errors.", "warn");
-            } else {
-                try {
-                    await acknowledgeAllModuleNovelty();
-                } catch (err) {
-                    setRefreshLine(`Refresh completed, but novelty reset failed: ${String(err)}`, "warn");
-                }
-            }
-        } catch (err) {
-            setRefreshLine(`Custom Nodes refresh error: ${String(err)}`, "warn");
-        } finally {
-            setActionBusy(false);
-        }
-        await loadCatalog();
-    };
+    bindModuleNodePickerEvents({
+        groupSelect,
+        categorySelect,
+        moduleFilter,
+        nodeSelect,
+        nodeList,
+        updateAllBtn,
+        comfyUpdateBtn,
+        comfyInstallReqBtn,
+        comfyInfoBtn,
+        comfyModeSelect,
+        refreshBtn,
+        isCustomCategory,
+        pickerStore,
+        getSelectedGroup,
+        fillModuleSelect,
+        syncUpdateAllButton,
+        syncPickerSelectionState,
+        loadModuleInfo,
+        isActionBusy: () => actionBusy,
+        setCustomStatusChecked: (value) => {
+            customStatusChecked = Boolean(value);
+        },
+        setProcessTarget,
+        runModuleUpdate,
+        installComfyUIRequirementsFlow,
+        refreshComfyUIInfoFlow,
+        saveComfyCheckMode,
+        loadCatalog,
+        refreshCustomNodesInfoFlow,
+        setExpandedModule: (value) => {
+            expandedModule = String(value || "").trim();
+        },
+    });
 
-    const startupGroup = String(pickerStore.get("selectedGroup") || "custom").trim();
-    const startupModule = String(pickerStore.get("selectedModule") || DEFAULT_MODULE).trim();
-    loadCatalog({
-        preferredGroup: startupGroup || "custom",
-        preferredModule: startupModule || DEFAULT_MODULE,
+    runModuleNodePickerStartupLoad({
+        pickerStore,
+        defaultModule: DEFAULT_MODULE,
+        loadCatalog,
     });
 }
 
