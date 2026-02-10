@@ -103,6 +103,18 @@ class SmokeTests(unittest.TestCase):
         blend = cut_mod._blend_window_from_confidence(conf)
         self.assertIn(blend, [4, 8, 12])
 
+    def test_qr_code_generation(self):
+        """Verify QR node returns a square image tensor with requested resolution."""
+        try:
+            import qrcode  # noqa: F401
+        except Exception:
+            self.skipTest("qrcode is not installed in this environment")
+
+        qr_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.qr_code_generate")
+        node = qr_mod.GenerateQRCode()
+        out, = node.generate("https://example.com", 256, "M")
+        self.assertEqual(tuple(out.shape), (1, 256, 256, 3))
+
 
 if __name__ == "__main__":
     unittest.main()

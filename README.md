@@ -1,9 +1,9 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.14.0
+Version: 0.15.0
 
 ## Overview
-Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ и отображение/сохранение JSON.
+Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
 
 Changelog: [CHANGELOG.md](CHANGELOG.md)
 
@@ -61,6 +61,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 - [Find Closest Video Frame](#find-closest-video-frame)
 - [Match Video Cut Point](#match-video-cut-point)
 - [Image Difference](#image-difference)
+- [Generate QR Code](#generate-qr-code)
 - [Image Waveform Scope](#image-waveform-scope)
 - [Image Histogram Scope](#image-histogram-scope)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
@@ -158,6 +159,18 @@ Guide: [GUIDE_VIDEO_CUT_MATCH.md](guides/GUIDE_VIDEO_CUT_MATCH.md)
 Входы: `image_a`, `image_b` (авторесайз меньшей к большей).  
 Выходы: `difference` (|A−B|).  
 Guide: [GUIDE_IMAGE_DIFFERENCE.md](guides/GUIDE_IMAGE_DIFFERENCE.md)
+
+---
+
+## Generate QR Code
+Генерирует QR-код из ссылки или текста.
+
+- Display name: Generate QR Code  
+- Type name: GenerateQRCode  
+- Category: image/utils  
+Входы: `url`, `resolution`, `error_correction` (L/M/Q/H).  
+Выходы: `image`.  
+Guide: [GUIDE_QR_CODE.md](guides/GUIDE_QR_CODE.md)
 
 ---
 

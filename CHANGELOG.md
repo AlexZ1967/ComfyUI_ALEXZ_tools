@@ -1,5 +1,12 @@
 # Changelog — ALEXZ_tools
 
+## 0.15.0 — 2026-02-10
+- Added new node `Generate QR Code` (`GenerateQRCode`) for QR generation from link/text.
+- New node inputs: `url`, `resolution`, `error_correction` (`L/M/Q/H`), output: `image`.
+- Added guide `guides/GUIDE_QR_CODE.md`.
+- Updated docs synchronization checks to include QR node (`utils/docs_check.py`).
+- Added dependency `qrcode` to `requirements.txt`.
+
 ## 0.14.0 — 2026-02-10
 - Minor-version bump due large internal refactor of project layout (`nodes/`, `guides/`, `utils/`).
 - `Remove Static Watermark from Video` migrated to ProPainter-only pipeline.

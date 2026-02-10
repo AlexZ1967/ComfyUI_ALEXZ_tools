@@ -50,6 +50,12 @@ NODE_DOCS = [
         "readme_heading": "## Image Difference",
     },
     {
+        "file": "nodes/qr_code_generate.py",
+        "class": "GenerateQRCode",
+        "guide": "guides/GUIDE_QR_CODE.md",
+        "readme_heading": "## Generate QR Code",
+    },
+    {
         "file": "nodes/image_scopes.py",
         "class": "ImageWaveformScope",
         "guide": "guides/GUIDE_IMAGE_WAVEFORM.md",

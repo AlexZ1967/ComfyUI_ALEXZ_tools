@@ -99,6 +99,7 @@ _ALEXZ_ANNOTATIONS = {
     "ImageDifference": "Строит абсолютную разницу двух изображений.",
     "ImageWaveformScope": "Строит waveform/parade scope для анализа яркости и каналов.",
     "ImageHistogramScope": "Строит RGB/Luma гистограмму изображения.",
+    "GenerateQRCode": "Генерирует QR-код из ссылки или текста.",
     "ALEXZTestNode": "Тестовая нода для проверки загрузки/обновления и работы Module Nodes.",
 }
 

@@ -21,6 +21,7 @@ _NODE_SPECS = [
     ("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
     ("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
     ("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
+    ("GenerateQRCode", "Generate QR Code", ".qr_code_generate", "GenerateQRCode"),
     ("ALEXZTestNode", "ALEXZ Test Node", ".test_node", "ALEXZTestNode"),
 ]
 
