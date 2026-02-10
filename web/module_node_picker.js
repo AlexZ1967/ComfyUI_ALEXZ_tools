@@ -58,30 +58,52 @@ function injectStyles() {
         overflow: auto;
     }
     .alexz-mod-picker-head {
-        display: block;
-    }
-    .alexz-mod-picker-toolbar {
         display: flex;
         align-items: center;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
-    .alexz-mod-picker-debug-toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 11px;
-        opacity: 0.9;
-        user-select: none;
-        white-space: nowrap;
-    }
-    .alexz-mod-picker-debug-toggle input {
-        margin: 0;
+        gap: 8px;
     }
     .alexz-mod-picker-title {
         font-size: 13px;
         font-weight: 700;
         opacity: 0.95;
+        margin-right: auto;
+    }
+    .alexz-mod-picker-head-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .alexz-mod-picker-debug-card {
+        border: 1px dashed var(--border-color, #555);
+        border-radius: 7px;
+        padding: 6px;
+        display: none;
+        background: var(--comfy-input-bg, rgba(255,255,255,0.02));
+    }
+    .alexz-mod-picker-debug-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+    .alexz-mod-picker-debug-title {
+        font-size: 11px;
+        font-weight: 700;
+        opacity: 0.92;
+    }
+    .alexz-mod-picker-divider {
+        border-top: 1px solid var(--border-color, #444);
+        margin: 2px 0;
+    }
+    .alexz-mod-picker-update-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .alexz-mod-picker-update-block {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
     }
     .alexz-mod-picker-select {
         width: 100%;
@@ -135,21 +157,44 @@ function injectStyles() {
         max-height: 130px;
         overflow: auto;
     }
-    .alexz-mod-picker-comfy-alert {
-        border: 1px solid #b64040;
-        background: rgba(180, 64, 64, 0.16);
-        color: #ff6b6b;
+    .alexz-mod-picker-status-card {
+        border: 1px solid var(--border-color, #555);
+        background: var(--comfy-input-bg, rgba(255,255,255,0.02));
+        color: var(--input-text, inherit);
         border-radius: 7px;
         padding: 7px 8px;
         font-size: 12px;
         line-height: 1.3;
-        font-weight: 700;
-        display: none;
+        display: block;
     }
-    .alexz-mod-picker-comfy-alert.alexz-mod-picker-comfy-alert--ok {
+    .alexz-mod-picker-status-card.alexz-mod-picker-status-card--warn {
+        border-color: #b64040;
+        background: rgba(180, 64, 64, 0.16);
+        color: #ff6b6b;
+        font-weight: 700;
+    }
+    .alexz-mod-picker-status-card.alexz-mod-picker-status-card--ok {
         border-color: #2e8f61;
         background: rgba(61, 187, 126, 0.16);
         color: #3dbb7e;
+        font-weight: 700;
+    }
+    .alexz-mod-picker-status-card.alexz-mod-picker-status-card--neutral {
+        border-color: var(--border-color, #555);
+        background: rgba(120, 120, 120, 0.08);
+        color: var(--input-text, inherit);
+    }
+    .alexz-mod-picker-status-card-actions {
+        margin-top: 6px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .alexz-mod-picker-process-inline {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px dashed var(--border-color, #555);
+        display: none;
     }
     .alexz-mod-picker-module-card {
         border: 1px solid var(--border-color, #444);
@@ -196,6 +241,14 @@ function injectStyles() {
         opacity: 0.8;
         line-height: 1.25em;
         white-space: pre-wrap;
+    }
+    .alexz-mod-picker-module-note.alexz-mod-picker-module-note--ok {
+        color: #3dbb7e;
+        font-weight: 700;
+    }
+    .alexz-mod-picker-module-note.alexz-mod-picker-module-note--warn {
+        color: #ff6b6b;
+        font-weight: 700;
     }
     .alexz-mod-picker-module-row {
         font-size: 11px;
@@ -579,32 +632,71 @@ function renderPicker(container) {
     title.textContent = "Node Picker";
     head.appendChild(title);
 
-    const toolbar = document.createElement("div");
-    toolbar.className = "alexz-mod-picker-toolbar";
-    root.appendChild(toolbar);
+    const headRight = document.createElement("div");
+    headRight.className = "alexz-mod-picker-head-right";
+    head.appendChild(headRight);
 
-    const updateAllBtn = document.createElement("button");
-    updateAllBtn.type = "button";
-    updateAllBtn.textContent = "Update all custom_nodes";
-    updateAllBtn.className = "alexz-mod-picker-btn-small";
-    updateAllBtn.style.display = "none";
-    toolbar.appendChild(updateAllBtn);
+    const debugToggle = document.createElement("button");
+    debugToggle.type = "button";
+    debugToggle.className = "alexz-mod-picker-btn-small";
+    debugToggle.textContent = "Debug";
+    headRight.appendChild(debugToggle);
 
-    const refreshBtn = document.createElement("button");
-    refreshBtn.type = "button";
-    refreshBtn.textContent = "Обновить информацию о модулях";
-    refreshBtn.className = "alexz-mod-picker-btn-small";
-    toolbar.appendChild(refreshBtn);
+    const debugCard = document.createElement("div");
+    debugCard.className = "alexz-mod-picker-debug-card";
+    root.appendChild(debugCard);
+
+    const debugCardHeader = document.createElement("div");
+    debugCardHeader.className = "alexz-mod-picker-debug-card-header";
+    debugCard.appendChild(debugCardHeader);
+
+    const debugTitle = document.createElement("div");
+    debugTitle.className = "alexz-mod-picker-debug-title";
+    debugTitle.textContent = "Debug diagnostics";
+    debugCardHeader.appendChild(debugTitle);
+
+    const debugCopyBtn = document.createElement("button");
+    debugCopyBtn.type = "button";
+    debugCopyBtn.className = "alexz-mod-picker-btn-small";
+    debugCopyBtn.textContent = "Copy ⧉";
+    debugCardHeader.appendChild(debugCopyBtn);
+
+    const diagnostics = document.createElement("div");
+    diagnostics.className = "alexz-mod-picker-diag";
+    diagnostics.textContent = "diag: waiting for sidebar sync...";
+    debugCard.appendChild(diagnostics);
+
+    const dividerTop = document.createElement("div");
+    dividerTop.className = "alexz-mod-picker-divider";
+    root.appendChild(dividerTop);
+
+    const updateGrid = document.createElement("div");
+    updateGrid.className = "alexz-mod-picker-update-grid";
+    root.appendChild(updateGrid);
+
+    const comfyUpdateBlock = document.createElement("div");
+    comfyUpdateBlock.className = "alexz-mod-picker-update-block";
+    updateGrid.appendChild(comfyUpdateBlock);
+
+    const customUpdateBlock = document.createElement("div");
+    customUpdateBlock.className = "alexz-mod-picker-update-block";
+    updateGrid.appendChild(customUpdateBlock);
 
     const comfyInfoBtn = document.createElement("button");
     comfyInfoBtn.type = "button";
-    comfyInfoBtn.textContent = "Обновить информацию о ComfyUI";
+    comfyInfoBtn.textContent = "Refresh ComfyUI Info";
     comfyInfoBtn.className = "alexz-mod-picker-btn-small";
-    toolbar.appendChild(comfyInfoBtn);
+    comfyUpdateBlock.appendChild(comfyInfoBtn);
+
+    const refreshBtn = document.createElement("button");
+    refreshBtn.type = "button";
+    refreshBtn.textContent = "Refresh Custom Nodes Info";
+    refreshBtn.className = "alexz-mod-picker-btn-small";
+    customUpdateBlock.appendChild(refreshBtn);
 
     const comfyModeSelect = document.createElement("select");
     comfyModeSelect.className = "alexz-mod-picker-btn-small";
-    comfyModeSelect.title = "Режим проверки обновлений ComfyUI";
+    comfyModeSelect.title = "ComfyUI update-check mode";
     const modeReleases = document.createElement("option");
     modeReleases.value = "releases";
     modeReleases.textContent = "ComfyUI check: releases";
@@ -613,28 +705,40 @@ function renderPicker(container) {
     modeCommits.value = "commits";
     modeCommits.textContent = "ComfyUI check: commits";
     comfyModeSelect.appendChild(modeCommits);
-    toolbar.appendChild(comfyModeSelect);
-
-    const debugToggleLabel = document.createElement("label");
-    debugToggleLabel.className = "alexz-mod-picker-debug-toggle";
-    const debugToggle = document.createElement("input");
-    debugToggle.type = "checkbox";
-    debugToggleLabel.appendChild(debugToggle);
-    debugToggleLabel.append("Debug");
-    toolbar.appendChild(debugToggleLabel);
+    comfyUpdateBlock.appendChild(comfyModeSelect);
 
     const comfyAlert = document.createElement("div");
-    comfyAlert.className = "alexz-mod-picker-comfy-alert";
+    comfyAlert.className = "alexz-mod-picker-status-card alexz-mod-picker-status-card--neutral";
     const comfyAlertText = document.createElement("div");
     comfyAlert.appendChild(comfyAlertText);
+    const comfyActions = document.createElement("div");
+    comfyActions.className = "alexz-mod-picker-status-card-actions";
+    comfyAlert.appendChild(comfyActions);
     const comfyUpdateBtn = document.createElement("button");
     comfyUpdateBtn.type = "button";
     comfyUpdateBtn.className = "alexz-mod-picker-btn-small";
     comfyUpdateBtn.textContent = "Update ComfyUI";
-    comfyUpdateBtn.style.marginTop = "6px";
     comfyUpdateBtn.style.display = "none";
-    comfyAlert.appendChild(comfyUpdateBtn);
+    comfyActions.appendChild(comfyUpdateBtn);
     root.appendChild(comfyAlert);
+
+    const customAlert = document.createElement("div");
+    customAlert.className = "alexz-mod-picker-status-card alexz-mod-picker-status-card--neutral";
+    const customAlertText = document.createElement("div");
+    customAlert.appendChild(customAlertText);
+    const customActions = document.createElement("div");
+    customActions.className = "alexz-mod-picker-status-card-actions";
+    customAlert.appendChild(customActions);
+    const updateAllBtn = document.createElement("button");
+    updateAllBtn.type = "button";
+    updateAllBtn.textContent = "Update Custom Nodes";
+    updateAllBtn.className = "alexz-mod-picker-btn-small";
+    updateAllBtn.style.display = "none";
+    customActions.appendChild(updateAllBtn);
+    root.appendChild(customAlert);
+
+    const processHost = document.createElement("div");
+    processHost.className = "alexz-mod-picker-process-inline";
 
     const categorySelect = document.createElement("select");
     categorySelect.className = "alexz-mod-picker-select";
@@ -664,12 +768,15 @@ function renderPicker(container) {
 
     const refreshLine = document.createElement("div");
     refreshLine.className = "alexz-mod-picker-refresh-line";
-    root.appendChild(refreshLine);
+    processHost.appendChild(refreshLine);
 
-    const diagnostics = document.createElement("div");
-    diagnostics.className = "alexz-mod-picker-diag";
-    diagnostics.textContent = "diag: waiting for sidebar sync...";
-    root.appendChild(diagnostics);
+    const processActions = document.createElement("div");
+    processActions.className = "alexz-mod-picker-status-card-actions";
+    processHost.appendChild(processActions);
+
+    const dividerBottom = document.createElement("div");
+    dividerBottom.className = "alexz-mod-picker-divider";
+    root.appendChild(dividerBottom);
 
     const loadDebugEnabled = () => {
         try {
@@ -711,16 +818,25 @@ function renderPicker(container) {
             // Ignore storage failures and keep runtime flag only.
         }
     };
+    let debugEnabled = loadDebugEnabled();
     const applyDebugUiState = () => {
-        const enabled = Boolean(debugToggle.checked);
-        window[NODE_PICKER_DEBUG_KEY] = enabled;
-        diagnostics.style.display = enabled ? "" : "none";
+        window[NODE_PICKER_DEBUG_KEY] = Boolean(debugEnabled);
+        debugCard.style.display = debugEnabled ? "" : "none";
+        debugToggle.textContent = debugEnabled ? "Debug: ON" : "Debug";
     };
-    debugToggle.checked = loadDebugEnabled();
     applyDebugUiState();
-    debugToggle.addEventListener("change", () => {
+    debugToggle.addEventListener("click", () => {
+        debugEnabled = !debugEnabled;
         applyDebugUiState();
-        saveDebugEnabled(Boolean(debugToggle.checked));
+        saveDebugEnabled(Boolean(debugEnabled));
+    });
+    debugCopyBtn.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(diagnostics.textContent || "");
+            setHelpText("Debug diagnostics copied to clipboard.");
+        } catch (_err) {
+            setHelpText("Failed to copy debug diagnostics.");
+        }
     });
 
     const help = document.createElement("div");
@@ -739,12 +855,50 @@ function renderPicker(container) {
     const moduleOptions = new Map();
     const moduleBadges = new Map();
     const moduleNodeDiffs = new Map();
+    const moduleInlineStatus = new Map();
     const updatedModulesSession = new Set();
     let refreshPollToken = 0;
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
+    let customStatusChecked = false;
+    let processTarget = "";
     let actionBusy = false;
     let expandedModule = "";
+
+    /**
+     * Store one-line module action result shown inside module card.
+     */
+    const setModuleInlineStatus = (moduleName, text, tone = "neutral") => {
+        const key = String(moduleName || "").trim();
+        if (!key) {
+            return;
+        }
+        if (!text) {
+            moduleInlineStatus.delete(key);
+            return;
+        }
+        moduleInlineStatus.set(key, {
+            text: String(text),
+            tone: String(tone || "neutral"),
+        });
+    };
+
+    /**
+     * Mount progress inline block into the selected top status card.
+     */
+    const setProcessTarget = (target) => {
+        const normalized = String(target || "").trim().toLowerCase();
+        processTarget = normalized;
+        const parent = processHost.parentElement;
+        if (parent) {
+            parent.removeChild(processHost);
+        }
+        if (normalized === "comfy") {
+            comfyAlert.appendChild(processHost);
+        } else if (normalized === "custom") {
+            customAlert.appendChild(processHost);
+        }
+    };
 
     /**
      * Return true when UI is currently in Custom Nodes mode.
@@ -762,45 +916,77 @@ function renderPicker(container) {
     };
 
     /**
-     * Render ComfyUI update alert block when upstream update is available.
+     * Render ComfyUI status card based on selected update-check mode.
      */
     const renderComfyAlert = (info) => {
         const behind = Number(info?.behind);
         const status = String(info?.update_status || "unknown");
         const mode = String(info?.check_mode || comfyModeSelect.value || "releases");
-        const updatedBetweenRuns = Boolean(info?.updated_between_runs);
-        comfyAlert.classList.remove("alexz-mod-picker-comfy-alert--ok");
-        const canUpdate = status === "can_update" && (!Number.isFinite(behind) || behind > 0);
-        if (!canUpdate) {
-            if (updatedBetweenRuns) {
-                const prev = String(info?.startup_prev_commit_short || "unknown");
-                const next = String(info?.startup_new_commit_short || "unknown");
-                const at = info?.startup_update_at ? ` (${fmtDate(info.startup_update_at)})` : "";
-                comfyAlertText.textContent = `ComfyUI обновлен между запусками: ${prev} -> ${next}${at}.`;
-                comfyUpdateBtn.style.display = "none";
-                comfyAlert.style.display = "block";
-                comfyAlert.classList.add("alexz-mod-picker-comfy-alert--ok");
-                return;
-            }
-            comfyAlert.style.display = "none";
-            comfyAlertText.textContent = "";
-            comfyUpdateBtn.style.display = "none";
-            return;
-        }
         const branch = String(info?.branch || "unknown");
         const local = String(info?.installed_commit_short || "unknown");
         const remote = String(info?.remote_commit_short || "unknown");
         const releaseTag = String(info?.release_tag || "").trim();
-        if (mode === "releases" && releaseTag) {
-            comfyAlertText.textContent = `ComfyUI требует обновления: mode=releases, release=${releaseTag}, local=${local}, remote=${remote}.`;
-        } else if (Number.isFinite(behind) && behind > 0) {
-            comfyAlertText.textContent = `ComfyUI требует обновления: mode=commits, branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
-        } else {
-            comfyAlertText.textContent = `ComfyUI требует обновления: mode=${mode}, branch=${branch}, local=${local}, remote=${remote}.`;
-        }
-        comfyUpdateBtn.style.display = "";
-        comfyUpdateBtn.disabled = actionBusy;
+        const canUpdate = status === "can_update" && (!Number.isFinite(behind) || behind > 0);
+
+        comfyAlert.classList.remove(
+            "alexz-mod-picker-status-card--warn",
+            "alexz-mod-picker-status-card--ok",
+            "alexz-mod-picker-status-card--neutral"
+        );
         comfyAlert.style.display = "block";
+
+        if (canUpdate) {
+            comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
+            if (mode === "releases" && releaseTag) {
+                comfyAlertText.textContent = `ComfyUI requires update (releases): release=${releaseTag}, local=${local}, remote=${remote}.`;
+            } else if (Number.isFinite(behind) && behind > 0) {
+                comfyAlertText.textContent = `ComfyUI requires update (commits): branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
+            } else {
+                comfyAlertText.textContent = `ComfyUI requires update: mode=${mode}, branch=${branch}, local=${local}, remote=${remote}.`;
+            }
+            comfyUpdateBtn.style.display = "";
+            comfyUpdateBtn.disabled = actionBusy;
+            return;
+        }
+
+        comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
+        if (Boolean(info?.updated_between_runs)) {
+            const prev = String(info?.startup_prev_commit_short || "unknown");
+            const next = String(info?.startup_new_commit_short || "unknown");
+            const at = info?.startup_update_at ? ` (${fmtDate(info.startup_update_at)})` : "";
+            comfyAlertText.textContent = `ComfyUI updated between runs: ${prev} -> ${next}${at}. No updates required.`;
+        } else {
+            comfyAlertText.textContent = `ComfyUI is up to date (${mode} check).`;
+        }
+        comfyUpdateBtn.style.display = "none";
+    };
+
+    /**
+     * Render Custom Nodes status card and global update button.
+     */
+    const renderCustomAlert = () => {
+        if (customModulesNeedUpdate <= 0 && !customStatusChecked) {
+            customAlert.style.display = "none";
+            updateAllBtn.style.display = "none";
+            return;
+        }
+        customAlert.classList.remove(
+            "alexz-mod-picker-status-card--warn",
+            "alexz-mod-picker-status-card--ok",
+            "alexz-mod-picker-status-card--neutral"
+        );
+        customAlert.style.display = "block";
+        if (customModulesNeedUpdate > 0) {
+            customAlert.classList.add("alexz-mod-picker-status-card--warn");
+            customAlertText.textContent = `${customModulesNeedUpdate} custom modules require update.`;
+            updateAllBtn.textContent = `Update Custom Nodes (${customModulesNeedUpdate})`;
+            updateAllBtn.style.display = "";
+            updateAllBtn.disabled = actionBusy;
+            return;
+        }
+        customAlert.classList.add("alexz-mod-picker-status-card--neutral");
+        customAlertText.textContent = "Custom Nodes: no updates required.";
+        updateAllBtn.style.display = "none";
     };
 
     /**
@@ -812,16 +998,58 @@ function renderPicker(container) {
     };
 
     /**
-     * Update the one-line status/progress text with optional color tone.
+     * Show a process action row with optional button (e.g., install requirements).
+     */
+    const setProcessAction = (label, btnText, onClick) => {
+        processActions.innerHTML = "";
+        if (!label) {
+            if (!refreshLine.textContent) {
+                processHost.style.display = "none";
+            }
+            return;
+        }
+        if (!processHost.parentElement) {
+            setProcessTarget(processTarget || "custom");
+        }
+        processHost.style.display = "";
+        const labelEl = document.createElement("div");
+        labelEl.textContent = label;
+        processActions.appendChild(labelEl);
+        if (!btnText || typeof onClick !== "function") {
+            return;
+        }
+        const actionBtn = document.createElement("button");
+        actionBtn.type = "button";
+        actionBtn.className = "alexz-mod-picker-btn-small";
+        actionBtn.textContent = btnText;
+        actionBtn.disabled = actionBusy;
+        actionBtn.onclick = onClick;
+        processActions.appendChild(actionBtn);
+    };
+
+    /**
+     * Update inline process text with optional color tone.
      */
     const setRefreshLine = (text, tone = "neutral") => {
-        refreshLine.textContent = text || "";
+        const value = String(text || "");
+        refreshLine.textContent = value;
         refreshLine.classList.remove("alexz-mod-picker-refresh-line--ok", "alexz-mod-picker-refresh-line--warn");
+        if (!value) {
+            if (!processActions.children.length) {
+                processHost.style.display = "none";
+            }
+            return;
+        }
+        if (!processHost.parentElement) {
+            setProcessTarget(processTarget || "custom");
+        }
+        processHost.style.display = "";
         if (tone === "ok") {
             refreshLine.classList.add("alexz-mod-picker-refresh-line--ok");
         } else if (tone === "warn") {
             refreshLine.classList.add("alexz-mod-picker-refresh-line--warn");
         }
+        console.log(`[ALEXZ_tools] ${value}`);
     };
     /**
      * Render compact diagnostics block for tab-sync troubleshooting.
@@ -944,24 +1172,24 @@ function renderPicker(container) {
         if (phase === "sync") {
             if (total > 0) {
                 const modulePart = moduleName ? ` (${moduleName})` : "";
-                return { text: `Обновление статусов модулей: ${current}/${total}, осталось ${remaining}${modulePart}`, tone: "neutral" };
+                return { text: `Refreshing Custom Nodes: ${current}/${total}, remaining ${remaining}${modulePart}`, tone: "neutral" };
             }
-            return { text: "Обновление статусов модулей: подготовка...", tone: "neutral" };
+            return { text: "Refreshing Custom Nodes: preparing...", tone: "neutral" };
         }
         if (phase === "snapshots") {
-            return { text: "Обновление статусов модулей: пересчет...", tone: "neutral" };
+            return { text: "Refreshing Custom Nodes: recomputing snapshots...", tone: "neutral" };
         }
         if (phase === "done") {
             const count = Number.isFinite(modulesNeedUpdate) ? Math.max(0, modulesNeedUpdate) : 0;
             if (count > 0) {
-                return { text: `${count} модулей требуют обновления`, tone: "warn" };
+                return { text: `${count} custom modules require update`, tone: "warn" };
             }
-            return { text: "обновления не требуются", tone: "ok" };
+            return { text: "Custom Nodes: no updates required", tone: "ok" };
         }
         if (phase === "error") {
-            return { text: `Обновление статусов модулей: ошибка${error ? ` (${error})` : ""}.`, tone: "warn" };
+            return { text: `Custom Nodes refresh failed${error ? ` (${error})` : ""}.`, tone: "warn" };
         }
-        return { text: "Обновление статусов модулей: запуск...", tone: "neutral" };
+        return { text: "Refreshing Custom Nodes: starting...", tone: "neutral" };
     };
 
     /**
@@ -974,7 +1202,7 @@ function renderPicker(container) {
             try {
                 payload = await fetchModuleRefreshStatus();
             } catch (err) {
-                setRefreshLine(`Обновление статусов модулей: ошибка статуса (${String(err)}).`, "warn");
+                setRefreshLine(`Custom Nodes refresh status failed (${String(err)}).`, "warn");
                 return false;
             }
             const refresh = payload?.refresh || {};
@@ -995,9 +1223,14 @@ function renderPicker(container) {
         actionBusy = Boolean(busy);
         refreshBtn.disabled = actionBusy;
         comfyInfoBtn.disabled = actionBusy;
+        comfyModeSelect.disabled = actionBusy;
+        debugToggle.disabled = actionBusy;
         updateAllBtn.disabled = actionBusy;
         comfyUpdateBtn.disabled = actionBusy || comfyUpdateBtn.style.display === "none";
         for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
+            btn.disabled = actionBusy;
+        }
+        for (const btn of processActions.querySelectorAll(".alexz-mod-picker-btn-small")) {
             btn.disabled = actionBusy;
         }
     };
@@ -1006,13 +1239,7 @@ function renderPicker(container) {
      * Toggle visibility and label of the global custom-nodes update button.
      */
     const syncUpdateAllButton = () => {
-        const show = isCustomCategory() && customModulesNeedUpdate > 0;
-        if (!show) {
-            updateAllBtn.style.display = "none";
-            return;
-        }
-        updateAllBtn.style.display = "";
-        updateAllBtn.textContent = `Update all custom_nodes (${customModulesNeedUpdate})`;
+        renderCustomAlert();
     };
 
     /**
@@ -1034,38 +1261,38 @@ function renderPicker(container) {
         if (phase === "update") {
             const modulePart = moduleName ? ` (${moduleName})` : "";
             if (total > 0) {
-                return { text: `Обновление модулей: ${current}/${total}, осталось ${remaining}${modulePart}`, tone: "neutral" };
+                return { text: `Updating modules: ${current}/${total}, remaining ${remaining}${modulePart}`, tone: "neutral" };
             }
-            return { text: "Обновление модулей: запуск...", tone: "neutral" };
+            return { text: "Updating modules: starting...", tone: "neutral" };
         }
         if (phase === "done") {
             if (scope === "comfyui") {
                 if (failed > 0) {
-                    return { text: "Обновление ComfyUI завершено с ошибкой.", tone: "warn" };
+                    return { text: "ComfyUI update finished with errors.", tone: "warn" };
                 }
                 if (updated > 0 && requirementsChanged) {
-                    return { text: "ComfyUI обновлен, требуется обновить dependencies.", tone: "warn" };
+                    return { text: "ComfyUI updated. requirements.txt changed.", tone: "warn" };
                 }
                 if (updated > 0) {
-                    return { text: "ComfyUI обновлен.", tone: "ok" };
+                    return { text: "ComfyUI updated.", tone: "ok" };
                 }
-                return { text: "ComfyUI уже актуален.", tone: "ok" };
+                return { text: "ComfyUI already up to date.", tone: "ok" };
             }
             if (total <= 0) {
-                return { text: "Обновления не найдены.", tone: "ok" };
+                return { text: "No updates found.", tone: "ok" };
             }
             if (failed > 0) {
-                return { text: `Обновление завершено: updated=${updated}, failed=${failed}.`, tone: "warn" };
+                return { text: `Update finished: updated=${updated}, failed=${failed}.`, tone: "warn" };
             }
             if (reqList.length > 0) {
-                return { text: `Обновление завершено: ${updated} модулей обновлено, требуется обновить dependencies.`, tone: "warn" };
+                return { text: `Update finished: ${updated} module(s) updated, requirements changed.`, tone: "warn" };
             }
-            return { text: `Обновление завершено: ${updated} модулей обновлено.`, tone: "ok" };
+            return { text: `Update finished: ${updated} module(s) updated.`, tone: "ok" };
         }
         if (phase === "error") {
-            return { text: `Обновление модулей: ошибка${error ? ` (${error})` : ""}.`, tone: "warn" };
+            return { text: `Update failed${error ? ` (${error})` : ""}.`, tone: "warn" };
         }
-        return { text: "Обновление модулей: подготовка...", tone: "neutral" };
+        return { text: "Preparing update...", tone: "neutral" };
     };
 
     /**
@@ -1078,7 +1305,7 @@ function renderPicker(container) {
             try {
                 payload = await fetchModuleUpdateStatus();
             } catch (err) {
-                setRefreshLine(`Обновление модулей: ошибка статуса (${String(err)}).`, "warn");
+                setRefreshLine(`Update status failed (${String(err)}).`, "warn");
                 return null;
             }
             const update = payload?.update || {};
@@ -1093,7 +1320,7 @@ function renderPicker(container) {
     };
 
     /**
-     * Ask user to install changed requirements.txt files and execute pip install.
+     * Offer one-click requirements installation when updated modules changed requirements.txt.
      */
     const maybeInstallChangedRequirements = async (update) => {
         const scope = String(update?.scope || "");
@@ -1101,21 +1328,26 @@ function renderPicker(container) {
             if (!Boolean(update?.requirements_changed)) {
                 return;
             }
-            const answer = window.confirm(
-                "В ComfyUI изменился requirements.txt.\n" +
-                "Обновить зависимости через pip в текущем окружении ComfyUI?"
+            setRefreshLine("ComfyUI requirements.txt changed. Install dependencies?", "warn");
+            setProcessAction(
+                "ComfyUI requirements were updated after pull.",
+                "Install ComfyUI requirements",
+                async () => {
+                    setActionBusy(true);
+                    try {
+                        setRefreshLine("Installing ComfyUI dependencies (pip)...", "neutral");
+                        const install = await installComfyUIRequirements();
+                        if (String(install?.status || "") !== "installed") {
+                            setRefreshLine("ComfyUI dependencies install failed.", "warn");
+                            return;
+                        }
+                        setRefreshLine("ComfyUI dependencies installed.", "ok");
+                        setProcessAction("", "", null);
+                    } finally {
+                        setActionBusy(false);
+                    }
+                }
             );
-            if (!answer) {
-                setRefreshLine("ComfyUI requirements.txt изменился, установка зависимостей пропущена.", "warn");
-                return;
-            }
-            setRefreshLine("Установка зависимостей ComfyUI (pip) ...", "neutral");
-            const install = await installComfyUIRequirements();
-            if (String(install?.status || "") !== "installed") {
-                setRefreshLine("Установка зависимостей ComfyUI завершена с ошибкой.", "warn");
-                return;
-            }
-            setRefreshLine("Зависимости ComfyUI обновлены.", "ok");
             return;
         }
 
@@ -1123,23 +1355,28 @@ function renderPicker(container) {
         if (!modules.length) {
             return;
         }
-        const answer = window.confirm(
-            `В модуле(ях) ${modules.join(", ")} изменился requirements.txt.\n` +
-            "Обновить зависимости через pip в текущем окружении ComfyUI?"
+        setRefreshLine("Custom module requirements changed. Install dependencies?", "warn");
+        setProcessAction(
+            `requirements.txt changed for: ${modules.join(", ")}.`,
+            "Install updated requirements",
+            async () => {
+                setActionBusy(true);
+                try {
+                    setRefreshLine("Installing updated dependencies (pip)...", "neutral");
+                    const install = await installModuleRequirements(modules);
+                    const failed = Number(install?.failed || 0);
+                    const installed = Number(install?.installed || 0);
+                    if (failed > 0) {
+                        setRefreshLine(`Dependencies install finished with errors: ok=${installed}, failed=${failed}.`, "warn");
+                        return;
+                    }
+                    setRefreshLine(`Dependencies installed: ${installed} module(s).`, "ok");
+                    setProcessAction("", "", null);
+                } finally {
+                    setActionBusy(false);
+                }
+            }
         );
-        if (!answer) {
-            setRefreshLine("requirements.txt изменился, установка зависимостей пропущена.", "warn");
-            return;
-        }
-        setRefreshLine("Установка зависимостей (pip) ...", "neutral");
-        const install = await installModuleRequirements(modules);
-        const failed = Number(install?.failed || 0);
-        const installed = Number(install?.installed || 0);
-        if (failed > 0) {
-            setRefreshLine(`Установка зависимостей завершена с ошибками: ok=${installed}, failed=${failed}.`, "warn");
-            return;
-        }
-        setRefreshLine(`Зависимости обновлены: ${installed} модулей.`, "ok");
     };
 
     /**
@@ -1149,7 +1386,13 @@ function renderPicker(container) {
     const runModuleUpdate = async (scope, moduleName) => {
         setActionBusy(true);
         try {
-            setRefreshLine("Обновление модулей: запуск...", "neutral");
+            if (String(scope || "") === "comfyui") {
+                setProcessTarget("comfy");
+            } else {
+                setProcessTarget("custom");
+            }
+            setProcessAction("", "", null);
+            setRefreshLine("Starting update...", "neutral");
             await startModuleUpdate(scope, moduleName);
             const update = await pollUpdateProgress();
             if (!update) {
@@ -1188,7 +1431,7 @@ function renderPicker(container) {
             await loadCatalog({ preferredGroup, preferredModule, autoExpandModule });
             await loadModuleInfo();
         } catch (err) {
-            setRefreshLine(`Обновление модулей: ошибка (${String(err)}).`, "warn");
+            setRefreshLine(`Update failed (${String(err)}).`, "warn");
         } finally {
             setActionBusy(false);
             syncUpdateAllButton();
@@ -1549,14 +1792,19 @@ function renderPicker(container) {
                 if (actionBusy) {
                     return;
                 }
+                const moduleName = String(info.module || nodeSelect.value || "").trim();
+                setProcessTarget("");
+                setRefreshLine("", "neutral");
+                setProcessAction("", "", null);
+                setModuleInlineStatus(moduleName, "Refreshing module info...", "neutral");
                 setActionBusy(true);
-                setRefreshLine("Обновление информации о модуле...", "neutral");
                 try {
                     await loadModuleInfo({ forceRefresh: true, syncUpstream: true, throwOnError: true });
-                    setRefreshLine("Информация о модуле обновлена.", "ok");
+                    setModuleInlineStatus(moduleName, "Module info updated.", "ok");
                 } catch (err) {
-                    setRefreshLine(`Ошибка обновления информации модуля: ${String(err)}`, "warn");
+                    setModuleInlineStatus(moduleName, `Failed to refresh module info: ${String(err)}`, "warn");
                 } finally {
+                    await loadModuleInfo({ forceRefresh: false, syncUpstream: false });
                     setActionBusy(false);
                     syncUpdateAllButton();
                 }
@@ -1597,14 +1845,19 @@ function renderPicker(container) {
                 if (actionBusy) {
                     return;
                 }
+                const moduleName = String(info.module || nodeSelect.value || "").trim();
+                setProcessTarget("");
+                setRefreshLine("", "neutral");
+                setProcessAction("", "", null);
+                setModuleInlineStatus(moduleName, "Refreshing module info...", "neutral");
                 setActionBusy(true);
-                setRefreshLine("Обновление информации о модуле...", "neutral");
                 try {
                     await loadModuleInfo({ forceRefresh: true, syncUpstream: false, throwOnError: true });
-                    setRefreshLine("Информация о модуле обновлена.", "ok");
+                    setModuleInlineStatus(moduleName, "Module info updated.", "ok");
                 } catch (err) {
-                    setRefreshLine(`Ошибка обновления информации модуля: ${String(err)}`, "warn");
+                    setModuleInlineStatus(moduleName, `Failed to refresh module info: ${String(err)}`, "warn");
                 } finally {
+                    await loadModuleInfo({ forceRefresh: false, syncUpstream: false });
                     setActionBusy(false);
                     syncUpdateAllButton();
                 }
@@ -1664,6 +1917,19 @@ function renderPicker(container) {
             newLine.className = "alexz-mod-picker-module-note";
             newLine.textContent = `Добавлены ноды: ${newNodes.join(", ")}`;
             card.appendChild(newLine);
+        }
+
+        const inlineStatus = moduleInlineStatus.get(selectedModule);
+        if (inlineStatus && inlineStatus.text) {
+            const statusLine = document.createElement("div");
+            statusLine.className = "alexz-mod-picker-module-note";
+            if (inlineStatus.tone === "ok") {
+                statusLine.classList.add("alexz-mod-picker-module-note--ok");
+            } else if (inlineStatus.tone === "warn") {
+                statusLine.classList.add("alexz-mod-picker-module-note--warn");
+            }
+            statusLine.textContent = inlineStatus.text;
+            card.appendChild(statusLine);
         }
 
         moduleInfo.appendChild(card);
@@ -1736,9 +2002,12 @@ function renderPicker(container) {
             syncUpdateAllButton();
         } catch (err) {
             setHelpText(`Ошибка загрузки: ${String(err)}`);
-            comfyAlert.style.display = "none";
-            comfyAlertText.textContent = "";
+            comfyAlert.classList.remove("alexz-mod-picker-status-card--warn", "alexz-mod-picker-status-card--ok");
+            comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
+            comfyAlert.style.display = "block";
+            comfyAlertText.textContent = "ComfyUI status unavailable (catalog load failed).";
             comfyUpdateBtn.style.display = "none";
+            customModulesNeedUpdate = 0;
             groupSelect.innerHTML = "";
             nodeSelect.innerHTML = "";
             moduleInfo.innerHTML = "";
@@ -1769,12 +2038,15 @@ function renderPicker(container) {
         if (actionBusy) {
             return;
         }
+        customStatusChecked = true;
+        setProcessTarget("custom");
         await runModuleUpdate("all", "");
     };
     comfyUpdateBtn.onclick = async () => {
         if (actionBusy) {
             return;
         }
+        setProcessTarget("comfy");
         await runModuleUpdate("comfyui", "");
     };
     comfyInfoBtn.onclick = async () => {
@@ -1782,20 +2054,22 @@ function renderPicker(container) {
             return;
         }
         setActionBusy(true);
-        setRefreshLine("Обновление информации о ComfyUI...", "neutral");
+        setProcessTarget("");
+        setProcessAction("", "", null);
+        setRefreshLine("", "neutral");
         try {
             const payload = await fetchComfyUIInfo(true, true, comfyModeSelect.value);
             renderComfyAlert(payload?.comfyui || null);
-            const status = String(payload?.comfyui?.update_status || "unknown");
-            if (status === "can_update") {
-                setRefreshLine("ComfyUI требует обновления.", "warn");
-            } else if (status === "up_to_date") {
-                setRefreshLine("ComfyUI актуален.", "ok");
-            } else {
-                setRefreshLine("Статус ComfyUI обновлен (не удалось определить необходимость обновления).", "neutral");
-            }
         } catch (err) {
-            setRefreshLine(`Ошибка обновления информации ComfyUI: ${String(err)}`, "warn");
+            comfyAlert.classList.remove(
+                "alexz-mod-picker-status-card--warn",
+                "alexz-mod-picker-status-card--ok",
+                "alexz-mod-picker-status-card--neutral"
+            );
+            comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
+            comfyAlert.style.display = "block";
+            comfyAlertText.textContent = `Failed to refresh ComfyUI info: ${String(err)}`;
+            comfyUpdateBtn.style.display = "none";
         } finally {
             setActionBusy(false);
             syncUpdateAllButton();
@@ -1806,22 +2080,25 @@ function renderPicker(container) {
         await loadCatalog();
     };
     refreshBtn.onclick = async () => {
+        customStatusChecked = true;
         setActionBusy(true);
-        setRefreshLine("Обновление статусов модулей: запуск...", "neutral");
+        setProcessTarget("custom");
+        setProcessAction("", "", null);
+        setRefreshLine("Refreshing Custom Nodes info...", "neutral");
         try {
             await refreshModuleRuntimeState();
             const ok = await pollRefreshProgress();
             if (!ok) {
-                setRefreshLine("Обновление статусов модулей: завершилось с ошибкой.", "warn");
+                setRefreshLine("Custom Nodes refresh finished with errors.", "warn");
             } else {
                 try {
                     await acknowledgeAllModuleNovelty();
                 } catch (err) {
-                    setRefreshLine(`Статусы обновлены, но не удалось сбросить метки новизны: ${String(err)}`, "warn");
+                    setRefreshLine(`Refresh completed, but novelty reset failed: ${String(err)}`, "warn");
                 }
             }
         } catch (err) {
-            setRefreshLine(`Обновление статусов модулей: ошибка (${String(err)}).`, "warn");
+            setRefreshLine(`Custom Nodes refresh error: ${String(err)}`, "warn");
         } finally {
             setActionBusy(false);
         }

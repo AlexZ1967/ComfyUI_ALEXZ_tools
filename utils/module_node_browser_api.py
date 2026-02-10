@@ -54,6 +54,7 @@ _COMFYUI_STATUS_TTL_SEC = 120.0
 _LAZY_REFRESH_DONE = False
 _REFRESH_LOCK = threading.Lock()
 _REFRESH_THREAD: threading.Thread | None = None
+_REFRESH_LOG_LAST = ""
 _REFRESH_STATUS: dict[str, Any] = {
     "running": False,
     "phase": "idle",
@@ -71,6 +72,7 @@ _REFRESH_STATUS: dict[str, Any] = {
 }
 _UPDATE_LOCK = threading.Lock()
 _UPDATE_THREAD: threading.Thread | None = None
+_UPDATE_LOG_LAST = ""
 _UPDATE_STATUS: dict[str, Any] = {
     "running": False,
     "phase": "idle",
@@ -1072,13 +1074,16 @@ def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> d
         return result
 
     cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)]
+    _LOGGER.info("Installing requirements for module %s via %s", module, result["requirements_path"])
     run = _run_command(cmd, timeout=timeout)
     if not run.get("ok"):
         result["status"] = "error"
         result["message"] = str(run.get("stderr") or run.get("stdout") or "pip install failed")
+        _LOGGER.error("Requirements install failed for module %s: %s", module, result["message"])
         return result
     result["status"] = "installed"
     result["message"] = "requirements installed"
+    _LOGGER.info("Requirements install completed for module %s", module)
     return result
 
 
@@ -1096,13 +1101,16 @@ def _install_comfyui_requirements(timeout: float = 1800.0) -> dict[str, Any]:
         result["message"] = "ComfyUI requirements.txt not found"
         return result
     result["requirements_path"] = str(req)
+    _LOGGER.info("Installing ComfyUI requirements via %s", result["requirements_path"])
     run = _run_command([sys.executable, "-m", "pip", "install", "-r", str(req)], timeout=timeout)
     if not run.get("ok"):
         result["status"] = "error"
         result["message"] = str(run.get("stderr") or run.get("stdout") or "pip install failed")
+        _LOGGER.error("ComfyUI requirements install failed: %s", result["message"])
         return result
     result["status"] = "installed"
     result["message"] = "ComfyUI requirements installed"
+    _LOGGER.info("ComfyUI requirements install completed")
     return result
 
 def _module_repo_url(module_name: str) -> str | None:
@@ -2229,6 +2237,7 @@ def _refresh_progress(
     message: str = "",
 ) -> None:
     """Update refresh-job progress counters and status text."""
+    global _REFRESH_LOG_LAST
     _set_refresh_status(
         phase=phase,
         current=int(current),
@@ -2238,6 +2247,13 @@ def _refresh_progress(
         module=module,
         message=message,
     )
+    line = (
+        f"phase={phase} current={int(current)}/{int(total)} remaining={max(0, int(remaining))} "
+        f"module={module or '-'} message={message or '-'}"
+    )
+    if line != _REFRESH_LOG_LAST:
+        _REFRESH_LOG_LAST = line
+        _LOGGER.info("Module refresh: %s", line)
 
 
 def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any | None = None) -> dict[str, Any]:
@@ -2356,9 +2372,28 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
 
 def _set_update_status(**kwargs: Any) -> None:
     """Set shared module-update job status fields in a thread-safe way."""
+    global _UPDATE_LOG_LAST
     with _UPDATE_LOCK:
         _UPDATE_STATUS.update(kwargs)
         _UPDATE_STATUS["updated_at"] = _now_iso()
+        line = (
+            "scope={scope} phase={phase} current={current}/{total} remaining={remaining} "
+            "module={module} updated={updated} up_to_date={up_to_date} failed={failed} message={message}"
+        ).format(
+            scope=_UPDATE_STATUS.get("scope", ""),
+            phase=_UPDATE_STATUS.get("phase", ""),
+            current=int(_UPDATE_STATUS.get("current", 0) or 0),
+            total=int(_UPDATE_STATUS.get("total", 0) or 0),
+            remaining=int(_UPDATE_STATUS.get("remaining", 0) or 0),
+            module=_UPDATE_STATUS.get("module", "") or "-",
+            updated=int(_UPDATE_STATUS.get("updated", 0) or 0),
+            up_to_date=int(_UPDATE_STATUS.get("up_to_date", 0) or 0),
+            failed=int(_UPDATE_STATUS.get("failed", 0) or 0),
+            message=_UPDATE_STATUS.get("message", "") or "-",
+        )
+    if line != _UPDATE_LOG_LAST:
+        _UPDATE_LOG_LAST = line
+        _LOGGER.info("Module update: %s", line)
 
 
 def _update_status_snapshot() -> dict[str, Any]:
@@ -2556,6 +2591,7 @@ def _install_requirements_for_modules(modules: list[str]) -> dict[str, Any]:
     canonical = [x for x in dict.fromkeys(canonical) if x and x != "unknown"]
     if not canonical:
         return {"status": "ok", "count": 0, "results": []}
+    _LOGGER.info("Installing requirements for %d module(s): %s", len(canonical), ", ".join(canonical))
 
     results: list[dict[str, Any]] = []
     installed = 0
@@ -2567,6 +2603,12 @@ def _install_requirements_for_modules(modules: list[str]) -> dict[str, Any]:
             installed += 1
         else:
             failed += 1
+    _LOGGER.info(
+        "Requirements install summary: total=%d installed=%d failed=%d",
+        len(canonical),
+        installed,
+        failed,
+    )
     return {"status": "ok", "count": len(canonical), "installed": installed, "failed": failed, "results": results}
 
 
