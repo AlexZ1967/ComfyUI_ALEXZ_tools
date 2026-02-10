@@ -66,6 +66,8 @@ Primary constraints:
 
 ## Phase 0 — Baseline and Guardrails
 
+Status: ✅ completed (2026-02-10, commit `50a93f3`)
+
 Deliverables:
 - Freeze current behavior with regression checks for:
   - catalog loading
