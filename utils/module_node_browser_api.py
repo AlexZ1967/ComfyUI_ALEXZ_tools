@@ -1279,7 +1279,13 @@ def _module_local_readme_summary(module_name: str) -> str | None:
     return None
 
 
-def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
+def _resolve_module_info(
+    group: str,
+    module_name: str,
+    *,
+    force_refresh: bool = False,
+    sync_upstream: bool = False,
+) -> dict[str, Any]:
     """Internal helper: `_resolve_module_info`."""
     group = (group or "").strip().lower()
     module_name = (module_name or "").strip()
@@ -1287,6 +1293,8 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
         module_name = _canonical_custom_module_name(module_name)
 
     key = (group or "", module_name or "")
+    if force_refresh:
+        _MODULE_INFO_CACHE.pop(key, None)
     now_ts = time.time()
     cached = _MODULE_INFO_CACHE.get(key)
     if cached is not None and (now_ts - cached[0]) < _MODULE_INFO_TTL_SEC:
@@ -1337,6 +1345,9 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
         _apply_node_change_info(result, group, module_name)
         _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
         return result
+
+    if sync_upstream:
+        _sync_module_upstream(module_name)
 
     manager_data = _manager_index()
     module_l = (module_name or "").lower()
@@ -1967,14 +1978,35 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         """Execute `alexz_tools_module_info` routine."""
         group = (request.query.get("group", "") or "").strip().lower()
         module_name = (request.query.get("module", "") or "").strip()
+        refresh_raw = (request.query.get("refresh", "0") or "0").strip().lower()
+        sync_raw = (request.query.get("sync_upstream", "0") or "0").strip().lower()
+        force_refresh = refresh_raw not in {"0", "false", "no", "off"}
+        sync_upstream = sync_raw not in {"0", "false", "no", "off"}
         if not module_name:
             return web.json_response({"error": "module is required"}, status=400)
         try:
             _ensure_runtime_state_ready()
-            info = _resolve_module_info(group, module_name)
+            info = _resolve_module_info(
+                group,
+                module_name,
+                force_refresh=force_refresh,
+                sync_upstream=sync_upstream,
+            )
             return web.json_response({"group": group, "module": module_name, "info": info})
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module info API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
+    @PromptServer.instance.routes.get("/alexz_tools/comfyui_info")
+    async def alexz_tools_comfyui_info(request):
+        """Execute `alexz_tools_comfyui_info` routine."""
+        try:
+            refresh_raw = (request.query.get("refresh", "1") or "1").strip().lower()
+            force_refresh = refresh_raw not in {"0", "false", "no", "off"}
+            comfyui = _comfyui_git_status(force_refresh=force_refresh)
+            return web.json_response({"status": "ok", "comfyui": comfyui})
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("ComfyUI info API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
     @PromptServer.instance.routes.get("/alexz_tools/module_list")

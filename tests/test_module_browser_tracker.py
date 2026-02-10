@@ -57,6 +57,12 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self._orig_pull_comfyui = self.api._pull_comfyui
         self._orig_install_comfyui_requirements = self.api._install_comfyui_requirements
         self._orig_refresh_runtime_state = self.api._refresh_module_runtime_state
+        self._orig_manager_index = self.api._manager_index
+        self._orig_manager_github_stats = self.api._manager_github_stats
+        self._orig_module_repo_url = self.api._module_repo_url
+        self._orig_module_local_readme_summary = self.api._module_local_readme_summary
+        self._orig_remember_module_state = self.api._remember_module_state
+        self._orig_apply_node_change_info = self.api._apply_node_change_info
         self.api._MODULE_STATE_CACHE = {}
         self.api._COMFYUI_STATUS_CACHE = None
         self.api._save_module_state = lambda state: None
@@ -81,6 +87,12 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._pull_comfyui = self._orig_pull_comfyui
         self.api._install_comfyui_requirements = self._orig_install_comfyui_requirements
         self.api._refresh_module_runtime_state = self._orig_refresh_runtime_state
+        self.api._manager_index = self._orig_manager_index
+        self.api._manager_github_stats = self._orig_manager_github_stats
+        self.api._module_repo_url = self._orig_module_repo_url
+        self.api._module_local_readme_summary = self._orig_module_local_readme_summary
+        self.api._remember_module_state = self._orig_remember_module_state
+        self.api._apply_node_change_info = self._orig_apply_node_change_info
         self.api._MODULE_INFO_CACHE.clear()
 
     def test_new_module_marker_applies_without_node_diffs(self):
@@ -288,6 +300,38 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._install_comfyui_requirements = lambda timeout=1800.0: {"status": "installed"}
         result = self.api._install_comfyui_requirements()
         self.assertEqual(result.get("status"), "installed")
+
+    def test_force_refresh_module_info_syncs_upstream(self):
+        """Validate `test_force_refresh_module_info_syncs_upstream` behavior."""
+        calls = []
+        self.api._sync_module_upstream = lambda module_name, timeout=15.0: calls.append(module_name) or True
+        self.api._module_git_state = lambda module_name: {
+            "module_path": "/tmp/fake_mod",
+            "repository": "https://github.com/alex/testmod",
+            "installed_commit": "1234567890abcdef",
+            "installed_updated_at": "2026-02-10T00:00:00+00:00",
+            "remote_updated_at": "2026-02-10T01:00:00+00:00",
+            "has_upstream": True,
+            "ahead": 0,
+            "behind": 1,
+            "remote_head": "fedcba0987654321",
+        }
+        self.api._manager_index = lambda: {"by_github": {}, "by_id": {}, "by_repo_name": {}}
+        self.api._manager_github_stats = lambda: {"by_url": {}, "by_github": {}}
+        self.api._module_repo_url = lambda module_name: "https://github.com/alex/testmod"
+        self.api._module_local_readme_summary = lambda module_name: "test module summary"
+        self.api._remember_module_state = lambda module_name, info: None
+        self.api._apply_node_change_info = lambda result, group, module_name: None
+        self.api._MODULE_INFO_CACHE[("custom", "testmod")] = (
+            time.time(),
+            {"module": "testmod", "group": "custom", "description": "cached"},
+        )
+
+        info = self.api._resolve_module_info("custom", "testmod", force_refresh=True, sync_upstream=True)
+
+        self.assertEqual(calls, ["testmod"])
+        self.assertEqual(info.get("installed_commit_short"), "12345678")
+        self.assertEqual(info.get("update_status"), "can_update")
 
 
 if __name__ == "__main__":

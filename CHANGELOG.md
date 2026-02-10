@@ -1,5 +1,13 @@
 # Changelog — ALEXZ_tools
 
+## 0.15.2 — 2026-02-10
+- `Module Nodes` UI: added dedicated top button `Обновить информацию о ComfyUI` (refreshes ComfyUI status without full module refresh).
+- Module card UI: added button `Обновить информацию о модуле` for targeted refresh of selected module info.
+- Custom module status now explicitly shows red text `модуль требует обновления` when update is available; ComfyUI alert text updated to `ComfyUI требует обновления`.
+- Backend: `/alexz_tools/module_info` now supports `refresh` and `sync_upstream` query flags for forced/targeted status refresh.
+- Backend: added new endpoint `GET /alexz_tools/comfyui_info` for dedicated ComfyUI status refresh.
+- Added regression test for forced module-info refresh with upstream sync (`tests/test_module_browser_tracker.py`).
+
 ## 0.15.1 — 2026-02-10
 - Added cross-UI node metadata compatibility for old and new node card design (Nodes 2.0).
 - Node registry now injects `DESCRIPTION`, `OUTPUT_TOOLTIPS`, and `SEARCH_ALIASES` for all package nodes (`nodes/__init__.py`).

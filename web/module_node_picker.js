@@ -141,6 +141,14 @@ function injectStyles() {
     .alexz-mod-picker-module-row.notice {
         color: #f0b429;
     }
+    .alexz-mod-picker-module-row.warn {
+        color: #ff6b6b;
+        font-weight: 700;
+    }
+    .alexz-mod-picker-module-row.ok {
+        color: #3dbb7e;
+        font-weight: 700;
+    }
     .alexz-mod-picker-module-label {
         font-weight: 700;
         opacity: 0.95;
@@ -277,9 +285,26 @@ async function fetchNodeCatalog() {
 }
 
 /** Handle `fetchModuleInfo` workflow step. */
-async function fetchModuleInfo(group, moduleName) {
+async function fetchModuleInfo(group, moduleName, options = {}) {
+    const forceRefresh = Boolean(options?.forceRefresh);
+    const syncUpstream = Boolean(options?.syncUpstream);
     const resp = await api.fetchApi(
-        `/alexz_tools/module_info?group=${encodeURIComponent(group || "")}&module=${encodeURIComponent(moduleName || "")}`,
+        `/alexz_tools/module_info?group=${encodeURIComponent(group || "")}` +
+        `&module=${encodeURIComponent(moduleName || "")}` +
+        `&refresh=${forceRefresh ? "1" : "0"}` +
+        `&sync_upstream=${syncUpstream ? "1" : "0"}`,
+        { cache: "no-store" }
+    );
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
+/** Handle `fetchComfyUIInfo` workflow step. */
+async function fetchComfyUIInfo(forceRefresh = true) {
+    const resp = await api.fetchApi(
+        `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}`,
         { cache: "no-store" }
     );
     if (!resp.ok) {
@@ -377,18 +402,6 @@ function fmtDate(iso) {
     }
 }
 
-/** Handle `statusUi` workflow step. */
-function statusUi(info) {
-    const status = String(info?.update_status || "unknown");
-    if (status === "can_update") {
-        return { label: "Update available", cls: "can-update" };
-    }
-    if (status === "up_to_date") {
-        return { label: "Up to date", cls: "up-to-date" };
-    }
-    return { label: "Unknown", cls: "unknown" };
-}
-
 /** Handle `moduleBadgesFromInfo` workflow step. */
 function moduleBadgesFromInfo(info) {
     const behind = Number(info?.git_behind);
@@ -444,6 +457,12 @@ function renderPicker(container) {
     refreshBtn.textContent = "Обновить информацию о модулях";
     refreshBtn.className = "alexz-mod-picker-btn-small";
     headActions.appendChild(refreshBtn);
+
+    const comfyInfoBtn = document.createElement("button");
+    comfyInfoBtn.type = "button";
+    comfyInfoBtn.textContent = "Обновить информацию о ComfyUI";
+    comfyInfoBtn.className = "alexz-mod-picker-btn-small";
+    headActions.appendChild(comfyInfoBtn);
 
     const comfyAlert = document.createElement("div");
     comfyAlert.className = "alexz-mod-picker-comfy-alert";
@@ -511,7 +530,7 @@ function renderPicker(container) {
         const branch = String(info?.branch || "unknown");
         const local = String(info?.installed_commit_short || "unknown");
         const remote = String(info?.remote_commit_short || "unknown");
-        comfyAlertText.textContent = `Доступна новая версия ComfyUI на GitHub: branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
+        comfyAlertText.textContent = `ComfyUI требует обновления: branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
         comfyUpdateBtn.style.display = "";
         comfyUpdateBtn.disabled = actionBusy;
         comfyAlert.style.display = "block";
@@ -631,6 +650,7 @@ function renderPicker(container) {
     const setActionBusy = (busy) => {
         actionBusy = Boolean(busy);
         refreshBtn.disabled = actionBusy;
+        comfyInfoBtn.disabled = actionBusy;
         updateAllBtn.disabled = actionBusy;
         comfyUpdateBtn.disabled = actionBusy || comfyUpdateBtn.style.display === "none";
     };
@@ -1072,20 +1092,51 @@ function renderPicker(container) {
         if (String(info.group || "") === "custom") {
             const statusRow = document.createElement("div");
             statusRow.className = "alexz-mod-picker-module-row";
-            const s = statusUi(info);
             const labelEl = document.createElement("span");
             labelEl.className = "alexz-mod-picker-module-label";
             labelEl.textContent = "Status:";
             const valueEl = document.createElement("span");
-            valueEl.className = `alexz-mod-picker-status ${s.cls}`;
-            valueEl.textContent = s.label;
+            const updateStatus = String(info.update_status || "unknown");
+            if (updateStatus === "can_update") {
+                statusRow.classList.add("warn");
+                valueEl.textContent = "модуль требует обновления";
+            } else if (updateStatus === "up_to_date") {
+                statusRow.classList.add("ok");
+                valueEl.textContent = "модуль актуален";
+            } else {
+                valueEl.textContent = "статус неизвестен";
+            }
             statusRow.appendChild(labelEl);
             statusRow.appendChild(valueEl);
             card.appendChild(statusRow);
 
-            if (String(info.update_status || "") === "can_update") {
-                const actionRow = document.createElement("div");
-                actionRow.className = "alexz-mod-picker-action-row";
+            const actionRow = document.createElement("div");
+            actionRow.className = "alexz-mod-picker-action-row";
+
+            const refreshInfoBtn = document.createElement("button");
+            refreshInfoBtn.type = "button";
+            refreshInfoBtn.className = "alexz-mod-picker-btn-small";
+            refreshInfoBtn.textContent = "Обновить информацию о модуле";
+            refreshInfoBtn.disabled = actionBusy;
+            refreshInfoBtn.onclick = async () => {
+                if (actionBusy) {
+                    return;
+                }
+                setActionBusy(true);
+                setRefreshLine("Обновление информации о модуле...", "neutral");
+                try {
+                    await loadModuleInfo({ forceRefresh: true, syncUpstream: true, throwOnError: true });
+                    setRefreshLine("Информация о модуле обновлена.", "ok");
+                } catch (err) {
+                    setRefreshLine(`Ошибка обновления информации модуля: ${String(err)}`, "warn");
+                } finally {
+                    setActionBusy(false);
+                    syncUpdateAllButton();
+                }
+            };
+            actionRow.appendChild(refreshInfoBtn);
+
+            if (updateStatus === "can_update") {
                 const updateBtn = document.createElement("button");
                 updateBtn.type = "button";
                 updateBtn.className = "alexz-mod-picker-btn-small";
@@ -1102,8 +1153,35 @@ function renderPicker(container) {
                     await runModuleUpdate("single", moduleName);
                 };
                 actionRow.appendChild(updateBtn);
-                card.appendChild(actionRow);
             }
+            card.appendChild(actionRow);
+        }
+        if (String(info.group || "") !== "custom") {
+            const actionRow = document.createElement("div");
+            actionRow.className = "alexz-mod-picker-action-row";
+            const refreshInfoBtn = document.createElement("button");
+            refreshInfoBtn.type = "button";
+            refreshInfoBtn.className = "alexz-mod-picker-btn-small";
+            refreshInfoBtn.textContent = "Обновить информацию о модуле";
+            refreshInfoBtn.disabled = actionBusy;
+            refreshInfoBtn.onclick = async () => {
+                if (actionBusy) {
+                    return;
+                }
+                setActionBusy(true);
+                setRefreshLine("Обновление информации о модуле...", "neutral");
+                try {
+                    await loadModuleInfo({ forceRefresh: true, syncUpstream: false, throwOnError: true });
+                    setRefreshLine("Информация о модуле обновлена.", "ok");
+                } catch (err) {
+                    setRefreshLine(`Ошибка обновления информации модуля: ${String(err)}`, "warn");
+                } finally {
+                    setActionBusy(false);
+                    syncUpdateAllButton();
+                }
+            };
+            actionRow.appendChild(refreshInfoBtn);
+            card.appendChild(actionRow);
         }
 
         if (info.new_module_between_runs) {
@@ -1139,15 +1217,21 @@ function renderPicker(container) {
     };
 
     /** Handle `loadModuleInfo` workflow step. */
-    const loadModuleInfo = async () => {
+    const loadModuleInfo = async (options = {}) => {
         const selectedModule = nodeSelect.value;
         const selectedGroup = groupSelect.value;
+        const forceRefresh = Boolean(options?.forceRefresh);
+        const syncUpstream = Boolean(options?.syncUpstream);
+        const throwOnError = Boolean(options?.throwOnError);
         if (!selectedModule || selectedModule === "-1") {
             moduleInfo.innerHTML = "";
             return;
         }
         try {
-            const payload = await fetchModuleInfo(selectedGroup, selectedModule);
+            const payload = await fetchModuleInfo(selectedGroup, selectedModule, {
+                forceRefresh,
+                syncUpstream,
+            });
             if (nodeSelect.value !== selectedModule || groupSelect.value !== selectedGroup) {
                 return;
             }
@@ -1166,6 +1250,9 @@ function renderPicker(container) {
             }
         } catch (err) {
             moduleInfo.innerHTML = "";
+            if (throwOnError) {
+                throw err;
+            }
         }
     };
 
@@ -1220,6 +1307,30 @@ function renderPicker(container) {
             return;
         }
         await runModuleUpdate("comfyui", "");
+    };
+    comfyInfoBtn.onclick = async () => {
+        if (actionBusy) {
+            return;
+        }
+        setActionBusy(true);
+        setRefreshLine("Обновление информации о ComfyUI...", "neutral");
+        try {
+            const payload = await fetchComfyUIInfo(true);
+            renderComfyAlert(payload?.comfyui || null);
+            const status = String(payload?.comfyui?.update_status || "unknown");
+            if (status === "can_update") {
+                setRefreshLine("ComfyUI требует обновления.", "warn");
+            } else if (status === "up_to_date") {
+                setRefreshLine("ComfyUI актуален.", "ok");
+            } else {
+                setRefreshLine("Статус ComfyUI обновлен (не удалось определить необходимость обновления).", "neutral");
+            }
+        } catch (err) {
+            setRefreshLine(`Ошибка обновления информации ComfyUI: ${String(err)}`, "warn");
+        } finally {
+            setActionBusy(false);
+            syncUpdateAllButton();
+        }
     };
     refreshBtn.onclick = async () => {
         setActionBusy(true);
