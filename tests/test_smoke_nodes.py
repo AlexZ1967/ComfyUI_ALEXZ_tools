@@ -1,14 +1,21 @@
+"""Smoke tests for core node/helper contracts.
+
+These tests ensure basic tensor outputs, helper utilities, and JSON payload
+structure remain stable after refactors.
+"""
+
+import importlib
 import json
 import os
 import sys
 import types
 import unittest
-import importlib
 
 import torch
 
 
 def _install_folder_paths_stub():
+    """Internal helper: `_install_folder_paths_stub`."""
     if "folder_paths" in sys.modules:
         return
     stub = types.SimpleNamespace(
@@ -20,8 +27,10 @@ def _install_folder_paths_stub():
 
 
 class SmokeTests(unittest.TestCase):
+    """Run minimal checks against key node helper behavior."""
     @classmethod
     def setUpClass(cls):
+        """Execute `setUpClass` routine."""
         repo_root = os.path.dirname(os.path.dirname(__file__))
         if "ComfyUI_ALEXZ_tools" not in sys.modules:
             pkg = types.ModuleType("ComfyUI_ALEXZ_tools")
@@ -30,7 +39,8 @@ class SmokeTests(unittest.TestCase):
         _install_folder_paths_stub()
 
     def test_image_difference_autoresize(self):
-        utils_mod = importlib.import_module("ComfyUI_ALEXZ_tools.utils")
+        """Ensure image difference auto-resizes to the larger image shape."""
+        utils_mod = importlib.import_module("ComfyUI_ALEXZ_tools.utils.utils")
 
         a = torch.rand(64, 64, 3)
         b = torch.rand(32, 48, 3)
@@ -38,7 +48,8 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(tuple(diff.shape), (64, 64, 3))
 
     def test_color_match_json_has_quality_metrics(self):
-        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.image_color_match")
+        """Verify Color Match returns quality metrics in output JSON."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
 
         # Avoid LPIPS model download in smoke tests.
         old_lpips = image_color_match._lpips_alex_distance
@@ -61,7 +72,8 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("ssim", data["quality"]["after"])
 
     def test_video_frame_topk_helpers(self):
-        video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.video_frame_match")
+        """Validate top-k and confidence helper math for frame matching."""
+        video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_match")
 
         top = []
         video_mod._update_top_matches(top, 0, 0.30, limit=3)
@@ -74,7 +86,8 @@ class SmokeTests(unittest.TestCase):
         self.assertLessEqual(conf, 1.0)
 
     def test_video_cut_match_helpers(self):
-        cut_mod = importlib.import_module("ComfyUI_ALEXZ_tools.video_cut_match")
+        """Validate top-k pair ranking and blend suggestion helpers."""
+        cut_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_cut_match")
 
         top_pairs = []
         cut_mod._update_top_pairs(top_pairs, {"frame_a_number": 10, "frame_b_number": 0, "score": 0.3}, 3)

@@ -1,4 +1,6 @@
+"""Utility/support module: `utils/module_node_browser_api.py`."""
 from __future__ import annotations
+
 
 import importlib
 import inspect
@@ -77,7 +79,7 @@ _UPDATE_STATUS: dict[str, Any] = {
     "finished_at": "",
 }
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/([^/]+)/([^/]+)", re.IGNORECASE)
-_MODULE_STATE_PATH = Path(__file__).resolve().with_name("module_state_cache.json")
+_MODULE_STATE_PATH = Path(__file__).resolve().parents[1] / "module_state_cache.json"
 _GROUP_ORDER = (
     ("core", "Core_Nodes"),
     ("core_extras", "Core_Extras_Nodes"),
@@ -102,6 +104,7 @@ _ALEXZ_ANNOTATIONS = {
 
 
 def _short_commit(commit: str | None) -> str:
+    """Internal helper: `_short_commit`."""
     value = (commit or "").strip()
     if not value:
         return "unknown"
@@ -109,6 +112,7 @@ def _short_commit(commit: str | None) -> str:
 
 
 def _node_mappings() -> tuple[dict[str, Any], dict[str, str]]:
+    """Internal helper: `_node_mappings`."""
     comfy_nodes = importlib.import_module("nodes")
     class_map = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS", {}) or {}
     display_map = getattr(comfy_nodes, "NODE_DISPLAY_NAME_MAPPINGS", {}) or {}
@@ -116,6 +120,7 @@ def _node_mappings() -> tuple[dict[str, Any], dict[str, str]]:
 
 
 def _node_source_file(node_cls: Any) -> str:
+    """Internal helper: `_node_source_file`."""
     source_file = ""
     try:
         source_file = inspect.getsourcefile(node_cls) or ""
@@ -139,6 +144,7 @@ def _node_source_file(node_cls: Any) -> str:
 
 
 def _relative_to_custom_roots(path_text: str) -> str:
+    """Internal helper: `_relative_to_custom_roots`."""
     if not path_text:
         return ""
     try:
@@ -154,6 +160,7 @@ def _relative_to_custom_roots(path_text: str) -> str:
 
 
 def _file_digest(path_text: str) -> str:
+    """Internal helper: `_file_digest`."""
     if not path_text:
         return ""
     try:
@@ -164,6 +171,7 @@ def _file_digest(path_text: str) -> str:
 
 
 def _build_node_snapshots() -> dict[str, dict[str, dict[str, dict[str, str]]]]:
+    """Internal helper: `_build_node_snapshots`."""
     class_map, _ = _node_mappings()
     snapshots: dict[str, dict[str, dict[str, dict[str, str]]]] = defaultdict(lambda: defaultdict(dict))
     digest_cache: dict[str, str] = {}
@@ -188,6 +196,7 @@ def _build_node_snapshots() -> dict[str, dict[str, dict[str, dict[str, str]]]]:
 
 
 def _module_root(node_cls: Any) -> str:
+    """Internal helper: `_module_root`."""
     module_name = getattr(node_cls, "__module__", "") or ""
     if not module_name:
         return "unknown"
@@ -195,6 +204,7 @@ def _module_root(node_cls: Any) -> str:
 
 
 def _classify_by_relative_module(node_cls: Any) -> tuple[str, str]:
+    """Internal helper: `_classify_by_relative_module`."""
     rel = getattr(node_cls, "RELATIVE_PYTHON_MODULE", None)
     if isinstance(rel, str) and rel:
         parts = [p for p in rel.split(".") if p]
@@ -228,6 +238,7 @@ def _classify_by_relative_module(node_cls: Any) -> tuple[str, str]:
 
 
 def _fallback_annotation(node_cls: Any) -> str:
+    """Internal helper: `_fallback_annotation`."""
     category = getattr(node_cls, "CATEGORY", "") or "unknown"
     return_names = getattr(node_cls, "RETURN_NAMES", None)
     if not return_names:
@@ -249,6 +260,7 @@ def _fallback_annotation(node_cls: Any) -> str:
 
 
 def _custom_nodes_roots() -> list[Path]:
+    """Internal helper: `_custom_nodes_roots`."""
     if folder_paths is not None and hasattr(folder_paths, "get_folder_paths"):
         try:
             roots = [Path(x) for x in folder_paths.get_folder_paths("custom_nodes") if x]
@@ -260,6 +272,7 @@ def _custom_nodes_roots() -> list[Path]:
 
 
 def _discover_custom_modules() -> list[str]:
+    """Internal helper: `_discover_custom_modules`."""
     names: set[str] = set()
     for root in _custom_nodes_roots():
         if not root.exists():
@@ -285,10 +298,12 @@ def _discover_custom_modules() -> list[str]:
 
 
 def _normalize_module_token(name: str) -> str:
+    """Internal helper: `_normalize_module_token`."""
     return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
 
 
 def _custom_module_aliases() -> dict[str, str]:
+    """Internal helper: `_custom_module_aliases`."""
     global _CUSTOM_MODULE_ALIAS_CACHE
     if _CUSTOM_MODULE_ALIAS_CACHE is not None:
         return _CUSTOM_MODULE_ALIAS_CACHE
@@ -306,6 +321,7 @@ def _custom_module_aliases() -> dict[str, str]:
 
 
 def _canonical_custom_module_name(module_name: str) -> str:
+    """Internal helper: `_canonical_custom_module_name`."""
     name = (module_name or "").strip()
     if not name:
         return "unknown"
@@ -324,6 +340,7 @@ def _canonical_custom_module_name(module_name: str) -> str:
 
 
 def _classify_by_source_path(node_cls: Any) -> tuple[str, str] | None:
+    """Internal helper: `_classify_by_source_path`."""
     source = _node_source_file(node_cls)
     if not source:
         return None
@@ -354,6 +371,7 @@ def _classify_by_source_path(node_cls: Any) -> tuple[str, str] | None:
 
 
 def _normalize_repo_url(url: str | None) -> str | None:
+    """Internal helper: `_normalize_repo_url`."""
     if not isinstance(url, str):
         return None
     value = url.strip()
@@ -369,6 +387,7 @@ def _normalize_repo_url(url: str | None) -> str | None:
 
 
 def _github_id(url: str | None) -> str | None:
+    """Internal helper: `_github_id`."""
     norm = _normalize_repo_url(url)
     if not norm:
         return None
@@ -379,6 +398,7 @@ def _github_id(url: str | None) -> str | None:
 
 
 def _repo_name(url: str | None) -> str | None:
+    """Internal helper: `_repo_name`."""
     gid = _github_id(url)
     if not gid:
         return None
@@ -386,6 +406,7 @@ def _repo_name(url: str | None) -> str | None:
 
 
 def _pick_repo_url(entry: dict[str, Any]) -> str | None:
+    """Internal helper: `_pick_repo_url`."""
     candidates: list[str] = []
     for key in ("repository", "reference"):
         value = entry.get(key)
@@ -402,6 +423,7 @@ def _pick_repo_url(entry: dict[str, Any]) -> str | None:
 
 
 def _manager_custom_db_path() -> Path | None:
+    """Internal helper: `_manager_custom_db_path`."""
     for root in _custom_nodes_roots():
         db_path = root / "comfyui-manager" / "custom-node-list.json"
         if db_path.exists():
@@ -410,6 +432,7 @@ def _manager_custom_db_path() -> Path | None:
 
 
 def _manager_github_stats_path() -> Path | None:
+    """Internal helper: `_manager_github_stats_path`."""
     for root in _custom_nodes_roots():
         db_path = root / "comfyui-manager" / "github-stats.json"
         if db_path.exists():
@@ -418,6 +441,7 @@ def _manager_github_stats_path() -> Path | None:
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
+    """Internal helper: `_parse_datetime`."""
     if not isinstance(value, str):
         return None
     text = value.strip()
@@ -439,6 +463,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
 
 
 def _to_iso(dt: datetime | None) -> str | None:
+    """Internal helper: `_to_iso`."""
     if dt is None:
         return None
     if dt.tzinfo is None:
@@ -447,10 +472,12 @@ def _to_iso(dt: datetime | None) -> str | None:
 
 
 def _now_iso() -> str:
+    """Internal helper: `_now_iso`."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def _manager_github_stats() -> dict[str, dict[str, dict[str, Any]]]:
+    """Internal helper: `_manager_github_stats`."""
     global _MANAGER_GITHUB_STATS_CACHE
     if _MANAGER_GITHUB_STATS_CACHE is not None:
         return _MANAGER_GITHUB_STATS_CACHE
@@ -487,6 +514,7 @@ def _manager_github_stats() -> dict[str, dict[str, dict[str, Any]]]:
 
 
 def _manager_index() -> dict[str, dict[str, dict[str, Any]]]:
+    """Internal helper: `_manager_index`."""
     global _MANAGER_INDEX_CACHE
     if _MANAGER_INDEX_CACHE is not None:
         return _MANAGER_INDEX_CACHE
@@ -539,6 +567,7 @@ def _manager_index() -> dict[str, dict[str, dict[str, Any]]]:
 
 
 def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
+    """Internal helper: `_run_git`."""
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
     env.setdefault("GIT_ASKPASS", "echo")
@@ -560,6 +589,7 @@ def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
 
 
 def _run_command(args: list[str], timeout: float = 120.0, disable_git_prompt: bool = False) -> dict[str, Any]:
+    """Internal helper: `_run_command`."""
     env = os.environ.copy()
     if disable_git_prompt:
         env["GIT_TERMINAL_PROMPT"] = "0"
@@ -584,6 +614,7 @@ def _run_command(args: list[str], timeout: float = 120.0, disable_git_prompt: bo
 
 
 def _module_dir(module_name: str) -> Path | None:
+    """Internal helper: `_module_dir`."""
     module_name = _canonical_custom_module_name((module_name or "").strip())
     if not module_name:
         return None
@@ -595,6 +626,7 @@ def _module_dir(module_name: str) -> Path | None:
 
 
 def _requirements_changed_between(module_dir: Path, before_commit: str, after_commit: str) -> bool:
+    """Internal helper: `_requirements_changed_between`."""
     before = (before_commit or "").strip()
     after = (after_commit or "").strip()
     if not before or not after or before == after:
@@ -611,6 +643,7 @@ def _requirements_changed_between(module_dir: Path, before_commit: str, after_co
 
 
 def _module_needs_update_now(module_name: str) -> bool:
+    """Internal helper: `_module_needs_update_now`."""
     git_state = _module_git_state(module_name)
     if not git_state:
         return False
@@ -623,6 +656,7 @@ def _module_needs_update_now(module_name: str) -> bool:
 
 
 def _count_custom_modules_need_update() -> int:
+    """Internal helper: `_count_custom_modules_need_update`."""
     state = _load_module_state()
     if not isinstance(state, dict):
         return 0
@@ -635,6 +669,7 @@ def _count_custom_modules_need_update() -> int:
 
 
 def _comfyui_requirements_path() -> Path | None:
+    """Internal helper: `_comfyui_requirements_path`."""
     root = _comfyui_root()
     if root is None:
         return None
@@ -643,6 +678,7 @@ def _comfyui_requirements_path() -> Path | None:
 
 
 def _comfyui_needs_update_now() -> bool:
+    """Internal helper: `_comfyui_needs_update_now`."""
     status = _comfyui_git_status(force_refresh=True)
     behind = status.get("behind")
     if isinstance(behind, int):
@@ -651,6 +687,7 @@ def _comfyui_needs_update_now() -> bool:
 
 
 def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
+    """Internal helper: `_pull_comfyui`."""
     root = _comfyui_root()
     result: dict[str, Any] = {
         "module": "ComfyUI",
@@ -700,6 +737,7 @@ def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
 
 
 def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, Any]:
+    """Internal helper: `_pull_custom_module`."""
     module = _canonical_custom_module_name(module_name)
     module_dir = _module_dir(module)
     result: dict[str, Any] = {
@@ -755,6 +793,7 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
 
 
 def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> dict[str, Any]:
+    """Internal helper: `_install_module_requirements`."""
     module = _canonical_custom_module_name(module_name)
     module_dir = _module_dir(module)
     result: dict[str, Any] = {
@@ -787,6 +826,7 @@ def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> d
 
 
 def _install_comfyui_requirements(timeout: float = 1800.0) -> dict[str, Any]:
+    """Internal helper: `_install_comfyui_requirements`."""
     result: dict[str, Any] = {
         "module": "ComfyUI",
         "status": "error",
@@ -809,6 +849,7 @@ def _install_comfyui_requirements(timeout: float = 1800.0) -> dict[str, Any]:
     return result
 
 def _module_repo_url(module_name: str) -> str | None:
+    """Internal helper: `_module_repo_url`."""
     module_name = _canonical_custom_module_name((module_name or "").strip())
     if not module_name:
         return None
@@ -823,6 +864,7 @@ def _module_repo_url(module_name: str) -> str | None:
 
 
 def _module_git_state(module_name: str) -> dict[str, Any]:
+    """Internal helper: `_module_git_state`."""
     module_name = _canonical_custom_module_name((module_name or "").strip())
     if not module_name:
         return {}
@@ -865,6 +907,7 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
 
 
 def _sync_module_upstream(module_name: str, timeout: float = 15.0) -> bool:
+    """Internal helper: `_sync_module_upstream`."""
     module_name = _canonical_custom_module_name((module_name or "").strip())
     if not module_name:
         return False
@@ -886,6 +929,7 @@ def _sync_module_upstream(module_name: str, timeout: float = 15.0) -> bool:
 
 
 def _comfyui_root() -> Path | None:
+    """Internal helper: `_comfyui_root`."""
     base = Path(__file__).resolve()
     for candidate in (base.parents[2], *base.parents):
         try:
@@ -897,6 +941,7 @@ def _comfyui_root() -> Path | None:
 
 
 def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
+    """Internal helper: `_comfyui_git_status`."""
     global _COMFYUI_STATUS_CACHE
     now_ts = time.time()
     if (
@@ -968,6 +1013,7 @@ def _comfyui_git_status(force_refresh: bool = False) -> dict[str, Any]:
 
 
 def _load_module_state() -> dict[str, dict[str, Any]]:
+    """Internal helper: `_load_module_state`."""
     global _MODULE_STATE_CACHE
     if _MODULE_STATE_CACHE is not None:
         return _MODULE_STATE_CACHE
@@ -984,6 +1030,7 @@ def _load_module_state() -> dict[str, dict[str, Any]]:
 
 
 def _save_module_state(state: dict[str, dict[str, Any]]) -> None:
+    """Internal helper: `_save_module_state`."""
     try:
         with _MODULE_STATE_PATH.open("w", encoding="utf-8") as handle:
             json.dump(state, handle, ensure_ascii=True, indent=2, sort_keys=True)
@@ -992,6 +1039,7 @@ def _save_module_state(state: dict[str, dict[str, Any]]) -> None:
 
 
 def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
+    """Internal helper: `_remember_module_state`."""
     module_name = _canonical_custom_module_name(module_name)
     state = _load_module_state()
     now = _now_iso()
@@ -1022,6 +1070,7 @@ def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
 
 
 def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str) -> None:
+    """Internal helper: `_apply_node_change_info`."""
     state = _load_module_state()
     tracker = state.get("__node_tracker__")
     if not isinstance(tracker, dict):
@@ -1049,6 +1098,7 @@ def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str
 
 
 def _announce_tracked_module_updates() -> dict[str, int]:
+    """Internal helper: `_announce_tracked_module_updates`."""
     state = _load_module_state()
     if not isinstance(state, dict):
         return {"modules_need_update": 0}
@@ -1201,6 +1251,7 @@ def _announce_tracked_module_updates() -> dict[str, int]:
 
 
 def _module_local_readme_summary(module_name: str) -> str | None:
+    """Internal helper: `_module_local_readme_summary`."""
     module_name = (module_name or "").strip()
     if not module_name:
         return None
@@ -1228,6 +1279,7 @@ def _module_local_readme_summary(module_name: str) -> str | None:
 
 
 def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
+    """Internal helper: `_resolve_module_info`."""
     group = (group or "").strip().lower()
     module_name = (module_name or "").strip()
     if group == "custom":
@@ -1358,6 +1410,7 @@ def _resolve_module_info(group: str, module_name: str) -> dict[str, Any]:
 
 
 def _collect_nodes() -> list[dict[str, Any]]:
+    """Internal helper: `_collect_nodes`."""
     class_map, display_map = _node_mappings()
 
     items: list[dict[str, Any]] = []
@@ -1379,6 +1432,7 @@ def _collect_nodes() -> list[dict[str, Any]]:
 
 
 def _build_catalog() -> dict[str, list[dict[str, Any]]]:
+    """Internal helper: `_build_catalog`."""
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in _collect_nodes():
         module_name = item["module"]
@@ -1390,6 +1444,7 @@ def _build_catalog() -> dict[str, list[dict[str, Any]]]:
 
 
 def _build_group_catalog() -> dict[str, list[dict[str, Any]]]:
+    """Internal helper: `_build_group_catalog`."""
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in _collect_nodes():
         grouped[item["group"]].append(item)
@@ -1400,6 +1455,7 @@ def _build_group_catalog() -> dict[str, list[dict[str, Any]]]:
 
 
 def _build_group_modules(grouped_nodes: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """Internal helper: `_build_group_modules`."""
     module_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for group_name, nodes in grouped_nodes.items():
         for node in nodes:
@@ -1419,6 +1475,7 @@ def _build_group_modules(grouped_nodes: dict[str, list[dict[str, Any]]]) -> dict
 
 
 def _filter_modules(query: str, module_names: list[str]) -> list[str]:
+    """Internal helper: `_filter_modules`."""
     if not query:
         return module_names
     q = query.lower()
@@ -1429,12 +1486,14 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
 
 
 def _set_refresh_status(**kwargs: Any) -> None:
+    """Internal helper: `_set_refresh_status`."""
     with _REFRESH_LOCK:
         _REFRESH_STATUS.update(kwargs)
         _REFRESH_STATUS["updated_at"] = _now_iso()
 
 
 def _refresh_status_snapshot() -> dict[str, Any]:
+    """Internal helper: `_refresh_status_snapshot`."""
     with _REFRESH_LOCK:
         return dict(_REFRESH_STATUS)
 
@@ -1449,6 +1508,7 @@ def _refresh_progress(
     module: str = "",
     message: str = "",
 ) -> None:
+    """Internal helper: `_refresh_progress`."""
     _set_refresh_status(
         phase=phase,
         current=int(current),
@@ -1461,6 +1521,7 @@ def _refresh_progress(
 
 
 def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any | None = None) -> dict[str, Any]:
+    """Internal helper: `_refresh_module_runtime_state`."""
     global _LAZY_REFRESH_DONE
     global _CUSTOM_MODULE_ALIAS_CACHE
     global _COMFYUI_STATUS_CACHE
@@ -1512,6 +1573,7 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
 
 
 def _ensure_runtime_state_ready() -> None:
+    """Internal helper: `_ensure_runtime_state_ready`."""
     global _LAZY_REFRESH_DONE
     if _LAZY_REFRESH_DONE:
         return
@@ -1520,6 +1582,7 @@ def _ensure_runtime_state_ready() -> None:
 
 
 def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
+    """Internal helper: `_start_refresh_job`."""
     global _REFRESH_THREAD
     with _REFRESH_LOCK:
         thread = _REFRESH_THREAD
@@ -1544,6 +1607,7 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
         )
 
     def _runner() -> None:
+        """Internal helper: `_runner`."""
         global _REFRESH_THREAD
         try:
             result = _refresh_module_runtime_state(sync_upstreams=sync_upstreams, progress_cb=_refresh_progress)
@@ -1569,17 +1633,20 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
 
 
 def _set_update_status(**kwargs: Any) -> None:
+    """Internal helper: `_set_update_status`."""
     with _UPDATE_LOCK:
         _UPDATE_STATUS.update(kwargs)
         _UPDATE_STATUS["updated_at"] = _now_iso()
 
 
 def _update_status_snapshot() -> dict[str, Any]:
+    """Internal helper: `_update_status_snapshot`."""
     with _UPDATE_LOCK:
         return dict(_UPDATE_STATUS)
 
 
 def _resolve_update_targets(scope: str, module_name: str) -> list[str]:
+    """Internal helper: `_resolve_update_targets`."""
     scope_norm = (scope or "").strip().lower()
     if scope_norm == "single":
         canonical = _canonical_custom_module_name(module_name)
@@ -1600,6 +1667,7 @@ def _resolve_update_targets(scope: str, module_name: str) -> list[str]:
 
 
 def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
+    """Internal helper: `_start_module_update_job`."""
     global _UPDATE_THREAD
     scope_norm = (scope or "").strip().lower()
     if scope_norm not in {"single", "all", "comfyui"}:
@@ -1645,6 +1713,7 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
         )
 
     def _runner() -> None:
+        """Internal helper: `_runner`."""
         global _UPDATE_THREAD
         try:
             if scope_norm == "comfyui":
@@ -1758,6 +1827,7 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
 
 
 def _install_requirements_for_modules(modules: list[str]) -> dict[str, Any]:
+    """Internal helper: `_install_requirements_for_modules`."""
     if not isinstance(modules, list):
         return {"status": "error", "error": "modules must be a list"}
     canonical = [_canonical_custom_module_name(str(x)) for x in modules if str(x).strip()]
@@ -1783,6 +1853,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.post("/alexz_tools/module_refresh")
     async def alexz_tools_module_refresh(request):
+        """Execute `alexz_tools_module_refresh` routine."""
         try:
             sync_raw = (request.query.get("sync_upstreams", "1") or "1").strip().lower()
             do_sync = sync_raw not in {"0", "false", "no", "off"}
@@ -1793,6 +1864,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.get("/alexz_tools/module_refresh_status")
     async def alexz_tools_module_refresh_status(request):
+        """Execute `alexz_tools_module_refresh_status` routine."""
         try:
             return web.json_response({"status": "ok", "refresh": _refresh_status_snapshot()})
         except Exception as exc:  # pragma: no cover - diagnostic
@@ -1801,6 +1873,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.post("/alexz_tools/module_update")
     async def alexz_tools_module_update(request):
+        """Execute `alexz_tools_module_update` routine."""
         try:
             payload = {}
             try:
@@ -1819,6 +1892,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.get("/alexz_tools/module_update_status")
     async def alexz_tools_module_update_status(request):
+        """Execute `alexz_tools_module_update_status` routine."""
         try:
             return web.json_response({"status": "ok", "update": _update_status_snapshot()})
         except Exception as exc:  # pragma: no cover - diagnostic
@@ -1827,6 +1901,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.post("/alexz_tools/module_install_requirements")
     async def alexz_tools_module_install_requirements(request):
+        """Execute `alexz_tools_module_install_requirements` routine."""
         try:
             payload = {}
             try:
@@ -1843,6 +1918,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.post("/alexz_tools/comfyui_install_requirements")
     async def alexz_tools_comfyui_install_requirements(request):
+        """Execute `alexz_tools_comfyui_install_requirements` routine."""
         try:
             result = _install_comfyui_requirements()
             status_code = 200 if result.get("status") == "installed" else 400
@@ -1853,6 +1929,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.get("/alexz_tools/node_catalog")
     async def alexz_tools_node_catalog(request):
+        """Execute `alexz_tools_node_catalog` routine."""
         try:
             _ensure_runtime_state_ready()
             grouped = _build_group_catalog()
@@ -1886,6 +1963,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.get("/alexz_tools/module_info")
     async def alexz_tools_module_info(request):
+        """Execute `alexz_tools_module_info` routine."""
         group = (request.query.get("group", "") or "").strip().lower()
         module_name = (request.query.get("module", "") or "").strip()
         if not module_name:
@@ -1900,6 +1978,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.get("/alexz_tools/module_list")
     async def alexz_tools_module_list(request):
+        """Execute `alexz_tools_module_list` routine."""
         query = (request.query.get("q", "") or "").strip().lower()
         try:
             catalog = _build_catalog()
@@ -1915,6 +1994,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
 
     @PromptServer.instance.routes.get("/alexz_tools/module_nodes")
     async def alexz_tools_module_nodes(request):
+        """Execute `alexz_tools_module_nodes` routine."""
         query = (request.query.get("module", "") or request.query.get("q", "")).strip()
         try:
             catalog = _build_catalog()

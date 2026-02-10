@@ -1,3 +1,8 @@
+/**
+ * Frontend module: `module_node_picker.js`.
+ * Handles ComfyUI web-side UI behavior for ALEXZ tools.
+ */
+
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 
@@ -13,6 +18,7 @@ const GROUP_LABELS = {
 const MODULE_MARK_UPDATED = "✅";
 const MODULE_MARK_REMOTE_UPDATE = "🟥";
 
+/** Handle `injectStyles` workflow step. */
 function injectStyles() {
     const styleId = "alexz-module-picker-style";
     if (document.getElementById(styleId)) {
@@ -234,6 +240,7 @@ function injectStyles() {
     document.head.appendChild(style);
 }
 
+/** Handle `centerNode` workflow step. */
 function centerNode(node) {
     const area = app.canvas?.visible_area;
     if (area && area.length >= 4) {
@@ -246,6 +253,7 @@ function centerNode(node) {
     }
 }
 
+/** Handle `createNodeByInfo` workflow step. */
 function createNodeByInfo(nodeInfo) {
     const candidates = [nodeInfo.node_name, nodeInfo.display_name].filter(Boolean);
     for (const name of candidates) {
@@ -257,6 +265,7 @@ function createNodeByInfo(nodeInfo) {
     return null;
 }
 
+/** Handle `fetchNodeCatalog` workflow step. */
 async function fetchNodeCatalog() {
     const resp = await api.fetchApi("/alexz_tools/node_catalog", {
         cache: "no-store",
@@ -267,6 +276,7 @@ async function fetchNodeCatalog() {
     return await resp.json();
 }
 
+/** Handle `fetchModuleInfo` workflow step. */
 async function fetchModuleInfo(group, moduleName) {
     const resp = await api.fetchApi(
         `/alexz_tools/module_info?group=${encodeURIComponent(group || "")}&module=${encodeURIComponent(moduleName || "")}`,
@@ -278,6 +288,7 @@ async function fetchModuleInfo(group, moduleName) {
     return await resp.json();
 }
 
+/** Handle `refreshModuleRuntimeState` workflow step. */
 async function refreshModuleRuntimeState() {
     const resp = await api.fetchApi("/alexz_tools/module_refresh", {
         method: "POST",
@@ -289,6 +300,7 @@ async function refreshModuleRuntimeState() {
     return await resp.json();
 }
 
+/** Handle `fetchModuleRefreshStatus` workflow step. */
 async function fetchModuleRefreshStatus() {
     const resp = await api.fetchApi("/alexz_tools/module_refresh_status", {
         cache: "no-store",
@@ -299,6 +311,7 @@ async function fetchModuleRefreshStatus() {
     return await resp.json();
 }
 
+/** Handle `startModuleUpdate` workflow step. */
 async function startModuleUpdate(scope, moduleName) {
     const resp = await api.fetchApi("/alexz_tools/module_update", {
         method: "POST",
@@ -315,6 +328,7 @@ async function startModuleUpdate(scope, moduleName) {
     return await resp.json();
 }
 
+/** Handle `fetchModuleUpdateStatus` workflow step. */
 async function fetchModuleUpdateStatus() {
     const resp = await api.fetchApi("/alexz_tools/module_update_status", {
         cache: "no-store",
@@ -325,6 +339,7 @@ async function fetchModuleUpdateStatus() {
     return await resp.json();
 }
 
+/** Handle `installModuleRequirements` workflow step. */
 async function installModuleRequirements(modules) {
     const resp = await api.fetchApi("/alexz_tools/module_install_requirements", {
         method: "POST",
@@ -338,6 +353,7 @@ async function installModuleRequirements(modules) {
     return await resp.json();
 }
 
+/** Handle `installComfyUIRequirements` workflow step. */
 async function installComfyUIRequirements() {
     const resp = await api.fetchApi("/alexz_tools/comfyui_install_requirements", {
         method: "POST",
@@ -349,6 +365,7 @@ async function installComfyUIRequirements() {
     return await resp.json();
 }
 
+/** Handle `fmtDate` workflow step. */
 function fmtDate(iso) {
     if (!iso) {
         return "n/a";
@@ -360,6 +377,7 @@ function fmtDate(iso) {
     }
 }
 
+/** Handle `statusUi` workflow step. */
 function statusUi(info) {
     const status = String(info?.update_status || "unknown");
     if (status === "can_update") {
@@ -371,6 +389,7 @@ function statusUi(info) {
     return { label: "Unknown", cls: "unknown" };
 }
 
+/** Handle `moduleBadgesFromInfo` workflow step. */
 function moduleBadgesFromInfo(info) {
     const behind = Number(info?.git_behind);
     return {
@@ -379,6 +398,7 @@ function moduleBadgesFromInfo(info) {
     };
 }
 
+/** Handle `formatModuleOption` workflow step. */
 function formatModuleOption(moduleName, count, badges) {
     const marks = [];
     if (badges?.updatedBetweenRuns) {
@@ -391,6 +411,7 @@ function formatModuleOption(moduleName, count, badges) {
     return `${prefix}${moduleName} (${count})`;
 }
 
+/** Handle `renderPicker` workflow step. */
 function renderPicker(container) {
     container.innerHTML = "";
 
@@ -477,6 +498,7 @@ function renderPicker(container) {
     let customModulesNeedUpdate = 0;
     let actionBusy = false;
 
+    /** Handle `renderComfyAlert` workflow step. */
     const renderComfyAlert = (info) => {
         const behind = Number(info?.behind);
         const status = String(info?.update_status || "unknown");
@@ -495,6 +517,7 @@ function renderPicker(container) {
         comfyAlert.style.display = "block";
     };
 
+    /** Handle `getNodesForSelectedGroup` workflow step. */
     const getNodesForSelectedGroup = () => {
         const group = groupSelect.value;
         return catalogByGroup.get(group) || [];
@@ -510,11 +533,13 @@ function renderPicker(container) {
         }
     };
 
+    /** Handle `setHelpText` workflow step. */
     const setHelpText = (text) => {
         help.innerHTML = "";
         help.textContent = text || "";
     };
 
+    /** Handle `setHelpModuleSummary` workflow step. */
     const setHelpModuleSummary = (moduleName, nodeCount) => {
         help.innerHTML = "";
 
@@ -547,6 +572,7 @@ function renderPicker(container) {
         help.appendChild(hint3);
     };
 
+    /** Handle `formatRefreshLine` workflow step. */
     const formatRefreshLine = (refresh) => {
         const phase = String(refresh?.phase || "");
         const current = Number(refresh?.current || 0);
@@ -579,6 +605,7 @@ function renderPicker(container) {
         return { text: "Обновление статусов модулей: запуск...", tone: "neutral" };
     };
 
+    /** Handle `pollRefreshProgress` workflow step. */
     const pollRefreshProgress = async () => {
         const token = ++refreshPollToken;
         while (token === refreshPollToken) {
@@ -600,6 +627,7 @@ function renderPicker(container) {
         return false;
     };
 
+    /** Handle `setActionBusy` workflow step. */
     const setActionBusy = (busy) => {
         actionBusy = Boolean(busy);
         refreshBtn.disabled = actionBusy;
@@ -607,6 +635,7 @@ function renderPicker(container) {
         comfyUpdateBtn.disabled = actionBusy || comfyUpdateBtn.style.display === "none";
     };
 
+    /** Handle `syncUpdateAllButton` workflow step. */
     const syncUpdateAllButton = () => {
         const show = groupSelect.value === "custom" && customModulesNeedUpdate > 0;
         if (!show) {
@@ -617,6 +646,7 @@ function renderPicker(container) {
         updateAllBtn.textContent = `Update all custom_nodes (${customModulesNeedUpdate})`;
     };
 
+    /** Handle `formatUpdateLine` workflow step. */
     const formatUpdateLine = (update) => {
         const scope = String(update?.scope || "");
         const phase = String(update?.phase || "");
@@ -667,6 +697,7 @@ function renderPicker(container) {
         return { text: "Обновление модулей: подготовка...", tone: "neutral" };
     };
 
+    /** Handle `pollUpdateProgress` workflow step. */
     const pollUpdateProgress = async () => {
         const token = ++updatePollToken;
         while (token === updatePollToken) {
@@ -688,6 +719,7 @@ function renderPicker(container) {
         return null;
     };
 
+    /** Handle `maybeInstallChangedRequirements` workflow step. */
     const maybeInstallChangedRequirements = async (update) => {
         const scope = String(update?.scope || "");
         if (scope === "comfyui") {
@@ -735,6 +767,7 @@ function renderPicker(container) {
         setRefreshLine(`Зависимости обновлены: ${installed} модулей.`, "ok");
     };
 
+    /** Handle `runModuleUpdate` workflow step. */
     const runModuleUpdate = async (scope, moduleName) => {
         setActionBusy(true);
         try {
@@ -757,6 +790,7 @@ function renderPicker(container) {
         }
     };
 
+    /** Handle `setModuleOptionText` workflow step. */
     const setModuleOptionText = (moduleName) => {
         const option = moduleOptions.get(moduleName);
         if (!option) {
@@ -767,6 +801,7 @@ function renderPicker(container) {
         option.textContent = formatModuleOption(moduleName, count, badges);
     };
 
+    /** Handle `setModuleNodeDiffs` workflow step. */
     const setModuleNodeDiffs = (moduleName, info) => {
         const newNodes = Array.isArray(info?.new_nodes_between_runs) ? info.new_nodes_between_runs : [];
         const updatedNodes = Array.isArray(info?.updated_nodes_between_runs) ? info.updated_nodes_between_runs : [];
@@ -777,6 +812,7 @@ function renderPicker(container) {
         });
     };
 
+    /** Handle `loadModuleBadges` workflow step. */
     const loadModuleBadges = async (group, modules) => {
         const token = ++moduleBadgeLoadToken;
         if (!modules.length) {
@@ -811,6 +847,7 @@ function renderPicker(container) {
         await Promise.all(workers);
     };
 
+    /** Handle `fillModuleSelect` workflow step. */
     const fillModuleSelect = () => {
         const nodes = getNodesForSelectedGroup();
         const selectedGroup = groupSelect.value;
@@ -882,6 +919,7 @@ function renderPicker(container) {
         syncUpdateAllButton();
     };
 
+    /** Handle `fillGroupSelect` workflow step. */
     const fillGroupSelect = (groups) => {
         groupSelect.innerHTML = "";
         moduleCatalogByGroup.clear();
@@ -903,6 +941,7 @@ function renderPicker(container) {
         fillModuleSelect();
     };
 
+    /** Handle `renderNodeList` workflow step. */
     const renderNodeList = () => {
         nodeList.innerHTML = "";
         const selectedModule = nodeSelect.value;
@@ -972,6 +1011,7 @@ function renderPicker(container) {
         nodeList.appendChild(groupEl);
     };
 
+    /** Handle `renderModuleInfo` workflow step. */
     const renderModuleInfo = (info) => {
         moduleInfo.innerHTML = "";
         if (!info || nodeSelect.value === "-1") {
@@ -1098,6 +1138,7 @@ function renderPicker(container) {
         moduleInfo.appendChild(card);
     };
 
+    /** Handle `loadModuleInfo` workflow step. */
     const loadModuleInfo = async () => {
         const selectedModule = nodeSelect.value;
         const selectedGroup = groupSelect.value;
@@ -1128,6 +1169,7 @@ function renderPicker(container) {
         }
     };
 
+    /** Handle `loadCatalog` workflow step. */
     const loadCatalog = async () => {
         setHelpText("Загрузка списка нод...");
         try {
@@ -1199,6 +1241,7 @@ function renderPicker(container) {
     loadCatalog();
 }
 
+/** Handle `activateSidebarTab` workflow step. */
 function activateSidebarTab() {
     const sidebar = app.extensionManager?.sidebarTab || app.extensionManager;
     if (!sidebar) {
@@ -1215,6 +1258,7 @@ function activateSidebarTab() {
     return false;
 }
 
+/** Handle `attachFallbackButton` workflow step. */
 function attachFallbackButton() {
     const button = document.createElement("button");
     button.type = "button";

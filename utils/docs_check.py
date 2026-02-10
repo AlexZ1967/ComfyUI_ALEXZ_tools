@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""Validate guide/readme synchronization with node source definitions.
+
+Checks that documented inputs/outputs and guide links match node classes.
+"""
+
 import ast
 import re
 import sys
@@ -9,63 +14,63 @@ README = ROOT / "README.md"
 
 NODE_DOCS = [
     {
-        "file": "image_prepare.py",
+        "file": "nodes/image_prepare.py",
         "class": "ImagePrepareForQwenEditOutpaint",
-        "guide": "GUIDE_IMAGE_PREP.md",
+        "guide": "guides/GUIDE_IMAGE_PREP.md",
         "readme_heading": "## Image Prepare for QwenEdit Outpaint",
     },
     {
-        "file": "image_align.py",
+        "file": "nodes/image_align.py",
         "class": "ImageAlignOverlayToBackground",
-        "guide": "GUIDE_ALIGN.md",
+        "guide": "guides/GUIDE_ALIGN.md",
         "readme_heading": "## Align Overlay To Background",
     },
     {
-        "file": "image_color_match.py",
+        "file": "nodes/image_color_match.py",
         "class": "ImageColorMatchToReference",
-        "guide": "COLOR_MATCH_GUIDE.md",
+        "guide": "guides/COLOR_MATCH_GUIDE.md",
         "readme_heading": "## Color Match To Reference",
     },
     {
-        "file": "video_frame_match.py",
+        "file": "nodes/video_frame_match.py",
         "class": "VideoFrameMatch",
-        "guide": "GUIDE_VIDEO_FRAME_MATCH.md",
+        "guide": "guides/GUIDE_VIDEO_FRAME_MATCH.md",
         "readme_heading": "## Find Closest Video Frame",
     },
     {
-        "file": "video_cut_match.py",
+        "file": "nodes/video_cut_match.py",
         "class": "VideoCutMatch",
-        "guide": "GUIDE_VIDEO_CUT_MATCH.md",
+        "guide": "guides/GUIDE_VIDEO_CUT_MATCH.md",
         "readme_heading": "## Match Video Cut Point",
     },
     {
-        "file": "image_difference.py",
+        "file": "nodes/image_difference.py",
         "class": "ImageDifference",
-        "guide": "GUIDE_IMAGE_DIFFERENCE.md",
+        "guide": "guides/GUIDE_IMAGE_DIFFERENCE.md",
         "readme_heading": "## Image Difference",
     },
     {
-        "file": "image_scopes.py",
+        "file": "nodes/image_scopes.py",
         "class": "ImageWaveformScope",
-        "guide": "GUIDE_IMAGE_WAVEFORM.md",
+        "guide": "guides/GUIDE_IMAGE_WAVEFORM.md",
         "readme_heading": "## Image Waveform Scope",
     },
     {
-        "file": "image_scopes.py",
+        "file": "nodes/image_scopes.py",
         "class": "ImageHistogramScope",
-        "guide": "GUIDE_IMAGE_HISTOGRAM.md",
+        "guide": "guides/GUIDE_IMAGE_HISTOGRAM.md",
         "readme_heading": "## Image Histogram Scope",
     },
     {
-        "file": "video_inpaint.py",
+        "file": "nodes/video_inpaint.py",
         "class": "VideoInpaintWatermark",
-        "guide": "GUIDE_VIDEO_INPAINT.md",
+        "guide": "guides/GUIDE_VIDEO_INPAINT.md",
         "readme_heading": "## Remove Static Watermark from Video",
     },
     {
-        "file": "json_output.py",
+        "file": "nodes/json_output.py",
         "class": "JsonDisplayAndSave",
-        "guide": "GUIDE_JSON.md",
+        "guide": "guides/GUIDE_JSON.md",
         "readme_heading": "## Show/Save JSON",
     },
 ]
@@ -82,11 +87,12 @@ TEMPLATE_SECTIONS = [
 ]
 
 EXTRA_GUIDES = [
-    "GUIDE_COLOR_MATCH.md",
+    "guides/GUIDE_COLOR_MATCH.md",
 ]
 
 
 def _literal_str_tuple(node):
+    """Internal helper: `_literal_str_tuple`."""
     if isinstance(node, (ast.Tuple, ast.List)):
         out = []
         for el in node.elts:
@@ -97,6 +103,7 @@ def _literal_str_tuple(node):
 
 
 def _find_class(tree, class_name):
+    """Internal helper: `_find_class`."""
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == class_name:
             return node
@@ -104,6 +111,7 @@ def _find_class(tree, class_name):
 
 
 def _parse_return_names(class_node):
+    """Internal helper: `_parse_return_names`."""
     for stmt in class_node.body:
         if isinstance(stmt, ast.Assign):
             for tgt in stmt.targets:
@@ -113,6 +121,7 @@ def _parse_return_names(class_node):
 
 
 def _extract_dict_keys(dict_node):
+    """Internal helper: `_extract_dict_keys`."""
     if not isinstance(dict_node, ast.Dict):
         return []
     out = []
@@ -123,6 +132,7 @@ def _extract_dict_keys(dict_node):
 
 
 def _parse_input_keys(class_node):
+    """Internal helper: `_parse_input_keys`."""
     required = []
     optional = []
     for stmt in class_node.body:
@@ -142,10 +152,12 @@ def _parse_input_keys(class_node):
 
 
 def _read(path: Path):
+    """Internal helper: `_read`."""
     return path.read_text(encoding="utf-8")
 
 
 def _section(text: str, heading: str):
+    """Internal helper: `_section`."""
     idx = text.find(heading)
     if idx < 0:
         return ""
@@ -157,6 +169,7 @@ def _section(text: str, heading: str):
 
 
 def main():
+    """Execute `main` routine."""
     issues = []
     readme_text = _read(README)
 

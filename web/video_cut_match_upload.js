@@ -1,3 +1,8 @@
+/**
+ * Frontend module: `video_cut_match_upload.js`.
+ * Handles ComfyUI web-side UI behavior for ALEXZ tools.
+ */
+
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 
@@ -5,6 +10,7 @@ const EXT_NAME = "ALEXZ.Tools.VideoCutMatchUpload";
 const TARGET_NODES = new Set(["VideoCutMatch", "Match Video Cut Point"]);
 const VIDEO_ACCEPT = ["video/webm", "video/mp4", "video/x-matroska", "image/gif"];
 
+/** Handle `ensureOption` workflow step. */
 function ensureOption(widget, filename) {
     if (!widget?.options || !Array.isArray(widget.options.values)) {
         return;
@@ -14,6 +20,7 @@ function ensureOption(widget, filename) {
     }
 }
 
+/** Handle `setWidgetValue` workflow step. */
 function setWidgetValue(widget, filename) {
     if (!widget) {
         return;
@@ -23,6 +30,7 @@ function setWidgetValue(widget, filename) {
     widget.callback?.(filename);
 }
 
+/** Handle `uploadVideoFile` workflow step. */
 async function uploadVideoFile(file) {
     const body = new FormData();
     const newFile = new File([file], file.name, {
@@ -46,6 +54,7 @@ async function uploadVideoFile(file) {
     return `${subfolder}${name}`;
 }
 
+/** Handle `addUploadWidget` workflow step. */
 function addUploadWidget(node, widgetName, buttonLabel) {
     if (!node?.widgets?.length) {
         return;

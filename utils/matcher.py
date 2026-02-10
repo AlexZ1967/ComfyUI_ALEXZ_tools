@@ -1,4 +1,6 @@
+"""Utility/support module: `utils/matcher.py`."""
 import numpy as np
+
 try:
     import cv2
 except Exception:  # pragma: no cover - runtime dependency check
@@ -8,11 +10,13 @@ from .constants import MATCHER_TYPES
 
 
 def _ensure_cv2():
+    """Internal helper: `_ensure_cv2`."""
     if cv2 is None:
         raise RuntimeError("opencv-python is required for feature alignment. Please install opencv-python.")
 
 
 def _create_detector(matcher_type, feature_count):
+    """Internal helper: `_create_detector`."""
     if matcher_type == "orb":
         return cv2.ORB_create(nfeatures=feature_count), cv2.NORM_HAMMING
     if matcher_type == "akaze":
@@ -36,6 +40,7 @@ def detect_and_match(
     color_mode,
     lab_channels,
 ):
+    """Execute `detect_and_match` routine."""
     _ensure_cv2()
 
     if lab_channels not in ("l", "lab"):
@@ -107,6 +112,7 @@ def detect_and_match(
 
 
 def estimate_affine(ov_points, bg_points, ransac_thresh, scale_mode, min_inliers):
+    """Execute `estimate_affine` routine."""
     _ensure_cv2()
     if scale_mode == "preserve_aspect":
         matrix, inliers = cv2.estimateAffinePartial2D(

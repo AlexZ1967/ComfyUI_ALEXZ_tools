@@ -1,3 +1,9 @@
+"""Node registry for ComfyUI_ALEXZ_tools.
+
+Loads all node classes, builds `NODE_CLASS_MAPPINGS` / `NODE_DISPLAY_NAME_MAPPINGS`,
+and logs load status for each node.
+"""
+
 import importlib
 import logging
 import traceback
@@ -25,8 +31,9 @@ _LOG_LINES = []
 
 
 def _load_node(name: str, display: str, module: str, attr: str):
+    """Load one node class and store it in ComfyUI mappings."""
     try:
-        mod = importlib.import_module(module, __name__.rsplit(".", 1)[0])
+        mod = importlib.import_module(module, __name__)
         cls = getattr(mod, attr)
         NODE_CLASS_MAPPINGS[name] = cls
         NODE_DISPLAY_NAME_MAPPINGS[name] = display

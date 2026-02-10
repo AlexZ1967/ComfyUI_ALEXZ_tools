@@ -1,6 +1,10 @@
+"""Node implementation module: `nodes/test_node.py`."""
 class ALEXZTestNode:
+    """ComfyUI node class: `ALEXZTestNode`."""
+
     @classmethod
     def INPUT_TYPES(cls):
+        """Execute `INPUT_TYPES` routine."""
         return {
             "required": {
                 "text": ("STRING", {"default": "hello", "tooltip": "Тестовый текст."}),
@@ -15,4 +19,5 @@ class ALEXZTestNode:
     CATEGORY = "utils/debug"
 
     def run(self, text, value):
+        """Execute `run` routine."""
         return (f"ALEXZ_TEST: {text}", int(value))

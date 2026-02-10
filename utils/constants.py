@@ -1,4 +1,6 @@
+"""Utility/support module: `utils/constants.py`."""
 DEFAULT_FEATURE_COUNT = 1500
+
 DEFAULT_GOOD_MATCH_PERCENT = 0.2
 DEFAULT_RANSAC_THRESH = 5.0
 DEFAULT_OPACITY = 1.0

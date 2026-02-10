@@ -1,4 +1,6 @@
+"""Node implementation module: `nodes/video_inpaint.py`."""
 import gc
+
 import glob
 import json
 import logging
@@ -12,27 +14,27 @@ import folder_paths
 from comfy import model_management
 from PIL import Image
 
-from .color_match_utils import (
+from ..utils.color_match_utils import (
     apply_color_match as _apply_color_match,
     ensure_mask_batch as _ensure_mask_batch,
     normalize_mask as _normalize_mask,
     resize_images_to_size as _resize_images_to_size,
     resize_mask_to_output as _resize_mask_to_output,
 )
-from .propainter.propainter_inference import (
+from ..propainter.propainter_inference import (
     ProPainterConfig,
     feature_propagation,
     process_inpainting,
 )
-from .propainter.utils.cudnn_utils import configure_cudnn
-from .propainter.utils.image_utils import (
+from ..propainter.utils.cudnn_utils import configure_cudnn
+from ..propainter.utils.image_utils import (
     ImageConfig,
     convert_image_to_frames,
     handle_output,
     prepare_frames_and_masks,
 )
-from .propainter.utils.model_utils import initialize_models
-from .e2fgvi.utils.image_utils import (
+from ..propainter.utils.model_utils import initialize_models
+from ..e2fgvi.utils.image_utils import (
     convert_image_to_frames as e2f_convert_frames,
     convert_mask_to_frames as e2f_convert_masks,
     dilate_masks as e2f_dilate_masks,
@@ -40,7 +42,7 @@ from .e2fgvi.utils.image_utils import (
     resize_frames as e2f_resize_frames,
     resize_masks as e2f_resize_masks,
 )
-from .e2fgvi.utils.model_utils import load_model as e2f_load_model
+from ..e2fgvi.utils.model_utils import load_model as e2f_load_model
 
 
 _LOGGER = logging.getLogger("VideoInpaintWatermark")
@@ -52,10 +54,12 @@ STREAM_STRIDE_DEFAULT = 1
 
 
 def _check_interrupt() -> None:
+    """Internal helper: `_check_interrupt`."""
     model_management.throw_exception_if_processing_interrupted()
 
 
 def _check_inputs(frames: torch.Tensor, masks: torch.Tensor) -> None:
+    """Internal helper: `_check_inputs`."""
     if frames.size(dim=0) <= 1:
         raise ValueError(f"Image length must be greater than 1, but got: {frames.size(dim=0)}")
     if masks.size(dim=0) != 1 and frames.size(dim=0) != masks.size(dim=0):
@@ -72,6 +76,7 @@ def _check_inputs(frames: torch.Tensor, masks: torch.Tensor) -> None:
 
 
 def _mask_to_bbox(mask: torch.Tensor) -> tuple[int, int, int, int, str]:
+    """Internal helper: `_mask_to_bbox`."""
     mask_np = mask.detach().cpu().numpy()
     if mask_np.ndim == 2:
         mask_np = mask_np[np.newaxis, ...]
@@ -92,6 +97,7 @@ def _pre_crop_inputs(
     mask: torch.Tensor,
     padding: int,
 ) -> tuple[torch.Tensor, torch.Tensor, tuple[int, int, int, int], str]:
+    """Internal helper: `_pre_crop_inputs`."""
     mask = _normalize_mask(mask)
     mask = _ensure_mask_batch(mask, frames.size(dim=0))
     x0, y0, x1, y1, status = _mask_to_bbox(mask)
@@ -114,6 +120,7 @@ def _crop_frames_with_bbox(
     mask: torch.Tensor,
     bbox: tuple[int, int, int, int],
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Internal helper: `_crop_frames_with_bbox`."""
     x0, y0, x1, y1 = bbox
     return frames[:, y0:y1, x0:x1, :], mask[:, y0:y1, x0:x1]
 
@@ -121,6 +128,7 @@ def _crop_frames_with_bbox(
 
 
 def _sanitize_prefix(prefix: str) -> str:
+    """Internal helper: `_sanitize_prefix`."""
     if prefix is None:
         return "patch_"
     prefix = prefix.strip()
@@ -128,6 +136,7 @@ def _sanitize_prefix(prefix: str) -> str:
 
 
 def _sanitize_prefix_with_default(prefix: str, default: str) -> str:
+    """Internal helper: `_sanitize_prefix_with_default`."""
     if prefix is None:
         return default
     prefix = prefix.strip()
@@ -135,6 +144,7 @@ def _sanitize_prefix_with_default(prefix: str, default: str) -> str:
 
 
 def _ensure_dir(path: str) -> None:
+    """Internal helper: `_ensure_dir`."""
     if not path:
         return
     os.makedirs(path, exist_ok=True)
@@ -148,6 +158,7 @@ def _save_rgba_sequence(
     label: str,
     start_index: int = 0,
 ) -> None:
+    """Internal helper: `_save_rgba_sequence`."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -177,6 +188,7 @@ def _save_rgba_frame(
     output_dir: str,
     filename: str,
 ) -> None:
+    """Internal helper: `_save_rgba_frame`."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -189,6 +201,7 @@ def _save_rgb_frame(
     output_dir: str,
     filename: str,
 ) -> None:
+    """Internal helper: `_save_rgb_frame`."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -200,6 +213,7 @@ def _save_mask_frame(
     output_dir: str,
     filename: str,
 ) -> None:
+    """Internal helper: `_save_mask_frame`."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -207,6 +221,7 @@ def _save_mask_frame(
 
 
 def _save_transform_json(output_dir: str, prefix: str, transform_json: str) -> None:
+    """Internal helper: `_save_transform_json`."""
     if not output_dir:
         return
     _ensure_dir(output_dir)
@@ -217,6 +232,7 @@ def _save_transform_json(output_dir: str, prefix: str, transform_json: str) -> N
 
 
 def _list_numbered_frames(directory: str, prefix: str, label: str) -> list[str]:
+    """Internal helper: `_list_numbered_frames`."""
     if not directory:
         return []
     prefix = _sanitize_prefix(prefix)
@@ -234,6 +250,7 @@ def _list_numbered_frames(directory: str, prefix: str, label: str) -> list[str]:
 
 
 def _purge_cached_inputs(directory: str, prefix: str) -> None:
+    """Internal helper: `_purge_cached_inputs`."""
     if not directory:
         return
     prefix = _sanitize_prefix(prefix)
@@ -250,6 +267,7 @@ def _purge_cached_inputs(directory: str, prefix: str) -> None:
 
 
 def _load_rgba_frame(path: str) -> np.ndarray:
+    """Internal helper: `_load_rgba_frame`."""
     with Image.open(path) as img:
         img = img.convert("RGBA")
         return np.asarray(img, dtype=np.uint8)
@@ -261,6 +279,7 @@ def _build_preview_composite(
     prefix: str,
     index: int,
 ) -> torch.Tensor | None:
+    """Internal helper: `_build_preview_composite`."""
     if not cache_dir or not output_dir:
         return None
     prefix = _sanitize_prefix(prefix)
@@ -292,6 +311,7 @@ def _stream_write_fullframes(
     stream_stride: int,
     total_frames: int | None,
 ) -> None:
+    """Internal helper: `_stream_write_fullframes`."""
     try:
         import cv2
     except ImportError as exc:
@@ -388,6 +408,7 @@ def _format_resolve_edit_position(
     overlay_width: int,
     overlay_height: int,
 ) -> dict:
+    """Internal helper: `_format_resolve_edit_position`."""
     scale_x = (background_width * background_width) / max(1.0, float(overlay_width))
     scale_y = (background_height * background_height) / max(1.0, float(overlay_height))
     pos_x = (norm_x - 0.5) * scale_x
@@ -404,6 +425,7 @@ def _format_crop_json(
     background_height: int,
     status: str,
 ) -> str:
+    """Internal helper: `_format_crop_json`."""
     payload = {
         "status": status,
         "overlay_scale": {"x": None, "y": None},
@@ -461,6 +483,7 @@ def _crop_outputs(
     background_width: int,
     background_height: int,
 ) -> tuple[torch.Tensor, torch.Tensor, str]:
+    """Internal helper: `_crop_outputs`."""
     mask = _normalize_mask(mask)
     mask = _ensure_mask_batch(mask, output_images.size(dim=0))
     mask = _resize_mask_to_output(mask, background_height, background_width)
@@ -496,6 +519,7 @@ def _compose_outputs_from_bbox(
     background_height: int,
     status: str,
 ) -> tuple[torch.Tensor, torch.Tensor, str]:
+    """Internal helper: `_compose_outputs_from_bbox`."""
     mask = _normalize_mask(mask)
     mask = _ensure_mask_batch(mask, output_images.size(dim=0))
     mask = _resize_mask_to_output(mask, output_images.shape[1], output_images.shape[2])
@@ -520,6 +544,7 @@ def _compose_outputs_from_bbox(
 
 
 class VideoInpaintWatermark:
+    """ComfyUI node class: `VideoInpaintWatermark`."""
     def _stream_video(
         self,
         video: str,
@@ -544,6 +569,7 @@ class VideoInpaintWatermark:
         write_fullframes: bool,
         fullframe_prefix: str,
     ):
+        """Internal helper: `_stream_video`."""
         pre_crop = True
         width = 0
         height = 0
@@ -785,6 +811,7 @@ class VideoInpaintWatermark:
         inputs_already_cropped: bool = False,
         mask_is_ready: bool = False,
     ) -> int:
+        """Internal helper: `_process_stream_chunk`."""
         _check_interrupt()
         width = 0
         height = 0
@@ -918,6 +945,7 @@ class VideoInpaintWatermark:
 
     @classmethod
     def INPUT_TYPES(cls):
+        """Execute `INPUT_TYPES` routine."""
         input_dir = folder_paths.get_input_directory()
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         files = folder_paths.filter_files_content_types(files, ["video"])
@@ -977,6 +1005,7 @@ class VideoInpaintWatermark:
         write_fullframes: bool,
         fullframe_prefix: str,
     ):
+        """Execute `inpaint` routine."""
         return self._stream_video(
             video=video,
             mask=mask,
@@ -1022,6 +1051,7 @@ class VideoInpaintWatermark:
         save_only: bool,
         preview_frame: int,
     ):
+        """Internal helper: `_inpaint_e2fgvi`."""
         device = model_management.get_torch_device()
         frames_np = e2f_convert_frames(frames)
         masks_np = e2f_convert_masks(mask)
@@ -1130,6 +1160,7 @@ class VideoInpaintWatermark:
 
 
 def _get_ref_index(mid_neighbor_id, neighbor_ids, length, ref_length, ref_num=-1):
+    """Internal helper: `_get_ref_index`."""
     ref_index = []
     if ref_num == -1:
         for i in range(0, length, ref_length):

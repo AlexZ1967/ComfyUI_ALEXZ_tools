@@ -1,7 +1,9 @@
+"""Node implementation module: `nodes/image_align.py`."""
 import logging
 
-from .alignment import align_overlay_to_background
-from .constants import (
+
+from ..utils.alignment import align_overlay_to_background
+from ..utils.constants import (
     DEFAULT_FEATURE_COUNT,
     DEFAULT_GOOD_MATCH_PERCENT,
     DEFAULT_MIN_INLIERS,
@@ -16,8 +18,10 @@ _LOGGER = logging.getLogger("ImageAlignOverlayToBackground")
 
 
 class ImageAlignOverlayToBackground:
+    """ComfyUI node class: `ImageAlignOverlayToBackground`."""
     @classmethod
     def INPUT_TYPES(cls):
+        """Execute `INPUT_TYPES` routine."""
         return {
             "required": {
                 "background": ("IMAGE", {"tooltip": "Фоновое изображение, в координатах которого выравниваем."}),
@@ -101,6 +105,7 @@ class ImageAlignOverlayToBackground:
         overlay_mask=None,
         use_color=None,
     ):
+        """Execute `align` routine."""
         if use_color is not None and use_color and color_mode == "gray":
             color_mode = "lab"
         if color_mode is None:

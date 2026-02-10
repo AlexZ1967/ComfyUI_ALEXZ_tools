@@ -1,3 +1,8 @@
+/**
+ * Frontend module: `show_json.js`.
+ * Handles ComfyUI web-side UI behavior for ALEXZ tools.
+ */
+
 import { app } from "../../../scripts/app.js";
 import { ComfyWidgets } from "../../../scripts/widgets.js";
 
@@ -10,6 +15,7 @@ app.registerExtension({
             return;
         }
 
+        /** Handle `ensureWidget` workflow step. */
         function ensureWidget() {
             if (this._jsonWidget) {
                 return this._jsonWidget;

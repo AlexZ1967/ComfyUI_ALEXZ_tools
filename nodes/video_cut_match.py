@@ -1,4 +1,6 @@
+"""Node implementation module: `nodes/video_cut_match.py`."""
 import json
+
 import logging
 import os
 import subprocess
@@ -15,7 +17,7 @@ try:
 except Exception:  # pragma: no cover - optional
     tqdm = None
 
-from .utils import ensure_hwc, normalize_to_reference
+from ..utils.utils import ensure_hwc, normalize_to_reference
 
 _LOGGER = logging.getLogger("VideoCutMatch")
 _SSIM_WINDOW_CACHE = {}
@@ -23,16 +25,19 @@ _LPIPS_CACHE = {}
 
 
 def _list_videos():
+    """Internal helper: `_list_videos`."""
     input_dir = folder_paths.get_input_directory()
     files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
     return folder_paths.filter_files_content_types(files, ["video"])
 
 
 def _to_tensor_rgb(frame_rgb: np.ndarray) -> torch.Tensor:
+    """Internal helper: `_to_tensor_rgb`."""
     return torch.from_numpy(frame_rgb.astype(np.float32) / 255.0)
 
 
 def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.Tensor:
+    """Internal helper: `_resize_to_match`."""
     h, w = target_hw
     if frame.shape[0] == h and frame.shape[1] == w:
         return frame
@@ -46,6 +51,7 @@ def _resize_to_match(frame: torch.Tensor, target_hw: Tuple[int, int]) -> torch.T
 
 
 def _downscale_max_side(frame: torch.Tensor, max_side: int) -> torch.Tensor:
+    """Internal helper: `_downscale_max_side`."""
     h, w = frame.shape[:2]
     if max(h, w) <= max_side:
         return frame
@@ -62,10 +68,12 @@ def _downscale_max_side(frame: torch.Tensor, max_side: int) -> torch.Tensor:
 
 
 def _mse_score(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Internal helper: `_mse_score`."""
     return float(torch.mean((a - b) ** 2).item())
 
 
 def _get_ssim_window(channels: int, device: torch.device, dtype: torch.dtype, size: int = 11, sigma: float = 1.5):
+    """Internal helper: `_get_ssim_window`."""
     key = (channels, device.type, str(dtype), size, sigma)
     if key in _SSIM_WINDOW_CACHE:
         return _SSIM_WINDOW_CACHE[key]
@@ -79,6 +87,7 @@ def _get_ssim_window(channels: int, device: torch.device, dtype: torch.dtype, si
 
 
 def _ssim_distance(a: torch.Tensor, b: torch.Tensor) -> float:
+    """Internal helper: `_ssim_distance`."""
     a = a.permute(2, 0, 1).unsqueeze(0)
     b = b.permute(2, 0, 1).unsqueeze(0)
     channels = a.shape[1]
@@ -101,6 +110,7 @@ def _ssim_distance(a: torch.Tensor, b: torch.Tensor) -> float:
 
 
 def _lpips_model(net: str, device: torch.device):
+    """Internal helper: `_lpips_model`."""
     key = (net, device.type)
     if key in _LPIPS_CACHE:
         return _LPIPS_CACHE[key]
@@ -116,6 +126,7 @@ def _lpips_model(net: str, device: torch.device):
 
 
 def _lpips_distance(a: torch.Tensor, b: torch.Tensor, net: str, device: torch.device) -> float:
+    """Internal helper: `_lpips_distance`."""
     model = _lpips_model(net, device)
     aa = a.permute(2, 0, 1).unsqueeze(0).to(device) * 2.0 - 1.0
     bb = b.permute(2, 0, 1).unsqueeze(0).to(device) * 2.0 - 1.0
@@ -125,6 +136,7 @@ def _lpips_distance(a: torch.Tensor, b: torch.Tensor, net: str, device: torch.de
 
 
 def _compute_score(metric: str, a: torch.Tensor, b: torch.Tensor, device: torch.device) -> float:
+    """Internal helper: `_compute_score`."""
     if metric == "mse":
         return _mse_score(a, b)
     if metric == "ssim":
@@ -137,6 +149,7 @@ def _compute_score(metric: str, a: torch.Tensor, b: torch.Tensor, device: torch.
 
 
 def _update_top_pairs(top_pairs, item, limit: int):
+    """Internal helper: `_update_top_pairs`."""
     if len(top_pairs) < limit:
         top_pairs.append(item)
         top_pairs.sort(key=lambda x: x["score"])
@@ -147,6 +160,7 @@ def _update_top_pairs(top_pairs, item, limit: int):
 
 
 def _confidence_from_top_pairs(top_pairs) -> float:
+    """Internal helper: `_confidence_from_top_pairs`."""
     if len(top_pairs) < 2:
         return 1.0 if len(top_pairs) == 1 else 0.0
     best = float(top_pairs[0]["score"])
@@ -157,6 +171,7 @@ def _confidence_from_top_pairs(top_pairs) -> float:
 
 
 def _blend_window_from_confidence(confidence: float) -> int:
+    """Internal helper: `_blend_window_from_confidence`."""
     if confidence >= 0.25:
         return 4
     if confidence >= 0.12:
@@ -165,6 +180,7 @@ def _blend_window_from_confidence(confidence: float) -> int:
 
 
 def _ffprobe_frames(video_path: str) -> int:
+    """Internal helper: `_ffprobe_frames`."""
     probes = [
         [
             "ffprobe",
@@ -208,6 +224,7 @@ def _ffprobe_frames(video_path: str) -> int:
 
 
 def _ffprobe_stream_info(video_path: str) -> Tuple[int, int, float]:
+    """Internal helper: `_ffprobe_stream_info`."""
     cmd = [
         "ffprobe",
         "-v",
@@ -244,6 +261,7 @@ def _ffprobe_stream_info(video_path: str) -> Tuple[int, int, float]:
 
 
 def _ffprobe_duration(video_path: str) -> float:
+    """Internal helper: `_ffprobe_duration`."""
     cmd = [
         "ffprobe",
         "-v",
@@ -269,6 +287,7 @@ def _ffprobe_duration(video_path: str) -> float:
 
 
 def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int, width: int, height: int):
+    """Internal helper: `_iter_ffmpeg_tail_frames`."""
     cmd = [
         "ffmpeg",
         "-v",
@@ -306,6 +325,7 @@ def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int
 
 
 def _load_head_frames(video_path: str, max_frames: int):
+    """Internal helper: `_load_head_frames`."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open video: {video_path}")
@@ -332,6 +352,7 @@ def _load_head_frames(video_path: str, max_frames: int):
 
 
 def _load_tail_frames(video_path: str, max_frames: int):
+    """Internal helper: `_load_tail_frames`."""
     if max_frames <= 0:
         return _load_head_frames(video_path, 0)
 
@@ -394,8 +415,10 @@ def _load_tail_frames(video_path: str, max_frames: int):
 
 
 class VideoCutMatch:
+    """ComfyUI node class: `VideoCutMatch`."""
     @classmethod
     def INPUT_TYPES(cls):
+        """Execute `INPUT_TYPES` routine."""
         videos = sorted(_list_videos())
         return {
             "required": {
@@ -464,6 +487,7 @@ class VideoCutMatch:
     CATEGORY = "video/utils"
 
     def match(self, video_a, video_b, search_tail_a, search_head_b, metric, normalize, top_k):
+        """Execute `match` routine."""
         path_a = folder_paths.get_annotated_filepath(video_a)
         path_b = folder_paths.get_annotated_filepath(video_b)
         if not os.path.exists(path_a):

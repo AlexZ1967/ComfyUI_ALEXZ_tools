@@ -16,7 +16,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## Docs Check
 - Проверка синхронизации параметров/выходов нод и документации:  
-  `python scripts/docs_check.py`
+  `python utils/docs_check.py`
 
 ## Runtime notes
 - `Color Match To Reference` preset `perceptual` использует `torchvision` из базовой среды ComfyUI.
@@ -78,7 +78,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 Inputs: `image`, `aspect_ratio` (as_is, 1x1, 16x9, 9x16, 2x3, 3x2, 4x3, 3x4)  
 Outputs: `image`, `latent`
-Guide: [GUIDE_IMAGE_PREP.md](GUIDE_IMAGE_PREP.md)
+Guide: [GUIDE_IMAGE_PREP.md](guides/GUIDE_IMAGE_PREP.md)
 
 ---
 
@@ -91,12 +91,12 @@ Guide: [GUIDE_IMAGE_PREP.md](GUIDE_IMAGE_PREP.md)
 
 Основные входы: background/overlay (+маски), feature_count, good_match_percent, ransac_thresh, opacity, matcher_type, min_matches, min_inliers, scale_mode, allow_rotation, color_mode.  
 Выходы: `aligned_overlay`, `composite`, `difference`, `transform_json`  
-Guide: [GUIDE_ALIGN.md](GUIDE_ALIGN.md)
+Guide: [GUIDE_ALIGN.md](guides/GUIDE_ALIGN.md)
 
 ---
 
 ## Color Match To Reference
-Цветокоррекция по образцу с пресетами качества: fast (mean/std), balanced (linear), quality (LAB CDF), perceptual (VGG). Подробно: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md).
+Цветокоррекция по образцу с пресетами качества: fast (mean/std), balanced (linear), quality (LAB CDF), perceptual (VGG). Подробно: [COLOR_MATCH_GUIDE.md](guides/COLOR_MATCH_GUIDE.md).
 
 - Display name: Color Match To Reference  
 - Type name: ImageColorMatchToReference  
@@ -105,7 +105,7 @@ Guide: [GUIDE_ALIGN.md](GUIDE_ALIGN.md)
 Пресеты: `fast`=mean/std, `balanced`=linear, `quality`=LAB CDF, `perceptual`=VGG.  
 `match_json.quality`: метрики до/после (`mse`, `ssim`, `delta_e76`, `lpips_alex`) и `improvement_pct`.  
 Выходы: `matched_image`, `match_json`.  
-Guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md), кратко — [GUIDE_COLOR_MATCH.md](GUIDE_COLOR_MATCH.md)
+Guide: [COLOR_MATCH_GUIDE.md](guides/COLOR_MATCH_GUIDE.md), кратко — [GUIDE_COLOR_MATCH.md](guides/GUIDE_COLOR_MATCH.md)
 
 ---
 
@@ -118,7 +118,7 @@ Guide: [COLOR_MATCH_GUIDE.md](COLOR_MATCH_GUIDE.md), кратко — [GUIDE_COL
 
 Ключевые входы: mask, method (propainter/e2fgvi/e2fgvi_hq), mask_dilates/flow_mask_dilates, ref_stride, neighbor_length, subvideo_length, raft_iter, fp16, throughput_mode, crop_padding, color_match_mode, cache_dir, output_dir, output_name, video, preview_frame, write_fullframes.  
 Выходы: `preview_image`, `transform_json`
-Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
+Guide: [GUIDE_VIDEO_INPAINT.md](guides/GUIDE_VIDEO_INPAINT.md)
 
 ---
 
@@ -131,7 +131,7 @@ Guide: [GUIDE_VIDEO_INPAINT.md](GUIDE_VIDEO_INPAINT.md)
 Входы: `image`, `video`, `max_frames` (0=все, иначе последние N), `metric`, `normalize`.  
 Выходы: `best_frame`, `best_frame_number`, `scores_json` (объект с metric/normalize, `best{index,score,confidence}`, `top_k`; для `lpips_*` включает двухпроходный поиск с refine-метаданными).
 Примечание: при `max_frames > 0` требуется `ffmpeg` в `PATH`.
-Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
+Guide: [GUIDE_VIDEO_FRAME_MATCH.md](guides/GUIDE_VIDEO_FRAME_MATCH.md)
 
 ---
 
@@ -145,7 +145,7 @@ Guide: [GUIDE_VIDEO_FRAME_MATCH.md](GUIDE_VIDEO_FRAME_MATCH.md)
 Выходы: `best_frame_a`, `best_frame_b`, `best_frame_a_number`, `best_frame_b_number`, `match_json`.  
 Для удобства в ноде есть две отдельные кнопки загрузки: `choose video_a to upload` и `choose video_b to upload`.
 `match_json` содержит `best`, `top_k`, `confidence` и `cut_hint` для склейки.
-Guide: [GUIDE_VIDEO_CUT_MATCH.md](GUIDE_VIDEO_CUT_MATCH.md)
+Guide: [GUIDE_VIDEO_CUT_MATCH.md](guides/GUIDE_VIDEO_CUT_MATCH.md)
 
 ---
 
@@ -157,7 +157,7 @@ Guide: [GUIDE_VIDEO_CUT_MATCH.md](GUIDE_VIDEO_CUT_MATCH.md)
 - Category: image/utils  
 Входы: `image_a`, `image_b` (авторесайз меньшей к большей).  
 Выходы: `difference` (|A−B|).  
-Guide: [GUIDE_IMAGE_DIFFERENCE.md](GUIDE_IMAGE_DIFFERENCE.md)
+Guide: [GUIDE_IMAGE_DIFFERENCE.md](guides/GUIDE_IMAGE_DIFFERENCE.md)
 
 ---
 
@@ -169,7 +169,7 @@ Guide: [GUIDE_IMAGE_DIFFERENCE.md](GUIDE_IMAGE_DIFFERENCE.md)
 - Category: image/analysis  
 Входы: `image`, `mode` (luma/parade), `width`, `height`, `gain`, `log_scale`.  
 Выходы: `waveform`.  
-Guide: [GUIDE_IMAGE_WAVEFORM.md](GUIDE_IMAGE_WAVEFORM.md)
+Guide: [GUIDE_IMAGE_WAVEFORM.md](guides/GUIDE_IMAGE_WAVEFORM.md)
 
 ---
 
@@ -182,7 +182,7 @@ Guide: [GUIDE_IMAGE_WAVEFORM.md](GUIDE_IMAGE_WAVEFORM.md)
 Входы: `image`, `mode` (rgb_overlay/rgb_split/luma), `bins`, `width`, `height`, `log_scale`.  
 `rgb_overlay`: тонкие RGB-кривые, с max-blend (меньше визуального смешивания).  
 Выходы: `histogram`, `hist_json`.  
-Guide: [GUIDE_IMAGE_HISTOGRAM.md](GUIDE_IMAGE_HISTOGRAM.md)
+Guide: [GUIDE_IMAGE_HISTOGRAM.md](guides/GUIDE_IMAGE_HISTOGRAM.md)
 
 ---
 
@@ -194,7 +194,7 @@ Guide: [GUIDE_IMAGE_HISTOGRAM.md](GUIDE_IMAGE_HISTOGRAM.md)
 - Category: utils/json  
 Inputs: `json_text`, optional `output_path`  
 Outputs: UI-only (без выходного порта)
-Guide: [GUIDE_JSON.md](GUIDE_JSON.md)
+Guide: [GUIDE_JSON.md](guides/GUIDE_JSON.md)
 
 ---
 

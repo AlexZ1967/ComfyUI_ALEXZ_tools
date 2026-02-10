@@ -1,4 +1,6 @@
+"""Node implementation module: `nodes/json_output.py`."""
 import json
+
 import logging
 import os
 
@@ -7,10 +9,13 @@ _LOGGER = logging.getLogger("JsonDisplayAndSave")
 
 
 class AnyType(str):
+    """Class definition: `AnyType`."""
     def __eq__(self, _other):
+        """Internal helper: `__eq__`."""
         return True
 
     def __ne__(self, _other):
+        """Internal helper: `__ne__`."""
         return False
 
 
@@ -18,6 +23,7 @@ any_type = AnyType("*")
 
 
 def _format_json_text(value):
+    """Internal helper: `_format_json_text`."""
     text = "{}"
     if value is None:
         return text
@@ -39,6 +45,7 @@ def _format_json_text(value):
 
 
 def _parse_json_string(value):
+    """Internal helper: `_parse_json_string`."""
     if not isinstance(value, str):
         return value
     try:
@@ -58,14 +65,17 @@ def _parse_json_string(value):
 
 
 def _unwrap_singleton(value):
+    """Internal helper: `_unwrap_singleton`."""
     while isinstance(value, (list, tuple)) and len(value) == 1:
         value = value[0]
     return value
 
 
 class JsonDisplayAndSave:
+    """ComfyUI node class: `JsonDisplayAndSave`."""
     @classmethod
     def INPUT_TYPES(cls):
+        """Execute `INPUT_TYPES` routine."""
         return {
             "required": {
                 "json_text": (any_type, {"tooltip": "JSON строка или объект для отображения и сохранения."}),
@@ -83,6 +93,7 @@ class JsonDisplayAndSave:
     OUTPUT_NODE = True
 
     def display(self, json_text, output_path=None):
+        """Execute `display` routine."""
         text = _format_json_text(_unwrap_singleton(json_text))
 
         output_value = _unwrap_singleton(output_path)

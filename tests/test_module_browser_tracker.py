@@ -1,3 +1,9 @@
+"""Regression tests for Module Node Picker backend state tracking.
+
+These tests validate module update detection, refresh status reporting, and
+support utilities used by the Module Nodes widget API.
+"""
+
 import importlib
 import os
 import sys
@@ -7,6 +13,7 @@ import unittest
 
 
 def _install_folder_paths_stub():
+    """Internal helper: `_install_folder_paths_stub`."""
     if "folder_paths" in sys.modules:
         stub = sys.modules["folder_paths"]
         if not hasattr(stub, "get_folder_paths"):
@@ -19,8 +26,10 @@ def _install_folder_paths_stub():
 
 
 class ModuleBrowserTrackerTests(unittest.TestCase):
+    """Verify module browser backend behavior for status and update flows."""
     @classmethod
     def setUpClass(cls):
+        """Execute `setUpClass` routine."""
         repo_root = os.path.dirname(os.path.dirname(__file__))
         if "ComfyUI_ALEXZ_tools" not in sys.modules:
             pkg = types.ModuleType("ComfyUI_ALEXZ_tools")
@@ -29,7 +38,8 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         _install_folder_paths_stub()
 
     def setUp(self):
-        self.api = importlib.import_module("ComfyUI_ALEXZ_tools.module_node_browser_api")
+        """Load module-browser backend and capture patchable symbols."""
+        self.api = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_node_browser_api")
         self._orig_state_cache = self.api._MODULE_STATE_CACHE
         self._orig_comfy_cache = self.api._COMFYUI_STATUS_CACHE
         self._orig_save_state = self.api._save_module_state
@@ -53,6 +63,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._MODULE_INFO_CACHE.clear()
 
     def tearDown(self):
+        """Execute `tearDown` routine."""
         self.api._MODULE_STATE_CACHE = self._orig_state_cache
         self.api._COMFYUI_STATUS_CACHE = self._orig_comfy_cache
         self.api._save_module_state = self._orig_save_state
@@ -73,6 +84,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._MODULE_INFO_CACHE.clear()
 
     def test_new_module_marker_applies_without_node_diffs(self):
+        """Validate `test_new_module_marker_applies_without_node_diffs` behavior."""
         self.api._MODULE_STATE_CACHE = {
             "__node_tracker__": {
                 "startup_changes": {},
@@ -93,6 +105,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertTrue(result["updated_between_runs"])
 
     def test_startup_new_modules_detected_from_module_set_diff(self):
+        """Validate `test_startup_new_modules_detected_from_module_set_diff` behavior."""
         self.api._now_iso = lambda: "2026-02-08T00:00:00+00:00"
         self.api._MODULE_STATE_CACHE = {
             "__node_tracker__": {
@@ -110,9 +123,11 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertIn("ComfyUI-Inpaint-CropAndStitch", startup_new)
 
     def test_comfyui_update_status_can_update(self):
+        """Validate `test_comfyui_update_status_can_update` behavior."""
         self.api._comfyui_root = lambda: os.path.join(os.getcwd(), "fake_comfy")
 
         def fake_run_git(args, timeout=2.0):
+            """Execute `fake_run_git` routine."""
             cmd = " ".join(args)
             table = {
                 "git -C " + os.path.join(os.getcwd(), "fake_comfy") + " rev-parse --is-inside-work-tree": "true",
@@ -135,6 +150,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(status.get("behind"), 3)
 
     def test_unseen_module_update_detected_between_runs(self):
+        """Validate `test_unseen_module_update_detected_between_runs` behavior."""
         self.api._now_iso = lambda: "2026-02-08T00:00:00+00:00"
         self.api._build_node_snapshots = lambda: {"custom": {"comfyui-AGSoft": {}}}
         self.api._discover_custom_modules = lambda: ["comfyui-AGSoft"]
@@ -145,6 +161,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         ]
 
         def fake_module_git_state(_module_name):
+            """Execute `fake_module_git_state` routine."""
             return dict(states.pop(0))
 
         self.api._module_git_state = fake_module_git_state
@@ -163,6 +180,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(entry.get("startup_new_commit"), "new222")
 
     def test_refresh_syncs_custom_module_upstreams(self):
+        """Validate `test_refresh_syncs_custom_module_upstreams` behavior."""
         called = []
         self.api._discover_custom_modules = lambda: ["modA", "modB"]
         self.api._sync_module_upstream = lambda module_name, timeout=15.0: called.append((module_name, timeout)) or True
@@ -174,6 +192,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual([x[0] for x in called], ["modA", "modB"])
 
     def test_initial_refresh_does_not_sync_upstreams_by_default(self):
+        """Validate `test_initial_refresh_does_not_sync_upstreams_by_default` behavior."""
         called = []
         self.api._discover_custom_modules = lambda: ["modA"]
         self.api._sync_module_upstream = lambda module_name, timeout=15.0: called.append((module_name, timeout)) or True
@@ -185,6 +204,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(called, [])
 
     def test_refresh_reports_progress_callback(self):
+        """Validate `test_refresh_reports_progress_callback` behavior."""
         events = []
         self.api._discover_custom_modules = lambda: ["modA"]
         self.api._sync_module_upstream = lambda module_name, timeout=15.0: True
@@ -199,6 +219,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertIn("done", phases)
 
     def test_refresh_reports_modules_need_update_count(self):
+        """Validate `test_refresh_reports_modules_need_update_count` behavior."""
         events = []
         self.api._discover_custom_modules = lambda: []
         self.api._announce_tracked_module_updates = lambda: {"modules_need_update": 4}
@@ -212,6 +233,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(done_events[-1].get("modules_need_update"), 4)
 
     def test_resolve_update_targets_all_filters_modules(self):
+        """Validate `test_resolve_update_targets_all_filters_modules` behavior."""
         self.api._discover_custom_modules = lambda: ["modA", "modB", "modC"]
         self.api._sync_module_upstream = lambda module_name, timeout=15.0: True
         self.api._module_needs_update_now = lambda module_name: module_name in {"modA", "modC"}
@@ -221,7 +243,9 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(targets, ["modA", "modC"])
 
     def test_install_requirements_for_modules_aggregates_results(self):
+        """Validate `test_install_requirements_for_modules_aggregates_results` behavior."""
         def fake_install(module_name, timeout=1200.0):
+            """Execute `fake_install` routine."""
             if module_name == "modA":
                 return {"module": module_name, "status": "installed"}
             return {"module": module_name, "status": "error"}
@@ -236,6 +260,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(result.get("failed"), 1)
 
     def test_module_update_job_supports_comfyui_scope(self):
+        """Validate `test_module_update_job_supports_comfyui_scope` behavior."""
         self.api._comfyui_root = lambda: os.getcwd()
         self.api._pull_comfyui = lambda timeout=240.0: {
             "module": "ComfyUI",
@@ -259,6 +284,7 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertTrue(done.get("requirements_changed"))
 
     def test_install_comfyui_requirements_endpoint_helper(self):
+        """Validate `test_install_comfyui_requirements_endpoint_helper` behavior."""
         self.api._install_comfyui_requirements = lambda timeout=1800.0: {"status": "installed"}
         result = self.api._install_comfyui_requirements()
         self.assertEqual(result.get("status"), "installed")

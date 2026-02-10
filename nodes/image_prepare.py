@@ -1,4 +1,6 @@
+"""Node implementation module: `nodes/image_prepare.py`."""
 import math
+
 
 import comfy.model_management
 import comfy.utils
@@ -22,8 +24,10 @@ _LATENT_CHANNELS = 4  # Стандартный VAE использует 4 кан
 
 
 class ImagePrepareForQwenEditOutpaint:
+    """ComfyUI node class: `ImagePrepareForQwenEditOutpaint`."""
     @classmethod
     def INPUT_TYPES(cls):
+        """Execute `INPUT_TYPES` routine."""
         return {
             "required": {
                 "image": ("IMAGE", {"tooltip": "Исходное изображение для подготовки."}),
@@ -40,6 +44,7 @@ class ImagePrepareForQwenEditOutpaint:
     CATEGORY = "image/qwen"
 
     def prepare(self, image, aspect_ratio):
+        """Execute `prepare` routine."""
         samples = image.movedim(-1, 1)
         in_height = samples.shape[2]
         in_width = samples.shape[3]

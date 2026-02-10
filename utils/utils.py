@@ -1,4 +1,6 @@
+"""Utility/support module: `utils/utils.py`."""
 import numpy as np
+
 import torch
 import torch.nn.functional as F
 from . import color_match_utils
@@ -9,19 +11,23 @@ except Exception:  # pragma: no cover - runtime dependency check
 
 
 def to_numpy_uint8(image_tensor):
+    """Execute `to_numpy_uint8` routine."""
     image = image_tensor.detach().cpu().clamp(0, 1).numpy()
     return (image * 255.0).round().astype(np.uint8)
 
 
 def to_torch_image(image_np):
+    """Execute `to_torch_image` routine."""
     return torch.from_numpy(image_np.astype(np.float32) / 255.0)
 
 
 def select_batch_item(batch, index):
+    """Execute `select_batch_item` routine."""
     return batch[min(index, batch.shape[0] - 1)]
 
 
 def mask_to_uint8(mask_tensor, target_hw):
+    """Execute `mask_to_uint8` routine."""
     if mask_tensor is None:
         return None
     mask_np = mask_tensor.detach().cpu().clamp(0, 1).numpy()
@@ -36,6 +42,7 @@ def mask_to_uint8(mask_tensor, target_hw):
 
 
 def round_to_multiple(value, multiple):
+    """Execute `round_to_multiple` routine."""
     return max(multiple, int(round(value / multiple)) * multiple)
 
 
