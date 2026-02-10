@@ -338,6 +338,17 @@ async function installModuleRequirements(modules) {
     return await resp.json();
 }
 
+async function installComfyUIRequirements() {
+    const resp = await api.fetchApi("/alexz_tools/comfyui_install_requirements", {
+        method: "POST",
+        cache: "no-store",
+    });
+    if (!resp.ok) {
+        throw new Error(`API ${resp.status}`);
+    }
+    return await resp.json();
+}
+
 function fmtDate(iso) {
     if (!iso) {
         return "n/a";
@@ -415,6 +426,15 @@ function renderPicker(container) {
 
     const comfyAlert = document.createElement("div");
     comfyAlert.className = "alexz-mod-picker-comfy-alert";
+    const comfyAlertText = document.createElement("div");
+    comfyAlert.appendChild(comfyAlertText);
+    const comfyUpdateBtn = document.createElement("button");
+    comfyUpdateBtn.type = "button";
+    comfyUpdateBtn.className = "alexz-mod-picker-btn-small";
+    comfyUpdateBtn.textContent = "Update ComfyUI";
+    comfyUpdateBtn.style.marginTop = "6px";
+    comfyUpdateBtn.style.display = "none";
+    comfyAlert.appendChild(comfyUpdateBtn);
     root.appendChild(comfyAlert);
 
     const groupSelect = document.createElement("select");
@@ -462,13 +482,16 @@ function renderPicker(container) {
         const status = String(info?.update_status || "unknown");
         if (status !== "can_update" || !Number.isFinite(behind) || behind <= 0) {
             comfyAlert.style.display = "none";
-            comfyAlert.textContent = "";
+            comfyAlertText.textContent = "";
+            comfyUpdateBtn.style.display = "none";
             return;
         }
         const branch = String(info?.branch || "unknown");
         const local = String(info?.installed_commit_short || "unknown");
         const remote = String(info?.remote_commit_short || "unknown");
-        comfyAlert.textContent = `Доступна новая версия ComfyUI на GitHub: branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
+        comfyAlertText.textContent = `Доступна новая версия ComfyUI на GitHub: branch=${branch}, behind=${behind}, local=${local}, remote=${remote}.`;
+        comfyUpdateBtn.style.display = "";
+        comfyUpdateBtn.disabled = actionBusy;
         comfyAlert.style.display = "block";
     };
 
@@ -581,6 +604,7 @@ function renderPicker(container) {
         actionBusy = Boolean(busy);
         refreshBtn.disabled = actionBusy;
         updateAllBtn.disabled = actionBusy;
+        comfyUpdateBtn.disabled = actionBusy || comfyUpdateBtn.style.display === "none";
     };
 
     const syncUpdateAllButton = () => {
@@ -594,6 +618,7 @@ function renderPicker(container) {
     };
 
     const formatUpdateLine = (update) => {
+        const scope = String(update?.scope || "");
         const phase = String(update?.phase || "");
         const current = Number(update?.current || 0);
         const total = Number(update?.total || 0);
@@ -602,6 +627,7 @@ function renderPicker(container) {
         const error = String(update?.error || "");
         const updated = Number(update?.updated || 0);
         const failed = Number(update?.failed || 0);
+        const requirementsChanged = Boolean(update?.requirements_changed);
         const reqList = Array.isArray(update?.requirements_modules) ? update.requirements_modules : [];
 
         if (phase === "update") {
@@ -612,6 +638,18 @@ function renderPicker(container) {
             return { text: "Обновление модулей: запуск...", tone: "neutral" };
         }
         if (phase === "done") {
+            if (scope === "comfyui") {
+                if (failed > 0) {
+                    return { text: "Обновление ComfyUI завершено с ошибкой.", tone: "warn" };
+                }
+                if (updated > 0 && requirementsChanged) {
+                    return { text: "ComfyUI обновлен, требуется обновить dependencies.", tone: "warn" };
+                }
+                if (updated > 0) {
+                    return { text: "ComfyUI обновлен.", tone: "ok" };
+                }
+                return { text: "ComfyUI уже актуален.", tone: "ok" };
+            }
             if (total <= 0) {
                 return { text: "Обновления не найдены.", tone: "ok" };
             }
@@ -651,6 +689,29 @@ function renderPicker(container) {
     };
 
     const maybeInstallChangedRequirements = async (update) => {
+        const scope = String(update?.scope || "");
+        if (scope === "comfyui") {
+            if (!Boolean(update?.requirements_changed)) {
+                return;
+            }
+            const answer = window.confirm(
+                "В ComfyUI изменился requirements.txt.\n" +
+                "Обновить зависимости через pip в текущем окружении ComfyUI?"
+            );
+            if (!answer) {
+                setRefreshLine("ComfyUI requirements.txt изменился, установка зависимостей пропущена.", "warn");
+                return;
+            }
+            setRefreshLine("Установка зависимостей ComfyUI (pip) ...", "neutral");
+            const install = await installComfyUIRequirements();
+            if (String(install?.status || "") !== "installed") {
+                setRefreshLine("Установка зависимостей ComfyUI завершена с ошибкой.", "warn");
+                return;
+            }
+            setRefreshLine("Зависимости ComfyUI обновлены.", "ok");
+            return;
+        }
+
         const modules = Array.isArray(update?.requirements_modules) ? update.requirements_modules : [];
         if (!modules.length) {
             return;
@@ -1087,7 +1148,8 @@ function renderPicker(container) {
         } catch (err) {
             setHelpText(`Ошибка загрузки: ${String(err)}`);
             comfyAlert.style.display = "none";
-            comfyAlert.textContent = "";
+            comfyAlertText.textContent = "";
+            comfyUpdateBtn.style.display = "none";
             groupSelect.innerHTML = "";
             nodeSelect.innerHTML = "";
             moduleInfo.innerHTML = "";
@@ -1110,6 +1172,12 @@ function renderPicker(container) {
             return;
         }
         await runModuleUpdate("all", "");
+    };
+    comfyUpdateBtn.onclick = async () => {
+        if (actionBusy) {
+            return;
+        }
+        await runModuleUpdate("comfyui", "");
     };
     refreshBtn.onclick = async () => {
         setActionBusy(true);

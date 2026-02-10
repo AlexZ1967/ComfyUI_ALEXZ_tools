@@ -1,6 +1,7 @@
 import importlib
 import os
 import sys
+import time
 import types
 import unittest
 
@@ -43,6 +44,9 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self._orig_comfy_status = self.api._comfyui_git_status
         self._orig_module_needs_update_now = self.api._module_needs_update_now
         self._orig_install_module_requirements = self.api._install_module_requirements
+        self._orig_pull_comfyui = self.api._pull_comfyui
+        self._orig_install_comfyui_requirements = self.api._install_comfyui_requirements
+        self._orig_refresh_runtime_state = self.api._refresh_module_runtime_state
         self.api._MODULE_STATE_CACHE = {}
         self.api._COMFYUI_STATUS_CACHE = None
         self.api._save_module_state = lambda state: None
@@ -63,6 +67,9 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._comfyui_git_status = self._orig_comfy_status
         self.api._module_needs_update_now = self._orig_module_needs_update_now
         self.api._install_module_requirements = self._orig_install_module_requirements
+        self.api._pull_comfyui = self._orig_pull_comfyui
+        self.api._install_comfyui_requirements = self._orig_install_comfyui_requirements
+        self.api._refresh_module_runtime_state = self._orig_refresh_runtime_state
         self.api._MODULE_INFO_CACHE.clear()
 
     def test_new_module_marker_applies_without_node_diffs(self):
@@ -227,6 +234,34 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(result.get("count"), 2)
         self.assertEqual(result.get("installed"), 1)
         self.assertEqual(result.get("failed"), 1)
+
+    def test_module_update_job_supports_comfyui_scope(self):
+        self.api._comfyui_root = lambda: os.getcwd()
+        self.api._pull_comfyui = lambda timeout=240.0: {
+            "module": "ComfyUI",
+            "status": "updated",
+            "requirements_changed": True,
+        }
+        self.api._refresh_module_runtime_state = lambda sync_upstreams=False, progress_cb=None: {"status": "ok"}
+
+        started = self.api._start_module_update_job("comfyui", "")
+        self.assertEqual(started.get("status"), "started")
+
+        for _ in range(100):
+            snap = self.api._update_status_snapshot()
+            if not snap.get("running"):
+                break
+            time.sleep(0.01)
+
+        done = self.api._update_status_snapshot()
+        self.assertEqual(done.get("phase"), "done")
+        self.assertEqual(done.get("updated"), 1)
+        self.assertTrue(done.get("requirements_changed"))
+
+    def test_install_comfyui_requirements_endpoint_helper(self):
+        self.api._install_comfyui_requirements = lambda timeout=1800.0: {"status": "installed"}
+        result = self.api._install_comfyui_requirements()
+        self.assertEqual(result.get("status"), "installed")
 
 
 if __name__ == "__main__":

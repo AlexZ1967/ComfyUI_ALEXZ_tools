@@ -69,6 +69,7 @@ _UPDATE_STATUS: dict[str, Any] = {
     "updated": 0,
     "up_to_date": 0,
     "failed": 0,
+    "requirements_changed": False,
     "requirements_modules": [],
     "results": [],
     "started_at": "",
@@ -633,6 +634,71 @@ def _count_custom_modules_need_update() -> int:
     return count
 
 
+def _comfyui_requirements_path() -> Path | None:
+    root = _comfyui_root()
+    if root is None:
+        return None
+    req = root / "requirements.txt"
+    return req if req.exists() else None
+
+
+def _comfyui_needs_update_now() -> bool:
+    status = _comfyui_git_status(force_refresh=True)
+    behind = status.get("behind")
+    if isinstance(behind, int):
+        return behind > 0
+    return bool(status.get("update_status") == "can_update")
+
+
+def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
+    root = _comfyui_root()
+    result: dict[str, Any] = {
+        "module": "ComfyUI",
+        "status": "error",
+        "message": "",
+        "updated": False,
+        "requirements_changed": False,
+        "before_commit": "",
+        "after_commit": "",
+    }
+    if root is None:
+        result["status"] = "not_found"
+        result["message"] = "ComfyUI root not found"
+        return result
+    root_str = str(root)
+    is_git = _run_git(["git", "-C", root_str, "rev-parse", "--is-inside-work-tree"])
+    if is_git != "true":
+        result["status"] = "no_git"
+        result["message"] = "ComfyUI is not a git repository"
+        return result
+    upstream = _run_git(["git", "-C", root_str, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+    if not upstream:
+        result["status"] = "no_upstream"
+        result["message"] = "ComfyUI upstream is not configured"
+        return result
+
+    before_commit = _run_git(["git", "-C", root_str, "rev-parse", "HEAD"]) or ""
+    result["before_commit"] = before_commit
+    pull = _run_command(["git", "-C", root_str, "pull", "--ff-only"], timeout=timeout, disable_git_prompt=True)
+    if not pull.get("ok"):
+        result["status"] = "error"
+        result["message"] = str(pull.get("stderr") or pull.get("stdout") or "git pull failed")
+        return result
+
+    after_commit = _run_git(["git", "-C", root_str, "rev-parse", "HEAD"]) or ""
+    result["after_commit"] = after_commit
+    updated = bool(before_commit and after_commit and before_commit != after_commit)
+    result["updated"] = updated
+    if updated:
+        result["status"] = "updated"
+        result["message"] = "ComfyUI updated"
+        result["requirements_changed"] = _requirements_changed_between(root, before_commit, after_commit)
+    else:
+        result["status"] = "up_to_date"
+        result["message"] = "already up to date"
+    return result
+
+
 def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, Any]:
     module = _canonical_custom_module_name(module_name)
     module_dir = _module_dir(module)
@@ -717,6 +783,29 @@ def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> d
         return result
     result["status"] = "installed"
     result["message"] = "requirements installed"
+    return result
+
+
+def _install_comfyui_requirements(timeout: float = 1800.0) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "module": "ComfyUI",
+        "status": "error",
+        "message": "",
+        "requirements_path": "",
+    }
+    req = _comfyui_requirements_path()
+    if req is None:
+        result["status"] = "missing_requirements"
+        result["message"] = "ComfyUI requirements.txt not found"
+        return result
+    result["requirements_path"] = str(req)
+    run = _run_command([sys.executable, "-m", "pip", "install", "-r", str(req)], timeout=timeout)
+    if not run.get("ok"):
+        result["status"] = "error"
+        result["message"] = str(run.get("stderr") or run.get("stdout") or "pip install failed")
+        return result
+    result["status"] = "installed"
+    result["message"] = "ComfyUI requirements installed"
     return result
 
 def _module_repo_url(module_name: str) -> str | None:
@@ -1513,13 +1602,16 @@ def _resolve_update_targets(scope: str, module_name: str) -> list[str]:
 def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
     global _UPDATE_THREAD
     scope_norm = (scope or "").strip().lower()
-    if scope_norm not in {"single", "all"}:
-        return {"status": "error", "error": "scope must be 'single' or 'all'"}
+    if scope_norm not in {"single", "all", "comfyui"}:
+        return {"status": "error", "error": "scope must be 'single', 'all' or 'comfyui'"}
 
     if scope_norm == "single":
         canonical = _canonical_custom_module_name(module_name)
         if _module_dir(canonical) is None:
             return {"status": "error", "error": "module not found"}
+    if scope_norm == "comfyui":
+        if _comfyui_root() is None:
+            return {"status": "error", "error": "ComfyUI root not found"}
 
     with _REFRESH_LOCK:
         if _REFRESH_THREAD is not None and _REFRESH_THREAD.is_alive():
@@ -1543,6 +1635,7 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                 "updated": 0,
                 "up_to_date": 0,
                 "failed": 0,
+                "requirements_changed": False,
                 "requirements_modules": [],
                 "results": [],
                 "started_at": _now_iso(),
@@ -1554,6 +1647,38 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
     def _runner() -> None:
         global _UPDATE_THREAD
         try:
+            if scope_norm == "comfyui":
+                _set_update_status(phase="update", current=0, total=1, remaining=1, module="ComfyUI", message="pull")
+                item = _pull_comfyui()
+                status = str(item.get("status") or "")
+                updated_count = 1 if status == "updated" else 0
+                uptodate_count = 1 if status == "up_to_date" else 0
+                failed_count = 1 if status not in {"updated", "up_to_date"} else 0
+                requirements_changed = bool(item.get("requirements_changed"))
+                _set_update_status(
+                    phase="update",
+                    current=1,
+                    total=1,
+                    remaining=0,
+                    module="ComfyUI",
+                    message=status or "done",
+                    updated=updated_count,
+                    up_to_date=uptodate_count,
+                    failed=failed_count,
+                    requirements_changed=requirements_changed,
+                    requirements_modules=[],
+                    results=[item],
+                )
+                _refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kwargs: None)
+                _set_update_status(
+                    running=False,
+                    phase="done",
+                    message="done",
+                    module="",
+                    finished_at=_now_iso(),
+                )
+                return
+
             targets = _resolve_update_targets(scope_norm, module_name)
             total = len(targets)
             _set_update_status(phase="update", total=total, remaining=total, message="running")
@@ -1564,6 +1689,7 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                     phase="done",
                     message="nothing_to_update",
                     results=[],
+                    requirements_changed=False,
                     requirements_modules=[],
                     finished_at=_now_iso(),
                 )
@@ -1605,6 +1731,7 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                     updated=updated_count,
                     up_to_date=uptodate_count,
                     failed=failed_count,
+                    requirements_changed=bool(requirements_modules),
                     requirements_modules=requirements_modules,
                     results=results,
                 )
@@ -1712,6 +1839,16 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             return web.json_response(result, status=status_code)
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module requirements install API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
+    @PromptServer.instance.routes.post("/alexz_tools/comfyui_install_requirements")
+    async def alexz_tools_comfyui_install_requirements(request):
+        try:
+            result = _install_comfyui_requirements()
+            status_code = 200 if result.get("status") == "installed" else 400
+            return web.json_response(result, status=status_code)
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("ComfyUI requirements install API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
     @PromptServer.instance.routes.get("/alexz_tools/node_catalog")

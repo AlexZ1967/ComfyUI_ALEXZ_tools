@@ -1,5 +1,12 @@
 # Changelog — ALEXZ_tools
 
+## 0.13.18 — 2026-02-10
+- `Module Nodes`: added `Update ComfyUI` button in ComfyUI update alert (shown when `behind > 0`).
+- `Update ComfyUI` now runs `git pull --ff-only` for ComfyUI and then refreshes module/node snapshots.
+- Added requirements flow for ComfyUI update: if `ComfyUI/requirements.txt` changed, widget asks for confirmation and installs via current interpreter (`sys.executable -m pip install -r ...`).
+- Update job API (`/alexz_tools/module_update`) now supports `scope=comfyui`; status payload includes `requirements_changed` for both module and ComfyUI update flows.
+- Node change highlighting remains unified for all groups (`Core_Nodes`, `Core_Extras_Nodes`, `API_Nodes`, `Custom_Nodes`): red frame for new nodes, green frame for updated nodes between runs.
+
 ## 0.13.17 — 2026-02-10
 - `Module Nodes`: added module update actions in UI:
   - `Update module` in custom-module card (shown only when update is available),
