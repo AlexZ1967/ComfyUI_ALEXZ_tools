@@ -1361,7 +1361,11 @@ function renderPicker(container) {
         card.className = "alexz-mod-picker-module-card";
         const selectedModule = nodeSelect.value;
         const nodeCount = moduleCounts.get(selectedModule) || 0;
-        if (updatedModulesSession.has(selectedModule)) {
+        if (
+            updatedModulesSession.has(selectedModule)
+            || Boolean(info?.updated_between_runs)
+            || Boolean(info?.new_module_between_runs)
+        ) {
             card.classList.add("alexz-mod-picker-module-card--updated");
         }
         if (selectedModule !== "-1" && nodeCount > 0) {
@@ -1534,7 +1538,7 @@ function renderPicker(container) {
             card.appendChild(newRow);
         }
 
-        if (info.updated_between_runs && (info.startup_prev_commit_short || info.startup_new_commit_short)) {
+        if (info.updated_between_runs) {
             const updateRow = document.createElement("div");
             updateRow.className = "alexz-mod-picker-module-row notice";
             const labelEl = document.createElement("span");
@@ -1544,7 +1548,11 @@ function renderPicker(container) {
             const prev = info.startup_prev_commit_short || "unknown";
             const next = info.startup_new_commit_short || "unknown";
             const at = info.startup_update_at ? ` (${fmtDate(info.startup_update_at)})` : "";
-            valueEl.textContent = `${prev} -> ${next}${at}`;
+            if (info.startup_prev_commit_short || info.startup_new_commit_short) {
+                valueEl.textContent = `${prev} -> ${next}${at}`;
+            } else {
+                valueEl.textContent = `local changes detected${at}`;
+            }
             updateRow.appendChild(labelEl);
             updateRow.appendChild(valueEl);
             card.appendChild(updateRow);

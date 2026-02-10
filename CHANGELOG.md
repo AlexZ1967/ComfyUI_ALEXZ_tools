@@ -17,6 +17,9 @@
 - Added explicit local commit-change tracking:
   - any changed module commit SHA between runs marks the module as updated,
   - this does not depend on node-file changes and applies to module-wide updates.
+- Module card rendering adjusted:
+  - green border now appears not only for in-session updates but also for cached `updated_between_runs`,
+  - card now always shows `Updated between runs` row for update markers (including local-change-only cases).
 - Added tracker regression tests for persistent novelty markers and acknowledge flow (`tests/test_module_browser_tracker.py`), including global acknowledge and ComfyUI marker acknowledge.
 
 ## 0.16.3 — 2026-02-10
