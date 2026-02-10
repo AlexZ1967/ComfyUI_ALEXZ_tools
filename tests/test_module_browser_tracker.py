@@ -1,7 +1,7 @@
-"""Regression tests for Module Node Picker backend state tracking.
+"""Regression tests for Module Node Picker backend tracking.
 
-These tests validate module update detection, refresh status reporting, and
-support utilities used by the Module Nodes widget API.
+Covers module update detection, state snapshot persistence, and helper logic
+used by refresh/update API routines.
 """
 
 import importlib

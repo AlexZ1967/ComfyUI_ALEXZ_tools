@@ -1,4 +1,9 @@
-"""Utility/support module: `utils/color_match_utils.py`."""
+"""Color matching helper functions.
+
+Provides reusable color-transfer algorithms and mask/resize helpers used by
+color-related nodes and shared image normalization logic.
+"""
+
 import numpy as np
 
 import torch

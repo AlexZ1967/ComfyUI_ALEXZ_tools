@@ -1,4 +1,9 @@
-"""Utility/support module: `utils/constants.py`."""
+"""Centralized constants for ComfyUI_ALEXZ_tools.
+
+Defines default values, limits, and UI-facing labels reused across nodes and
+utility modules to keep behavior consistent.
+"""
+
 DEFAULT_FEATURE_COUNT = 1500
 
 DEFAULT_GOOD_MATCH_PERCENT = 0.2

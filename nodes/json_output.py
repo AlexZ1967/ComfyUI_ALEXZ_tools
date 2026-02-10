@@ -1,4 +1,9 @@
-"""Node implementation module: `nodes/json_output.py`."""
+"""Show/Save JSON node implementation.
+
+Normalizes arbitrary input values to JSON, displays formatted text, and can
+optionally write the same payload to an output file.
+"""
+
 import json
 
 import logging

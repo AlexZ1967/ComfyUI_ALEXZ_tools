@@ -1,4 +1,9 @@
-"""Utility/support module: `utils/alignment.py`."""
+"""Image alignment helper functions.
+
+Contains feature-matching and affine-transform utilities used by alignment
+nodes, including JSON metadata formatting for external editors.
+"""
+
 import json
 
 import math

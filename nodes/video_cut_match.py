@@ -1,4 +1,9 @@
-"""Node implementation module: `nodes/video_cut_match.py`."""
+"""Match Video Cut Point node implementation.
+
+Finds the best frame pair between the tail of one video and the head of another
+video to help build seamless continuation edits.
+"""
+
 import json
 
 import logging

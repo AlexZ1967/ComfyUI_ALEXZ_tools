@@ -1,4 +1,9 @@
-"""Utility/support module: `utils/matcher.py`."""
+"""OpenCV feature-matching helper functions.
+
+Wraps detector creation, keypoint matching, and affine estimation utilities
+used by image/video alignment pipelines.
+"""
+
 import numpy as np
 
 try:

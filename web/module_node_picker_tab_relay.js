@@ -1,6 +1,8 @@
 /**
- * Frontend helper: `module_node_picker_tab_relay.js`.
- * Provides lightweight sidebar tab relay for Module Nodes tab visibility and switching.
+ * Module Node Picker tab relay helper.
+ *
+ * Provides sidebar-tab visibility synchronization helpers that keep the picker
+ * panel mounted/unmounted correctly across ComfyUI tab switches.
  */
 
 const TAB_RELAY_STATE_KEY = "__alexz_module_picker_tab_relay_state_v2__";

@@ -1,4 +1,8 @@
-"""Node implementation module: `nodes/qr_code_generate.py`."""
+"""Generate QR Code node implementation.
+
+Builds QR code images from user text or URL input with configurable size and
+error-correction level, returning a ComfyUI image tensor.
+"""
 
 import numpy as np
 import torch

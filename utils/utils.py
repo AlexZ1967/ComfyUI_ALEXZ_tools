@@ -1,4 +1,9 @@
-"""Utility/support module: `utils/utils.py`."""
+"""General tensor and image utility functions.
+
+Includes format conversion, resizing, difference computation, and shared helper
+operations used by multiple nodes.
+"""
+
 import numpy as np
 
 import torch

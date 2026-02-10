@@ -1,7 +1,7 @@
 """Node registry for ComfyUI_ALEXZ_tools.
 
-Loads all node classes, builds `NODE_CLASS_MAPPINGS` / `NODE_DISPLAY_NAME_MAPPINGS`,
-and logs load status for each node.
+Imports node modules, builds `NODE_CLASS_MAPPINGS` and
+`NODE_DISPLAY_NAME_MAPPINGS`, and prints compact load status lines.
 """
 
 import importlib

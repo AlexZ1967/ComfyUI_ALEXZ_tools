@@ -1,4 +1,9 @@
-"""Node implementation module: `nodes/test_node.py`."""
+"""Minimal internal test node implementation.
+
+Provides a lightweight node used to verify extension loading and basic node
+execution during development and tracker tests.
+"""
+
 class ALEXZTestNode:
     """ComfyUI test node used to verify extension loading and execution."""
 

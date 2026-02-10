@@ -1,6 +1,8 @@
 /**
- * Frontend module: `video_cut_match_upload.js`.
- * Handles ComfyUI web-side UI behavior for ALEXZ tools.
+ * Match Video Cut Point frontend upload helper.
+ *
+ * Adds UI support for selecting the second video input file required by the
+ * VideoCutMatch node workflow.
  */
 
 import { app } from "../../../scripts/app.js";

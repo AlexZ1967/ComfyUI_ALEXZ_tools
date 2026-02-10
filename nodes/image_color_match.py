@@ -1,4 +1,9 @@
-"""Node implementation module: `nodes/image_color_match.py`."""
+"""Color Match To Reference node implementation.
+
+Contains color-transfer methods, quality metrics, and JSON export helpers used
+for matching source image grading to a reference image.
+"""
+
 import json
 
 import logging

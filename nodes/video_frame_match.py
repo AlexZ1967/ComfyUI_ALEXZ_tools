@@ -1,4 +1,9 @@
-"""Node implementation module: `nodes/video_frame_match.py`."""
+"""Find Closest Video Frame node implementation.
+
+Searches video frames for the closest match to a reference image using selected
+metrics and returns the best frame with matching metadata.
+"""
+
 import json
 
 import logging

@@ -1,6 +1,8 @@
 /**
- * Frontend module: `show_json.js`.
- * Handles ComfyUI web-side UI behavior for ALEXZ tools.
+ * Show/Save JSON node frontend helper.
+ *
+ * Adds web-side behavior for JSON preview/output widgets so formatted JSON can
+ * be inspected conveniently in the ComfyUI interface.
  */
 
 import { app } from "../../../scripts/app.js";

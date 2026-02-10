@@ -1,4 +1,9 @@
-"""Utility/support module: `utils/module_node_browser_api.py`."""
+"""Backend API for Module Node Picker widget.
+
+Implements catalog, module info, refresh/update jobs, git status tracking, and
+requirements installation endpoints consumed by the frontend panel.
+"""
+
 from __future__ import annotations
 
 

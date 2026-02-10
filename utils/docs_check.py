@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Validate guide/readme synchronization with node source definitions.
+"""Documentation consistency checker.
 
-Checks that documented inputs/outputs and guide links match node classes.
+Validates that README/guides stay synchronized with current node input/output
+definitions and reports mismatches for maintenance.
 """
 
 import ast

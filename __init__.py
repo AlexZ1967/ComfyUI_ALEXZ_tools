@@ -1,7 +1,7 @@
-"""Package entrypoint for ComfyUI_ALEXZ_tools.
+"""ComfyUI_ALEXZ_tools package entrypoint.
 
-Initializes package-level logging, registers Module Nodes widget backend, and
-exports ComfyUI node mappings.
+Initializes extension logging, registers backend APIs for the Module Node Picker
+widget, and exposes ComfyUI node mapping dictionaries.
 """
 
 import logging

@@ -1,4 +1,9 @@
-"""Node implementation module: `nodes/image_difference.py`."""
+"""Image Difference node implementation.
+
+Provides a simple node that computes absolute per-pixel difference between two
+images after automatic size normalization.
+"""
+
 import torch
 
 

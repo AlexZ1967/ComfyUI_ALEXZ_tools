@@ -1,6 +1,8 @@
 /**
- * Frontend module: `module_node_picker.js`.
- * Handles ComfyUI web-side UI behavior for ALEXZ tools.
+ * Module Node Picker frontend panel.
+ *
+ * Renders the sidebar UI, fetches module/node catalogs, shows module metadata,
+ * and triggers backend refresh/update actions for ComfyUI and custom modules.
  */
 
 import { app } from "../../../scripts/app.js";

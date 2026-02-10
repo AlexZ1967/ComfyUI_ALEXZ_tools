@@ -1,4 +1,9 @@
-"""Node implementation module: `nodes/image_prepare.py`."""
+"""Image Prepare for QwenEdit Outpaint node implementation.
+
+Prepares source image and mask tensors for QwenEdit outpaint workflows and
+returns resized/positioned outputs suitable for downstream nodes.
+"""
+
 import math
 
 

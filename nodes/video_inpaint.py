@@ -1,4 +1,9 @@
-"""Node implementation module: `nodes/video_inpaint.py`."""
+"""Remove Static Watermark from Video node implementation.
+
+Implements crop-first video inpainting flow with ProPainter integration, frame
+streaming helpers, and composition back to full-frame outputs.
+"""
+
 import gc
 
 import glob

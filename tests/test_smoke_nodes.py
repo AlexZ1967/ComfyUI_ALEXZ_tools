@@ -1,7 +1,7 @@
-"""Smoke tests for core node/helper contracts.
+"""Smoke tests for node contracts and helper behavior.
 
-These tests ensure basic tensor outputs, helper utilities, and JSON payload
-structure remain stable after refactors.
+Verifies that core node/helper interfaces still produce expected output shapes
+and stable JSON payload structure after refactors.
 """
 
 import importlib

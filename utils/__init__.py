@@ -1,4 +1,6 @@
-"""Utility package for ComfyUI_ALEXZ_tools.
+"""Shared utility package for ComfyUI_ALEXZ_tools.
 
-Contains shared helpers, module browser backend API, and documentation check tools.
+Exposes helper modules for matching, alignment, color processing, browser API
+state tracking, and developer-facing documentation checks.
 """
+
