@@ -740,6 +740,10 @@ function renderPicker(container) {
     const processHost = document.createElement("div");
     processHost.className = "alexz-mod-picker-process-inline";
 
+    const dividerBottom = document.createElement("div");
+    dividerBottom.className = "alexz-mod-picker-divider";
+    root.appendChild(dividerBottom);
+
     const categorySelect = document.createElement("select");
     categorySelect.className = "alexz-mod-picker-select";
     const catComfy = document.createElement("option");
@@ -774,10 +778,6 @@ function renderPicker(container) {
     const processActions = document.createElement("div");
     processActions.className = "alexz-mod-picker-status-card-actions";
     processHost.appendChild(processActions);
-
-    const dividerBottom = document.createElement("div");
-    dividerBottom.className = "alexz-mod-picker-divider";
-    root.appendChild(dividerBottom);
 
     const loadDebugEnabled = () => {
         try {
@@ -823,7 +823,7 @@ function renderPicker(container) {
     const applyDebugUiState = () => {
         window[NODE_PICKER_DEBUG_KEY] = Boolean(debugEnabled);
         debugCard.hidden = !debugEnabled;
-        debugCard.style.display = debugEnabled ? "" : "none";
+        debugCard.style.display = debugEnabled ? "block" : "none";
         debugToggle.textContent = debugEnabled ? "Debug: ON" : "Debug";
     };
     applyDebugUiState();
