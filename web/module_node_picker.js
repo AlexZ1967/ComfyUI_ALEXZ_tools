@@ -720,6 +720,12 @@ function renderPicker(container) {
     comfyUpdateBtn.textContent = "Update ComfyUI";
     comfyUpdateBtn.style.display = "none";
     comfyActions.appendChild(comfyUpdateBtn);
+    const comfyInstallReqBtn = document.createElement("button");
+    comfyInstallReqBtn.type = "button";
+    comfyInstallReqBtn.className = "alexz-mod-picker-btn-small";
+    comfyInstallReqBtn.textContent = "Install ComfyUI requirements";
+    comfyInstallReqBtn.style.display = "none";
+    comfyActions.appendChild(comfyInstallReqBtn);
     root.appendChild(comfyAlert);
 
     const customAlert = document.createElement("div");
@@ -929,6 +935,10 @@ function renderPicker(container) {
         const remote = String(info?.remote_commit_short || "unknown");
         const releaseTag = String(info?.release_tag || "").trim();
         const canUpdate = status === "can_update" && (!Number.isFinite(behind) || behind > 0);
+        const requirementsPending = Boolean(info?.requirements_update_pending);
+        const requirementsPendingAt = info?.requirements_pending_updated_at
+            ? ` (${fmtDate(info.requirements_pending_updated_at)})`
+            : "";
 
         comfyAlert.classList.remove(
             "alexz-mod-picker-status-card--warn",
@@ -946,8 +956,24 @@ function renderPicker(container) {
             } else {
                 comfyAlertText.textContent = `ComfyUI requires update: mode=${mode}, branch=${branch}, local=${local}, remote=${remote}.`;
             }
+            if (requirementsPending) {
+                comfyAlertText.textContent += ` requirements.txt install is pending${requirementsPendingAt}.`;
+                comfyInstallReqBtn.style.display = "";
+                comfyInstallReqBtn.disabled = actionBusy;
+            } else {
+                comfyInstallReqBtn.style.display = "none";
+            }
             comfyUpdateBtn.style.display = "";
             comfyUpdateBtn.disabled = actionBusy;
+            return;
+        }
+
+        if (requirementsPending) {
+            comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
+            comfyAlertText.textContent = `ComfyUI requirements.txt install is pending${requirementsPendingAt}.`;
+            comfyUpdateBtn.style.display = "none";
+            comfyInstallReqBtn.style.display = "";
+            comfyInstallReqBtn.disabled = actionBusy;
             return;
         }
 
@@ -961,6 +987,7 @@ function renderPicker(container) {
             comfyAlertText.textContent = `ComfyUI is up to date (${mode} check).`;
         }
         comfyUpdateBtn.style.display = "none";
+        comfyInstallReqBtn.style.display = "none";
     };
 
     /**
@@ -1228,6 +1255,7 @@ function renderPicker(container) {
         comfyModeSelect.disabled = actionBusy;
         updateAllBtn.disabled = actionBusy;
         comfyUpdateBtn.disabled = actionBusy || comfyUpdateBtn.style.display === "none";
+        comfyInstallReqBtn.disabled = actionBusy || comfyInstallReqBtn.style.display === "none";
         for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
             btn.disabled = actionBusy;
         }
@@ -1321,6 +1349,29 @@ function renderPicker(container) {
     };
 
     /**
+     * Install ComfyUI requirements and refresh ComfyUI status card.
+     */
+    const installComfyUIRequirementsFlow = async () => {
+        setActionBusy(true);
+        setProcessTarget("comfy");
+        try {
+            setRefreshLine("Installing ComfyUI dependencies (pip)...", "neutral");
+            const install = await installComfyUIRequirements();
+            if (String(install?.status || "") !== "installed") {
+                setRefreshLine("ComfyUI dependencies install failed.", "warn");
+                return;
+            }
+            const comfyPayload = await fetchComfyUIInfo(false, false, comfyModeSelect.value);
+            renderComfyAlert(comfyPayload?.comfyui || null);
+            setRefreshLine("ComfyUI dependencies installed.", "ok");
+            setProcessAction("", "", null);
+        } finally {
+            setActionBusy(false);
+            syncUpdateAllButton();
+        }
+    };
+
+    /**
      * Offer one-click requirements installation when updated modules changed requirements.txt.
      */
     const maybeInstallChangedRequirements = async (update) => {
@@ -1333,21 +1384,7 @@ function renderPicker(container) {
             setProcessAction(
                 "ComfyUI requirements were updated after pull.",
                 "Install ComfyUI requirements",
-                async () => {
-                    setActionBusy(true);
-                    try {
-                        setRefreshLine("Installing ComfyUI dependencies (pip)...", "neutral");
-                        const install = await installComfyUIRequirements();
-                        if (String(install?.status || "") !== "installed") {
-                            setRefreshLine("ComfyUI dependencies install failed.", "warn");
-                            return;
-                        }
-                        setRefreshLine("ComfyUI dependencies installed.", "ok");
-                        setProcessAction("", "", null);
-                    } finally {
-                        setActionBusy(false);
-                    }
-                }
+                installComfyUIRequirementsFlow
             );
             return;
         }
@@ -1760,6 +1797,11 @@ function renderPicker(container) {
         }
 
         if (String(info.group || "") === "custom") {
+            const requirementsPending = Boolean(info?.requirements_update_pending);
+            const requirementsPendingAt = info?.requirements_pending_updated_at
+                ? ` (${fmtDate(info.requirements_pending_updated_at)})`
+                : "";
+
             const statusRow = document.createElement("div");
             statusRow.className = "alexz-mod-picker-module-row";
             const labelEl = document.createElement("span");
@@ -1779,6 +1821,19 @@ function renderPicker(container) {
             statusRow.appendChild(labelEl);
             statusRow.appendChild(valueEl);
             card.appendChild(statusRow);
+
+            if (requirementsPending) {
+                const reqRow = document.createElement("div");
+                reqRow.className = "alexz-mod-picker-module-row warn";
+                const reqLabel = document.createElement("span");
+                reqLabel.className = "alexz-mod-picker-module-label";
+                reqLabel.textContent = "Requirements:";
+                const reqValue = document.createElement("span");
+                reqValue.textContent = `requirements.txt install pending${requirementsPendingAt}`;
+                reqRow.appendChild(reqLabel);
+                reqRow.appendChild(reqValue);
+                card.appendChild(reqRow);
+            }
 
             const actionRow = document.createElement("div");
             actionRow.className = "alexz-mod-picker-action-row";
@@ -1830,6 +1885,46 @@ function renderPicker(container) {
                     await runModuleUpdate("single", moduleName);
                 };
                 actionRow.appendChild(updateBtn);
+            }
+
+            if (requirementsPending) {
+                const installReqBtn = document.createElement("button");
+                installReqBtn.type = "button";
+                installReqBtn.className = "alexz-mod-picker-btn-small";
+                installReqBtn.textContent = "Install module requirements";
+                installReqBtn.disabled = actionBusy;
+                installReqBtn.onclick = async (event) => {
+                    event.stopPropagation();
+                    if (actionBusy) {
+                        return;
+                    }
+                    const moduleName = String(info.module || nodeSelect.value || "").trim();
+                    if (!moduleName) {
+                        return;
+                    }
+                    setProcessTarget("custom");
+                    setRefreshLine(`Installing requirements for ${moduleName}...`, "neutral");
+                    setProcessAction("", "", null);
+                    setModuleInlineStatus(moduleName, "Installing module requirements...", "neutral");
+                    setActionBusy(true);
+                    try {
+                        const install = await installModuleRequirements([moduleName]);
+                        const failed = Number(install?.failed || 0);
+                        const installed = Number(install?.installed || 0);
+                        if (failed > 0 || installed <= 0) {
+                            setModuleInlineStatus(moduleName, "Module requirements install failed.", "warn");
+                        } else {
+                            setModuleInlineStatus(moduleName, "Module requirements installed.", "ok");
+                        }
+                    } catch (err) {
+                        setModuleInlineStatus(moduleName, `Module requirements install failed: ${String(err)}`, "warn");
+                    } finally {
+                        await loadModuleInfo({ forceRefresh: false, syncUpstream: false });
+                        setActionBusy(false);
+                        syncUpdateAllButton();
+                    }
+                };
+                actionRow.appendChild(installReqBtn);
             }
             card.appendChild(actionRow);
         }
@@ -2050,6 +2145,12 @@ function renderPicker(container) {
         setProcessTarget("comfy");
         await runModuleUpdate("comfyui", "");
     };
+    comfyInstallReqBtn.onclick = async () => {
+        if (actionBusy) {
+            return;
+        }
+        await installComfyUIRequirementsFlow();
+    };
     comfyInfoBtn.onclick = async () => {
         if (actionBusy) {
             return;
@@ -2071,6 +2172,7 @@ function renderPicker(container) {
             comfyAlert.style.display = "block";
             comfyAlertText.textContent = `Failed to refresh ComfyUI info: ${String(err)}`;
             comfyUpdateBtn.style.display = "none";
+            comfyInstallReqBtn.style.display = "none";
         } finally {
             setActionBusy(false);
             syncUpdateAllButton();

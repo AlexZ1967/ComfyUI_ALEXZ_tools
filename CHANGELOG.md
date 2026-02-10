@@ -1,5 +1,16 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.5 — 2026-02-10
+- Fixed dependency-update flow for ComfyUI and custom modules:
+  - if `requirements.txt` changes after update, pending install state is now persisted in cache and survives restart;
+  - pending state is cleared only after successful requirements installation.
+- Module Node Picker UI:
+  - ComfyUI status card now shows persistent `requirements.txt` pending state with `Install ComfyUI requirements` button;
+  - custom module card now shows per-module `requirements.txt` pending state with `Install module requirements` button.
+- This behavior now works for both update paths:
+  - single module update (`Update module`),
+  - bulk custom update (`Update Custom Nodes`).
+
 ## 0.16.4 — 2026-02-10
 - Module novelty markers are now sticky across ComfyUI restarts:
   - updated modules stay marked (`✅`, green node frames),

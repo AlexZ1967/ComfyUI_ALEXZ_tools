@@ -493,6 +493,66 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _set_comfyui_requirements_pending(pending: bool, before_commit: str = "", after_commit: str = "") -> None:
+    """Persist pending ComfyUI requirements-install marker in module state cache."""
+    global _COMFYUI_STATUS_CACHE
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return
+    entry_raw = state.get("__comfyui__")
+    before_entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
+    entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
+    if pending:
+        entry["pending_requirements_update"] = True
+        if before_commit:
+            entry["pending_requirements_before_commit"] = before_commit
+        if after_commit:
+            entry["pending_requirements_after_commit"] = after_commit
+        entry["pending_requirements_updated_at"] = _now_iso()
+    else:
+        entry.pop("pending_requirements_update", None)
+        entry.pop("pending_requirements_before_commit", None)
+        entry.pop("pending_requirements_after_commit", None)
+        entry.pop("pending_requirements_updated_at", None)
+    if entry == before_entry:
+        return
+    state["__comfyui__"] = entry
+    _COMFYUI_STATUS_CACHE.clear()
+    _save_module_state(state)
+
+
+def _set_module_requirements_pending(
+    module_name: str, pending: bool, before_commit: str = "", after_commit: str = ""
+) -> None:
+    """Persist pending requirements-install marker for one custom module."""
+    module = _canonical_custom_module_name(module_name)
+    if not module or module == "unknown":
+        return
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return
+    entry_raw = state.get(module)
+    before_entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
+    entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
+    if pending:
+        entry["pending_requirements_update"] = True
+        if before_commit:
+            entry["pending_requirements_before_commit"] = before_commit
+        if after_commit:
+            entry["pending_requirements_after_commit"] = after_commit
+        entry["pending_requirements_updated_at"] = _now_iso()
+    else:
+        entry.pop("pending_requirements_update", None)
+        entry.pop("pending_requirements_before_commit", None)
+        entry.pop("pending_requirements_after_commit", None)
+        entry.pop("pending_requirements_updated_at", None)
+    if entry == before_entry:
+        return
+    state[module] = entry
+    _MODULE_INFO_CACHE.clear()
+    _save_module_state(state)
+
+
 def _normalize_comfyui_mode(value: str | None) -> str:
     """Normalize ComfyUI update-check mode to supported values."""
     text = (value or "").strip().lower()
@@ -988,7 +1048,10 @@ def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
     if updated:
         result["status"] = "updated"
         result["message"] = "ComfyUI updated"
-        result["requirements_changed"] = _requirements_changed_between(root, before_commit, after_commit)
+        requirements_changed = _requirements_changed_between(root, before_commit, after_commit)
+        result["requirements_changed"] = requirements_changed
+        if requirements_changed:
+            _set_comfyui_requirements_pending(True, before_commit, after_commit)
     else:
         result["status"] = "up_to_date"
         result["message"] = "already up to date"
@@ -1044,7 +1107,10 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
     if updated:
         result["status"] = "updated"
         result["message"] = "module updated"
-        result["requirements_changed"] = _requirements_changed_between(module_dir, before_commit, after_commit)
+        requirements_changed = _requirements_changed_between(module_dir, before_commit, after_commit)
+        result["requirements_changed"] = requirements_changed
+        if requirements_changed:
+            _set_module_requirements_pending(module, True, before_commit, after_commit)
     else:
         result["status"] = "up_to_date"
         result["message"] = "already up to date"
@@ -1083,6 +1149,7 @@ def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> d
         return result
     result["status"] = "installed"
     result["message"] = "requirements installed"
+    _set_module_requirements_pending(module, False)
     _LOGGER.info("Requirements install completed for module %s", module)
     return result
 
@@ -1110,6 +1177,7 @@ def _install_comfyui_requirements(timeout: float = 1800.0) -> dict[str, Any]:
         return result
     result["status"] = "installed"
     result["message"] = "ComfyUI requirements installed"
+    _set_comfyui_requirements_pending(False)
     _LOGGER.info("ComfyUI requirements install completed")
     return result
 
@@ -1239,6 +1307,10 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
         "behind": None,
         "update_available": None,
         "update_status": "unknown",
+        "requirements_update_pending": False,
+        "requirements_pending_before_commit": "",
+        "requirements_pending_after_commit": "",
+        "requirements_pending_updated_at": "",
     }
 
     if not force_refresh:
@@ -1276,6 +1348,10 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
             merged["startup_prev_commit_short"] = _short_commit(pending_prev) if pending_prev else ""
             merged["startup_new_commit_short"] = _short_commit(pending_new) if pending_new else ""
             merged["startup_update_at"] = pending_at
+            merged["requirements_update_pending"] = bool(cached_entry.get("pending_requirements_update"))
+            merged["requirements_pending_before_commit"] = str(cached_entry.get("pending_requirements_before_commit") or "")
+            merged["requirements_pending_after_commit"] = str(cached_entry.get("pending_requirements_after_commit") or "")
+            merged["requirements_pending_updated_at"] = str(cached_entry.get("pending_requirements_updated_at") or "")
             _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(merged))
             return merged
         _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
@@ -1391,6 +1467,10 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
         result["startup_prev_commit_short"] = _short_commit(pending_prev) if pending_prev else ""
         result["startup_new_commit_short"] = _short_commit(pending_new) if pending_new else ""
         result["startup_update_at"] = pending_at
+        result["requirements_update_pending"] = bool(cached_entry.get("pending_requirements_update"))
+        result["requirements_pending_before_commit"] = str(cached_entry.get("pending_requirements_before_commit") or "")
+        result["requirements_pending_after_commit"] = str(cached_entry.get("pending_requirements_after_commit") or "")
+        result["requirements_pending_updated_at"] = str(cached_entry.get("pending_requirements_updated_at") or "")
 
     _COMFYUI_STATUS_CACHE[result["check_mode"]] = (now_ts, dict(result))
     state = _load_module_state()
@@ -2005,6 +2085,10 @@ def _resolve_module_info(
         "updated_nodes_between_runs": [],
         "startup_node_update_at": "",
         "new_module_between_runs": False,
+        "requirements_update_pending": False,
+        "requirements_pending_before_commit": "",
+        "requirements_pending_after_commit": "",
+        "requirements_pending_updated_at": "",
         "source": "none",
     }
 
@@ -2128,6 +2212,13 @@ def _resolve_module_info(
 
     if not cache_only:
         _remember_module_state(module_name, result)
+
+    if isinstance(cache_entry, dict):
+        result["requirements_update_pending"] = bool(cache_entry.get("pending_requirements_update"))
+        result["requirements_pending_before_commit"] = str(cache_entry.get("pending_requirements_before_commit") or "")
+        result["requirements_pending_after_commit"] = str(cache_entry.get("pending_requirements_after_commit") or "")
+        result["requirements_pending_updated_at"] = str(cache_entry.get("pending_requirements_updated_at") or "")
+
     _apply_node_change_info(result, group, module_name)
     _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
     return result
