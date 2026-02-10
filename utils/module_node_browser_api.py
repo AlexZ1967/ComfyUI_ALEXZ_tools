@@ -128,6 +128,20 @@ def _short_commit(commit: str | None) -> str:
     return value[:8]
 
 
+def _ensure_comfyui_status_cache() -> dict[str, tuple[float, dict[str, Any]]]:
+    """Return ComfyUI status cache dict, reinitializing it if tests set it to None."""
+    global _COMFYUI_STATUS_CACHE
+    if not isinstance(_COMFYUI_STATUS_CACHE, dict):
+        _COMFYUI_STATUS_CACHE = {}
+    return _COMFYUI_STATUS_CACHE
+
+
+def _clear_comfyui_status_cache() -> None:
+    """Clear ComfyUI status cache safely even if it was replaced with None."""
+    cache = _ensure_comfyui_status_cache()
+    cache.clear()
+
+
 def _node_mappings() -> tuple[dict[str, Any], dict[str, str]]:
     """Return NODE_CLASS_MAPPINGS from loaded extension modules."""
     comfy_nodes = importlib.import_module("nodes")
@@ -517,7 +531,7 @@ def _set_comfyui_requirements_pending(pending: bool, before_commit: str = "", af
     if entry == before_entry:
         return
     state["__comfyui__"] = entry
-    _COMFYUI_STATUS_CACHE.clear()
+    _clear_comfyui_status_cache()
     _save_module_state(state)
 
 
@@ -1278,7 +1292,8 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
     global _COMFYUI_STATUS_CACHE
     mode_norm = _normalize_comfyui_mode(mode)
     now_ts = time.time()
-    cached_mode = _COMFYUI_STATUS_CACHE.get(mode_norm)
+    cache = _ensure_comfyui_status_cache()
+    cached_mode = cache.get(mode_norm)
     if (
         not force_refresh
         and cached_mode is not None
@@ -1352,14 +1367,14 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
             merged["requirements_pending_before_commit"] = str(cached_entry.get("pending_requirements_before_commit") or "")
             merged["requirements_pending_after_commit"] = str(cached_entry.get("pending_requirements_after_commit") or "")
             merged["requirements_pending_updated_at"] = str(cached_entry.get("pending_requirements_updated_at") or "")
-            _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(merged))
+            cache[mode_norm] = (now_ts, dict(merged))
             return merged
-        _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
+        cache[mode_norm] = (now_ts, dict(result))
         return result
 
     root = _comfyui_root()
     if root is None:
-        _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
+        cache[mode_norm] = (now_ts, dict(result))
         state = _load_module_state()
         if isinstance(state, dict):
             entry_raw = state.get("__comfyui__")
@@ -1376,7 +1391,7 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
     result["path"] = str(root)
     is_git = _run_git(["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"])
     if is_git != "true":
-        _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
+        cache[mode_norm] = (now_ts, dict(result))
         state = _load_module_state()
         if isinstance(state, dict):
             entry_raw = state.get("__comfyui__")
@@ -1402,7 +1417,7 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
     remote_name = _git_pick_remote(root, upstream)
     result["remote_name"] = remote_name or ""
     if not remote_name:
-        _COMFYUI_STATUS_CACHE[mode_norm] = (now_ts, dict(result))
+        cache[mode_norm] = (now_ts, dict(result))
         return result
 
     # Keep remote refs fresh to reflect actual GitHub state.
@@ -1472,7 +1487,7 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
         result["requirements_pending_after_commit"] = str(cached_entry.get("pending_requirements_after_commit") or "")
         result["requirements_pending_updated_at"] = str(cached_entry.get("pending_requirements_updated_at") or "")
 
-    _COMFYUI_STATUS_CACHE[result["check_mode"]] = (now_ts, dict(result))
+    cache[result["check_mode"]] = (now_ts, dict(result))
     state = _load_module_state()
     if isinstance(state, dict):
         prev_entry = state.get("__comfyui__")
@@ -1559,7 +1574,7 @@ def _track_comfyui_local_update() -> None:
     state["__comfyui__"] = entry
 
     if changed:
-        _COMFYUI_STATUS_CACHE.clear()
+        _clear_comfyui_status_cache()
         _save_module_state(state)
 
 
@@ -1587,7 +1602,7 @@ def _acknowledge_comfyui_novelty() -> dict[str, Any]:
 
     changed = entry != before
     if changed:
-        _COMFYUI_STATUS_CACHE.clear()
+        _clear_comfyui_status_cache()
         state["__comfyui__"] = entry
         _save_module_state(state)
     return {"status": "ok", "changed": changed}
@@ -2354,7 +2369,7 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     global _COMFYUI_STATUS_CACHE
     _MODULE_INFO_CACHE.clear()
     _CUSTOM_MODULE_ALIAS_CACHE = None
-    _COMFYUI_STATUS_CACHE.clear()
+    _clear_comfyui_status_cache()
     if progress_cb is None:
         progress_cb = _refresh_progress
     if sync_upstreams:
