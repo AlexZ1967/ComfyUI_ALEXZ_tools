@@ -29,7 +29,7 @@ Changelog: [CHANGELOG.md](CHANGELOG.md)
 ## UI Tool: Module Node Picker
 - Инструмент показывает ноды по модулям (`Core/Extras/API/Custom`), дает быстрый поиск, статус обновлений и вставку выбранной ноды в workflow.
 - Подробное описание UI и всех кнопок: [GUIde_Module_Node_Picker.md](GUIde_Module_Node_Picker.md)
-- Известные проблемы и обходные пути: [Known_issue_Module_Node_Picker.md](Known_issue_Module_Node_Picker.md)
+- Известные проблемы и обходные пути: [![Known Issue](https://img.shields.io/badge/Known%20Issue-red)](Known_issue_Module_Node_Picker.md) [Known_issue_Module_Node_Picker.md](Known_issue_Module_Node_Picker.md)
 
 ## Nodes (jump to details)
 - [Image Prepare for QwenEdit Outpaint](#image-prepare-for-qwenedit-outpaint)

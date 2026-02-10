@@ -1,7 +1,5 @@
 # Known Issues: Module Node Picker
 
-![KNOWN ISSUE](https://img.shields.io/badge/KNOWN%20ISSUE-red)
-
 ## 1) `Module Nodes -> NodesMap` иногда открывает пустой `NodesMap`
 В некоторых конфигурациях ComfyUI при прямом переключении из `Module Nodes` в `NodesMap` вкладка `NodesMap` может открыться пустой.
 
