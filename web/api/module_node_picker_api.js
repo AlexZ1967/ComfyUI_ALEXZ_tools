@@ -13,6 +13,34 @@
 
 import { api } from "../../../../scripts/api.js";
 
+const DEFAULT_API_TIMEOUT_MS = 30000;
+
+/**
+ * Fetch JSON from backend API with timeout and unified error shape.
+ */
+async function fetchApiJson(path, options = {}, timeoutMs = DEFAULT_API_TIMEOUT_MS) {
+    const timeout = Math.max(1000, Number(timeoutMs || DEFAULT_API_TIMEOUT_MS));
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeout);
+    try {
+        const resp = await api.fetchApi(path, {
+            ...options,
+            signal: controller.signal,
+        });
+        if (!resp.ok) {
+            throw new Error(`API ${resp.status}`);
+        }
+        return await resp.json();
+    } catch (err) {
+        if (err?.name === "AbortError") {
+            throw new Error(`API timeout after ${timeout}ms`);
+        }
+        throw err;
+    } finally {
+        window.clearTimeout(timer);
+    }
+}
+
 /**
  * Normalize ComfyUI check mode to supported values.
  */
@@ -27,13 +55,9 @@ function normalizeComfyMode(comfyMode) {
  */
 export async function fetchNodeCatalog(comfyMode = "releases") {
     const mode = normalizeComfyMode(comfyMode);
-    const resp = await api.fetchApi(`/alexz_tools/node_catalog?cache_only=1&comfyui_mode=${mode}`, {
+    return fetchApiJson(`/alexz_tools/node_catalog?cache_only=1&comfyui_mode=${mode}`, {
         cache: "no-store",
     });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
 }
 
 /**
@@ -45,7 +69,7 @@ export async function fetchModuleInfo(group, moduleName, options = {}) {
     const cacheOnly = options?.cacheOnly === undefined
         ? (!forceRefresh && !syncUpstream)
         : Boolean(options?.cacheOnly);
-    const resp = await api.fetchApi(
+    return fetchApiJson(
         `/alexz_tools/module_info?group=${encodeURIComponent(group || "")}` +
         `&module=${encodeURIComponent(moduleName || "")}` +
         `&refresh=${forceRefresh ? "1" : "0"}` +
@@ -53,10 +77,6 @@ export async function fetchModuleInfo(group, moduleName, options = {}) {
         `&cache_only=${cacheOnly ? "1" : "0"}`,
         { cache: "no-store" }
     );
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
 }
 
 /**
@@ -64,62 +84,46 @@ export async function fetchModuleInfo(group, moduleName, options = {}) {
  */
 export async function fetchComfyUIInfo(forceRefresh = true, acknowledge = true, comfyMode = "releases") {
     const mode = normalizeComfyMode(comfyMode);
-    const resp = await api.fetchApi(
+    return fetchApiJson(
         `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}&acknowledge=${acknowledge ? "1" : "0"}&mode=${mode}`,
         { cache: "no-store" }
     );
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
 }
 
 /**
  * Start backend refresh job that recomputes module/runtime snapshots.
  */
 export async function refreshModuleRuntimeState() {
-    const resp = await api.fetchApi("/alexz_tools/module_refresh", {
+    return fetchApiJson("/alexz_tools/module_refresh", {
         method: "POST",
         cache: "no-store",
     });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
 }
 
 /**
  * Poll refresh job status from backend.
  */
 export async function fetchModuleRefreshStatus() {
-    const resp = await api.fetchApi("/alexz_tools/module_refresh_status", {
+    return fetchApiJson("/alexz_tools/module_refresh_status", {
         cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
+    }, 15000);
 }
 
 /**
  * Acknowledge/clear novelty markers for all modules after global refresh action.
  */
 export async function acknowledgeAllModuleNovelty() {
-    const resp = await api.fetchApi("/alexz_tools/module_acknowledge_all", {
+    return fetchApiJson("/alexz_tools/module_acknowledge_all", {
         method: "POST",
         cache: "no-store",
     });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
 }
 
 /**
  * Start backend update job for a single module, all modules, or ComfyUI.
  */
 export async function startModuleUpdate(scope, moduleName) {
-    const resp = await api.fetchApi("/alexz_tools/module_update", {
+    return fetchApiJson("/alexz_tools/module_update", {
         method: "POST",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
@@ -127,52 +131,36 @@ export async function startModuleUpdate(scope, moduleName) {
             scope: scope || "single",
             module: moduleName || "",
         }),
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
+    }, 60000);
 }
 
 /**
  * Poll module-update job status from backend.
  */
 export async function fetchModuleUpdateStatus() {
-    const resp = await api.fetchApi("/alexz_tools/module_update_status", {
+    return fetchApiJson("/alexz_tools/module_update_status", {
         cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
+    }, 15000);
 }
 
 /**
  * Install requirements.txt for selected custom modules.
  */
 export async function installModuleRequirements(modules) {
-    const resp = await api.fetchApi("/alexz_tools/module_install_requirements", {
+    return fetchApiJson("/alexz_tools/module_install_requirements", {
         method: "POST",
         cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modules: Array.isArray(modules) ? modules : [] }),
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
+    }, 120000);
 }
 
 /**
  * Install ComfyUI requirements.txt in current runtime environment.
  */
 export async function installComfyUIRequirements() {
-    const resp = await api.fetchApi("/alexz_tools/comfyui_install_requirements", {
+    return fetchApiJson("/alexz_tools/comfyui_install_requirements", {
         method: "POST",
         cache: "no-store",
-    });
-    if (!resp.ok) {
-        throw new Error(`API ${resp.status}`);
-    }
-    return await resp.json();
+    }, 120000);
 }

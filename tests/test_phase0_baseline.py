@@ -409,6 +409,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         lifecycle_guard_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_lifecycle_guard.js"
         ).read_text(encoding="utf-8")
+        api_text = (
+            repo_root / "web" / "api" / "module_node_picker_api.js"
+        ).read_text(encoding="utf-8")
         process_text = (
             repo_root / "web" / "ui" / "module_node_picker_process.js"
         ).read_text(encoding="utf-8")
@@ -418,6 +421,8 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("shouldContinue: isPickerAlive", picker_text)
         self.assertIn("dispose", process_text)
         self.assertIn("processUi?.dispose?.()", picker_text)
+        self.assertIn("AbortController", api_text)
+        self.assertIn("API timeout after", api_text)
         self.assertNotIn("!pickerDisposed && root.isConnected", picker_text)
 
     def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):

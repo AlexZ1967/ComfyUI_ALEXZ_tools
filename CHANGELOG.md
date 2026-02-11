@@ -56,6 +56,9 @@
 - Selector loading-state UX:
   - added explicit loading placeholders/disable-state for group/module selectors during catalog load,
   - prevents empty-looking dropdowns during startup/retry windows and re-enables controls after load completion.
+- API timeout hardening:
+  - introduced shared frontend API fetch wrapper with `AbortController` timeout handling,
+  - applied bounded timeouts to catalog/module/status/update/install API calls to avoid indefinite UI hangs.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,
