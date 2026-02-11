@@ -1,5 +1,16 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.15 — 2026-02-11
+- Phase 2 (tab-sync stabilization) continued:
+  - extracted large composer dependency maps into `web/orchestration/module_node_picker_context_builders.js`,
+  - moved runtime-setup/ui-stage/flow-stage/runtime-bootstrap context assembly out of `web/orchestration/module_node_picker_composer.js`,
+  - preserved behavior by keeping the same dependency wiring and lifecycle callbacks through builder adapters.
+- Baseline guardrail update:
+  - updated `tests/test_phase0_baseline.py` runtime marker aggregation to include `module_node_picker_context_builders.js`.
+- Validation:
+  - `conda run -n p313 node --check web/orchestration/module_node_picker_context_builders.js web/orchestration/module_node_picker_composer.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed).
+
 ## 0.16.14 — 2026-02-11
 - Module Node Picker update logging modes:
   - added backend log mode switch for update jobs in `utils/module_node_browser_api.py` (`summary`/`verbose`),

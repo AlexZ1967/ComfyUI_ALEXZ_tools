@@ -67,6 +67,12 @@ import { initializeModuleNodePickerRuntime } from "./module_node_picker_runtime_
 import { createModuleNodePickerRuntimeSetup } from "./module_node_picker_runtime_setup.js";
 import { createModuleNodePickerUiStage } from "./module_node_picker_ui_stage.js";
 import { createModuleNodePickerFlowStage } from "./module_node_picker_flow_stage.js";
+import {
+    buildFlowStageContext,
+    buildRuntimeSetupContext,
+    buildRuntimeBootstrapContext,
+    buildUiStageContext,
+} from "./module_node_picker_context_builders.js";
 
 /**
  * Render Module Node Picker UI and bind all panel event handlers.
@@ -120,7 +126,7 @@ export function renderModuleNodePicker(container) {
     let unbindPickerEvents = () => {};
     let cancelStartupLoad = () => {};
     let apiClientRef = null;
-    const runtimeSetup = createModuleNodePickerRuntimeSetup({
+    const runtimeSetup = createModuleNodePickerRuntimeSetup(buildRuntimeSetupContext({
         windowObj: window,
         defaultModule: DEFAULT_MODULE,
         runtimeKeys: {
@@ -164,7 +170,7 @@ export function renderModuleNodePicker(container) {
         fetchModuleUpdateStatus,
         installModuleRequirements,
         installComfyUIRequirements,
-    });
+    }));
     apiClientRef = runtimeSetup.apiClient;
     const pickerStore = runtimeSetup.pickerStore;
     const diagnosticsLogger = runtimeSetup.diagnosticsLogger;
@@ -218,8 +224,8 @@ export function renderModuleNodePicker(container) {
     let setExpandedModule = () => {};
     let loadCatalog = async () => {};
 
-    const uiStage = createModuleNodePickerUiStage({
-        shouldContinue: isPickerAlive,
+    const uiStage = createModuleNodePickerUiStage(buildUiStageContext({
+        isPickerAlive,
         categorySelect,
         groupSelect,
         nodeSelect,
@@ -277,7 +283,7 @@ export function renderModuleNodePicker(container) {
         saveComfyInfoSnapshot,
         initialCustomStatusChecked: loadCustomStatusChecked(),
         initialComfyStatusChecked: loadComfyStatusChecked(),
-    });
+    }));
     selectionController = uiStage.selectionController;
     const isCustomCategory = uiStage.isCustomCategory;
     const getSelectedGroup = uiStage.getSelectedGroup;
@@ -322,22 +328,21 @@ export function renderModuleNodePicker(container) {
     let resumePendingCustomRefreshFlow = async () => {};
     let resumePendingModuleUpdateFlow = async () => {};
     let resumePendingComfyInfoRefreshFlow = async () => {};
-    const flowStage = createModuleNodePickerFlowStage({
-        shouldContinue: isPickerAlive,
-        fetchModuleRefreshStatus: fetchModuleRefreshStatusApi,
-        fetchModuleUpdateStatus: fetchModuleUpdateStatusApi,
+    const flowStage = createModuleNodePickerFlowStage(buildFlowStageContext({
+        isPickerAlive,
+        fetchModuleRefreshStatusApi,
+        fetchModuleUpdateStatusApi,
         formatRefreshLine,
         formatUpdateLine,
         setRefreshLine,
-        getProcessTarget: () => processUi.getTarget(),
+        processUi,
         customAlert,
         customAlertText,
         getSelectedGroup,
-        getSelectedModule: () => String(nodeSelect.value || ""),
-        getSelectedModuleTrimmed: () => String(nodeSelect.value || "").trim(),
-        fetchModuleInfo: fetchModuleInfoApi,
-        fetchNodeCatalog: fetchNodeCatalogApi,
-        getComfyMode: () => comfyModeSelect.value,
+        nodeSelect,
+        fetchModuleInfoApi,
+        fetchNodeCatalogApi,
+        comfyModeSelect,
         catalogByGroup,
         moduleCounts,
         moduleOptions,
@@ -363,22 +368,19 @@ export function renderModuleNodePicker(container) {
         comfyUpdateBtn,
         comfyInstallReqBtn,
         groupSelect,
-        nodeSelect,
-        clearModuleInfo: () => {
-            moduleInfo.innerHTML = "";
-        },
+        moduleInfo,
         nodeList,
         setActionBusy,
         setProcessTarget,
         setProcessAction,
         setCustomRefreshCardLine,
-        startModuleUpdate: startModuleUpdateApi,
-        installModuleRequirements: installModuleRequirementsApi,
-        installComfyUIRequirements: installComfyUIRequirementsApi,
-        fetchComfyUIInfo: fetchComfyUIInfoApi,
-        getLogMode: getCurrentLogMode,
-        refreshModuleRuntimeState: refreshModuleRuntimeStateApi,
-        acknowledgeAllModuleNovelty: acknowledgeAllModuleNoveltyApi,
+        startModuleUpdateApi,
+        installModuleRequirementsApi,
+        installComfyUIRequirementsApi,
+        fetchComfyUIInfoApi,
+        getCurrentLogMode,
+        refreshModuleRuntimeStateApi,
+        acknowledgeAllModuleNoveltyApi,
         setModuleInlineStatus,
         setCustomStatusChecked,
         setComfyStatusChecked,
@@ -394,7 +396,6 @@ export function renderModuleNodePicker(container) {
         onMarkUpdatedModule: (mod) => updatedModulesSession.add(mod),
         isModuleMarkedUpdated: (mod) => updatedModulesSession.has(String(mod || "").trim()),
         isCanceledRequestError,
-        moduleInfo,
         updatedModulesSession,
         setHelpHintText,
         setHelpModuleCardHint,
@@ -403,10 +404,10 @@ export function renderModuleNodePicker(container) {
         app,
         centerNode: (node) => centerNodeInCanvas(node, app),
         fmtDate,
-        getActionBusy: () => busyUi.getActionBusy(),
+        busyUi,
         getNodesForSelectedGroup,
         getInlineStatus: (moduleName) => moduleInlineStatus.get(moduleName) || null,
-    });
+    }));
     pollingController = flowStage.pollingController;
     catalogController = flowStage.catalogController;
     modulePanelController = flowStage.modulePanelController;
@@ -426,7 +427,7 @@ export function renderModuleNodePicker(container) {
     resumePendingModuleUpdateFlow = (...args) => flowStage.resumePendingModuleUpdateFlow(...args);
     resumePendingComfyInfoRefreshFlow = (...args) => flowStage.resumePendingComfyInfoRefreshFlow(...args);
 
-    const runtimeBootstrap = initializeModuleNodePickerRuntime({
+    const runtimeBootstrap = initializeModuleNodePickerRuntime(buildRuntimeBootstrapContext({
         groupSelect,
         categorySelect,
         moduleFilter,
@@ -445,7 +446,7 @@ export function renderModuleNodePicker(container) {
         syncUpdateAllButton,
         syncPickerSelectionState,
         loadModuleInfo,
-        isActionBusy: () => busyUi.isActionBusy(),
+        busyUi,
         setCustomStatusChecked,
         setProcessTarget,
         runModuleUpdate,
@@ -459,7 +460,7 @@ export function renderModuleNodePicker(container) {
         hasPendingComfyInfoRefresh,
         loadComfyInfoSnapshot,
         renderComfyAlert,
-        shouldContinue: isPickerAlive,
+        isPickerAlive,
         setStartupBusy,
         startCatalogStartupLoad: (options = {}) => runModuleNodePickerStartupLoad({
             pickerStore,
@@ -475,7 +476,7 @@ export function renderModuleNodePicker(container) {
         resumePendingCustomRefreshFlow,
         resumePendingModuleUpdateFlow,
         resumePendingComfyInfoRefreshFlow,
-    });
+    }));
     unbindPickerEvents = runtimeBootstrap.unbindPickerEvents;
     cancelStartupLoad = runtimeBootstrap.cancelStartupLoad;
 }

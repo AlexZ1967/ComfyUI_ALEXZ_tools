@@ -374,13 +374,18 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         composer_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
+        context_builders_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_context_builders.js"
+        ).read_text(encoding="utf-8")
         ui_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
-        picker_runtime_text = f"{picker_text}\n{composer_text}\n{ui_stage_text}\n{flow_stage_text}"
+        picker_runtime_text = (
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}"
+        )
 
         self.assertIn("export function bindModuleNodesTabRelay", relay_text)
         self.assertIn("export function unbindModuleNodesTabRelay", relay_text)
@@ -449,13 +454,18 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         composer_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
+        context_builders_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_context_builders.js"
+        ).read_text(encoding="utf-8")
         ui_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
-        picker_runtime_text = f"{picker_text}\n{composer_text}\n{ui_stage_text}\n{flow_stage_text}"
+        picker_runtime_text = (
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}"
+        )
 
         self.assertNotIn("setInterval(", relay_text)
         self.assertIn("setTimeout(runTick", relay_text)
@@ -511,13 +521,18 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         composer_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
+        context_builders_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_context_builders.js"
+        ).read_text(encoding="utf-8")
         ui_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
-        picker_runtime_text = f"{picker_text}\n{composer_text}\n{ui_stage_text}\n{flow_stage_text}"
+        picker_runtime_text = (
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}"
+        )
         actions_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")
@@ -612,7 +627,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("initializeModuleNodePickerRuntime", picker_runtime_text)
         self.assertIn("runStartupCoordinator", runtime_bootstrap_text)
         self.assertIn("startCatalogStartupLoad", picker_runtime_text)
-        self.assertIn("isActionBusy: () => busyUi.isActionBusy()", picker_runtime_text)
+        self.assertTrue(
+            ("isActionBusy: () => busyUi.isActionBusy()" in picker_runtime_text)
+            or ("isActionBusy: () => context?.busyUi?.isActionBusy?.()" in picker_runtime_text)
+        )
         self.assertIn("const cancelStartupLoad = runStartupCoordinator({", runtime_bootstrap_text)
         self.assertIn("onSettled", bindings_text)
         self.assertIn("settle()", bindings_text)
