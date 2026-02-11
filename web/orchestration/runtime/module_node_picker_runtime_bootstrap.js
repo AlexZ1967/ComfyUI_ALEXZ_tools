@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_runtime_bootstrap.js
+ * Module: web/orchestration/runtime/module_node_picker_runtime_bootstrap.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -11,7 +11,7 @@
  *   coordinator wiring so the picker composer remains focused on composition.
  */
 
-import { bindModuleNodePickerEvents } from "./module_node_picker_bindings.js";
+import { bindModuleNodePickerEvents } from "../module_node_picker_bindings.js";
 import { runStartupCoordinator } from "./module_node_picker_startup_flow.js";
 
 /**

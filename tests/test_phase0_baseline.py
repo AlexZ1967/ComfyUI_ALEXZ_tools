@@ -364,16 +364,16 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             encoding="utf-8"
         )
         relay_helpers_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_helpers.js"
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_helpers.js"
         ).read_text(encoding="utf-8")
         relay_runtime_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_runtime.js"
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_runtime.js"
         ).read_text(encoding="utf-8")
         relay_intent_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_intent.js"
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_intent.js"
         ).read_text(encoding="utf-8")
         relay_tick_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_tick.js"
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_tick.js"
         ).read_text(encoding="utf-8")
         busy_ui_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
@@ -418,10 +418,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap_bindings.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap_bindings.js"
+        ).read_text(encoding="utf-8")
+        runtime_projection_text = (
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_projection.js"
         ).read_text(encoding="utf-8")
         picker_runtime_text = (
-            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}"
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}"
         )
 
         self.assertIn("export function bindModuleNodesTabRelay", relay_text)
@@ -488,13 +491,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             encoding="utf-8"
         )
         helpers_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_helpers.js"
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_helpers.js"
         ).read_text(encoding="utf-8")
         relay_intent_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_intent.js"
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_intent.js"
         ).read_text(encoding="utf-8")
         relay_tick_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_tick.js"
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_tick.js"
         ).read_text(encoding="utf-8")
         picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
             encoding="utf-8"
@@ -512,10 +515,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap_bindings.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap_bindings.js"
+        ).read_text(encoding="utf-8")
+        runtime_projection_text = (
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_projection.js"
         ).read_text(encoding="utf-8")
         picker_runtime_text = (
-            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}"
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}"
         )
 
         self.assertNotIn("setInterval(", relay_text)
@@ -542,13 +548,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_update_flow.js"
         ).read_text(encoding="utf-8")
         lifecycle_guard_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_lifecycle_guard.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_lifecycle_guard.js"
         ).read_text(encoding="utf-8")
         lifecycle_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_lifecycle.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_lifecycle.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap.js"
         ).read_text(encoding="utf-8")
         api_text = (
             repo_root / "web" / "api" / "module_node_picker_api.js"
@@ -585,8 +591,14 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         flow_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
+        runtime_bootstrap_bindings_text = (
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap_bindings.js"
+        ).read_text(encoding="utf-8")
+        runtime_projection_text = (
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_projection.js"
+        ).read_text(encoding="utf-8")
         picker_runtime_text = (
-            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}"
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}"
         )
         actions_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
@@ -598,7 +610,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_bindings.js"
         ).read_text(encoding="utf-8")
         startup_flow_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_startup_flow.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_startup_flow.js"
         ).read_text(encoding="utf-8")
         api_client_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_api_client.js"
@@ -625,7 +637,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_ui_controllers.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap.js"
         ).read_text(encoding="utf-8")
         polling_controller_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_polling_controller.js"
@@ -634,10 +646,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_module_panel_controller.js"
         ).read_text(encoding="utf-8")
         warmup_controller_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_warmup_controller.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_warmup_controller.js"
         ).read_text(encoding="utf-8")
         lifecycle_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_lifecycle.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_lifecycle.js"
         ).read_text(encoding="utf-8")
         resume_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_resume_flow.js"
@@ -664,13 +676,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_error_utils.js"
         ).read_text(encoding="utf-8")
         runtime_setup_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_runtime_setup.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_setup.js"
         ).read_text(encoding="utf-8")
         stage_bridge_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_stage_bridge.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap_bindings.js"
+            repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap_bindings.js"
         ).read_text(encoding="utf-8")
 
         self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_runtime_text)
@@ -773,6 +785,8 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("adapters", stage_bridge_text)
         self.assertIn("export function createModuleNodePickerRuntimeBootstrapBindings", runtime_bootstrap_bindings_text)
         self.assertIn("startCatalogStartupLoad", runtime_bootstrap_bindings_text)
+        self.assertIn("export function projectModuleNodePickerRuntimeSetup", runtime_projection_text)
+        self.assertIn("runtimeStatus", runtime_projection_text)
         self.assertIn("export function createModuleNodePickerLifecycle", lifecycle_text)
         self.assertIn("getCatalogController", lifecycle_text)
         self.assertIn("getPollingController", lifecycle_text)

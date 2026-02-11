@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_tab_relay_runtime.js
+ * Module: web/orchestration/relay/module_node_picker_tab_relay_runtime.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

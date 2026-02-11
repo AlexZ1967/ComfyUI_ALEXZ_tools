@@ -169,7 +169,12 @@
   - CSS Module Node Picker перемещен в UI-слой (`web/ui/styles/module_node_picker_styles.js`) для корректного разделения ответственности по директориям.
   - wiring deferred-stage из composer вынесен в `web/orchestration/module_node_picker_stage_bridge.js`, чтобы централизовать handoff flow-stage и adapter callbacks без изменения поведения.
   - runtime-bootstrap callback bindings вынесены из composer в `web/orchestration/module_node_picker_runtime_bootstrap_bindings.js`, чтобы снизить плотность inline-callback кода в композиции.
+  - проекция/распаковка runtime-setup вынесена в `web/orchestration/module_node_picker_runtime_projection.js`, что уменьшило шум flat-mapping полей в composer.
   - устранено зависание индикатора warmup: warmup-poller привязан к reload каталога, добавлены fail-safe ветки сброса индикатора при исчерпании retry-бюджета и ошибках poll.
+  - введены семантические подпапки orchestration:
+    - `web/orchestration/relay/` для tab-relay внутренних модулей,
+    - `web/orchestration/runtime/` для runtime/bootstrap/lifecycle/warmup модулей,
+    с обновлением импортов и тестовых путей.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

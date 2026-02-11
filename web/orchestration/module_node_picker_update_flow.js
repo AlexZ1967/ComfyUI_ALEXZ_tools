@@ -10,7 +10,7 @@
  *   Keeps long-running polling and update flows outside the main UI file.
  */
 
-import { shouldContinueContext } from "./module_node_picker_lifecycle_guard.js";
+import { shouldContinueContext } from "./runtime/module_node_picker_lifecycle_guard.js";
 import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
 
 /**

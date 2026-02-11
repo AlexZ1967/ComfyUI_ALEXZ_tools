@@ -62,12 +62,13 @@ import {
     createNodeFromCatalogInfo,
 } from "../ui/module_node_picker_node_factory.js";
 import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
-import { initializeModuleNodePickerRuntime } from "./module_node_picker_runtime_bootstrap.js";
-import { createModuleNodePickerRuntimeSetup } from "./module_node_picker_runtime_setup.js";
+import { initializeModuleNodePickerRuntime } from "./runtime/module_node_picker_runtime_bootstrap.js";
+import { createModuleNodePickerRuntimeSetup } from "./runtime/module_node_picker_runtime_setup.js";
 import { createModuleNodePickerUiStage } from "./module_node_picker_ui_stage.js";
 import { createModuleNodePickerFlowStage } from "./module_node_picker_flow_stage.js";
 import { createModuleNodePickerStageBridge } from "./module_node_picker_stage_bridge.js";
-import { createModuleNodePickerRuntimeBootstrapBindings } from "./module_node_picker_runtime_bootstrap_bindings.js";
+import { createModuleNodePickerRuntimeBootstrapBindings } from "./runtime/module_node_picker_runtime_bootstrap_bindings.js";
+import { projectModuleNodePickerRuntimeSetup } from "./runtime/module_node_picker_runtime_projection.js";
 import {
     buildFlowStageContext,
     buildRuntimeSetupContext,
@@ -174,50 +175,49 @@ export function renderModuleNodePicker(container) {
         installComfyUIRequirements,
     }));
     apiClientRef = runtimeSetup.apiClient;
-    const pickerStore = runtimeSetup.pickerStore;
-    const diagnosticsLogger = runtimeSetup.diagnosticsLogger;
-    const {
-        loadCustomStatusChecked,
-        saveCustomStatusChecked,
-        loadComfyStatusChecked,
-        saveComfyStatusChecked,
-        loadComfyInfoSnapshot,
-        saveComfyInfoSnapshot,
-        hasPendingCustomRefresh,
-        setPendingCustomRefresh,
-        clearPendingCustomRefresh,
-        hasPendingUpdate,
-        setPendingUpdate,
-        clearPendingUpdate,
-        hasPendingComfyInfoRefresh,
-        setPendingComfyInfoRefresh,
-        clearPendingComfyInfoRefresh,
-    } = runtimeSetup.runtimeStatus;
-    const saveComfyCheckMode = runtimeSetup.saveComfyCheckMode;
-    const catalogByGroup = runtimeSetup.catalogByGroup;
-    const moduleCatalogByGroup = runtimeSetup.moduleCatalogByGroup;
-    const moduleCounts = runtimeSetup.moduleCounts;
-    const moduleOptions = runtimeSetup.moduleOptions;
-    const moduleBadges = runtimeSetup.moduleBadges;
-    const moduleNodeDiffs = runtimeSetup.moduleNodeDiffs;
-    const moduleInlineStatus = runtimeSetup.moduleInlineStatus;
-    const updatedModulesSession = runtimeSetup.updatedModulesSession;
-    const isPickerAlive = runtimeSetup.isPickerAlive;
-    const fetchNodeCatalogApi = runtimeSetup.fetchNodeCatalogApi;
-    const fetchModuleInfoApi = runtimeSetup.fetchModuleInfoApi;
-    const fetchComfyUIInfoApi = runtimeSetup.fetchComfyUIInfoApi;
-    const refreshModuleRuntimeStateApi = runtimeSetup.refreshModuleRuntimeStateApi;
-    const fetchModuleRefreshStatusApi = runtimeSetup.fetchModuleRefreshStatusApi;
-    const acknowledgeAllModuleNoveltyApi = runtimeSetup.acknowledgeAllModuleNoveltyApi;
-    const startModuleUpdateApi = runtimeSetup.startModuleUpdateApi;
-    const fetchModuleUpdateStatusApi = runtimeSetup.fetchModuleUpdateStatusApi;
-    const installModuleRequirementsApi = runtimeSetup.installModuleRequirementsApi;
-    const installComfyUIRequirementsApi = runtimeSetup.installComfyUIRequirementsApi;
-    const debugUi = runtimeSetup.debugUi;
-    const processUi = runtimeSetup.processUi;
-    const setProcessTarget = runtimeSetup.setProcessTarget;
-    const setModuleInlineStatus = runtimeSetup.setModuleInlineStatus;
-    const disposePickerInstance = runtimeSetup.disposePickerInstance;
+    const runtimeProjection = projectModuleNodePickerRuntimeSetup(runtimeSetup);
+    const pickerStore = runtimeProjection.pickerStore;
+    const diagnosticsLogger = runtimeProjection.diagnosticsLogger;
+    const loadCustomStatusChecked = runtimeProjection.loadCustomStatusChecked;
+    const saveCustomStatusChecked = runtimeProjection.saveCustomStatusChecked;
+    const loadComfyStatusChecked = runtimeProjection.loadComfyStatusChecked;
+    const saveComfyStatusChecked = runtimeProjection.saveComfyStatusChecked;
+    const loadComfyInfoSnapshot = runtimeProjection.loadComfyInfoSnapshot;
+    const saveComfyInfoSnapshot = runtimeProjection.saveComfyInfoSnapshot;
+    const hasPendingCustomRefresh = runtimeProjection.hasPendingCustomRefresh;
+    const setPendingCustomRefresh = runtimeProjection.setPendingCustomRefresh;
+    const clearPendingCustomRefresh = runtimeProjection.clearPendingCustomRefresh;
+    const hasPendingUpdate = runtimeProjection.hasPendingUpdate;
+    const setPendingUpdate = runtimeProjection.setPendingUpdate;
+    const clearPendingUpdate = runtimeProjection.clearPendingUpdate;
+    const hasPendingComfyInfoRefresh = runtimeProjection.hasPendingComfyInfoRefresh;
+    const setPendingComfyInfoRefresh = runtimeProjection.setPendingComfyInfoRefresh;
+    const clearPendingComfyInfoRefresh = runtimeProjection.clearPendingComfyInfoRefresh;
+    const saveComfyCheckMode = runtimeProjection.saveComfyCheckMode;
+    const catalogByGroup = runtimeProjection.catalogByGroup;
+    const moduleCatalogByGroup = runtimeProjection.moduleCatalogByGroup;
+    const moduleCounts = runtimeProjection.moduleCounts;
+    const moduleOptions = runtimeProjection.moduleOptions;
+    const moduleBadges = runtimeProjection.moduleBadges;
+    const moduleNodeDiffs = runtimeProjection.moduleNodeDiffs;
+    const moduleInlineStatus = runtimeProjection.moduleInlineStatus;
+    const updatedModulesSession = runtimeProjection.updatedModulesSession;
+    const isPickerAlive = runtimeProjection.isPickerAlive;
+    const fetchNodeCatalogApi = runtimeProjection.fetchNodeCatalogApi;
+    const fetchModuleInfoApi = runtimeProjection.fetchModuleInfoApi;
+    const fetchComfyUIInfoApi = runtimeProjection.fetchComfyUIInfoApi;
+    const refreshModuleRuntimeStateApi = runtimeProjection.refreshModuleRuntimeStateApi;
+    const fetchModuleRefreshStatusApi = runtimeProjection.fetchModuleRefreshStatusApi;
+    const acknowledgeAllModuleNoveltyApi = runtimeProjection.acknowledgeAllModuleNoveltyApi;
+    const startModuleUpdateApi = runtimeProjection.startModuleUpdateApi;
+    const fetchModuleUpdateStatusApi = runtimeProjection.fetchModuleUpdateStatusApi;
+    const installModuleRequirementsApi = runtimeProjection.installModuleRequirementsApi;
+    const installComfyUIRequirementsApi = runtimeProjection.installComfyUIRequirementsApi;
+    const debugUi = runtimeProjection.debugUi;
+    const processUi = runtimeProjection.processUi;
+    const setProcessTarget = runtimeProjection.setProcessTarget;
+    const setModuleInlineStatus = runtimeProjection.setModuleInlineStatus;
+    const disposePickerInstance = runtimeProjection.disposePickerInstance;
     const getCurrentLogMode = () => (Boolean(pickerStore?.get?.("debugEnabled")) ? "verbose" : "summary");
     const setWarmupIndicator = (running) => {
         if (!warmupHint) {

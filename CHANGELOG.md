@@ -1,9 +1,36 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.21 — 2026-02-11
+- Phase 2 orchestration structure cleanup:
+  - introduced semantic subfolders in `web/orchestration`:
+    - `web/orchestration/relay/` for tab-relay internals,
+    - `web/orchestration/runtime/` for runtime/bootstrap/lifecycle/warmup internals.
+  - moved relay modules:
+    - `module_node_picker_tab_relay_helpers.js`,
+    - `module_node_picker_tab_relay_runtime.js`,
+    - `module_node_picker_tab_relay_tick.js`,
+    - `module_node_picker_tab_relay_intent.js`.
+  - moved runtime modules:
+    - `module_node_picker_runtime_setup.js`,
+    - `module_node_picker_runtime_bootstrap.js`,
+    - `module_node_picker_runtime_bootstrap_bindings.js`,
+    - `module_node_picker_runtime_projection.js`,
+    - `module_node_picker_startup_flow.js`,
+    - `module_node_picker_lifecycle.js`,
+    - `module_node_picker_lifecycle_guard.js`,
+    - `module_node_picker_warmup_controller.js`.
+  - updated imports in composer, tab relay entrypoint, and dependent orchestration modules to new paths.
+  - updated module header paths in moved files to reflect new locations.
+  - updated baseline test path markers in `tests/test_phase0_baseline.py` for new folder structure.
+- Validation:
+  - `conda run -n p313 node --check` on changed relay/runtime/composer files,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed, 40 tests).
+
 ## 0.16.20 — 2026-02-11
 - Phase 2 frontend decomposition continued:
   - extracted runtime-bootstrap callback adapters from composer into `web/orchestration/module_node_picker_runtime_bootstrap_bindings.js`,
   - `web/orchestration/module_node_picker_composer.js` now wires runtime bootstrap through prebuilt binding adapters (`createModuleNodePickerRuntimeBootstrapBindings`) to reduce inline lambda density and improve maintainability.
+  - extracted runtime-setup projection/unpacking from composer into `web/orchestration/module_node_picker_runtime_projection.js` (`projectModuleNodePickerRuntimeSetup`) to reduce composer field-mapping density.
 - Warmup UX reliability fix:
   - fixed stuck `warming up...` indicator by wiring warmup poller to catalog reload path in `web/orchestration/module_node_picker_catalog_controller.js` (`warmupController.setPoller(...)`),
   - added fail-safe warmup indicator reset paths in `web/orchestration/module_node_picker_warmup_controller.js` for retry budget exhaustion and poll errors.

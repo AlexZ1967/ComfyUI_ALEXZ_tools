@@ -10,9 +10,9 @@
  *   Synchronizes panel attachment/visibility with sidebar tab state and reports diagnostics.
  */
 
-import { createModuleNodePickerTabRelayRuntime } from "./orchestration/module_node_picker_tab_relay_runtime.js";
-import { startModuleNodePickerRelayTickLoop } from "./orchestration/module_node_picker_tab_relay_tick.js";
-import { createModuleNodePickerRelayIntentController } from "./orchestration/module_node_picker_tab_relay_intent.js";
+import { createModuleNodePickerTabRelayRuntime } from "./orchestration/relay/module_node_picker_tab_relay_runtime.js";
+import { startModuleNodePickerRelayTickLoop } from "./orchestration/relay/module_node_picker_tab_relay_tick.js";
+import { createModuleNodePickerRelayIntentController } from "./orchestration/relay/module_node_picker_tab_relay_intent.js";
 
 const TAB_RELAY_STATE_KEY = "__alexz_module_picker_tab_relay_state_v2__";
 

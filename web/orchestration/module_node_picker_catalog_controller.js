@@ -17,7 +17,7 @@ import {
     loadModuleInfoFlow,
     loadCatalogFlow,
 } from "./module_node_picker_data_flow.js";
-import { createModuleNodePickerWarmupController } from "./module_node_picker_warmup_controller.js";
+import { createModuleNodePickerWarmupController } from "./runtime/module_node_picker_warmup_controller.js";
 
 /**
  * Create catalog controller used by picker composition layer.
