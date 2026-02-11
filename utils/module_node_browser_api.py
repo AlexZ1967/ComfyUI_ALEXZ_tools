@@ -26,7 +26,6 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashlib import sha1
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -56,6 +55,15 @@ from .module_browser.api_manifest import (
 from .module_browser.contracts import (
     COMPONENT_REGISTRY_SCHEMA_NAME,
     COMPONENT_REGISTRY_SCHEMA_VERSION,
+)
+from .module_browser.jobs import (
+    emit_refresh_progress,
+    format_update_status_line,
+    refresh_status_snapshot,
+    resolve_update_targets,
+    set_refresh_status,
+    set_update_status,
+    update_status_snapshot,
 )
 
 try:
@@ -2931,15 +2939,17 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
 
 def _set_refresh_status(**kwargs: Any) -> None:
     """Set shared refresh job status fields in a thread-safe way."""
-    with _REFRESH_LOCK:
-        _REFRESH_STATUS.update(kwargs)
-        _REFRESH_STATUS["updated_at"] = _now_iso()
+    set_refresh_status(
+        lock=_REFRESH_LOCK,
+        status=_REFRESH_STATUS,
+        now_iso=_now_iso,
+        **kwargs,
+    )
 
 
 def _refresh_status_snapshot() -> dict[str, Any]:
     """Return thread-safe snapshot of refresh-job status."""
-    with _REFRESH_LOCK:
-        return dict(_REFRESH_STATUS)
+    return refresh_status_snapshot(lock=_REFRESH_LOCK, status=_REFRESH_STATUS)
 
 
 def _refresh_progress(
@@ -2955,42 +2965,22 @@ def _refresh_progress(
 ) -> None:
     """Update refresh-job progress counters and status text."""
     global _REFRESH_LOG_LAST
-    _set_refresh_status(
+    _REFRESH_LOG_LAST = emit_refresh_progress(
+        lock=_REFRESH_LOCK,
+        status=_REFRESH_STATUS,
+        now_iso=_now_iso,
         phase=phase,
-        current=int(current),
-        total=int(total),
-        remaining=max(0, int(remaining)),
-        modules_need_update=max(0, int(modules_need_update)),
-        modules_unknown_update=max(0, int(modules_unknown_update)),
+        current=current,
+        total=total,
+        remaining=remaining,
+        modules_need_update=modules_need_update,
+        modules_unknown_update=modules_unknown_update,
         module=module,
         message=message,
+        last_line=_REFRESH_LOG_LAST,
+        logger_debug=lambda line: _LOGGER.debug("Module refresh: %s", line),
+        console_log=lambda text, level="summary": _refresh_console_log(text, level=level),
     )
-    line = (
-        f"phase={phase} current={int(current)}/{int(total)} remaining={max(0, int(remaining))} "
-        f"module={module or '-'} message={message or '-'}"
-    )
-    if line != _REFRESH_LOG_LAST:
-        _REFRESH_LOG_LAST = line
-        # Keep detailed state transitions in logger debug to avoid duplicate console lines.
-        _LOGGER.debug("Module refresh: %s", line)
-        if phase == "sync" and total > 0 and module:
-            _refresh_console_log(
-                "sync [{current}/{total}] {module}: {message}".format(
-                    current=int(current),
-                    total=int(total),
-                    module=module,
-                    message=message or "-",
-                ),
-                level="verbose",
-            )
-        elif phase in {"sync", "snapshots", "done"}:
-            _refresh_console_log(
-                "phase={phase} message={message} need_update={need}".format(
-                    phase=phase,
-                    message=message or "-",
-                    need=max(0, int(modules_need_update)),
-                )
-            )
 
 
 def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any | None = None) -> dict[str, Any]:
@@ -3254,24 +3244,13 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
 def _set_update_status(**kwargs: Any) -> None:
     """Set shared module-update job status fields in a thread-safe way."""
     global _UPDATE_LOG_LAST
-    with _UPDATE_LOCK:
-        _UPDATE_STATUS.update(kwargs)
-        _UPDATE_STATUS["updated_at"] = _now_iso()
-        line = (
-            "scope={scope} phase={phase} current={current}/{total} remaining={remaining} "
-            "module={module} updated={updated} up_to_date={up_to_date} failed={failed} message={message}"
-        ).format(
-            scope=_UPDATE_STATUS.get("scope", ""),
-            phase=_UPDATE_STATUS.get("phase", ""),
-            current=int(_UPDATE_STATUS.get("current", 0) or 0),
-            total=int(_UPDATE_STATUS.get("total", 0) or 0),
-            remaining=int(_UPDATE_STATUS.get("remaining", 0) or 0),
-            module=_UPDATE_STATUS.get("module", "") or "-",
-            updated=int(_UPDATE_STATUS.get("updated", 0) or 0),
-            up_to_date=int(_UPDATE_STATUS.get("up_to_date", 0) or 0),
-            failed=int(_UPDATE_STATUS.get("failed", 0) or 0),
-            message=_UPDATE_STATUS.get("message", "") or "-",
-        )
+    set_update_status(
+        lock=_UPDATE_LOCK,
+        status=_UPDATE_STATUS,
+        now_iso=_now_iso,
+        **kwargs,
+    )
+    line = format_update_status_line(_UPDATE_STATUS)
     if line != _UPDATE_LOG_LAST:
         _UPDATE_LOG_LAST = line
         _LOGGER.info("Module update: %s", line)
@@ -3279,71 +3258,22 @@ def _set_update_status(**kwargs: Any) -> None:
 
 def _update_status_snapshot() -> dict[str, Any]:
     """Return thread-safe snapshot of module-update job status."""
-    with _UPDATE_LOCK:
-        return dict(_UPDATE_STATUS)
+    return update_status_snapshot(lock=_UPDATE_LOCK, status=_UPDATE_STATUS)
 
 
 def _resolve_update_targets(scope: str, module_name: str) -> list[str]:
     """Resolve concrete module names targeted by update request payload."""
-    scope_norm = (scope or "").strip().lower()
-    if scope_norm == "single":
-        canonical = _canonical_custom_module_name(module_name)
-        if not canonical or canonical == "unknown":
-            return []
-        return [canonical]
-
-    if scope_norm != "all":
-        return []
-
-    discovered = _discover_custom_modules()
-    total_scan = len(discovered)
-    _update_console_log(f"target scan started for {total_scan} custom module(s)")
-    if total_scan == 0:
-        return []
-
-    def _scan_one(idx: int, mod: str) -> tuple[int, str, bool, bool]:
-        sync_ok = _sync_module_upstream(mod)
-        needs_update = _module_needs_update_now(mod)
-        return (idx, mod, sync_ok, needs_update)
-
-    ordered_results: list[tuple[int, str, bool, bool]] = []
-    workers = max(1, min(_UPDATE_TARGET_SCAN_WORKERS, total_scan))
-    if workers == 1:
-        ordered_results = [_scan_one(idx, mod) for idx, mod in enumerate(discovered, start=1)]
-    else:
-        result_map: dict[int, tuple[int, str, bool, bool]] = {}
-        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="alexz-update-scan") as executor:
-            futures = {
-                executor.submit(_scan_one, idx, mod): idx
-                for idx, mod in enumerate(discovered, start=1)
-            }
-            for future in as_completed(futures):
-                idx = futures[future]
-                mod = discovered[idx - 1]
-                try:
-                    result_map[idx] = future.result()
-                except Exception as exc:  # pragma: no cover - defensive path
-                    _LOGGER.warning("Update target scan failed for module %s: %s", mod, exc)
-                    result_map[idx] = (idx, mod, False, False)
-        ordered_results = [result_map[i] for i in sorted(result_map)]
-
-    targets: list[str] = []
-    for idx, mod, sync_ok, needs_update in ordered_results:
-        if needs_update:
-            targets.append(_canonical_custom_module_name(mod))
-        _update_console_log(
-            "scan [{idx}/{total}] {mod}: {state} (sync={sync})".format(
-                idx=idx,
-                total=total_scan,
-                mod=mod,
-                state="needs update" if needs_update else "up to date",
-                sync="ok" if sync_ok else "skip",
-            ),
-            level="verbose",
-        )
-    # Keep order stable and deduplicate.
-    _update_console_log(f"target scan finished: {len(targets)} module(s) need update")
-    return list(dict.fromkeys(targets))
+    return resolve_update_targets(
+        scope=scope,
+        module_name=module_name,
+        canonical_module_name=_canonical_custom_module_name,
+        discover_modules=_discover_custom_modules,
+        sync_module_upstream=_sync_module_upstream,
+        module_needs_update=_module_needs_update_now,
+        update_console_log=lambda text, level="summary": _update_console_log(text, level=level),
+        workers=_UPDATE_TARGET_SCAN_WORKERS,
+        warn=lambda text: _LOGGER.warning("%s", text),
+    )
 
 
 def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summary") -> dict[str, Any]:

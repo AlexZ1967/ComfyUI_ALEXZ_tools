@@ -243,6 +243,8 @@
 
 ## Phase 3 — Модульная декомпозиция backend (без API-изменений)
 
+Статус: 🔄 в процессе (2026-02-12)
+
 Результат:
 - Внутренне делим `utils/module_node_browser_api.py` на блоки:
   - сбор/построение каталога;
@@ -250,6 +252,8 @@
   - сборка module info;
   - orchestration refresh/update jobs.
 - Сохраняем совместимость сигнатур роутов и ключей payload.
+- Выполнен шаг 1: вынесены job-helpers (`refresh/update` status + target resolution)
+  в `utils/module_browser/jobs.py`, основной backend оставлен как совместимый facade.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

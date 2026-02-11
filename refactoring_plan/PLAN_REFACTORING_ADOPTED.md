@@ -243,6 +243,8 @@ Exit criteria:
 
 ## Phase 3 — Backend Modular Split (No API Changes)
 
+Status: 🔄 in progress (2026-02-12)
+
 Deliverables:
 - Internally split `utils/module_node_browser_api.py` into focused modules:
   - catalog collection/building
@@ -250,6 +252,8 @@ Deliverables:
   - module info assembly
   - refresh/update job orchestration
 - Keep route signatures and payload keys backward-compatible.
+- Step 1 completed: refresh/update job helpers (status handling + update target
+  resolution) moved to `utils/module_browser/jobs.py` with facade-compatible wrappers.
 
 Exit criteria:
 - Existing frontend works without API changes.
