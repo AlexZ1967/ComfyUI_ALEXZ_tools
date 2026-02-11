@@ -67,6 +67,7 @@ import { initializeModuleNodePickerRuntime } from "./module_node_picker_runtime_
 import { createModuleNodePickerRuntimeSetup } from "./module_node_picker_runtime_setup.js";
 import { createModuleNodePickerUiStage } from "./module_node_picker_ui_stage.js";
 import { createModuleNodePickerFlowStage } from "./module_node_picker_flow_stage.js";
+import { createModuleNodePickerStageBridge } from "./module_node_picker_stage_bridge.js";
 import {
     buildFlowStageContext,
     buildRuntimeSetupContext,
@@ -225,12 +226,9 @@ export function renderModuleNodePicker(container) {
         warmupHint.style.display = running ? "inline" : "none";
     };
 
-    const deferredStage = {
-        loadModuleInfo: async () => {},
-        loadCatalog: async () => {},
-        renderNodeList: () => {},
-        setExpandedModule: () => {},
-    };
+    const stageBridge = createModuleNodePickerStageBridge();
+    const deferredStage = stageBridge.deferredStage;
+    const stageAdapters = stageBridge.adapters;
 
     const uiStage = createModuleNodePickerUiStage(buildUiStageContext({
         isPickerAlive,
@@ -256,7 +254,7 @@ export function renderModuleNodePicker(container) {
         defaultModule: DEFAULT_MODULE,
         comfyGroupOrder: COMFY_GROUP_ORDER,
         groupLabels: GROUP_LABELS,
-        setExpandedModule: (value) => deferredStage.setExpandedModule(value),
+        setExpandedModule: (value) => stageAdapters.setExpandedModule(value),
         getRenderNodeList: () => deferredStage.renderNodeList,
         getLoadModuleInfo: () => deferredStage.loadModuleInfo,
         controls: {
@@ -410,10 +408,7 @@ export function renderModuleNodePicker(container) {
     pollingController = flowStage.pollingController;
     catalogController = flowStage.catalogController;
     modulePanelController = flowStage.modulePanelController;
-    deferredStage.loadModuleInfo = (options = {}) => flowStage.loadModuleInfo(options);
-    deferredStage.loadCatalog = (options = {}) => flowStage.loadCatalog(options);
-    deferredStage.renderNodeList = () => flowStage.renderNodeList();
-    deferredStage.setExpandedModule = (value) => flowStage.setExpandedModule(value);
+    stageBridge.wireFlowStage(flowStage);
 
     const runtimeBootstrap = initializeModuleNodePickerRuntime(buildRuntimeBootstrapContext({
         groupSelect,
@@ -433,7 +428,7 @@ export function renderModuleNodePicker(container) {
         fillModuleSelect,
         syncUpdateAllButton,
         syncPickerSelectionState,
-        loadModuleInfo: (options = {}) => deferredStage.loadModuleInfo(options),
+        loadModuleInfo: (options = {}) => stageAdapters.loadModuleInfo(options),
         busyUi,
         setCustomStatusChecked,
         setProcessTarget,
@@ -441,9 +436,9 @@ export function renderModuleNodePicker(container) {
         installComfyUIRequirementsFlow: (...args) => flowStage.installComfyUIRequirementsFlow(...args),
         refreshComfyUIInfoFlow: (...args) => flowStage.refreshComfyUIInfoFlow(...args),
         saveComfyCheckMode,
-        loadCatalog: (options = {}) => deferredStage.loadCatalog(options),
+        loadCatalog: (options = {}) => stageAdapters.loadCatalog(options),
         refreshCustomNodesInfoFlow: (...args) => flowStage.refreshCustomNodesInfoFlow(...args),
-        setExpandedModule: (value) => deferredStage.setExpandedModule(value),
+        setExpandedModule: (value) => stageAdapters.setExpandedModule(value),
         statusCards,
         hasPendingComfyInfoRefresh,
         loadComfyInfoSnapshot,
@@ -453,7 +448,7 @@ export function renderModuleNodePicker(container) {
         startCatalogStartupLoad: (options = {}) => runModuleNodePickerStartupLoad({
             pickerStore,
             defaultModule: DEFAULT_MODULE,
-            loadCatalog: (opts = {}) => deferredStage.loadCatalog(opts),
+            loadCatalog: (opts = {}) => stageAdapters.loadCatalog(opts),
             shouldContinue: isPickerAlive,
             startupRetries: 2,
             startupRetryDelayMs: 250,

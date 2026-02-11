@@ -46,6 +46,10 @@ export function createModuleNodePickerWarmupController(context = {}) {
 
     const scheduleWarmupPoll = (nextOptions = {}) => {
         if (warmupPollAttempts >= maxAttempts) {
+            // Do not keep stale warmup indicator visible after retry budget ends.
+            clearWarmupPoll();
+            warmupPollAttempts = 0;
+            setWarmupIndicator(false);
             return;
         }
         clearWarmupPoll();
@@ -54,7 +58,12 @@ export function createModuleNodePickerWarmupController(context = {}) {
             if (!shouldContinue()) {
                 return;
             }
-            void poller(nextOptions);
+            void Promise.resolve(poller(nextOptions)).catch(() => {
+                // Fail-safe: never leave warmup hint hanging on rejected poll calls.
+                clearWarmupPoll();
+                warmupPollAttempts = 0;
+                setWarmupIndicator(false);
+            });
         }, delayMs);
     };
 

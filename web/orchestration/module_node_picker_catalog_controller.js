@@ -204,6 +204,9 @@ export function createModuleNodePickerCatalogController(context = {}) {
         }
     };
 
+    // Wire warmup poller to catalog loader so background retries actually run.
+    warmupController.setPoller((nextOptions = {}) => loadCatalog(nextOptions));
+
     const bumpRequestTokens = () => {
         moduleInfoLoadToken += 1;
         catalogLoadToken += 1;

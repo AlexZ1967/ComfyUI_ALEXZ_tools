@@ -166,6 +166,8 @@
   - адаптивный relay tick-loop вынесен в `web/orchestration/module_node_picker_tab_relay_tick.js`; bind/runtime слой релея упрощен без изменения поведения.
   - relay tab-intent/event orchestration вынесена в `web/orchestration/module_node_picker_tab_relay_intent.js`; wiring listeners в `module_node_picker_tab_relay.js` упрощен при сохранении поведения.
   - CSS Module Node Picker вынесен в `web/orchestration/styles/module_node_picker_styles.js` с секциями и подробными комментариями, чтобы отделить правки оформления от orchestration-логики.
+  - CSS Module Node Picker перемещен в UI-слой (`web/ui/styles/module_node_picker_styles.js`) для корректного разделения ответственности по директориям.
+  - wiring deferred-stage из composer вынесен в `web/orchestration/module_node_picker_stage_bridge.js`, чтобы централизовать handoff flow-stage и adapter callbacks без изменения поведения.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

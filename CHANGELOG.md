@@ -1,5 +1,19 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.19 — 2026-02-11
+- Phase 2 frontend decomposition continued:
+  - extracted deferred-stage bridge from composer into `web/orchestration/module_node_picker_stage_bridge.js`,
+  - `web/orchestration/module_node_picker_composer.js` now uses `createModuleNodePickerStageBridge()` to keep flow-stage wiring and deferred handlers centralized with behavior parity.
+- UI structure cleanup:
+  - moved picker stylesheet module from orchestration layer to UI layer:
+    - `web/orchestration/styles/module_node_picker_styles.js` -> `web/ui/styles/module_node_picker_styles.js`,
+  - updated `web/ui/module_node_picker_shell.js` import path accordingly.
+- Baseline guardrail update:
+  - extended `tests/test_phase0_baseline.py` marker checks for `module_node_picker_stage_bridge.js` and composer stage-bridge wiring.
+- Validation:
+  - `conda run -n p313 node --check web/orchestration/module_node_picker_stage_bridge.js web/orchestration/module_node_picker_composer.js web/ui/styles/module_node_picker_styles.js web/ui/module_node_picker_shell.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed, 40 tests).
+
 ## 0.16.18 — 2026-02-11
 - Phase 2 maintainability step for Module Node Picker UI styles:
   - extracted picker CSS from `web/ui/module_node_picker_shell.js` into a dedicated stylesheet source module:

@@ -660,6 +660,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         runtime_setup_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_runtime_setup.js"
         ).read_text(encoding="utf-8")
+        stage_bridge_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_stage_bridge.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_runtime_text)
         self.assertIn("getRuntimePickerState", runtime_state_text)
@@ -724,6 +727,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("createModuleNodePickerUiControllers", picker_runtime_text)
         self.assertIn("createModuleNodePickerFlowWiring", picker_runtime_text)
         self.assertIn("createModuleNodePickerRuntimeSetup", picker_runtime_text)
+        self.assertIn("createModuleNodePickerStageBridge", picker_runtime_text)
         self.assertIn("export function createModuleNodePickerFlowWiring", flow_wiring_text)
         self.assertIn("createModuleNodePickerPollingController", flow_wiring_text)
         self.assertIn("createModuleNodePickerCatalogController", flow_wiring_text)
@@ -753,6 +757,11 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export function createModuleNodePickerWarmupController", warmup_controller_text)
         self.assertIn("handleCatalogResult", warmup_controller_text)
         self.assertIn("setWarmupIndicator", warmup_controller_text)
+        self.assertIn("warmupPollAttempts >= maxAttempts", warmup_controller_text)
+        self.assertIn("Promise.resolve(poller(nextOptions)).catch", warmup_controller_text)
+        self.assertIn("export function createModuleNodePickerStageBridge", stage_bridge_text)
+        self.assertIn("wireFlowStage", stage_bridge_text)
+        self.assertIn("adapters", stage_bridge_text)
         self.assertIn("export function createModuleNodePickerLifecycle", lifecycle_text)
         self.assertIn("getCatalogController", lifecycle_text)
         self.assertIn("getPollingController", lifecycle_text)
@@ -780,6 +789,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("loadCatalog", catalog_controller_text)
         self.assertIn("loadModuleInfo", catalog_controller_text)
         self.assertIn("bumpRequestTokens", catalog_controller_text)
+        self.assertIn("warmupController.setPoller", catalog_controller_text)
         self.assertIn("renderModuleInfo: (...args) => renderModuleInfoImpl(...args)", flow_wiring_text)
         self.assertIn("export function createModuleNodePickerStatusCards", status_cards_text)
         self.assertIn("renderComfyAlertCard", status_cards_text)

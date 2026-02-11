@@ -166,6 +166,8 @@ Deliverables:
   - extracted relay adaptive tick-loop into `web/orchestration/module_node_picker_tab_relay_tick.js` and kept binding/runtime behavior unchanged.
   - extracted relay tab-intent/event orchestration into `web/orchestration/module_node_picker_tab_relay_intent.js` and simplified `module_node_picker_tab_relay.js` listener wiring.
   - extracted Module Node Picker CSS into `web/orchestration/styles/module_node_picker_styles.js` with grouped, documented style sections to separate presentation tuning from orchestration logic.
+  - moved Module Node Picker CSS module into UI layer (`web/ui/styles/module_node_picker_styles.js`) to align folder ownership with visual responsibilities.
+  - extracted deferred-stage bridge wiring from composer into `web/orchestration/module_node_picker_stage_bridge.js` so flow-stage handoff and adapter callbacks remain centralized and easier to evolve.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
