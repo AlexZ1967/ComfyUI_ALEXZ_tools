@@ -17,6 +17,8 @@ from typing import Any
 
 
 MODULE_STATE_SCHEMA_VERSION = 1
+COMPONENT_REGISTRY_SCHEMA_NAME = "alexz_component_registry"
+COMPONENT_REGISTRY_SCHEMA_VERSION = 1
 
 
 def ensure_module_state_schema(state: dict[str, Any] | None) -> dict[str, Any]:
@@ -29,4 +31,3 @@ def ensure_module_state_schema(state: dict[str, Any] | None) -> dict[str, Any]:
     meta["schema_version"] = MODULE_STATE_SCHEMA_VERSION
     normalized["__meta__"] = meta
     return normalized
-

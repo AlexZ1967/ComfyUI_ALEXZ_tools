@@ -122,7 +122,10 @@ class Slice0RegistryTests(unittest.TestCase):
     def test_component_registry_payload_contains_changes_block(self):
         """Component registry payload exposes deterministic change-tracking fields."""
         api = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_node_browser_api")
+        contracts = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_browser.contracts")
         payload = api._component_registry_payload(force_refresh=True)
+        self.assertEqual(payload.get("schema_name"), contracts.COMPONENT_REGISTRY_SCHEMA_NAME)
+        self.assertEqual(payload.get("schema_version"), contracts.COMPONENT_REGISTRY_SCHEMA_VERSION)
         self.assertIn("summary", payload)
         self.assertIn("changes", payload)
         self.assertIn("has_changes", payload)
@@ -186,6 +189,9 @@ class Slice0RegistryTests(unittest.TestCase):
             self.assertIn("node:OldNode", node_changes.get("removed", []))
             self.assertIn("api:/alexz_tools/old_route", api_changes.get("removed", []))
             self.assertTrue(bool(payload.get("has_changes")))
+            state_tracker = api._MODULE_STATE_CACHE.get("__component_registry__", {})
+            self.assertEqual(state_tracker.get("schema_name"), "alexz_component_registry")
+            self.assertEqual(state_tracker.get("schema_version"), 1)
         finally:
             api.build_default_component_registry = original_builder
             api._MODULE_STATE_CACHE = original_state

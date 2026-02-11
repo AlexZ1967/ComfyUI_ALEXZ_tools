@@ -1,5 +1,20 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.0 — 2026-02-12
+- Slice 0 (Extensibility Foundation) completed:
+  - centralized node lifecycle in `nodes/node_registry.py` (single node manifest source);
+  - added backend API manifest `utils/module_browser/api_manifest.py` and switched route decorators to manifest constants;
+  - added widget manifest `utils/module_browser/widget_manifest.py` and integrated it into component registry;
+  - added versioned component-registry contract fields (`schema_name`, `schema_version`);
+  - added component snapshot diff-tracking (`added`/`removed` for `node/widget/api`) in `/alexz_tools/component_registry`.
+- Stability fixes:
+  - fixed unknown-status badge gating so `🟨` is hidden until explicit custom refresh and does not conflict with local-update marker.
+- Plan/docs sync:
+  - marked Slice 0 as completed in `PLAN_REFACTORING_ADOPTED.md` and `PLAN_REFACTORING_ADOPTED_RU.md`.
+- Tests:
+  - extended `tests/test_slice0_registry.py` (manifests, schema, diff-tracking),
+  - full regression pass: `58 passed` (`slice0_registry + phase0_baseline + module_browser_tracker`).
+
 ## 0.17.2 — 2026-02-12
 - Slice 0 extensibility foundation (phase-3 prep, no breaking API changes):
   - added central node registry manifest `nodes/node_registry.py` (`NodeSpec`, `NODE_SPECS`, `NODE_UI_METADATA`), and switched node loader to use this manifest.

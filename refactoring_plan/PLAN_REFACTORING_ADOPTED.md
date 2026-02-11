@@ -225,7 +225,7 @@ Exit criteria:
 
 ## Slice 0 — Extensibility Foundation (nodes/widgets lifecycle)
 
-Status: 🚧 in progress (started 2026-02-12)
+Status: ✅ completed (2026-02-12)
 
 Deliverables:
 - Introduce a registry-first layer for module components (`nodes`, `widgets`, `api`) with auto-discovery.

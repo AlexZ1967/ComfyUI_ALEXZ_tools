@@ -53,6 +53,10 @@ from .module_browser.api_manifest import (
     ROUTE_MODULE_UPDATE_STATUS,
     ROUTE_NODE_CATALOG,
 )
+from .module_browser.contracts import (
+    COMPONENT_REGISTRY_SCHEMA_NAME,
+    COMPONENT_REGISTRY_SCHEMA_VERSION,
+)
 
 try:
     import folder_paths
@@ -290,6 +294,8 @@ def _component_registry_payload(force_refresh: bool = False) -> dict[str, Any]:
         changes[kind] = {"added": added, "removed": removed}
 
     payload = {
+        "schema_name": COMPONENT_REGISTRY_SCHEMA_NAME,
+        "schema_version": COMPONENT_REGISTRY_SCHEMA_VERSION,
         "summary": registry.summary(),
         "nodes": node_entries,
         "widgets": widget_entries,
@@ -302,6 +308,8 @@ def _component_registry_payload(force_refresh: bool = False) -> dict[str, Any]:
 
     if not isinstance(tracker_raw, dict) or tracker.get("snapshot") != current_snapshot:
         state["__component_registry__"] = {
+            "schema_name": COMPONENT_REGISTRY_SCHEMA_NAME,
+            "schema_version": COMPONENT_REGISTRY_SCHEMA_VERSION,
             "snapshot": current_snapshot,
             "summary": dict(payload["summary"]),
             "updated_at": payload["refreshed_at"],
