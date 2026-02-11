@@ -202,10 +202,57 @@ export function runModuleNodePickerStartupLoad(context) {
     const pickerStore = context?.pickerStore;
     const defaultModule = String(context?.defaultModule || "");
     const loadCatalog = context?.loadCatalog;
+    const shouldContinue = typeof context?.shouldContinue === "function"
+        ? context.shouldContinue
+        : () => true;
+    const maxRetries = Math.max(0, Number(context?.startupRetries ?? 2));
+    const retryDelayMs = Math.max(50, Number(context?.startupRetryDelayMs ?? 250));
     const startupGroup = String(pickerStore?.get?.("selectedGroup") || "custom").trim();
     const startupModule = String(pickerStore?.get?.("selectedModule") || defaultModule).trim();
-    loadCatalog?.({
-        preferredGroup: startupGroup || "custom",
-        preferredModule: startupModule || defaultModule,
-    });
+    let cancelled = false;
+    let retryTimer = 0;
+
+    const clearRetryTimer = () => {
+        if (retryTimer) {
+            window.clearTimeout(retryTimer);
+            retryTimer = 0;
+        }
+    };
+
+    const shouldRetryResult = (result) => {
+        if (!result || result.ok === false) {
+            return true;
+        }
+        const totalNodes = Number(result.totalNodes || 0);
+        const totalModules = Number(result.totalModules || 0);
+        return totalNodes <= 0 && totalModules <= 0;
+    };
+
+    const runAttempt = async (attempt) => {
+        if (cancelled || !shouldContinue()) {
+            return;
+        }
+        const result = await loadCatalog?.({
+            preferredGroup: startupGroup || "custom",
+            preferredModule: startupModule || defaultModule,
+        });
+        if (cancelled || !shouldContinue()) {
+            return;
+        }
+        if (attempt >= maxRetries) {
+            return;
+        }
+        if (!shouldRetryResult(result)) {
+            return;
+        }
+        retryTimer = window.setTimeout(() => {
+            runAttempt(attempt + 1);
+        }, retryDelayMs);
+    };
+
+    runAttempt(0);
+    return () => {
+        cancelled = true;
+        clearRetryTimer();
+    };
 }

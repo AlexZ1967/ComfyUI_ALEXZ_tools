@@ -779,6 +779,7 @@ function renderPicker(container) {
     let expandedModule = "";
     let unbindPickerEvents = () => {};
     let processUi = null;
+    let cancelStartupLoad = () => {};
 
     let pickerDisposed = false;
     // Keep async/UI flows active for this picker instance even if the root is
@@ -798,6 +799,11 @@ function renderPicker(container) {
             unbindPickerEvents?.();
         } catch (_err) {
             // Ignore stale event-unbind errors.
+        }
+        try {
+            cancelStartupLoad?.();
+        } catch (_err) {
+            // Ignore stale startup-load cancellation errors.
         }
         try {
             unsubscribeDebug?.();
@@ -1453,11 +1459,14 @@ function renderPicker(container) {
         },
     }) || (() => {});
 
-    runModuleNodePickerStartupLoad({
+    cancelStartupLoad = runModuleNodePickerStartupLoad({
         pickerStore,
         defaultModule: DEFAULT_MODULE,
         loadCatalog,
-    });
+        shouldContinue: isPickerAlive,
+        startupRetries: 2,
+        startupRetryDelayMs: 250,
+    }) || (() => {});
 }
 
 /**

@@ -50,6 +50,9 @@
 - Startup-open empty-state fix:
   - fixed first-open race where `loadCatalog` could skip due transient `root.isConnected` check during initial attach,
   - switched picker liveness guard to lifecycle (`!pickerDisposed`) and hide Custom alert card by default to avoid blank card flash.
+- Startup catalog resilience:
+  - added bounded startup retry loop for initial catalog load when backend returns temporary empty state,
+  - startup retry timer is now explicitly canceled on picker dispose to prevent stale late reloads.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

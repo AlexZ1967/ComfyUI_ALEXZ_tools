@@ -114,9 +114,23 @@ export async function loadCatalogFlow(options, context) {
         }
         context?.catalogByGroup?.clear?.();
         const groups = payload?.groups || [];
+        const totalNodes = groups.reduce((acc, group) => acc + Number(group?.count || 0), 0);
+        const totalModules = groups.reduce(
+            (acc, group) => acc + Number(
+                group?.module_count
+                ?? (Array.isArray(group?.modules) ? group.modules.length : 0)
+            ),
+            0
+        );
         context?.setCustomModulesNeedUpdate?.(Number(payload?.custom_modules_need_update || 0));
         context?.fillGroupSelect?.(groups, { preferredGroup, preferredModule, autoExpandModule });
         context?.syncUpdateAllButton?.();
+        return {
+            ok: true,
+            groupCount: groups.length,
+            totalNodes,
+            totalModules,
+        };
     } catch (err) {
         if (typeof isRequestActive === "function" && !isRequestActive()) {
             return;
@@ -146,5 +160,12 @@ export async function loadCatalogFlow(options, context) {
             context.nodeList.innerHTML = "";
         }
         context?.syncUpdateAllButton?.();
+        return {
+            ok: false,
+            error: String(err),
+            groupCount: 0,
+            totalNodes: 0,
+            totalModules: 0,
+        };
     }
 }

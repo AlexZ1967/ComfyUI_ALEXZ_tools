@@ -139,6 +139,7 @@ Deliverables:
   - added explicit process-controller dispose lifecycle to fully clear/detach progress host between picker re-renders.
   - deduplicated lifecycle guard logic into a shared orchestration helper module.
   - corrected startup liveness semantics to lifecycle-based checks, preventing first-open catalog skip/empty-select regression.
+  - added bounded startup catalog retry with explicit dispose cancellation to handle transient initial empty backend state.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

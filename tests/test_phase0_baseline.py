@@ -366,7 +366,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("catalogLoadToken", picker_text)
         self.assertIn("moduleInfoLoadToken", picker_text)
         self.assertIn("PICKER_CLEANUP_KEY", picker_text)
-        self.assertIn("isRequestActive", (repo_root / "web" / "orchestration" / "module_node_picker_data_flow.js").read_text(encoding="utf-8"))
+        data_flow_text = (repo_root / "web" / "orchestration" / "module_node_picker_data_flow.js").read_text(encoding="utf-8")
+        self.assertIn("isRequestActive", data_flow_text)
+        self.assertIn("totalNodes", data_flow_text)
 
     def test_frontend_tab_relay_legacy_paths_are_not_reintroduced(self):
         """Keep removed relay legacy paths from silently returning in future edits."""
@@ -392,6 +394,8 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("return () => {", bindings_text)
         self.assertIn("onchange = null", bindings_text)
         self.assertIn("unbindPickerEvents", picker_text)
+        self.assertIn("startupRetryDelayMs", bindings_text)
+        self.assertIn("cancelStartupLoad", picker_text)
         actions_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")
