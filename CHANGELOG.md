@@ -1,5 +1,18 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.2 — 2026-02-12
+- Slice 0 tooling extension:
+  - added standalone manifest validator `utils/module_browser/manifest_check.py`;
+  - added `run_manifest_check()` export in `utils/module_browser/__init__.py`;
+  - validator report includes registry summary, `manifest_signature`, and strict/soft status modes.
+- API/manifest contract strengthening:
+  - `api_manifest.py` now exposes `ALL_API_ROUTES` and `iter_all_api_routes()`;
+  - health checks validate component API routes against full route manifest and detect duplicates.
+- Tests:
+  - added `tests/test_module_browser_manifest_check.py`;
+  - extended slice0 tests for all-routes + health-checked fields;
+  - regression pass: `65 passed` (`manifest_check + slice0_registry + module_browser_jobs + phase0_baseline + module_browser_tracker`).
+
 ## 0.18.1 — 2026-02-12
 - Slice 0 hardening for component lifecycle tracking:
   - added manifest health validation module `utils/module_browser/health.py`;

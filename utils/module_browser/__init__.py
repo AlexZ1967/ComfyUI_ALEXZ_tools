@@ -27,6 +27,7 @@ from .contracts import (
     ensure_module_state_schema,
 )
 from .health import build_component_health_report
+from .manifest_check import run_manifest_check
 
 __all__ = [
     "ComponentEntry",
@@ -36,6 +37,7 @@ __all__ = [
     "MODULE_STATE_SCHEMA_VERSION",
     "build_default_component_registry",
     "build_component_health_report",
+    "run_manifest_check",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",
