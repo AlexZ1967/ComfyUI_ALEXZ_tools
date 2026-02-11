@@ -109,6 +109,8 @@ Exit criteria:
 
 ## Phase 2 — Tab-Sync Stabilization
 
+Status: 🚧 in progress (started 2026-02-11)
+
 Deliverables:
 - Keep one tab synchronization mechanism as primary path.
 - Remove or hard-disable competing sync paths that cause ownership conflicts.

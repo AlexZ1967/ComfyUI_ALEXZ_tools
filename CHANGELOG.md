@@ -1,5 +1,17 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.10 — 2026-02-11
+- Phase 2 start (tab-sync stabilization):
+  - removed legacy container-ownership sync path from `web/module_node_picker.js`,
+  - `Module Node Picker` now uses a single tab-sync mechanism via `web/module_node_picker_tab_relay.js`,
+  - removed dual-path runtime switch and competing visibility controllers.
+- Tab relay cleanup (same phase):
+  - removed force-activation branch from relay (no forced tab switching),
+  - removed duplicated `window` pointer/mouse/click listeners and kept document-level capture listeners,
+  - removed dead `maybeForceRecentTab` logic and associated stale state,
+  - added temporary `foreign tab intent` guard to keep picker detached right after foreign-tab clicks when sidebar state is stale.
+- Updated refactoring plan status for Phase 2 to in-progress in EN/RU plan files.
+
 ## 0.16.9 — 2026-02-11
 - Phase 1 continuation (frontend decomposition without UX changes):
   - added node/module card renderer module: `web/ui/module_node_picker_renderers.js`,

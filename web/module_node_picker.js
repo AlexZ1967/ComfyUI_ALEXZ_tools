@@ -1,7 +1,7 @@
 /**
  * Module: web/module_node_picker.js
  * Author: AlexZ1967
- * Last updated: 2026-02-10
+ * Last updated: 2026-02-11
  *
  * Description:
  *   Module Node Picker frontend panel.
@@ -86,13 +86,11 @@ const SIDEBAR_TAB_ID = "alexz-module-nodes";
 const MODULE_PICKER_GUARD_KEY = "__alexz_module_node_picker_registered__";
 const FALLBACK_BUTTON_ID = "alexz-module-nodes-fallback-btn";
 const DEFAULT_MODULE = "ComfyUI_ALEXZ_tools";
-const CONTAINER_SYNC_STATE_KEY = "__alexz_module_nodes_container_sync_state__";
 const NODE_PICKER_DEBUG_KEY = "__alexz_module_picker_debug__";
 const NODE_PICKER_DEBUG_STORAGE_KEY = "alexz_module_picker_debug";
 const NODE_PICKER_SELECTED_GROUP_STORAGE_KEY = "alexz_module_picker_selected_group";
 const NODE_PICKER_SELECTED_MODULE_STORAGE_KEY = "alexz_module_picker_selected_module";
 const COMFYUI_CHECK_MODE_STORAGE_KEY = "alexz_comfyui_check_mode";
-const NODE_PICKER_SIDEBAR_SYNC_KEY = "__alexz_module_picker_sidebar_sync__";
 const GROUP_LABELS = {
     core: "Core_Nodes",
     core_extras: "Core_Extras_Nodes",
@@ -469,8 +467,6 @@ function createNodeByInfo(nodeInfo) {
  * Render Module Node Picker UI and bind all panel event handlers.
  */
 function renderPicker(container) {
-    // Safety: clear any previous global tab-sync hooks before re-rendering.
-    unbindContainerOwnershipSync();
     unbindModuleNodesTabRelay();
 
     container.innerHTML = "";
@@ -855,26 +851,12 @@ function renderPicker(container) {
         ];
         diagnostics.textContent = lines.join("\n");
     };
-    if (Boolean(window[NODE_PICKER_SIDEBAR_SYNC_KEY])) {
-        bindContainerOwnershipSync(container, root, setDiagnosticText, diagnosticsLogger);
-    } else {
-        bindModuleNodesTabRelay({
-            app,
-            root,
-            sidebarTabId: SIDEBAR_TAB_ID,
-            onDiag: setDiagnosticText,
-        });
-        setDiagnosticText({
-            reason: "sync_disabled",
-            activeTabId: "n/a",
-            lastClickedTabId: "n/a",
-            ownBtnFound: false,
-            ownBtnSelected: null,
-            rootDisplay: root.style.display || "",
-            childNodesCount: 1,
-            childNodesShort: "ROOT",
-        });
-    }
+    bindModuleNodesTabRelay({
+        app,
+        root,
+        sidebarTabId: SIDEBAR_TAB_ID,
+        onDiag: setDiagnosticText,
+    });
 
     /**
      * Replace help area with plain status/help text.
@@ -1300,307 +1282,6 @@ function renderPicker(container) {
         defaultModule: DEFAULT_MODULE,
         loadCatalog,
     });
-}
-
-/**
- * Tear down legacy container-ownership sync listeners and observers.
- */
-function unbindContainerOwnershipSync() {
-    const state = window[CONTAINER_SYNC_STATE_KEY];
-    if (!state) {
-        return;
-    }
-    if (state.containerObserver && typeof state.containerObserver.disconnect === "function") {
-        state.containerObserver.disconnect();
-    }
-    if (state.sidebarObserver && typeof state.sidebarObserver.disconnect === "function") {
-        state.sidebarObserver.disconnect();
-    }
-    if (state.onClick) {
-        document.removeEventListener("click", state.onClick, true);
-        document.removeEventListener("keyup", state.onClick, true);
-    }
-    if (state.onPointerDown) {
-        document.removeEventListener("pointerdown", state.onPointerDown, true);
-    }
-    window[CONTAINER_SYNC_STATE_KEY] = null;
-}
-
-/**
- * Bind legacy sidebar/container sync logic used in compatibility mode.
- * Keeps picker root hidden when another sidebar tab owns the container.
- */
-function bindContainerOwnershipSync(container, root, onDiag, diagnosticsLogger = null) {
-    unbindContainerOwnershipSync();
-    // Ensure root is visible when binding ownership sync
-    root.style.display = "";
-    let lastClickedTabId = "";
-    let lastClickedTs = 0;
-    let observedContainer = container;
-    let syncTimerId = 0;
-    const getActiveSidebarTabId = () => {
-        const manager = app.extensionManager;
-        const sidebar = manager?.sidebarTab || manager;
-        const active = sidebar?.activeSidebarTabId ?? sidebar?.activeSidebarTab ?? "";
-        return String(active || "");
-    };
-    const tryActivateSidebarTab = (tabId) => {
-        if (!tabId) {
-            return false;
-        }
-        const manager = app.extensionManager;
-        const sidebar = manager?.sidebarTab || manager;
-        const openFn = sidebar && typeof sidebar.activateSidebarTab === "function"
-            ? sidebar.activateSidebarTab.bind(sidebar)
-            : null;
-        if (!openFn) {
-            return false;
-        }
-        try {
-            openFn(tabId);
-            return true;
-        } catch (_err) {
-            return false;
-        }
-    };
-    const extractTabIdFromButton = (buttonEl) => {
-        if (!(buttonEl instanceof Element)) {
-            return "";
-        }
-        for (const cls of Array.from(buttonEl.classList || [])) {
-            if (cls.endsWith("-tab-button")) {
-                return cls.slice(0, -"-tab-button".length);
-            }
-        }
-        return "";
-    };
-    const resolveSidebarButtonFromEvent = (event) => {
-        const isTabButtonLike = (el) => {
-            if (!(el instanceof Element)) {
-                return false;
-            }
-            for (const cls of Array.from(el.classList || [])) {
-                if (cls.endsWith("-tab-button")) {
-                    return true;
-                }
-            }
-            return false;
-        };
-        const directTarget = event?.target;
-        if (directTarget instanceof Element) {
-            const byClosest = directTarget.closest(".side-bar-button, [class*='-tab-button']");
-            if (byClosest) {
-                return byClosest;
-            }
-        }
-        if (typeof event?.composedPath === "function") {
-            for (const item of event.composedPath()) {
-                if (isTabButtonLike(item) || (item instanceof Element && item.classList?.contains("side-bar-button"))) {
-                    return item;
-                }
-            }
-        }
-        return null;
-    };
-    const getLiveContainer = () => {
-        const parent = root.parentElement;
-        if (parent instanceof Element) {
-            return parent;
-        }
-        return observedContainer;
-    };
-    const isOurTabSelected = () => {
-        const ownBtn = document.querySelector(`.${SIDEBAR_TAB_ID}-tab-button`);
-        if (!ownBtn) {
-            return null;
-        }
-        return ownBtn.classList.contains("side-bar-button-selected");
-    };
-    const getSelectedSidebarTabIds = () => {
-        const selectedButtons = Array.from(document.querySelectorAll(".side-bar-button-selected"));
-        const ids = [];
-        for (const btn of selectedButtons) {
-            const id = extractTabIdFromButton(btn);
-            if (id) {
-                ids.push(id);
-            }
-        }
-        return ids;
-    };
-    const describeChildNodes = (targetContainer) => {
-        const out = [];
-        for (const node of targetContainer.childNodes) {
-            if (node === root) {
-                out.push("ROOT");
-                continue;
-            }
-            if (node.nodeType === Node.TEXT_NODE) {
-                const trimmed = String(node.textContent || "").trim();
-                out.push(trimmed ? `TXT:${trimmed.slice(0, 24)}` : "TXT:blank");
-                continue;
-            }
-            if (node.nodeType === Node.COMMENT_NODE) {
-                out.push("COMMENT");
-                continue;
-            }
-            const tag = String(node.nodeName || "NODE");
-            const cls = String(node.className || "").trim();
-            out.push(cls ? `${tag}.${cls.split(/\s+/).slice(0, 2).join(".")}` : tag);
-        }
-        return out.slice(0, 10).join(" | ");
-    };
-    const hasForeignContent = (targetContainer) => {
-        for (const node of targetContainer.childNodes) {
-            if (node === root) {
-                continue;
-            }
-            if (node.nodeType === Node.TEXT_NODE && !String(node.textContent || "").trim()) {
-                continue;
-            }
-            return true;
-        }
-        return false;
-    };
-    let lastDiag = "";
-    const isDebugLoggingEnabled = () => {
-        if (diagnosticsLogger && typeof diagnosticsLogger.isDebugEnabled === "function") {
-            return diagnosticsLogger.isDebugEnabled();
-        }
-        return Boolean(window[NODE_PICKER_DEBUG_KEY]);
-    };
-    const sync = () => {
-        const liveContainer = getLiveContainer();
-        if (!root.isConnected || !liveContainer?.isConnected) {
-            onDiag?.({
-                reason: !root.isConnected ? "root_disconnected" : "container_disconnected",
-                activeTabId: getActiveSidebarTabId(),
-                ownBtnFound: Boolean(document.querySelector(`.${SIDEBAR_TAB_ID}-tab-button`)),
-                ownBtnSelected: isOurTabSelected(),
-                rootDisplay: root.style.display || "",
-                childNodesCount: Number(liveContainer?.childNodes?.length || 0),
-                childNodesShort: liveContainer ? describeChildNodes(liveContainer) : "n/a",
-                lastClickedTabId,
-            });
-            return;
-        }
-        if (liveContainer !== observedContainer) {
-            if (containerObserver && typeof containerObserver.disconnect === "function") {
-                containerObserver.disconnect();
-            }
-            observedContainer = liveContainer;
-            containerObserver.observe(observedContainer, { childList: true, subtree: true });
-        }
-        const activeTabId = getActiveSidebarTabId();
-        const selected = isOurTabSelected();
-        const selectedTabIds = getSelectedSidebarTabIds();
-        const otherTabSelected = selectedTabIds.some((x) => x && x !== SIDEBAR_TAB_ID);
-        const foreign = hasForeignContent(liveContainer);
-        let reason = "visible";
-        if (otherTabSelected) {
-            root.style.display = "none";
-            reason = "other_button_selected";
-        } else if (activeTabId && activeTabId !== SIDEBAR_TAB_ID) {
-            root.style.display = "none";
-            reason = "other_active_tab";
-        } else if (selected === false) {
-            root.style.display = "none";
-            reason = "module_tab_not_selected";
-        } else if (
-            !activeTabId &&
-            lastClickedTabId &&
-            lastClickedTabId !== SIDEBAR_TAB_ID &&
-            Date.now() - lastClickedTs < 1500
-        ) {
-            root.style.display = "none";
-            reason = "recent_other_tab_click";
-        } else if (foreign) {
-            root.style.display = "none";
-            reason = "foreign_content_in_container";
-        } else {
-            // Default: show if selected is true or null (button not found yet)
-            root.style.display = "";
-            reason = selected === true ? "visible" : "button_not_found_yet";
-        }
-        const diag = {
-            reason,
-            activeTabId,
-            ownBtnFound: selected !== null,
-            ownBtnSelected: selected,
-            rootDisplay: root.style.display || "",
-            childNodesCount: liveContainer.childNodes.length,
-            childNodesShort: describeChildNodes(liveContainer),
-            lastClickedTabId,
-        };
-        onDiag?.(diag);
-        const sig = JSON.stringify(diag);
-        if (sig !== lastDiag && isDebugLoggingEnabled()) {
-            if (diagnosticsLogger && typeof diagnosticsLogger.info === "function") {
-                diagnosticsLogger.info("sync", diag);
-            } else {
-                console.log("ALEXZ_tools Node Picker sync:", diag);
-            }
-            lastDiag = sig;
-        }
-    };
-    /**
-     * Debounce sync execution to avoid excessive DOM work on rapid events.
-     */
-    const scheduleSync = (clickedTabId = "") => {
-        if (syncTimerId) {
-            return;
-        }
-        syncTimerId = window.setTimeout(() => {
-            syncTimerId = 0;
-            sync();
-            // Workaround: some third-party tabs may not switch activeSidebarTabId
-            // from this tab; enforce a single delayed activation attempt.
-            const activeAfterClick = getActiveSidebarTabId();
-            if (
-                clickedTabId &&
-                clickedTabId !== SIDEBAR_TAB_ID &&
-                activeAfterClick === SIDEBAR_TAB_ID
-            ) {
-                tryActivateSidebarTab(clickedTabId);
-            }
-            window.setTimeout(sync, 70);
-        }, 16);
-    };
-    const containerObserver = new MutationObserver(() => scheduleSync(""));
-    containerObserver.observe(observedContainer, { childList: true });
-    const sidebarObserver = null;
-    /**
-     * Track sidebar interactions and schedule ownership sync updates.
-     */
-    const onInteraction = (event) => {
-        const button = resolveSidebarButtonFromEvent(event);
-        if (!button) {
-            return;
-        }
-        lastClickedTabId = extractTabIdFromButton(button);
-        lastClickedTs = Date.now();
-        if (!lastClickedTabId && !button.classList.contains(`${SIDEBAR_TAB_ID}-tab-button`)) {
-            lastClickedTabId = "(unknown-other-tab)";
-            root.style.display = "none";
-        } else if (lastClickedTabId && lastClickedTabId !== SIDEBAR_TAB_ID) {
-            root.style.display = "none";
-        }
-        scheduleSync(lastClickedTabId);
-    };
-    const onPointerDown = (event) => {
-        onInteraction(event);
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keyup", onInteraction, true);
-
-    window[CONTAINER_SYNC_STATE_KEY] = {
-        containerObserver,
-        sidebarObserver,
-        onClick: onInteraction,
-        onPointerDown,
-    };
-    // Always show root on initialization - sync will determine visibility on next tick
-    root.style.display = "";
-    sync();
 }
 
 /**
