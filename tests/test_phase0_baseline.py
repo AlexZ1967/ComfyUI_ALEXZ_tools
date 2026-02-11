@@ -584,6 +584,15 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         resume_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_resume_flow.js"
         ).read_text(encoding="utf-8")
+        resume_custom_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_resume_custom_refresh.js"
+        ).read_text(encoding="utf-8")
+        resume_update_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_resume_module_update.js"
+        ).read_text(encoding="utf-8")
+        resume_comfy_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_resume_comfy_refresh.js"
+        ).read_text(encoding="utf-8")
         busy_ui_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
         ).read_text(encoding="utf-8")
@@ -696,6 +705,12 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export async function resumePendingCustomRefreshFlow", resume_flow_text)
         self.assertIn("export async function resumePendingModuleUpdateFlow", resume_flow_text)
         self.assertIn("export async function resumePendingComfyInfoRefreshFlow", resume_flow_text)
+        self.assertIn("resumePendingCustomRefreshFlowImpl", resume_flow_text)
+        self.assertIn("resumePendingModuleUpdateFlowImpl", resume_flow_text)
+        self.assertIn("resumePendingComfyInfoRefreshFlowImpl", resume_flow_text)
+        self.assertIn("export async function resumePendingCustomRefreshFlowImpl", resume_custom_text)
+        self.assertIn("export async function resumePendingModuleUpdateFlowImpl", resume_update_text)
+        self.assertIn("export async function resumePendingComfyInfoRefreshFlowImpl", resume_comfy_text)
         self.assertIn("export function createBusyUiController", busy_ui_text)
         self.assertIn("setCatalogControlsLoading", busy_ui_text)
         self.assertIn("setActionBusy", busy_ui_text)

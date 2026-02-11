@@ -161,6 +161,7 @@ Deliverables:
   - extracted UI-stage assembly into `web/orchestration/module_node_picker_ui_stage.js` (selector/busy/view/status controller composition adapter).
   - extracted flow-stage assembly into `web/orchestration/module_node_picker_flow_stage.js` (polling/catalog/action/module-panel composition adapter).
   - extracted large composer dependency maps into `web/orchestration/module_node_picker_context_builders.js` (runtime-setup/ui-stage/flow-stage/runtime-bootstrap context builders), reducing `module_node_picker_composer.js` size while preserving behavior.
+  - split pending resume internals into focused modules (`module_node_picker_resume_custom_refresh.js`, `module_node_picker_resume_module_update.js`, `module_node_picker_resume_comfy_refresh.js`) while preserving stable facade exports in `module_node_picker_resume_flow.js`.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

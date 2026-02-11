@@ -161,6 +161,7 @@
   - вынесена UI-stage сборка в `web/orchestration/module_node_picker_ui_stage.js` (adapter-композиция selector/busy/view/status контроллеров).
   - вынесена flow-stage сборка в `web/orchestration/module_node_picker_flow_stage.js` (adapter-композиция polling/catalog/action/module-panel контроллеров).
   - крупные dependency-map объекты composer вынесены в `web/orchestration/module_node_picker_context_builders.js` (контекст-билдеры для runtime-setup/ui-stage/flow-stage/runtime-bootstrap), что уменьшило размер `module_node_picker_composer.js` без изменения поведения.
+  - внутренности pending-resume логики разнесены по отдельным модулям (`module_node_picker_resume_custom_refresh.js`, `module_node_picker_resume_module_update.js`, `module_node_picker_resume_comfy_refresh.js`) при сохранении стабильного фасада экспортов в `module_node_picker_resume_flow.js`.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

@@ -1,5 +1,30 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.17 — 2026-02-11
+- Module Node Picker first-open latency reduction:
+  - moved runtime-state warmup to non-blocking background worker in `utils/module_node_browser_api.py` (`_start_runtime_state_warmup`),
+  - `/alexz_tools/node_catalog` and `/alexz_tools/module_info` no longer block on synchronous `_ensure_runtime_state_ready()` during first UI open,
+  - preserved existing warmup logic and caches; only startup execution mode changed from blocking to async kickoff.
+- Runtime warmup UX follow-up:
+  - added `runtime_warmup` state to `/alexz_tools/node_catalog` payload,
+  - added silent catalog auto-reload loop in `web/orchestration/module_node_picker_catalog_controller.js` while warmup is not finished,
+  - novelty/update markers now self-appear after warmup completion without tab switching,
+  - added compact header hint (`warming up...`) near widget title while warmup is running.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed).
+
+## 0.16.16 — 2026-02-11
+- Phase 2 (tab-sync stabilization) continued:
+  - split pending-resume internals into focused modules:
+    - `web/orchestration/module_node_picker_resume_custom_refresh.js`,
+    - `web/orchestration/module_node_picker_resume_module_update.js`,
+    - `web/orchestration/module_node_picker_resume_comfy_refresh.js`,
+  - kept stable public facade in `web/orchestration/module_node_picker_resume_flow.js` (same export names/behavior),
+  - reduced composer stage-callback wiring churn by using deferred stage adapters in `web/orchestration/module_node_picker_composer.js`.
+- Validation:
+  - `conda run -n p313 node --check web/orchestration/module_node_picker_resume_flow.js web/orchestration/module_node_picker_resume_custom_refresh.js web/orchestration/module_node_picker_resume_module_update.js web/orchestration/module_node_picker_resume_comfy_refresh.js web/orchestration/module_node_picker_composer.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed).
+
 ## 0.16.15 — 2026-02-11
 - Phase 2 (tab-sync stabilization) continued:
   - extracted large composer dependency maps into `web/orchestration/module_node_picker_context_builders.js`,

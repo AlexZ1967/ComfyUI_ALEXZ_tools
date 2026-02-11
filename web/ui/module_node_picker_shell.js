@@ -31,6 +31,12 @@ const STYLE_TEXT = `
         font-size: 13px;
         font-weight: 700;
         opacity: 0.95;
+    }
+    .alexz-mod-picker-title-warmup {
+        font-size: 10px;
+        font-style: italic;
+        opacity: 0.68;
+        color: var(--input-text, #b3b3b3);
         margin-right: auto;
     }
     .alexz-mod-picker-head-right {

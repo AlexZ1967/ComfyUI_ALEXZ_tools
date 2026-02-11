@@ -53,6 +53,8 @@ _CUSTOM_MODULE_ALIAS_CACHE: dict[str, str] | None = None
 _COMFYUI_STATUS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _COMFYUI_STATUS_TTL_SEC = 120.0
 _LAZY_REFRESH_DONE = False
+_RUNTIME_WARMUP_LOCK = threading.Lock()
+_RUNTIME_WARMUP_THREAD: threading.Thread | None = None
 _REFRESH_LOCK = threading.Lock()
 _REFRESH_THREAD: threading.Thread | None = None
 _REFRESH_LOG_LAST = ""
@@ -2728,6 +2730,51 @@ def _ensure_runtime_state_ready() -> None:
     _LAZY_REFRESH_DONE = True
 
 
+def _start_runtime_state_warmup() -> bool:
+    """Start non-blocking runtime-state warmup once and return start status."""
+    global _RUNTIME_WARMUP_THREAD
+    if _LAZY_REFRESH_DONE:
+        return False
+
+    with _RUNTIME_WARMUP_LOCK:
+        if _LAZY_REFRESH_DONE:
+            return False
+        existing = _RUNTIME_WARMUP_THREAD
+        if existing is not None and existing.is_alive():
+            return False
+
+        def _runner() -> None:
+            """Warmup worker for runtime state cache used by first-open UI paths."""
+            global _RUNTIME_WARMUP_THREAD
+            try:
+                _ensure_runtime_state_ready()
+            except Exception as exc:  # pragma: no cover - diagnostic
+                _LOGGER.warning("Runtime warmup failed: %s", exc, exc_info=True)
+            finally:
+                with _RUNTIME_WARMUP_LOCK:
+                    _RUNTIME_WARMUP_THREAD = None
+
+        _RUNTIME_WARMUP_THREAD = threading.Thread(
+            target=_runner,
+            name="ALEXZ_tools_RuntimeWarmup",
+            daemon=True,
+        )
+        _RUNTIME_WARMUP_THREAD.start()
+        return True
+
+
+def _runtime_warmup_status() -> dict[str, Any]:
+    """Return lightweight runtime warmup state for frontend polling hints."""
+    with _RUNTIME_WARMUP_LOCK:
+        thread = _RUNTIME_WARMUP_THREAD
+        running = bool(thread is not None and thread.is_alive())
+    done = bool(_LAZY_REFRESH_DONE)
+    return {
+        "running": running,
+        "done": done,
+    }
+
+
 def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
     """Start background module refresh job if one is not already running."""
     global _REFRESH_THREAD
@@ -3220,11 +3267,12 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         """API route that returns grouped module and node catalog data."""
         try:
             mode = _normalize_comfyui_mode(request.query.get("comfyui_mode", "") or request.query.get("mode", ""))
-            _ensure_runtime_state_ready()
+            _start_runtime_state_warmup()
             grouped = _build_group_catalog()
             modules_by_group = _build_group_modules(grouped)
             comfyui = _comfyui_git_status(mode=mode)
             custom_modules_need_update = _count_custom_modules_need_update()
+            runtime_warmup = _runtime_warmup_status()
             groups = []
             for group_id, group_title in _GROUP_ORDER:
                 nodes = grouped.get(group_id, [])
@@ -3244,6 +3292,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                     "groups": groups,
                     "comfyui": comfyui,
                     "custom_modules_need_update": custom_modules_need_update,
+                    "runtime_warmup": runtime_warmup,
                 }
             )
         except Exception as exc:  # pragma: no cover - diagnostic
@@ -3266,7 +3315,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         if not module_name:
             return web.json_response({"error": "module is required"}, status=400)
         try:
-            _ensure_runtime_state_ready()
+            _start_runtime_state_warmup()
             info = _resolve_module_info(
                 group,
                 module_name,

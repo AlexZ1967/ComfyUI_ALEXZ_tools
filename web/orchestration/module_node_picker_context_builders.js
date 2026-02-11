@@ -42,6 +42,7 @@ export function buildFlowStageContext(context = {}) {
         moduleBadgesFromInfo: context?.moduleBadgesFromInfo,
         setCatalogControlsLoading: context?.setCatalogControlsLoading,
         setCustomModulesNeedUpdate: context?.setCustomModulesNeedUpdate,
+        setWarmupIndicator: context?.setWarmupIndicator,
         renderComfyAlert: context?.renderComfyAlert,
         selectionController: context?.selectionController,
         groupLabels: context?.groupLabels,

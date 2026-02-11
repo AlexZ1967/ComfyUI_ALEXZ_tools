@@ -59,6 +59,9 @@ export function createModuleNodePickerCatalogController(context = {}) {
     const setCustomModulesNeedUpdate = typeof context?.setCustomModulesNeedUpdate === "function"
         ? context.setCustomModulesNeedUpdate
         : () => {};
+    const setWarmupIndicator = typeof context?.setWarmupIndicator === "function"
+        ? context.setWarmupIndicator
+        : () => {};
     const renderComfyAlert = typeof context?.renderComfyAlert === "function"
         ? context.renderComfyAlert
         : () => {};
@@ -86,6 +89,35 @@ export function createModuleNodePickerCatalogController(context = {}) {
     let moduleInfoLoadToken = 0;
     let catalogLoadToken = 0;
     let catalogLoadBusyCount = 0;
+    let warmupPollTimer = 0;
+    let warmupPollAttempts = 0;
+    const WARMUP_POLL_MAX_ATTEMPTS = 30;
+    const WARMUP_POLL_DELAY_MS = 1000;
+
+    const clearWarmupPoll = () => {
+        if (warmupPollTimer) {
+            window.clearTimeout(warmupPollTimer);
+            warmupPollTimer = 0;
+        }
+    };
+
+    const scheduleWarmupPoll = () => {
+        if (warmupPollAttempts >= WARMUP_POLL_MAX_ATTEMPTS) {
+            return;
+        }
+        clearWarmupPoll();
+        warmupPollTimer = window.setTimeout(() => {
+            warmupPollTimer = 0;
+            if (!shouldContinue()) {
+                return;
+            }
+            void loadCatalog({
+                warmupPoll: true,
+                preferredGroup: getSelectedGroup(),
+                preferredModule: getSelectedModule(),
+            });
+        }, WARMUP_POLL_DELAY_MS);
+    };
 
     const getNodesForSelectedGroup = () => {
         const group = getSelectedGroup();
@@ -142,13 +174,18 @@ export function createModuleNodePickerCatalogController(context = {}) {
         if (!shouldContinue()) {
             return;
         }
+        const isWarmupPoll = Boolean(options?.warmupPoll);
         const token = ++catalogLoadToken;
-        catalogLoadBusyCount += 1;
-        if (catalogLoadBusyCount === 1) {
-            setCatalogControlsLoading(true);
+        if (!isWarmupPoll) {
+            warmupPollAttempts = 0;
+            clearWarmupPoll();
+            catalogLoadBusyCount += 1;
+            if (catalogLoadBusyCount === 1) {
+                setCatalogControlsLoading(true);
+            }
         }
         try {
-            return await loadCatalogFlow(options, {
+            const result = await loadCatalogFlow(options, {
                 isRequestActive: () => token === catalogLoadToken && shouldContinue(),
                 fetchNodeCatalog,
                 getComfyMode,
@@ -170,10 +207,28 @@ export function createModuleNodePickerCatalogController(context = {}) {
                 clearModuleInfo,
                 nodeList,
             });
+            if (token !== catalogLoadToken || !shouldContinue()) {
+                return result;
+            }
+            const warmup = result?.runtimeWarmup || null;
+            if (result?.ok && warmup && !Boolean(warmup.done)) {
+                setWarmupIndicator(true);
+                warmupPollAttempts += 1;
+                scheduleWarmupPoll();
+            } else if (warmup && Boolean(warmup.done)) {
+                warmupPollAttempts = 0;
+                clearWarmupPoll();
+                setWarmupIndicator(false);
+            } else if (!warmup) {
+                setWarmupIndicator(false);
+            }
+            return result;
         } finally {
-            catalogLoadBusyCount = Math.max(0, catalogLoadBusyCount - 1);
-            if (catalogLoadBusyCount === 0) {
-                setCatalogControlsLoading(false);
+            if (!isWarmupPoll) {
+                catalogLoadBusyCount = Math.max(0, catalogLoadBusyCount - 1);
+                if (catalogLoadBusyCount === 0) {
+                    setCatalogControlsLoading(false);
+                }
             }
         }
     };
@@ -181,6 +236,9 @@ export function createModuleNodePickerCatalogController(context = {}) {
     const bumpRequestTokens = () => {
         moduleInfoLoadToken += 1;
         catalogLoadToken += 1;
+        warmupPollAttempts = 0;
+        clearWarmupPoll();
+        setWarmupIndicator(false);
     };
 
     return {

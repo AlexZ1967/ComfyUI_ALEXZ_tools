@@ -125,11 +125,13 @@ export async function loadCatalogFlow(options, context) {
         context?.setCustomModulesNeedUpdate?.(Number(payload?.custom_modules_need_update || 0));
         context?.fillGroupSelect?.(groups, { preferredGroup, preferredModule, autoExpandModule });
         context?.syncUpdateAllButton?.();
+        const runtimeWarmup = payload?.runtime_warmup || null;
         return {
             ok: true,
             groupCount: groups.length,
             totalNodes,
             totalModules,
+            runtimeWarmup,
         };
     } catch (err) {
         if (typeof isRequestActive === "function" && !isRequestActive()) {
@@ -166,6 +168,7 @@ export async function loadCatalogFlow(options, context) {
             groupCount: 0,
             totalNodes: 0,
             totalModules: 0,
+            runtimeWarmup: null,
         };
     }
 }

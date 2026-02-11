@@ -30,6 +30,12 @@ export function createModuleNodePickerLayout(container) {
     title.textContent = "Node Picker";
     head.appendChild(title);
 
+    const warmupHint = document.createElement("span");
+    warmupHint.className = "alexz-mod-picker-title-warmup";
+    warmupHint.textContent = "warming up...";
+    warmupHint.style.display = "none";
+    head.appendChild(warmupHint);
+
     const headRight = document.createElement("div");
     headRight.className = "alexz-mod-picker-head-right";
     head.appendChild(headRight);
@@ -207,6 +213,7 @@ export function createModuleNodePickerLayout(container) {
         root,
         head,
         title,
+        warmupHint,
         headRight,
         debugToggle,
         debugCard,
