@@ -127,6 +127,7 @@ export function renderModuleNodePicker(container, options = {}) {
     let showHelpStatus = () => {};
     let pollingController = null;
     let customModulesNeedUpdate = 0;
+    let customModulesUnknownUpdate = 0;
     let modulePanelController = null;
     let catalogController = null;
     let selectionController = null;
@@ -289,6 +290,7 @@ export function renderModuleNodePicker(container, options = {}) {
         comfyInstallReqBtn,
         updateAllBtn,
         getCustomModulesNeedUpdate: () => customModulesNeedUpdate,
+        getCustomModulesUnknownUpdate: () => customModulesUnknownUpdate,
         saveCustomStatusChecked,
         saveComfyStatusChecked,
         saveComfyInfoSnapshot,
@@ -359,6 +361,9 @@ export function renderModuleNodePicker(container, options = {}) {
         setCatalogControlsLoading,
         setCustomModulesNeedUpdate: (value) => {
             customModulesNeedUpdate = Number(value || 0);
+        },
+        setCustomModulesUnknownUpdate: (value) => {
+            customModulesUnknownUpdate = Number(value || 0);
         },
         setWarmupIndicator,
         renderComfyAlert,

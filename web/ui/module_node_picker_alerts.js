@@ -97,6 +97,7 @@ export function renderComfyAlertCard(context) {
  */
 export function renderCustomAlertCard(context) {
     const customModulesNeedUpdate = Number(context?.customModulesNeedUpdate || 0);
+    const customModulesUnknownUpdate = Number(context?.customModulesUnknownUpdate || 0);
     const customStatusChecked = Boolean(context?.customStatusChecked);
     const actionBusy = Boolean(context?.actionBusy);
     const customAlert = context?.customAlert;
@@ -107,7 +108,7 @@ export function renderCustomAlertCard(context) {
         return;
     }
 
-    if (customModulesNeedUpdate <= 0 && !customStatusChecked) {
+    if (customModulesNeedUpdate <= 0 && customModulesUnknownUpdate <= 0 && !customStatusChecked) {
         customAlert.style.display = "none";
         updateAllBtn.style.display = "none";
         return;
@@ -124,6 +125,13 @@ export function renderCustomAlertCard(context) {
         updateAllBtn.textContent = `Update Custom Nodes (${customModulesNeedUpdate})`;
         updateAllBtn.style.display = "";
         updateAllBtn.disabled = actionBusy;
+        return;
+    }
+    if (customModulesUnknownUpdate > 0) {
+        customAlert.classList.add("alexz-mod-picker-status-card--warn");
+        customAlertText.textContent =
+            `${customModulesUnknownUpdate} custom modules could not be checked for updates (missing git remote/upstream).`;
+        updateAllBtn.style.display = "none";
         return;
     }
     customAlert.classList.add("alexz-mod-picker-status-card--neutral");

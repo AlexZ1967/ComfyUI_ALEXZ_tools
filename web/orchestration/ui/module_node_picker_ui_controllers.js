@@ -31,6 +31,9 @@ export function createModuleNodePickerUiControllers(context = {}) {
     const getCustomModulesNeedUpdate = typeof context?.getCustomModulesNeedUpdate === "function"
         ? context.getCustomModulesNeedUpdate
         : () => 0;
+    const getCustomModulesUnknownUpdate = typeof context?.getCustomModulesUnknownUpdate === "function"
+        ? context.getCustomModulesUnknownUpdate
+        : () => 0;
 
     let syncUpdateAllButtonImpl = () => {};
     let setHelpTextImpl = () => {};
@@ -93,6 +96,7 @@ export function createModuleNodePickerUiControllers(context = {}) {
         customAlertText: context?.customAlertText,
         updateAllBtn: context?.updateAllBtn,
         getCustomModulesNeedUpdate,
+        getCustomModulesUnknownUpdate,
         saveCustomStatusChecked: context?.saveCustomStatusChecked,
         saveComfyStatusChecked: context?.saveComfyStatusChecked,
         saveComfyInfoSnapshot: context?.saveComfyInfoSnapshot,

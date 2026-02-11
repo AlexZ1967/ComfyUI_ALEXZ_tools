@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.34 — 2026-02-11
+- Module refresh correctness fix for non-trackable custom repos:
+  - backend now distinguishes between:
+    - `modules_need_update` (confirmed updates),
+    - `modules_unknown_update` (cannot be checked: missing git remote/upstream or no git state).
+  - `Refresh Custom Nodes Info` no longer reports global "no updates required" when some modules are uncheckable.
+  - `node_catalog` API now returns `custom_modules_unknown_update`.
+  - custom status card now shows warning:
+    - `N custom modules could not be checked for updates (missing git remote/upstream).`
+  - refresh progress/status line now shows unknown-check results where applicable.
+- Backend tracking updates:
+  - per-module state now persists `update_status` (`can_update` / `up_to_date` / `unknown`).
+  - modules without valid remote/upstream are explicitly marked `update_status=unknown` and `update_available=null`.
+- Tests:
+  - added backend tests for unknown-update counting and missing-git-state behavior in `tests/test_module_browser_tracker.py`.
+  - updated baseline refresh-status contract for `modules_unknown_update` in `tests/test_phase0_baseline.py`.
+
 ## 0.16.33 — 2026-02-11
 - Phase 2 relay runtime modular cleanup (no UX/behavior changes):
   - extracted relay bind-state lifecycle helpers to:

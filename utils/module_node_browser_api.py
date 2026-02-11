@@ -66,6 +66,7 @@ _REFRESH_STATUS: dict[str, Any] = {
     "total": 0,
     "remaining": 0,
     "modules_need_update": 0,
+    "modules_unknown_update": 0,
     "module": "",
     "message": "",
     "error": "",
@@ -943,6 +944,22 @@ def _count_custom_modules_need_update() -> int:
     for module_name in _discover_custom_modules():
         entry = state.get(_canonical_custom_module_name(module_name))
         if isinstance(entry, dict) and bool(entry.get("update_available")):
+            count += 1
+    return count
+
+
+def _count_custom_modules_unknown_update() -> int:
+    """Count custom modules whose remote update status is unknown/uncheckable."""
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return 0
+    count = 0
+    for module_name in _discover_custom_modules():
+        entry = state.get(_canonical_custom_module_name(module_name))
+        if not isinstance(entry, dict):
+            count += 1
+            continue
+        if not isinstance(entry.get("update_available"), bool):
             count += 1
     return count
 
@@ -1842,6 +1859,7 @@ def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
     entry["installed_updated_at"] = result.get("installed_updated_at")
     entry["remote_updated_at"] = result.get("remote_updated_at")
     entry["update_available"] = result.get("update_available")
+    entry["update_status"] = result.get("update_status")
     entry["module_path"] = result.get("module_path")
     entry["repository"] = result.get("repository")
     state[module_name] = entry
@@ -1999,8 +2017,10 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
     now = _now_iso()
     changed = False
     modules_need_update = 0
+    modules_unknown_update = 0
     modules_checked = 0
     update_available_modules: list[str] = []
+    unknown_update_modules: list[str] = []
     local_change_modules: list[str] = []
     commit_change_modules: list[str] = []
 
@@ -2036,7 +2056,7 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
         before = dict(entry)
 
         entry["last_checked_at"] = now
-        needs_update = bool(entry.get("update_available"))
+        needs_update: bool | None = None
         prev_worktree_sig = str(entry.get("worktree_signature") or "")
         curr_worktree_sig = _module_worktree_signature(module_name)
         if curr_worktree_sig != prev_worktree_sig:
@@ -2056,7 +2076,13 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
                     needs_update = behind > 0
                 elif git_state.get("has_upstream") and remote_head and current_commit:
                     needs_update = remote_head != current_commit
-                entry["update_available"] = bool(needs_update)
+
+        if isinstance(needs_update, bool):
+            entry["update_available"] = needs_update
+            entry["update_status"] = "can_update" if needs_update else "up_to_date"
+        else:
+            entry["update_available"] = None
+            entry["update_status"] = "unknown"
 
         if current_commit:
             if prev_commit and current_commit != prev_commit:
@@ -2077,9 +2103,12 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
         if bool(entry.get("pending_local_change")):
             local_change_modules.append(module_name)
 
-        if needs_update:
+        if isinstance(needs_update, bool) and needs_update:
             modules_need_update += 1
             update_available_modules.append(module_name)
+        elif not isinstance(needs_update, bool):
+            modules_unknown_update += 1
+            unknown_update_modules.append(module_name)
 
         state[module_name] = entry
         if entry != before:
@@ -2196,8 +2225,10 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
     )
     return {
         "modules_need_update": modules_need_update,
+        "modules_unknown_update": modules_unknown_update,
         "modules_checked": modules_checked,
         "update_available_modules": sorted(update_available_modules, key=str.lower),
+        "unknown_update_modules": sorted(unknown_update_modules, key=str.lower),
         "local_change_modules": sorted(set(local_change_modules), key=str.lower),
         "commit_change_modules": sorted(set(commit_change_modules), key=str.lower),
         "node_changed_modules": node_changed_modules,
@@ -2406,6 +2437,8 @@ def _resolve_module_info(
         if isinstance(update_available, bool):
             result["update_available"] = update_available
             result["update_status"] = "can_update" if update_available else "up_to_date"
+        elif isinstance(cache_entry.get("update_status"), str):
+            result["update_status"] = str(cache_entry.get("update_status") or "unknown")
         result["last_checked_at"] = cache_entry.get("last_checked_at") or ""
         result["last_local_change_at"] = cache_entry.get("last_local_change_at") or ""
     elif git_state:
@@ -2558,6 +2591,7 @@ def _refresh_progress(
     total: int = 0,
     remaining: int = 0,
     modules_need_update: int = 0,
+    modules_unknown_update: int = 0,
     module: str = "",
     message: str = "",
 ) -> None:
@@ -2569,6 +2603,7 @@ def _refresh_progress(
         total=int(total),
         remaining=max(0, int(remaining)),
         modules_need_update=max(0, int(modules_need_update)),
+        modules_unknown_update=max(0, int(modules_unknown_update)),
         module=module,
         message=message,
     )
@@ -2644,8 +2679,10 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     progress_cb(phase="snapshots", current=0, total=0, remaining=0, message="recompute_snapshots")
     announce_summary = _announce_tracked_module_updates()
     modules_need_update = 0
+    modules_unknown_update = 0
     if isinstance(announce_summary, dict):
         modules_need_update = max(0, int(announce_summary.get("modules_need_update", 0)))
+        modules_unknown_update = max(0, int(announce_summary.get("modules_unknown_update", 0)))
     modules_checked = max(0, int((announce_summary or {}).get("modules_checked", 0)))
     commit_changed = list((announce_summary or {}).get("commit_change_modules") or [])
     local_changed = list((announce_summary or {}).get("local_change_modules") or [])
@@ -2658,11 +2695,12 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
                 new_modules_count += len(value)
     scan_elapsed = time.perf_counter() - scan_started
     _refresh_console_log(
-        "phase 2/3 done in {elapsed:.2f}s: checked={checked}, need_update={need}, commit_changed={commit}, "
-        "local_changed={local}, node_changed={node}, new_modules={new}".format(
+        "phase 2/3 done in {elapsed:.2f}s: checked={checked}, need_update={need}, unknown_update={unknown}, "
+        "commit_changed={commit}, local_changed={local}, node_changed={node}, new_modules={new}".format(
             elapsed=scan_elapsed,
             checked=modules_checked,
             need=modules_need_update,
+            unknown=modules_unknown_update,
             commit=len(commit_changed),
             local=len(local_changed),
             node=len(node_changed),
@@ -2678,6 +2716,12 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     update_available_modules = list((announce_summary or {}).get("update_available_modules") or [])
     if update_available_modules:
         _refresh_console_log(f"update available modules: {', '.join(update_available_modules)}", level="verbose")
+    unknown_update_modules = list((announce_summary or {}).get("unknown_update_modules") or [])
+    if unknown_update_modules:
+        _refresh_console_log(
+            f"unknown update status modules: {', '.join(unknown_update_modules)}",
+            level="verbose",
+        )
 
     _refresh_console_log("phase 3/3: checking ComfyUI status...")
     comfy_started = time.perf_counter()
@@ -2700,14 +2744,16 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
         total=0,
         remaining=0,
         modules_need_update=modules_need_update,
+        modules_unknown_update=modules_unknown_update,
         message="done",
     )
     _LAZY_REFRESH_DONE = True
     total_elapsed = time.perf_counter() - refresh_started
     _refresh_console_log(
-        "runtime refresh finished in {elapsed:.2f}s (modules_need_update={need})".format(
+        "runtime refresh finished in {elapsed:.2f}s (modules_need_update={need}, modules_unknown_update={unknown})".format(
             elapsed=total_elapsed,
             need=modules_need_update,
+            unknown=modules_unknown_update,
         )
     )
     return {
@@ -2716,6 +2762,7 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
         "comfyui": comfyui,
         "sync_upstreams": sync_upstreams,
         "modules_need_update": modules_need_update,
+        "modules_unknown_update": modules_unknown_update,
     }
 
 
@@ -2792,6 +2839,7 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
                 "total": 0,
                 "remaining": 0,
                 "modules_need_update": 0,
+                "modules_unknown_update": 0,
                 "module": "",
                 "message": "starting",
                 "error": "",
@@ -2820,10 +2868,12 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
                 module="",
                 refreshed_at=result.get("refreshed_at", ""),
                 modules_need_update=max(0, int(result.get("modules_need_update", 0))),
+                modules_unknown_update=max(0, int(result.get("modules_unknown_update", 0))),
             )
             _refresh_console_log(
-                "job finished: modules_need_update={need}".format(
-                    need=max(0, int(result.get("modules_need_update", 0)))
+                "job finished: modules_need_update={need}, modules_unknown_update={unknown}".format(
+                    need=max(0, int(result.get("modules_need_update", 0))),
+                    unknown=max(0, int(result.get("modules_unknown_update", 0))),
                 )
             )
         except Exception as exc:
@@ -3272,6 +3322,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             modules_by_group = _build_group_modules(grouped)
             comfyui = _comfyui_git_status(mode=mode)
             custom_modules_need_update = _count_custom_modules_need_update()
+            custom_modules_unknown_update = _count_custom_modules_unknown_update()
             runtime_warmup = _runtime_warmup_status()
             groups = []
             for group_id, group_title in _GROUP_ORDER:
@@ -3292,6 +3343,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                     "groups": groups,
                     "comfyui": comfyui,
                     "custom_modules_need_update": custom_modules_need_update,
+                    "custom_modules_unknown_update": custom_modules_unknown_update,
                     "runtime_warmup": runtime_warmup,
                 }
             )

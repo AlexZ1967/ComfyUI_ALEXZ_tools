@@ -208,6 +208,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             "total",
             "remaining",
             "modules_need_update",
+            "modules_unknown_update",
             "module",
             "message",
             "error",
@@ -259,6 +260,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("refreshed_at", result)
         self.assertIn("comfyui", result)
         self.assertEqual(result.get("modules_need_update"), 3)
+        self.assertIn("modules_unknown_update", result)
 
         phases = [ev.get("phase") for ev in events]
         self.assertIn("sync", phases)

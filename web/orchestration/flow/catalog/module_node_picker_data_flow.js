@@ -123,6 +123,7 @@ export async function loadCatalogFlow(options, context) {
             0
         );
         context?.setCustomModulesNeedUpdate?.(Number(payload?.custom_modules_need_update || 0));
+        context?.setCustomModulesUnknownUpdate?.(Number(payload?.custom_modules_unknown_update || 0));
         context?.fillGroupSelect?.(groups, { preferredGroup, preferredModule, autoExpandModule });
         context?.syncUpdateAllButton?.();
         const runtimeWarmup = payload?.runtime_warmup || null;
@@ -151,6 +152,7 @@ export async function loadCatalogFlow(options, context) {
             comfyInstallReqBtn.style.display = "none";
         }
         context?.setCustomModulesNeedUpdate?.(0);
+        context?.setCustomModulesUnknownUpdate?.(0);
         if (context?.groupSelect) {
             context.groupSelect.innerHTML = "";
         }

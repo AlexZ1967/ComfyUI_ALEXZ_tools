@@ -55,6 +55,7 @@ export function createModuleNodePickerUiStage(context = {}) {
         comfyInstallReqBtn: context?.comfyInstallReqBtn,
         updateAllBtn: context?.updateAllBtn,
         getCustomModulesNeedUpdate: context?.getCustomModulesNeedUpdate,
+        getCustomModulesUnknownUpdate: context?.getCustomModulesUnknownUpdate,
         saveCustomStatusChecked: context?.saveCustomStatusChecked,
         saveComfyStatusChecked: context?.saveComfyStatusChecked,
         saveComfyInfoSnapshot: context?.saveComfyInfoSnapshot,
@@ -85,4 +86,3 @@ export function createModuleNodePickerUiStage(context = {}) {
         setComfyStatusChecked: uiControllers.setComfyStatusChecked,
     };
 }
-

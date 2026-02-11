@@ -40,6 +40,9 @@ export function createModuleNodePickerStatusCards(context = {}) {
     const getCustomModulesNeedUpdate = typeof context?.getCustomModulesNeedUpdate === "function"
         ? context.getCustomModulesNeedUpdate
         : () => 0;
+    const getCustomModulesUnknownUpdate = typeof context?.getCustomModulesUnknownUpdate === "function"
+        ? context.getCustomModulesUnknownUpdate
+        : () => 0;
     const saveCustomStatusChecked = typeof context?.saveCustomStatusChecked === "function"
         ? context.saveCustomStatusChecked
         : () => {};
@@ -80,6 +83,7 @@ export function createModuleNodePickerStatusCards(context = {}) {
         }
         renderCustomAlertCard({
             customModulesNeedUpdate: Number(getCustomModulesNeedUpdate() || 0),
+            customModulesUnknownUpdate: Number(getCustomModulesUnknownUpdate() || 0),
             customStatusChecked,
             actionBusy: getActionBusy(),
             customAlert,

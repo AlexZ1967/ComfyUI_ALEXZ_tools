@@ -623,6 +623,41 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertTrue(done_events)
         self.assertEqual(done_events[-1].get("modules_need_update"), 4)
 
+    def test_refresh_reports_modules_unknown_update_count(self):
+        """Validate unknown/uncheckable custom module update count in refresh summary."""
+        events = []
+        self.api._discover_custom_modules = lambda: []
+        self.api._announce_tracked_module_updates = lambda: {
+            "modules_need_update": 0,
+            "modules_unknown_update": 2,
+        }
+        self.api._comfyui_git_status = lambda force_refresh=False: {"update_status": "unknown"}
+
+        result = self.api._refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kw: events.append(dict(kw)))
+
+        self.assertEqual(result.get("modules_unknown_update"), 2)
+        done_events = [e for e in events if e.get("phase") == "done"]
+        self.assertTrue(done_events)
+        self.assertEqual(done_events[-1].get("modules_unknown_update"), 2)
+
+    def test_announce_marks_module_unknown_when_git_state_missing(self):
+        """Validate that modules without git/upstream state are marked as unknown."""
+        self.api._discover_custom_modules = lambda: ["modA"]
+        self.api._module_git_state = lambda module_name: {}
+        self.api._module_worktree_signature = lambda module_name: ""
+        self.api._build_node_snapshots = lambda: {}
+
+        summary = self.api._announce_tracked_module_updates(local_only=False)
+
+        self.assertEqual(summary.get("modules_need_update"), 0)
+        self.assertEqual(summary.get("modules_unknown_update"), 1)
+        self.assertIn("modA", summary.get("unknown_update_modules", []))
+        state = self.api._load_module_state()
+        entry = state.get("modA")
+        self.assertIsInstance(entry, dict)
+        self.assertIsNone(entry.get("update_available"))
+        self.assertEqual(entry.get("update_status"), "unknown")
+
     def test_resolve_update_targets_all_filters_modules(self):
         """Validate `test_resolve_update_targets_all_filters_modules` behavior."""
         self.api._discover_custom_modules = lambda: ["modA", "modB", "modC"]
