@@ -115,6 +115,15 @@ Deliverables:
 - Keep one tab synchronization mechanism as primary path.
 - Remove or hard-disable competing sync paths that cause ownership conflicts.
 - Ensure deterministic attach/detach for picker root when tab changes.
+- Progress checkpoint (2026-02-11):
+  - removed legacy/competing sync paths and kept single relay path,
+  - split relay internals into focused modules:
+    - `web/orchestration/module_node_picker_tab_relay_helpers.js`
+    - `web/orchestration/module_node_picker_tab_relay_runtime.js`
+  - removed broad unknown-tab fallback detach logic from content clicks,
+  - reduced relay event noise (single pointer/mouse path, no per-button listeners),
+  - added relay runtime debounce and explicit dispose cleanup on unbind,
+  - reduced passive tick pressure when picker tab is inactive.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

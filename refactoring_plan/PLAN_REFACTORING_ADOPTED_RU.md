@@ -115,6 +115,15 @@
 - Оставляем один основной механизм синхронизации вкладок.
 - Убираем или жестко отключаем конкурирующие sync-пути, вызывающие конфликты ownership.
 - Обеспечиваем детерминированный attach/detach root picker при смене вкладки.
+- Промежуточный прогресс (2026-02-11):
+  - удалены legacy/конкурирующие sync-пути, оставлен один relay-путь,
+  - внутренности relay вынесены в отдельные модули:
+    - `web/orchestration/module_node_picker_tab_relay_helpers.js`
+    - `web/orchestration/module_node_picker_tab_relay_runtime.js`
+  - удалена широкая fallback-логика unknown-tab detach при кликах по контенту,
+  - уменьшен шум событий relay (единый pointer/mouse путь, без per-button listeners),
+  - добавлены debounce синхронизации и явный dispose cleanup при unbind,
+  - снижено давление пассивного `relay_tick`, когда вкладка picker не активна.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

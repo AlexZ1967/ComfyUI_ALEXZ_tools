@@ -1,5 +1,20 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.11 — 2026-02-11
+- Phase 2 (tab-sync stabilization) continued:
+  - extracted relay runtime logic to `web/orchestration/module_node_picker_tab_relay_runtime.js`,
+  - kept helper functions in `web/orchestration/module_node_picker_tab_relay_helpers.js`,
+  - hardened relay click handling to avoid content-click detach regression,
+  - simplified relay event sources (single pointer/mouse path, removed per-button listeners),
+  - reduced passive relay tick pressure when picker tab is inactive,
+  - added relay sync debounce and runtime `dispose()` cleanup on unbind,
+  - avoided redundant attach/detach DOM operations in relay runtime.
+- Module UI/UX refinements:
+  - module-card click now toggles node list (expand/collapse),
+  - help/legend layout adjusted: hint near module card, legend shown between module card and node list,
+  - ComfyUI status card is hidden on widget load and shown only after explicit ComfyUI refresh/actions.
+- Strengthened frontend relay contract markers in `tests/test_phase0_baseline.py`.
+
 ## 0.16.10 — 2026-02-11
 - Phase 2 start (tab-sync stabilization):
   - removed legacy container-ownership sync path from `web/module_node_picker.js`,
