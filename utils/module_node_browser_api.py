@@ -35,6 +35,9 @@ from typing import Any
 
 from .module_browser import (
     build_default_component_registry,
+    build_registry_snapshot,
+    build_component_health_report,
+    compute_snapshot_signature,
     ensure_module_state_schema,
 )
 from .module_browser.api_manifest import (
@@ -284,11 +287,9 @@ def _component_registry_payload(force_refresh: bool = False) -> dict[str, Any]:
     node_entries = [entry.to_dict() for entry in registry.list("node")]
     widget_entries = [entry.to_dict() for entry in registry.list("widget")]
     api_entries = [entry.to_dict() for entry in registry.list("api")]
-    current_snapshot = {
-        "node": sorted(str(item.get("component_id") or "") for item in node_entries if item.get("component_id")),
-        "widget": sorted(str(item.get("component_id") or "") for item in widget_entries if item.get("component_id")),
-        "api": sorted(str(item.get("component_id") or "") for item in api_entries if item.get("component_id")),
-    }
+    current_snapshot = build_registry_snapshot(registry)
+    current_signature = compute_snapshot_signature(current_snapshot)
+    previous_signature = str(tracker.get("manifest_signature") or "")
 
     changes: dict[str, dict[str, list[str]]] = {}
     has_changes = False
@@ -305,20 +306,28 @@ def _component_registry_payload(force_refresh: bool = False) -> dict[str, Any]:
         "schema_name": COMPONENT_REGISTRY_SCHEMA_NAME,
         "schema_version": COMPONENT_REGISTRY_SCHEMA_VERSION,
         "summary": registry.summary(),
+        "health": build_component_health_report(),
         "nodes": node_entries,
         "widgets": widget_entries,
         "apis": api_entries,
         "changes": changes,
         "has_changes": has_changes,
+        "manifest_signature": current_signature,
+        "manifest_changed": bool(previous_signature and previous_signature != current_signature),
         "previous_snapshot_at": str(tracker.get("updated_at") or ""),
         "refreshed_at": _now_iso(),
     }
 
-    if not isinstance(tracker_raw, dict) or tracker.get("snapshot") != current_snapshot:
+    if (
+        not isinstance(tracker_raw, dict)
+        or tracker.get("snapshot") != current_snapshot
+        or str(tracker.get("manifest_signature") or "") != current_signature
+    ):
         state["__component_registry__"] = {
             "schema_name": COMPONENT_REGISTRY_SCHEMA_NAME,
             "schema_version": COMPONENT_REGISTRY_SCHEMA_VERSION,
             "snapshot": current_snapshot,
+            "manifest_signature": current_signature,
             "summary": dict(payload["summary"]),
             "updated_at": payload["refreshed_at"],
         }

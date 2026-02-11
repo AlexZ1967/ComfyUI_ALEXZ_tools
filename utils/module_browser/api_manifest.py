@@ -28,6 +28,22 @@ ROUTE_COMFYUI_INFO = "/alexz_tools/comfyui_info"
 ROUTE_MODULE_LIST = "/alexz_tools/module_list"
 ROUTE_MODULE_NODES = "/alexz_tools/module_nodes"
 
+ALL_API_ROUTES: tuple[str, ...] = (
+    ROUTE_MODULE_REFRESH,
+    ROUTE_MODULE_REFRESH_STATUS,
+    ROUTE_MODULE_ACKNOWLEDGE_ALL,
+    ROUTE_MODULE_UPDATE,
+    ROUTE_MODULE_UPDATE_STATUS,
+    ROUTE_MODULE_INSTALL_REQUIREMENTS,
+    ROUTE_COMFYUI_INSTALL_REQUIREMENTS,
+    ROUTE_COMPONENT_REGISTRY,
+    ROUTE_NODE_CATALOG,
+    ROUTE_MODULE_INFO,
+    ROUTE_COMFYUI_INFO,
+    ROUTE_MODULE_LIST,
+    ROUTE_MODULE_NODES,
+)
+
 # Component-facing API routes that should appear in component registry snapshots.
 COMPONENT_API_ROUTES: tuple[str, ...] = (
     ROUTE_NODE_CATALOG,
@@ -41,8 +57,13 @@ COMPONENT_API_ROUTES: tuple[str, ...] = (
 )
 
 
+def iter_all_api_routes():
+    """Yield all declared backend API routes for manifest validation."""
+    for route in ALL_API_ROUTES:
+        yield route
+
+
 def iter_component_api_routes():
     """Yield API routes included in component-registry snapshots."""
     for route in COMPONENT_API_ROUTES:
         yield route
-

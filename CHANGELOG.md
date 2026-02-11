@@ -1,5 +1,23 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.1 — 2026-02-12
+- Slice 0 hardening for component lifecycle tracking:
+  - added manifest health validation module `utils/module_browser/health.py`;
+  - `/alexz_tools/component_registry` now returns `health` report (issues, counts, checked manifests);
+  - added deterministic component-manifest signature fields:
+    `manifest_signature` and `manifest_changed` in registry payload;
+  - persisted component-registry tracker now stores `manifest_signature`.
+- API manifest contract hardening:
+  - added `ALL_API_ROUTES` + `iter_all_api_routes()` in `utils/module_browser/api_manifest.py`;
+  - health checks now validate consistency of `COMPONENT_API_ROUTES` against all declared routes.
+- Phase 3 progress:
+  - extracted refresh/update job helpers into `utils/module_browser/jobs.py` and kept
+    `utils/module_node_browser_api.py` as API-compatible facade.
+- Tests:
+  - added `tests/test_module_browser_jobs.py`,
+  - expanded `tests/test_slice0_registry.py` (health/signature/API-manifest coverage),
+  - regression pass: `63 passed` (`slice0_registry + module_browser_jobs + phase0_baseline + module_browser_tracker`).
+
 ## 0.18.0 — 2026-02-12
 - Slice 0 (Extensibility Foundation) completed:
   - centralized node lifecycle in `nodes/node_registry.py` (single node manifest source);

@@ -20,6 +20,7 @@ import sys
 import tempfile
 import types
 import unittest
+from dataclasses import dataclass
 
 
 def _install_folder_paths_stub():
@@ -96,7 +97,10 @@ class Slice0RegistryTests(unittest.TestCase):
         """API manifest keeps component-registry endpoint in published route list."""
         module = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_browser.api_manifest")
         routes = set(module.iter_component_api_routes())
+        all_routes = set(module.iter_all_api_routes())
         self.assertIn("/alexz_tools/component_registry", routes)
+        self.assertIn("/alexz_tools/component_registry", all_routes)
+        self.assertIn("/alexz_tools/module_update", all_routes)
 
     def test_module_state_schema_is_added_on_load(self):
         """Module state loader normalizes persisted cache to versioned schema."""
@@ -129,9 +133,16 @@ class Slice0RegistryTests(unittest.TestCase):
         self.assertIn("summary", payload)
         self.assertIn("changes", payload)
         self.assertIn("has_changes", payload)
+        self.assertIn("manifest_signature", payload)
+        self.assertIn("manifest_changed", payload)
         self.assertIn("node", payload["changes"])
         self.assertIn("widget", payload["changes"])
         self.assertIn("api", payload["changes"])
+        self.assertIn("health", payload)
+        self.assertIn("ok", payload["health"])
+        self.assertIn("issue_count", payload["health"])
+        self.assertIn("checked", payload["health"])
+        self.assertIn("all_api_routes", payload["health"]["checked"])
 
     def test_component_registry_payload_detects_added_and_removed_components(self):
         """Change tracker reports added/removed component ids against previous snapshot."""
@@ -179,6 +190,7 @@ class Slice0RegistryTests(unittest.TestCase):
                         "widget": ["widget:module_node_picker"],
                         "api": ["api:/alexz_tools/old_route"],
                     },
+                    "manifest_signature": "deadbeef0000",
                     "updated_at": "2026-02-12T00:00:00+00:00",
                 }
             }
@@ -189,13 +201,47 @@ class Slice0RegistryTests(unittest.TestCase):
             self.assertIn("node:OldNode", node_changes.get("removed", []))
             self.assertIn("api:/alexz_tools/old_route", api_changes.get("removed", []))
             self.assertTrue(bool(payload.get("has_changes")))
+            self.assertTrue(bool(payload.get("manifest_changed")))
+            self.assertTrue(str(payload.get("manifest_signature")))
             state_tracker = api._MODULE_STATE_CACHE.get("__component_registry__", {})
             self.assertEqual(state_tracker.get("schema_name"), "alexz_component_registry")
             self.assertEqual(state_tracker.get("schema_version"), 1)
+            self.assertEqual(str(state_tracker.get("manifest_signature")), str(payload.get("manifest_signature")))
         finally:
             api.build_default_component_registry = original_builder
             api._MODULE_STATE_CACHE = original_state
             api._COMPONENT_REGISTRY_PAYLOAD_CACHE = original_payload_cache
+
+    def test_component_health_report_detects_missing_widget_entrypoint(self):
+        """Health report flags widget entries that point to missing frontend files."""
+        health = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_browser.health")
+
+        @dataclass(frozen=True)
+        class _FakeWidgetSpec:
+            widget_id: str
+            name: str
+            entrypoint: str
+            enabled: bool = True
+
+        original_iter_widget_specs = health.iter_widget_specs
+        try:
+            health.iter_widget_specs = lambda: iter(
+                [
+                    _FakeWidgetSpec(
+                        widget_id="missing_widget",
+                        name="Missing Widget",
+                        entrypoint="web/does_not_exist_widget.js",
+                        enabled=True,
+                    )
+                ]
+            )
+            report = health.build_component_health_report()
+            self.assertFalse(bool(report.get("ok")))
+            self.assertGreater(int(report.get("issue_count", 0)), 0)
+            issues = report.get("issues", [])
+            self.assertTrue(any(item.get("code") == "entrypoint_not_found" for item in issues))
+        finally:
+            health.iter_widget_specs = original_iter_widget_specs
 
 
 if __name__ == "__main__":

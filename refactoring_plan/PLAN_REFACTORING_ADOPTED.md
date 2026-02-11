@@ -231,6 +231,7 @@ Deliverables:
 - Introduce a registry-first layer for module components (`nodes`, `widgets`, `api`) with auto-discovery.
 - Introduce stable backend contracts (schema/versioned payload) and versioned runtime cache.
 - Define single registration/unregistration points so adding/removing nodes/widgets does not require multi-file manual edits.
+- Add manifest health-report and deterministic `manifest_signature` for quick component drift checks.
 - Add minimal contract tests for:
   - new component added,
   - component removed,

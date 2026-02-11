@@ -14,6 +14,8 @@ Purpose:
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import json
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +75,38 @@ class ComponentRegistry:
             "api_count": len(apis),
             "total": len(self._entries),
         }
+
+
+def build_registry_snapshot(registry: ComponentRegistry) -> dict[str, list[str]]:
+    """Build deterministic component-id snapshot grouped by kind."""
+    return {
+        "node": sorted(
+            str(item.component_id)
+            for item in registry.list("node")
+            if str(item.component_id or "").strip()
+        ),
+        "widget": sorted(
+            str(item.component_id)
+            for item in registry.list("widget")
+            if str(item.component_id or "").strip()
+        ),
+        "api": sorted(
+            str(item.component_id)
+            for item in registry.list("api")
+            if str(item.component_id or "").strip()
+        ),
+    }
+
+
+def compute_snapshot_signature(snapshot: dict[str, Any]) -> str:
+    """Compute short stable signature for registry snapshot payload."""
+    normalized = {
+        "node": list(snapshot.get("node") or []),
+        "widget": list(snapshot.get("widget") or []),
+        "api": list(snapshot.get("api") or []),
+    }
+    packed = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return sha1(packed.encode("utf-8")).hexdigest()[:12]
 
 
 def _iter_node_specs() -> list[tuple[str, str, str, str]]:
