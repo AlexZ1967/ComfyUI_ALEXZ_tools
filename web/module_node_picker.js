@@ -1201,7 +1201,8 @@ function renderPicker(container) {
             inlineStatus: moduleInlineStatus.get(selectedModule) || null,
             fmtDate,
             onExpandModule: (moduleName) => {
-                expandedModule = String(moduleName || "").trim();
+                const normalized = String(moduleName || "").trim();
+                expandedModule = expandedModule === normalized ? "" : normalized;
                 renderNodeList();
             },
             onRefreshModuleInfo: refreshModuleInfoFlow,

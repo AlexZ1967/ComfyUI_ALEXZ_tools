@@ -138,7 +138,7 @@ export function renderModuleInfoCard(context) {
     }
     if (nodeCount > 0) {
         card.classList.add("alexz-mod-picker-module-card--clickable");
-        card.title = "Кликните, чтобы показать список нод";
+        card.title = "Кликните, чтобы показать или скрыть список нод";
         card.onclick = () => onExpandModule?.(selectedModule);
     }
 

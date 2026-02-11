@@ -173,6 +173,13 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
         },
 
         /**
+         * Return true when temporary foreign-tab intent window is still active.
+         */
+        hasPendingForeignIntent() {
+            return isForeignIntentActive();
+        },
+
+        /**
          * Clear foreign intent when native tab switch is confirmed.
          */
         clearForeignIntent() {

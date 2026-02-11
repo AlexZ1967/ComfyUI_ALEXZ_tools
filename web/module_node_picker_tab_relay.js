@@ -49,8 +49,11 @@ export function unbindModuleNodesTabRelay() {
     if (state.onKeyUp) {
         document.removeEventListener("keyup", state.onKeyUp, true);
     }
-    if (state.onFocusIn) {
-        document.removeEventListener("focusin", state.onFocusIn, true);
+    if (state.onVisibilityChange) {
+        document.removeEventListener("visibilitychange", state.onVisibilityChange, true);
+    }
+    if (state.onPageShow) {
+        window.removeEventListener("pageshow", state.onPageShow, true);
     }
     if (Array.isArray(state.boundButtons)) {
         for (const item of state.boundButtons) {
@@ -73,6 +76,7 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     unbindModuleNodesTabRelay();
 
     let relayTimer = 0;
+    let passiveTickBudget = 0;
     const relayRuntime = createModuleNodePickerTabRelayRuntime({
         app,
         root,
@@ -150,7 +154,8 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     const onMouseDown = supportsPointer ? null : ((event) => handleEvent(event));
     const onClick = null;
     const onKeyUp = () => relayRuntime.syncVisibility("relay_keyup");
-    const onFocusIn = (event) => handleEvent(event);
+    const onVisibilityChange = () => relayRuntime.syncVisibility("relay_visibility");
+    const onPageShow = () => relayRuntime.syncVisibility("relay_pageshow");
 
     if (onPointerDown) {
         document.addEventListener("pointerdown", onPointerDown, true);
@@ -159,12 +164,29 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         document.addEventListener("mousedown", onMouseDown, true);
     }
     document.addEventListener("keyup", onKeyUp, true);
-    document.addEventListener("focusin", onFocusIn, true);
+    document.addEventListener("visibilitychange", onVisibilityChange, true);
+    window.addEventListener("pageshow", onPageShow, true);
 
     const bindButtonsInterval = 0;
     const tickInterval = window.setInterval(() => {
+        if (document.visibilityState === "hidden") {
+            return;
+        }
+        const ownTabSelected = isOwnButtonSelected(sidebarTabId) === true;
+        const keepFastTick = ownTabSelected || relayRuntime.hasPendingForeignIntent();
+        if (!keepFastTick) {
+            passiveTickBudget += 1;
+            // When picker tab is inactive, run a sparse maintenance tick
+            // instead of syncing on every timer pulse.
+            if (passiveTickBudget < 6) {
+                return;
+            }
+            passiveTickBudget = 0;
+        } else {
+            passiveTickBudget = 0;
+        }
         relayRuntime.syncVisibility("relay_tick");
-    }, 220);
+    }, 500);
 
     relayRuntime.syncVisibility("relay_init");
     window[TAB_RELAY_STATE_KEY] = {
@@ -175,7 +197,8 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         onMouseDown,
         onClick,
         onKeyUp,
-        onFocusIn,
+        onVisibilityChange,
+        onPageShow,
         boundButtons: [],
     };
 }
