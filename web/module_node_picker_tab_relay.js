@@ -112,6 +112,13 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
      * Global event handler used to detect sidebar tab interactions.
      */
     const handleEvent = (event) => {
+        // React only to primary-button pointer/mouse events.
+        if (event?.type === "pointerdown" || event?.type === "mousedown") {
+            const button = Number(event?.button);
+            if (Number.isFinite(button) && button !== 0) {
+                return;
+            }
+        }
         const direct = event?.target;
         // Ignore any interaction that originates inside picker root,
         // including text-node targets emitted by some browser/event paths.
