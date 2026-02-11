@@ -138,6 +138,7 @@ Deliverables:
   - propagated liveness-aware cancellation guards through refresh/update/install orchestration to prevent stale post-dispose UI mutations.
   - added explicit process-controller dispose lifecycle to fully clear/detach progress host between picker re-renders.
   - deduplicated lifecycle guard logic into a shared orchestration helper module.
+  - corrected startup liveness semantics to lifecycle-based checks, preventing first-open catalog skip/empty-select regression.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

@@ -138,6 +138,7 @@
   - liveness-aware cancellation guards протянуты через refresh/update/install orchestration (исключены stale UI-мутации после dispose).
   - добавлен явный lifecycle dispose для process-controller (прогресс-хост гарантированно очищается/отцепляется между re-render).
   - устранено дублирование lifecycle-guard логики: общий helper вынесен в отдельный orchestration-модуль.
+  - исправлена семантика startup-liveness (жизненный цикл вместо `root.isConnected`), устранен баг пустых селектов при первом открытии.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

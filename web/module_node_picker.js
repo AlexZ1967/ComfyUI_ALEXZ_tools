@@ -630,6 +630,7 @@ function renderPicker(container) {
 
     const customAlert = document.createElement("div");
     customAlert.className = "alexz-mod-picker-status-card alexz-mod-picker-status-card--neutral";
+    customAlert.style.display = "none";
     const customAlertText = document.createElement("div");
     customAlert.appendChild(customAlertText);
     const customActions = document.createElement("div");
@@ -780,7 +781,10 @@ function renderPicker(container) {
     let processUi = null;
 
     let pickerDisposed = false;
-    const isPickerAlive = () => !pickerDisposed && root.isConnected;
+    // Keep async/UI flows active for this picker instance even if the root is
+    // temporarily detached during sidebar transitions; lifecycle is governed by
+    // explicit dispose, not transient DOM attachment state.
+    const isPickerAlive = () => !pickerDisposed;
     const disposePickerInstance = () => {
         if (pickerDisposed) {
             return;

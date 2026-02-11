@@ -410,6 +410,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("shouldContinue: isPickerAlive", picker_text)
         self.assertIn("dispose", process_text)
         self.assertIn("processUi?.dispose?.()", picker_text)
+        self.assertNotIn("!pickerDisposed && root.isConnected", picker_text)
 
     def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):
         """Ensure non-forced ComfyUI status request returns cached/unknown data without git calls."""
