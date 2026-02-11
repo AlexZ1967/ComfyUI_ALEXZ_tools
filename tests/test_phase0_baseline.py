@@ -356,6 +356,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("passiveTickBudget", relay_text)
         self.assertIn("relay_visibility", relay_text)
         self.assertIn("relay_pageshow", relay_text)
+        self.assertIn("bindToken = Symbol", relay_text)
+        self.assertIn("isCurrentBinding()", relay_text)
+        self.assertIn("[contenteditable]", relay_text)
 
         self.assertIn("diag.active_tab=", picker_text)
         self.assertIn("diag.last_clicked_tab=", picker_text)
