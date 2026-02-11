@@ -79,7 +79,8 @@
   - last explicitly refreshed ComfyUI status card is restored across widget switches in current session (and reset on full page/ComfyUI reload).
 - Resume orchestration hardening:
   - pending restore flows (custom refresh, update jobs, ComfyUI info refresh) now run sequentially on widget startup,
-  - avoids cross-flow UI races on `actionBusy`/process target and reduces startup flicker.
+  - avoids cross-flow UI races on `actionBusy`/process target and reduces startup flicker,
+  - startup now uses a single coordinator: pending resumes first (if any), then catalog startup load, preventing parallel startup race between restore and catalog bootstrap.
 - Regression guardrails:
   - added frontend contract checks for pending/resume markers and session-runtime status in `tests/test_phase0_baseline.py`.
 - ComfyUI mode-switch UX fix:

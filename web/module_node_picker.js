@@ -1910,26 +1910,58 @@ function renderPicker(container) {
         }
     }
 
-    cancelStartupLoad = runModuleNodePickerStartupLoad({
-        pickerStore,
-        defaultModule: DEFAULT_MODULE,
-        loadCatalog,
-        shouldContinue: isPickerAlive,
-        startupRetries: 2,
-        startupRetryDelayMs: 250,
-    }) || (() => {});
-    const resumePendingFlows = async () => {
-        await resumePendingCustomRefreshFlow();
-        if (!isPickerAlive()) {
-            return;
-        }
-        await resumePendingModuleUpdateFlow();
-        if (!isPickerAlive()) {
-            return;
-        }
-        await resumePendingComfyInfoRefreshFlow();
+    const runStartupSequence = () => {
+        let sequenceCanceled = false;
+        let cancelCatalogStartupLoad = () => {};
+        const shouldContinueStartup = () => !sequenceCanceled && isPickerAlive();
+
+        const runCatalogStartupLoad = () => {
+            if (!shouldContinueStartup()) {
+                return;
+            }
+            cancelCatalogStartupLoad = runModuleNodePickerStartupLoad({
+                pickerStore,
+                defaultModule: DEFAULT_MODULE,
+                loadCatalog,
+                shouldContinue: shouldContinueStartup,
+                startupRetries: 2,
+                startupRetryDelayMs: 250,
+            }) || (() => {});
+        };
+
+        const run = async () => {
+            const hasPendingWork = hasPendingCustomRefresh()
+                || hasPendingUpdate()
+                || hasPendingComfyInfoRefresh();
+            if (hasPendingWork) {
+                await resumePendingCustomRefreshFlow();
+                if (!shouldContinueStartup()) {
+                    return;
+                }
+                await resumePendingModuleUpdateFlow();
+                if (!shouldContinueStartup()) {
+                    return;
+                }
+                await resumePendingComfyInfoRefreshFlow();
+                if (!shouldContinueStartup()) {
+                    return;
+                }
+            }
+            runCatalogStartupLoad();
+        };
+
+        void run();
+        return () => {
+            sequenceCanceled = true;
+            try {
+                cancelCatalogStartupLoad?.();
+            } catch (_err) {
+                // Ignore stale startup-load cleanup errors.
+            }
+        };
     };
-    void resumePendingFlows();
+
+    cancelStartupLoad = runStartupSequence();
 }
 
 /**
