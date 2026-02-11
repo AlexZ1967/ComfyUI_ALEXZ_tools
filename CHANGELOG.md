@@ -1,5 +1,27 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.14 — 2026-02-11
+- Module Node Picker update logging modes:
+  - added backend log mode switch for update jobs in `utils/module_node_browser_api.py` (`summary`/`verbose`),
+  - update routes now accept `log_mode` and apply it to console output (`/alexz_tools/module_update`, `/alexz_tools/module_refresh`),
+  - wired frontend API wrappers to pass `log_mode` in refresh/update requests (`web/api/module_node_picker_api.js`),
+  - wired orchestration so current mode follows picker debug flag: `Debug=ON` => `verbose`, `Debug=OFF` => `summary`.
+- Console output tuning:
+  - `summary` now logs only key milestones (job start/finish, target scan summary, ComfyUI pull start/done),
+  - `verbose` additionally logs per-module scan/pull steps and command timings.
+- Validation:
+  - `conda run -n p313 node --check` for changed JS modules,
+  - `conda run -n p313 pytest -q tests/test_module_browser_tracker.py tests/test_phase0_baseline.py` (all passed).
+
+## 0.16.13 — 2026-02-11
+- Phase 2 (tab-sync stabilization) continued:
+  - extracted UI-stage composition from `web/orchestration/module_node_picker_composer.js` into `web/orchestration/module_node_picker_ui_stage.js` (selector/busy/view/status controller assembly preserved),
+  - extracted flow-stage composition from `web/orchestration/module_node_picker_composer.js` into `web/orchestration/module_node_picker_flow_stage.js` (polling/catalog/action/module-panel wiring preserved),
+  - rewired composer to consume stage adapters with behavior parity and retained deferred callbacks (`loadCatalog`, `loadModuleInfo`, `renderNodeList`, `setExpandedModule`) to avoid startup regressions.
+- Regression coverage:
+  - updated `tests/test_phase0_baseline.py` contract bundle to include new stage modules in runtime marker scans.
+  - verified with `conda run -n p313 node --check` for changed JS modules and `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py tests/test_smoke_nodes.py` (42 passed).
+
 ## 0.16.12 — 2026-02-11
 - Phase 2 (tab-sync stabilization) continued:
   - extracted category/group/module dropdown orchestration from `web/module_node_picker.js` into `web/orchestration/module_node_picker_selection_controller.js`,

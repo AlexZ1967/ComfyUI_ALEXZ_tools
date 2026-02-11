@@ -190,7 +190,9 @@ export async function runRefreshCustomNodesInfoAction(context) {
         customAlertText.textContent = "Refreshing Custom Nodes info...";
     }
     try {
-        await context?.refreshModuleRuntimeState?.();
+        await context?.refreshModuleRuntimeState?.({
+            logMode: typeof context?.getLogMode === "function" ? context.getLogMode() : "summary",
+        });
         if (!shouldContinueContext(context)) {
             return;
         }

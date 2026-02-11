@@ -135,6 +135,10 @@ export async function refreshModuleRuntimeState(options = {}) {
     return fetchApiJson("/alexz_tools/module_refresh", {
         method: "POST",
         cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            log_mode: String(options?.logMode || "summary"),
+        }),
         signal: options?.signal,
     });
 }
@@ -171,6 +175,7 @@ export async function startModuleUpdate(scope, moduleName, options = {}) {
         body: JSON.stringify({
             scope: scope || "single",
             module: moduleName || "",
+            log_mode: String(options?.logMode || "summary"),
         }),
         signal: options?.signal,
     }, 60000);

@@ -230,6 +230,9 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
     const setProcessAction = context?.setProcessAction;
     const setRefreshLine = context?.setRefreshLine;
     const startModuleUpdate = context?.startModuleUpdate;
+    const getLogMode = typeof context?.getLogMode === "function"
+        ? context.getLogMode
+        : () => "summary";
     const pollUpdateProgress = context?.pollUpdateProgress;
     const getSelectedGroup = context?.getSelectedGroup;
     const getSelectedModule = context?.getSelectedModule;
@@ -258,7 +261,7 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
         }
         setProcessAction?.("", "", null);
         setRefreshLine?.("Starting update...", "neutral");
-        await startModuleUpdate?.(scope, moduleName);
+        await startModuleUpdate?.(scope, moduleName, { logMode: getLogMode() });
         if (!shouldContinueContext(context)) {
             return;
         }

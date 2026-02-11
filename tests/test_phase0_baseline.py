@@ -1,7 +1,7 @@
 """
 Module: tests/test_phase0_baseline.py
 Author: AlexZ1967
-Last updated: 2026-02-10
+Last updated: 2026-02-11
 
 Description:
     Phase 0 baseline guardrail tests for Module Node Picker backend.
@@ -374,7 +374,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         composer_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
-        picker_runtime_text = f"{picker_text}\n{composer_text}"
+        ui_stage_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
+        ).read_text(encoding="utf-8")
+        flow_stage_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
+        ).read_text(encoding="utf-8")
+        picker_runtime_text = f"{picker_text}\n{composer_text}\n{ui_stage_text}\n{flow_stage_text}"
 
         self.assertIn("export function bindModuleNodesTabRelay", relay_text)
         self.assertIn("export function unbindModuleNodesTabRelay", relay_text)
@@ -443,7 +449,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         composer_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
-        picker_runtime_text = f"{picker_text}\n{composer_text}"
+        ui_stage_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
+        ).read_text(encoding="utf-8")
+        flow_stage_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
+        ).read_text(encoding="utf-8")
+        picker_runtime_text = f"{picker_text}\n{composer_text}\n{ui_stage_text}\n{flow_stage_text}"
 
         self.assertNotIn("setInterval(", relay_text)
         self.assertIn("setTimeout(runTick", relay_text)
@@ -499,7 +511,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         composer_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
-        picker_runtime_text = f"{picker_text}\n{composer_text}"
+        ui_stage_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
+        ).read_text(encoding="utf-8")
+        flow_stage_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
+        ).read_text(encoding="utf-8")
+        picker_runtime_text = f"{picker_text}\n{composer_text}\n{ui_stage_text}\n{flow_stage_text}"
         actions_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")

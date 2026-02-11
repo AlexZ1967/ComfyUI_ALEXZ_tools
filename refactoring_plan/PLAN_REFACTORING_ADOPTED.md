@@ -158,6 +158,8 @@ Deliverables:
   - extracted polling/catalog/actions/module-panel composition into `web/orchestration/module_node_picker_flow_wiring.js` to keep runtime orchestration modular.
   - extracted runtime bootstrap (event binding, ComfyUI-card restore, startup coordinator wiring) into `web/orchestration/module_node_picker_runtime_bootstrap.js`.
   - extracted base runtime setup (runtime context, lifecycle, API client, debug/process controllers) into `web/orchestration/module_node_picker_runtime_setup.js`.
+  - extracted UI-stage assembly into `web/orchestration/module_node_picker_ui_stage.js` (selector/busy/view/status controller composition adapter).
+  - extracted flow-stage assembly into `web/orchestration/module_node_picker_flow_stage.js` (polling/catalog/action/module-panel composition adapter).
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

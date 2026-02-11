@@ -62,11 +62,11 @@ import {
     createNodeFromCatalogInfo,
 } from "../ui/module_node_picker_node_factory.js";
 import { runModuleNodePickerStartupLoad } from "./module_node_picker_bindings.js";
-import { createModuleNodePickerFlowWiring } from "./module_node_picker_flow_wiring.js";
 import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
-import { createModuleNodePickerUiControllers } from "./module_node_picker_ui_controllers.js";
 import { initializeModuleNodePickerRuntime } from "./module_node_picker_runtime_bootstrap.js";
 import { createModuleNodePickerRuntimeSetup } from "./module_node_picker_runtime_setup.js";
+import { createModuleNodePickerUiStage } from "./module_node_picker_ui_stage.js";
+import { createModuleNodePickerFlowStage } from "./module_node_picker_flow_stage.js";
 
 /**
  * Render Module Node Picker UI and bind all panel event handlers.
@@ -210,13 +210,15 @@ export function renderModuleNodePicker(container) {
     const setProcessTarget = runtimeSetup.setProcessTarget;
     const setModuleInlineStatus = runtimeSetup.setModuleInlineStatus;
     const disposePickerInstance = runtimeSetup.disposePickerInstance;
+    const getCurrentLogMode = () => (Boolean(pickerStore?.get?.("debugEnabled")) ? "verbose" : "summary");
 
     let loadModuleInfo = async () => {};
     let renderNodeList = () => {};
     let renderModuleInfo = () => {};
     let setExpandedModule = () => {};
     let loadCatalog = async () => {};
-    const uiControllers = createModuleNodePickerUiControllers({
+
+    const uiStage = createModuleNodePickerUiStage({
         shouldContinue: isPickerAlive,
         categorySelect,
         groupSelect,
@@ -276,18 +278,16 @@ export function renderModuleNodePicker(container) {
         initialCustomStatusChecked: loadCustomStatusChecked(),
         initialComfyStatusChecked: loadComfyStatusChecked(),
     });
-    selectionController = uiControllers.selectionController;
-    const isCustomCategory = uiControllers.isCustomCategory;
-    const getSelectedGroup = uiControllers.getSelectedGroup;
-    const syncPickerSelectionState = uiControllers.syncPickerSelectionState;
-    const getNodesForSelectedGroup = uiControllers.getNodesForSelectedGroup;
-    const fillModuleSelect = uiControllers.fillModuleSelect;
-    const fillGroupSelect = uiControllers.fillGroupSelect;
-    const busyUi = uiControllers.busyUi;
-    const syncBusyUiState = uiControllers.syncBusyUiState;
-    const setCatalogControlsLoading = uiControllers.setCatalogControlsLoading;
-    const setActionBusy = uiControllers.setActionBusy;
-    const setStartupBusy = uiControllers.setStartupBusy;
+    selectionController = uiStage.selectionController;
+    const isCustomCategory = uiStage.isCustomCategory;
+    const getSelectedGroup = uiStage.getSelectedGroup;
+    const syncPickerSelectionState = uiStage.syncPickerSelectionState;
+    const getNodesForSelectedGroup = uiStage.getNodesForSelectedGroup;
+    const fillModuleSelect = uiStage.fillModuleSelect;
+    const busyUi = uiStage.busyUi;
+    const setCatalogControlsLoading = uiStage.setCatalogControlsLoading;
+    const setActionBusy = uiStage.setActionBusy;
+    const setStartupBusy = uiStage.setStartupBusy;
     const {
         setProcessAction,
         setRefreshLine,
@@ -296,14 +296,14 @@ export function renderModuleNodePicker(container) {
         setHelpHintText,
         setHelpModuleSummary,
         setHelpModuleCardHint,
-    } = uiControllers.viewHelpers;
-    showHelpStatus = setHelpText;
-    statusCards = uiControllers.statusCards;
-    const renderComfyAlert = uiControllers.renderComfyAlert;
-    const renderCustomAlert = uiControllers.renderCustomAlert;
-    const syncUpdateAllButton = uiControllers.syncUpdateAllButton;
-    const setCustomStatusChecked = uiControllers.setCustomStatusChecked;
-    const setComfyStatusChecked = uiControllers.setComfyStatusChecked;
+    } = uiStage.viewHelpers;
+    showHelpStatus = uiStage.showHelpStatus;
+    statusCards = uiStage.statusCards;
+    const renderComfyAlert = uiStage.renderComfyAlert;
+    const renderCustomAlert = uiStage.renderCustomAlert;
+    const syncUpdateAllButton = uiStage.syncUpdateAllButton;
+    const setCustomStatusChecked = uiStage.setCustomStatusChecked;
+    const setComfyStatusChecked = uiStage.setComfyStatusChecked;
 
     bindModuleNodesTabRelay({
         app,
@@ -322,7 +322,7 @@ export function renderModuleNodePicker(container) {
     let resumePendingCustomRefreshFlow = async () => {};
     let resumePendingModuleUpdateFlow = async () => {};
     let resumePendingComfyInfoRefreshFlow = async () => {};
-    const flowWiring = createModuleNodePickerFlowWiring({
+    const flowStage = createModuleNodePickerFlowStage({
         shouldContinue: isPickerAlive,
         fetchModuleRefreshStatus: fetchModuleRefreshStatusApi,
         fetchModuleUpdateStatus: fetchModuleUpdateStatusApi,
@@ -376,6 +376,7 @@ export function renderModuleNodePicker(container) {
         installModuleRequirements: installModuleRequirementsApi,
         installComfyUIRequirements: installComfyUIRequirementsApi,
         fetchComfyUIInfo: fetchComfyUIInfoApi,
+        getLogMode: getCurrentLogMode,
         refreshModuleRuntimeState: refreshModuleRuntimeStateApi,
         acknowledgeAllModuleNovelty: acknowledgeAllModuleNoveltyApi,
         setModuleInlineStatus,
@@ -406,24 +407,24 @@ export function renderModuleNodePicker(container) {
         getNodesForSelectedGroup,
         getInlineStatus: (moduleName) => moduleInlineStatus.get(moduleName) || null,
     });
-    pollingController = flowWiring.pollingController;
-    catalogController = flowWiring.catalogController;
-    modulePanelController = flowWiring.modulePanelController;
-    loadModuleInfo = (options = {}) => flowWiring.loadModuleInfo(options);
-    loadCatalog = (options = {}) => flowWiring.loadCatalog(options);
-    renderNodeList = () => flowWiring.renderNodeList();
-    renderModuleInfo = (info) => flowWiring.renderModuleInfo(info);
-    setExpandedModule = (value) => flowWiring.setExpandedModule(value);
-    installComfyUIRequirementsFlow = (...args) => flowWiring.actionFlows.installComfyUIRequirementsFlow(...args);
-    maybeInstallChangedRequirements = (...args) => flowWiring.actionFlows.maybeInstallChangedRequirements(...args);
-    runModuleUpdate = (...args) => flowWiring.actionFlows.runModuleUpdate(...args);
-    refreshComfyUIInfoFlow = (...args) => flowWiring.actionFlows.refreshComfyUIInfoFlow(...args);
-    refreshCustomNodesInfoFlow = (...args) => flowWiring.actionFlows.refreshCustomNodesInfoFlow(...args);
-    refreshModuleInfoFlow = (...args) => flowWiring.actionFlows.refreshModuleInfoFlow(...args);
-    installSingleModuleRequirementsFlow = (...args) => flowWiring.actionFlows.installSingleModuleRequirementsFlow(...args);
-    resumePendingCustomRefreshFlow = (...args) => flowWiring.actionFlows.resumePendingCustomRefreshFlow(...args);
-    resumePendingModuleUpdateFlow = (...args) => flowWiring.actionFlows.resumePendingModuleUpdateFlow(...args);
-    resumePendingComfyInfoRefreshFlow = (...args) => flowWiring.actionFlows.resumePendingComfyInfoRefreshFlow(...args);
+    pollingController = flowStage.pollingController;
+    catalogController = flowStage.catalogController;
+    modulePanelController = flowStage.modulePanelController;
+    loadModuleInfo = (options = {}) => flowStage.loadModuleInfo(options);
+    loadCatalog = (options = {}) => flowStage.loadCatalog(options);
+    renderNodeList = () => flowStage.renderNodeList();
+    renderModuleInfo = (info) => flowStage.renderModuleInfo(info);
+    setExpandedModule = (value) => flowStage.setExpandedModule(value);
+    installComfyUIRequirementsFlow = (...args) => flowStage.installComfyUIRequirementsFlow(...args);
+    maybeInstallChangedRequirements = (...args) => flowStage.maybeInstallChangedRequirements(...args);
+    runModuleUpdate = (...args) => flowStage.runModuleUpdate(...args);
+    refreshComfyUIInfoFlow = (...args) => flowStage.refreshComfyUIInfoFlow(...args);
+    refreshCustomNodesInfoFlow = (...args) => flowStage.refreshCustomNodesInfoFlow(...args);
+    refreshModuleInfoFlow = (...args) => flowStage.refreshModuleInfoFlow(...args);
+    installSingleModuleRequirementsFlow = (...args) => flowStage.installSingleModuleRequirementsFlow(...args);
+    resumePendingCustomRefreshFlow = (...args) => flowStage.resumePendingCustomRefreshFlow(...args);
+    resumePendingModuleUpdateFlow = (...args) => flowStage.resumePendingModuleUpdateFlow(...args);
+    resumePendingComfyInfoRefreshFlow = (...args) => flowStage.resumePendingComfyInfoRefreshFlow(...args);
 
     const runtimeBootstrap = initializeModuleNodePickerRuntime({
         groupSelect,

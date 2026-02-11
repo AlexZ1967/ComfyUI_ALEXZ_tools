@@ -158,6 +158,8 @@
   - вынесен orchestration-бандл polling/catalog/actions/module-panel в `web/orchestration/module_node_picker_flow_wiring.js` для модульной сборки runtime-пайплайна.
   - вынесен runtime-bootstrap (bind events, восстановление ComfyUI-card, wiring startup coordinator) в `web/orchestration/module_node_picker_runtime_bootstrap.js`.
   - вынесен базовый runtime-setup (runtime context, lifecycle, API client, debug/process controllers) в `web/orchestration/module_node_picker_runtime_setup.js`.
+  - вынесена UI-stage сборка в `web/orchestration/module_node_picker_ui_stage.js` (adapter-композиция selector/busy/view/status контроллеров).
+  - вынесена flow-stage сборка в `web/orchestration/module_node_picker_flow_stage.js` (adapter-композиция polling/catalog/action/module-panel контроллеров).
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

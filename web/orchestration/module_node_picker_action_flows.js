@@ -53,6 +53,9 @@ export function createModuleNodePickerActionFlows(context = {}) {
     const getComfyMode = typeof context?.getComfyMode === "function"
         ? context.getComfyMode
         : () => "releases";
+    const getLogMode = typeof context?.getLogMode === "function"
+        ? context.getLogMode
+        : () => "summary";
     const getSelectedGroup = typeof context?.getSelectedGroup === "function"
         ? context.getSelectedGroup
         : () => "";
@@ -123,6 +126,7 @@ export function createModuleNodePickerActionFlows(context = {}) {
             setProcessAction,
             setRefreshLine,
             startModuleUpdate,
+            getLogMode,
             pollUpdateProgress,
             getSelectedGroup,
             getSelectedModule,
@@ -193,6 +197,7 @@ export function createModuleNodePickerActionFlows(context = {}) {
             customAlert,
             customAlertText,
             refreshModuleRuntimeState,
+            getLogMode,
             pollRefreshProgress,
             acknowledgeAllModuleNovelty,
             loadCatalog: getLoadCatalog(),

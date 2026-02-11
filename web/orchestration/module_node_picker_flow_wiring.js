@@ -95,6 +95,7 @@ export function createModuleNodePickerFlowWiring(context = {}) {
         installModuleRequirements: context?.installModuleRequirements,
         installComfyUIRequirements: context?.installComfyUIRequirements,
         fetchComfyUIInfo: context?.fetchComfyUIInfo,
+        getLogMode: context?.getLogMode,
         refreshModuleRuntimeState: context?.refreshModuleRuntimeState,
         acknowledgeAllModuleNovelty: context?.acknowledgeAllModuleNovelty,
         fetchModuleRefreshStatus: context?.fetchModuleRefreshStatus,
