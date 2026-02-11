@@ -341,6 +341,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         relay_runtime_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_runtime.js"
         ).read_text(encoding="utf-8")
+        busy_ui_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
+        ).read_text(encoding="utf-8")
         picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
             encoding="utf-8"
         )
@@ -367,8 +370,8 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("moduleInfoLoadToken", picker_text)
         self.assertIn("catalogLoadBusyCount", picker_text)
         self.assertIn("setCatalogControlsLoading", picker_text)
-        self.assertIn("Loading groups...", picker_text)
-        self.assertIn("Loading modules...", picker_text)
+        self.assertIn("Loading groups...", busy_ui_text)
+        self.assertIn("Loading modules...", busy_ui_text)
         self.assertIn("PICKER_CLEANUP_KEY", picker_text)
         data_flow_text = (repo_root / "web" / "orchestration" / "module_node_picker_data_flow.js").read_text(encoding="utf-8")
         self.assertIn("isRequestActive", data_flow_text)
@@ -447,6 +450,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         resume_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_resume_flow.js"
         ).read_text(encoding="utf-8")
+        busy_ui_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
+        ).read_text(encoding="utf-8")
         runtime_state_text = (
             repo_root / "web" / "state" / "module_node_picker_runtime_state.js"
         ).read_text(encoding="utf-8")
@@ -483,7 +489,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("resumePendingModuleUpdateFlowImpl", picker_text)
         self.assertIn("resumePendingComfyInfoRefreshFlowImpl", picker_text)
         self.assertIn("startCatalogStartupLoad", picker_text)
-        self.assertIn("isActionBusy: () => actionBusy || startupBusy", picker_text)
+        self.assertIn("isActionBusy: () => busyUi.isActionBusy()", picker_text)
         self.assertIn("cancelStartupLoad = runStartupCoordinator(", picker_text)
         self.assertIn("onSettled", bindings_text)
         self.assertIn("settle()", bindings_text)
@@ -499,6 +505,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export async function resumePendingCustomRefreshFlow", resume_flow_text)
         self.assertIn("export async function resumePendingModuleUpdateFlow", resume_flow_text)
         self.assertIn("export async function resumePendingComfyInfoRefreshFlow", resume_flow_text)
+        self.assertIn("export function createBusyUiController", busy_ui_text)
+        self.assertIn("setCatalogControlsLoading", busy_ui_text)
+        self.assertIn("setActionBusy", busy_ui_text)
+        self.assertIn("setStartupBusy", busy_ui_text)
         self.assertIn("export function getRuntimePickerState", runtime_state_text)
         self.assertIn("export function clearLegacyPersistentFlags", runtime_state_text)
         self.assertIn("export function createRuntimeStatusAccessors", runtime_state_text)

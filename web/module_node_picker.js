@@ -86,6 +86,7 @@ import {
     resumePendingModuleUpdateFlow as resumePendingModuleUpdateFlowImpl,
     resumePendingComfyInfoRefreshFlow as resumePendingComfyInfoRefreshFlowImpl,
 } from "./orchestration/module_node_picker_resume_flow.js";
+import { createBusyUiController } from "./orchestration/module_node_picker_busy_ui.js";
 import { runStartupCoordinator } from "./orchestration/module_node_picker_startup_flow.js";
 import { createModuleNodePickerStore } from "./state/store.js";
 import {
@@ -806,9 +807,6 @@ function renderPicker(container) {
     let customModulesNeedUpdate = 0;
     let customStatusChecked = loadCustomStatusChecked();
     let comfyStatusChecked = loadComfyStatusChecked();
-    let actionBusy = false;
-    let startupBusy = false;
-    let catalogControlsLoading = false;
     let expandedModule = "";
     let unbindPickerEvents = () => {};
     let processUi = null;
@@ -954,29 +952,28 @@ function renderPicker(container) {
         pickerStore.set(partial);
     };
 
-    /**
-     * Toggle selector controls into loading/ready state with safe placeholders.
-     */
-    const setCatalogControlsLoading = (loading) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        const busy = Boolean(loading);
-        catalogControlsLoading = busy;
-        if (busy && groupSelect && groupSelect.options.length === 0) {
-            const opt = document.createElement("option");
-            opt.value = "";
-            opt.textContent = "Loading groups...";
-            groupSelect.appendChild(opt);
-        }
-        if (busy && nodeSelect && nodeSelect.options.length === 0) {
-            const opt = document.createElement("option");
-            opt.value = "";
-            opt.textContent = "Loading modules...";
-            nodeSelect.appendChild(opt);
-        }
-        syncBusyUiState();
-    };
+    const busyUi = createBusyUiController({
+        shouldContinue: isPickerAlive,
+        controls: {
+            refreshBtn,
+            comfyInfoBtn,
+            comfyModeSelect,
+            categorySelect,
+            groupSelect,
+            nodeSelect,
+            moduleFilter,
+            updateAllBtn,
+            comfyUpdateBtn,
+            comfyInstallReqBtn,
+            moduleInfo,
+            nodeList,
+        },
+        getProcessUi: () => processUi,
+    });
+    const syncBusyUiState = () => busyUi.syncBusyUiState();
+    const setCatalogControlsLoading = (loading) => busyUi.setCatalogControlsLoading(loading);
+    const setActionBusy = (busy) => busyUi.setActionBusy(busy);
+    const setStartupBusy = (busy) => busyUi.setStartupBusy(busy);
 
     /**
      * Render ComfyUI status card based on selected update-check mode.
@@ -993,7 +990,7 @@ function renderPicker(container) {
         renderComfyAlertCard({
             info,
             comfyMode: comfyModeSelect.value,
-            actionBusy,
+            actionBusy: busyUi.getActionBusy(),
             fmtDate,
             comfyAlert,
             comfyAlertText,
@@ -1012,7 +1009,7 @@ function renderPicker(container) {
         renderCustomAlertCard({
             customModulesNeedUpdate,
             customStatusChecked,
-            actionBusy,
+            actionBusy: busyUi.getActionBusy(),
             customAlert,
             customAlertText,
             updateAllBtn,
@@ -1034,7 +1031,7 @@ function renderPicker(container) {
         if (!isPickerAlive()) {
             return;
         }
-        processUi.setAction(label, btnText, onClick, actionBusy);
+        processUi.setAction(label, btnText, onClick, busyUi.getActionBusy());
     };
 
     /**
@@ -1162,57 +1159,6 @@ function renderPicker(container) {
             customAlertText,
             sleepMs: 400,
         });
-    };
-
-    /**
-     * Sync top/module action controls disabled-state from startup/action busy flags.
-     */
-    function syncBusyUiState() {
-        if (!isPickerAlive()) {
-            return;
-        }
-        const busy = Boolean(actionBusy || startupBusy);
-        const controlsBusy = Boolean(busy || catalogControlsLoading);
-        refreshBtn.disabled = busy;
-        comfyInfoBtn.disabled = busy;
-        comfyModeSelect.disabled = busy;
-        categorySelect.disabled = controlsBusy;
-        groupSelect.disabled = controlsBusy;
-        nodeSelect.disabled = controlsBusy;
-        moduleFilter.disabled = controlsBusy;
-        updateAllBtn.disabled = busy;
-        comfyUpdateBtn.disabled = busy || comfyUpdateBtn.style.display === "none";
-        comfyInstallReqBtn.disabled = busy || comfyInstallReqBtn.style.display === "none";
-        moduleInfo.style.pointerEvents = controlsBusy ? "none" : "";
-        nodeList.style.pointerEvents = controlsBusy ? "none" : "";
-        moduleInfo.style.opacity = controlsBusy ? "0.85" : "";
-        nodeList.style.opacity = controlsBusy ? "0.92" : "";
-        for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
-            btn.disabled = busy;
-        }
-        processUi.setButtonsDisabled(busy);
-    }
-
-    /**
-     * Enable/disable actionable UI controls during long-running operations.
-     */
-    const setActionBusy = (busy) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        actionBusy = Boolean(busy);
-        syncBusyUiState();
-    };
-
-    /**
-     * Mark startup bootstrap state and apply unified disabled-state to controls.
-     */
-    const setStartupBusy = (busy) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        startupBusy = Boolean(busy);
-        syncBusyUiState();
     };
 
     /**
@@ -1554,7 +1500,7 @@ function renderPicker(container) {
                 updatedModulesSession.has(selectedModule)
                 || Boolean(info?.updated_between_runs)
                 || Boolean(info?.new_module_between_runs),
-            actionBusy,
+            actionBusy: busyUi.getActionBusy(),
             inlineStatus: moduleInlineStatus.get(selectedModule) || null,
             fmtDate,
             onExpandModule: (moduleName) => {
@@ -1694,7 +1640,7 @@ function renderPicker(container) {
         syncUpdateAllButton,
         syncPickerSelectionState,
         loadModuleInfo,
-        isActionBusy: () => actionBusy || startupBusy,
+        isActionBusy: () => busyUi.isActionBusy(),
         setCustomStatusChecked,
         setProcessTarget,
         runModuleUpdate,
