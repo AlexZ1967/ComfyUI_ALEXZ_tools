@@ -63,12 +63,28 @@ export function extractTabIdFromButton(buttonEl) {
  * Resolve sidebar tab-like button element from DOM event target/path.
  */
 export function resolveSidebarButtonFromEvent(event) {
+    const isSidebarContextElement = (el) => {
+        if (!(el instanceof Element)) {
+            return false;
+        }
+        if (el.classList?.contains("side-bar-button")) {
+            return true;
+        }
+        if (extractTabIdFromButton(el)) {
+            return true;
+        }
+        return Boolean(
+            el.closest(
+                ".side-bar, .sidebar, .comfy-sidebar, [class*='sidebar'], [class*='side-bar']"
+            )
+        );
+    };
     const direct = event?.target;
     if (direct instanceof Element) {
         const closest = direct.closest(
             ".side-bar-button, [class*='-tab-button'], [role='tab'], button[aria-label], button[title]"
         );
-        if (closest) {
+        if (closest && isSidebarContextElement(closest)) {
             return closest;
         }
     }
@@ -77,13 +93,11 @@ export function resolveSidebarButtonFromEvent(event) {
             if (!(item instanceof Element)) {
                 continue;
             }
-            if (item.classList?.contains("side-bar-button")) {
+            const role = String(item.getAttribute("role") || "").toLowerCase();
+            if (role === "tab" && isSidebarContextElement(item)) {
                 return item;
             }
-            if (extractTabIdFromButton(item)) {
-                return item;
-            }
-            if (String(item.getAttribute("role") || "").toLowerCase() === "tab") {
+            if (isSidebarContextElement(item)) {
                 return item;
             }
         }
