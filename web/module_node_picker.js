@@ -39,6 +39,8 @@ import {
 } from "./ui/module_node_picker_status.js";
 import {
     renderHelpText,
+    renderHelpHintText,
+    renderHelpHintTextWithTone,
     renderHelpModuleSummary,
     renderHelpModuleCardHint,
 } from "./ui/module_node_picker_help.js";
@@ -204,6 +206,10 @@ function injectStyles() {
         word-break: break-word;
         overflow-wrap: anywhere;
         margin-bottom: 0;
+    }
+    .alexz-mod-picker-help-hint--warn {
+        color: #ff6b6b;
+        opacity: 0.95;
     }
     .alexz-mod-picker-refresh-line {
         font-size: 12px;
@@ -907,6 +913,17 @@ function renderPicker(container) {
     };
 
     /**
+     * Replace help area with compact hint-like message.
+     */
+    const setHelpHintText = (text, tone = "neutral") => {
+        if (String(tone || "").toLowerCase() === "warn") {
+            renderHelpHintTextWithTone(help, text, "warn");
+            return;
+        }
+        renderHelpHintText(help, text);
+    };
+
+    /**
      * Render expanded-module help summary with insertion hints and legend.
      */
     const setHelpModuleSummary = (moduleName, nodeCount) => {
@@ -1215,6 +1232,7 @@ function renderPicker(container) {
             getNodesForSelectedGroup,
             expandedModule,
             setHelpText,
+            setHelpHintText,
             setHelpModuleCardHint,
             setHelpModuleSummary,
             moduleNodeDiffs,

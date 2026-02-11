@@ -1,7 +1,7 @@
 /**
  * Module: web/ui/module_node_picker_renderers.js
  * Author: AlexZ1967
- * Last updated: 2026-02-10
+ * Last updated: 2026-02-11
  *
  * Description:
  *   DOM render helpers for Module Node Picker module and node cards.
@@ -19,6 +19,7 @@ export function renderNodeListPanel(context) {
     const getNodesForSelectedGroup = context?.getNodesForSelectedGroup;
     const expandedModule = String(context?.expandedModule || "");
     const setHelpText = context?.setHelpText;
+    const setHelpHintText = context?.setHelpHintText;
     const setHelpModuleCardHint = context?.setHelpModuleCardHint;
     const setHelpModuleSummary = context?.setHelpModuleSummary;
     const moduleNodeDiffs = context?.moduleNodeDiffs;
@@ -42,7 +43,7 @@ export function renderNodeListPanel(context) {
         return;
     }
     if (!nodes.length) {
-        setHelpText?.(`Модуль ${selectedModule}: загруженных нод не найдено (возможно, модуль не загрузился).`);
+        setHelpHintText?.("Загруженных нод не найдено (возможно, модуль не загрузился).", "warn");
         return;
     }
     if (expandedModule !== selectedModule) {

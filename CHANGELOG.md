@@ -13,6 +13,9 @@
   - filtered `relay_keyup` handling to tab/navigation keys and excluded text-input targets to reduce noisy sync cycles,
   - added relay bind-token guards so stale timers/listeners from previous binds cannot apply visibility updates,
   - removed unused tab-id fallback helper from relay helpers to reduce dead heuristics.
+- Module Node Picker UX cleanup:
+  - fixed help-hint flicker when switching `ComfyUI check` mode by removing transient catalog-loading help overrides,
+  - changed "no loaded nodes" message to compact hint style, removed module-name prefix, and highlighted it in red.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

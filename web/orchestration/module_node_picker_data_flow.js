@@ -99,21 +99,12 @@ export async function loadCatalogFlow(options, context) {
     const preferredGroup = String(options?.preferredGroup || "").trim();
     const preferredModule = String(options?.preferredModule || "").trim();
     const autoExpandModule = String(options?.autoExpandModule || "").trim();
-    context?.setHelpText?.("Загрузка списка нод...");
     try {
         const payload = await context?.fetchNodeCatalog?.(context?.getComfyMode?.());
         context?.catalogByGroup?.clear?.();
         const groups = payload?.groups || [];
         context?.setCustomModulesNeedUpdate?.(Number(payload?.custom_modules_need_update || 0));
         context?.fillGroupSelect?.(groups, { preferredGroup, preferredModule, autoExpandModule });
-        const groupLabels = context?.groupLabels || {};
-        const summary = groups
-            .map((group) => {
-                const label = groupLabels[group.id] || group.title || group.id;
-                return `${label}=${group.count}`;
-            })
-            .join(", ");
-        context?.setHelpText?.(`Группы: ${summary}.`);
         context?.syncUpdateAllButton?.();
     } catch (err) {
         context?.setHelpText?.(`Ошибка загрузки: ${String(err)}`);

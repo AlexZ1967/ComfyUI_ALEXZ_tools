@@ -1,7 +1,7 @@
 /**
  * Module: web/ui/module_node_picker_help.js
  * Author: AlexZ1967
- * Last updated: 2026-02-10
+ * Last updated: 2026-02-11
  *
  * Description:
  *   Help panel rendering helpers for Module Node Picker.
@@ -18,7 +18,34 @@ export function renderHelpText(helpEl, text) {
         return;
     }
     helpEl.innerHTML = "";
-    helpEl.textContent = text || "";
+    const main = document.createElement("div");
+    main.className = "alexz-mod-picker-help-main";
+    main.textContent = text || "";
+    helpEl.appendChild(main);
+}
+
+/**
+ * Replace help area with compact hint-style text.
+ */
+export function renderHelpHintText(helpEl, text) {
+    return renderHelpHintTextWithTone(helpEl, text, "neutral");
+}
+
+/**
+ * Replace help area with compact hint-style text and tone.
+ */
+export function renderHelpHintTextWithTone(helpEl, text, tone = "neutral") {
+    if (!helpEl) {
+        return;
+    }
+    helpEl.innerHTML = "";
+    const hint = document.createElement("div");
+    hint.className = "alexz-mod-picker-help-hint";
+    if (String(tone || "").toLowerCase() === "warn") {
+        hint.classList.add("alexz-mod-picker-help-hint--warn");
+    }
+    hint.textContent = text || "";
+    helpEl.appendChild(hint);
 }
 
 /**
