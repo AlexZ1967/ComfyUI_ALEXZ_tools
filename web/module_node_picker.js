@@ -935,7 +935,7 @@ function renderPicker(container) {
             remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
         },
         renderNodeList: () => renderNodeList(),
-        renderModuleInfo,
+        renderModuleInfo: (...args) => renderModuleInfo(...args),
         moduleBadgesFromInfo,
         setCatalogControlsLoading,
         setCustomModulesNeedUpdate: (value) => {

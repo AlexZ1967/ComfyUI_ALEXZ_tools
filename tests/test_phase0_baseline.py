@@ -549,6 +549,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("loadCatalog", catalog_controller_text)
         self.assertIn("loadModuleInfo", catalog_controller_text)
         self.assertIn("bumpRequestTokens", catalog_controller_text)
+        self.assertIn("renderModuleInfo: (...args) => renderModuleInfo(...args)", picker_text)
         self.assertIn("export function createModuleNodePickerStatusCards", status_cards_text)
         self.assertIn("renderComfyAlertCard", status_cards_text)
         self.assertIn("renderCustomAlertCard", status_cards_text)

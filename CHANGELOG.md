@@ -95,6 +95,7 @@
   - extracted catalog/module loading controller into `web/orchestration/module_node_picker_catalog_controller.js` (request tokens, busy counters, option/diff caches), preserving existing loader behavior.
   - extracted top status-card orchestration into `web/orchestration/module_node_picker_status_cards.js` (Comfy/Custom card rendering + checked-state persistence), preserving card UX.
   - extracted picker runtime/store bootstrap into `web/state/module_node_picker_runtime_context.js` (store + diagnostics + runtime status accessors + mode storage wiring), behavior unchanged.
+  - fixed startup regression after refactor: catalog controller now receives deferred `renderModuleInfo` callback to avoid TDZ access before function initialization.
 - Canceled-request handling hardening:
   - added shared error-classifier `web/orchestration/module_node_picker_error_utils.js`,
   - resume/action/poll flows now suppress non-actionable warnings for intentionally canceled/aborted requests.
