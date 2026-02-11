@@ -203,6 +203,19 @@
     - `web/orchestration/core/infra/` для инфраструктурных модулей bindings/error/registration.
   - `module_node_picker_composer.js` + `module_node_picker_context_builders.js` + `module_node_picker_stage_bridge.js` перенесены в `core/composition/`, `module_node_picker_bindings.js` + `module_node_picker_error_utils.js` + `module_node_picker_registration.js` перенесены в `core/infra/`, затем обновлены зависимые импорты, шапки `Module:`, ссылки в плане и пути в baseline frontend-тестах.
   - убран хрупкий глубокий импорт `scripts/app.js` из composer; теперь `app` передается из entrypoint через dependency injection (`renderModuleNodePicker(container, { appInstance: app })`), что снижает риск поломки инициализации после переносов файлов.
+  - реализация relay bind/unbind вынесена в `web/orchestration/relay/module_node_picker_tab_relay_facade.js`, а `web/module_node_picker_tab_relay.js` преобразован в стабильный re-export entrypoint с сохранением текущего import path и уменьшением плотности root-слоя orchestration.
+  - доступ к глобальному relay-состоянию централизован в `web/orchestration/relay/module_node_picker_tab_relay_state.js`; relay facade переведен на shared state helper для операций read/write/clear.
+  - reason/timing константы relay централизованы в `web/orchestration/relay/module_node_picker_tab_relay_constants.js`, а `runtime/intent/tick/facade` переведены на constants-driven flow.
+  - логика bypass debounce для immediate-reason в relay унифицирована через общий helper `isImmediateRelayReason()` из constants-модуля.
+  - уменьшена нагрузка relay-диагностики: события relay прокидываются в debug-панель только при включенном debug-режиме.
+  - в relay facade добавлены browser-context guards для bind/unbind, чтобы исключить падения в частичных/non-browser сценариях инициализации.
+  - добавлен явный `mountHost`-wiring от composer до relay runtime, чтобы восстановление attach/detach могло переаттачить root к актуальному sidebar-host при смене исходного parent-контейнера.
+  - нормализован relay bind input (guard на `root` как `Element` в facade) и улучшен host-preference в runtime: подключенный root при дрейфе owner-контейнера принудительно возвращается под preferred mount host.
+  - DOM-детекторы relay (tab-candidate/sidebar-context) вынесены в `web/orchestration/relay/module_node_picker_tab_relay_dom.js`, а relay helpers переведены на shared DOM helper-функции.
+  - lifecycle relay bind-state (создание state + детерминированный dispose/unbind) вынесен в `web/orchestration/relay/module_node_picker_tab_relay_lifecycle.js`, а facade переведен на shared lifecycle helpers.
+  - формирование payload relay-диагностики и dedup-emitter вынесены в `web/orchestration/relay/module_node_picker_tab_relay_diagnostics.js`, runtime переведен на shared diagnostics helpers.
+  - DOM ownership relay (attach/detach + восстановление host) вынесен в `web/orchestration/relay/module_node_picker_tab_relay_dom_ownership.js`, runtime visibility переведен на shared ownership controller.
+  - relay-bind wiring в composer вынесен в `web/orchestration/core/composition/module_node_picker_relay_bridge.js`, чтобы body composition оставался компактнее и relay-инициализация была изолирована в bridge-модуле.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

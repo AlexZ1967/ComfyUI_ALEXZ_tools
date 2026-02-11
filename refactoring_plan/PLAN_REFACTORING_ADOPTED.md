@@ -203,6 +203,19 @@ Deliverables:
     - `web/orchestration/core/infra/` for bindings/error/registration infrastructure.
   - moved `module_node_picker_composer.js` + `module_node_picker_context_builders.js` + `module_node_picker_stage_bridge.js` into `core/composition/`, moved `module_node_picker_bindings.js` + `module_node_picker_error_utils.js` + `module_node_picker_registration.js` into `core/infra/`, then updated dependent imports, module headers, plan path references, and baseline test path markers.
   - removed fragile deep `scripts/app.js` import from composer and switched to dependency injection from entrypoint (`renderModuleNodePicker(container, { appInstance: app })`) to reduce startup break risk after folder moves.
+  - extracted relay bind/unbind implementation into `web/orchestration/relay/module_node_picker_tab_relay_facade.js` and converted `web/module_node_picker_tab_relay.js` into a stable re-export entrypoint, preserving existing import path while reducing root-level orchestration density.
+  - centralized relay global state access in `web/orchestration/relay/module_node_picker_tab_relay_state.js` and switched relay facade to use shared state helpers for read/write/clear operations.
+  - centralized relay reasons/timing thresholds in `web/orchestration/relay/module_node_picker_tab_relay_constants.js` and switched relay `runtime/intent/tick/facade` modules to constants-driven flow.
+  - unified relay immediate-reason debounce bypass logic through shared `isImmediateRelayReason()` helper from relay constants module.
+  - reduced relay diagnostics overhead by forwarding tab-relay diagnostics to debug panel only when debug mode is enabled.
+  - added browser-context guards in relay facade bind/unbind path to prevent crashes in partial/non-browser initialization contexts.
+  - added explicit `mountHost` relay wiring from composer to relay runtime so attach/detach recovery can rebind picker root against current sidebar render host when original parent changes.
+  - normalized relay bind input (`root` element guard in facade) and improved runtime host preference so connected root is moved back under preferred mount host when container ownership drifts.
+  - extracted relay DOM candidate/sidebar-context detection into `web/orchestration/relay/module_node_picker_tab_relay_dom.js` and switched relay helpers to shared DOM helper functions.
+  - extracted relay bind-state lifecycle (state construction + deterministic dispose/unbind) into `web/orchestration/relay/module_node_picker_tab_relay_lifecycle.js` and switched facade to shared lifecycle helpers.
+  - extracted relay diagnostics payload/deduplicated emit path into `web/orchestration/relay/module_node_picker_tab_relay_diagnostics.js` and switched relay runtime to diagnostics helpers.
+  - extracted relay DOM ownership/host-recovery (attach/detach) into `web/orchestration/relay/module_node_picker_tab_relay_dom_ownership.js` and switched runtime visibility path to shared ownership controller.
+  - extracted composer relay-bind wiring into `web/orchestration/core/composition/module_node_picker_relay_bridge.js` so composition body keeps relay boot logic in a focused bridge module.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

@@ -17,6 +17,14 @@ import {
     isOwnButtonSelected,
     inferTabIdFromButton,
 } from "./module_node_picker_tab_relay_helpers.js";
+import {
+    RELAY_FOREIGN_CORRECTION_DELAY_MS,
+    RELAY_REASON_KEYUP,
+    RELAY_REASON_NATIVE_OK,
+    RELAY_REASON_PAGESHOW,
+    RELAY_REASON_PENDING_SWITCH,
+    RELAY_REASON_VISIBILITY,
+} from "./module_node_picker_tab_relay_constants.js";
 
 /**
  * Create intent controller for tab interactions and relay correction scheduling.
@@ -70,12 +78,12 @@ export function createModuleNodePickerRelayIntentController(context = {}) {
             const ownSelected = isOwnButtonSelected(sidebarTabId);
             if (activeTabId === tabId || ownSelected === false) {
                 relayRuntime?.clearForeignIntent?.();
-                relayRuntime?.syncVisibility?.("relay_native_ok", tabId);
+                relayRuntime?.syncVisibility?.(RELAY_REASON_NATIVE_OK, tabId);
                 return;
             }
             // Do not force tab activation from relay. Only re-evaluate visibility.
-            relayRuntime?.syncVisibility?.("relay_pending_switch", tabId);
-        }, 60));
+            relayRuntime?.syncVisibility?.(RELAY_REASON_PENDING_SWITCH, tabId);
+        }, RELAY_FOREIGN_CORRECTION_DELAY_MS));
     };
 
     const handleEvent = (event) => {
@@ -136,21 +144,21 @@ export function createModuleNodePickerRelayIntentController(context = {}) {
         if (target instanceof Element && target.closest("input, textarea, [contenteditable]")) {
             return;
         }
-        relayRuntime?.syncVisibility?.("relay_keyup");
+        relayRuntime?.syncVisibility?.(RELAY_REASON_KEYUP);
     };
 
     const onVisibilityChange = () => {
         if (!isCurrentBinding()) {
             return;
         }
-        relayRuntime?.syncVisibility?.("relay_visibility");
+        relayRuntime?.syncVisibility?.(RELAY_REASON_VISIBILITY);
     };
 
     const onPageShow = () => {
         if (!isCurrentBinding()) {
             return;
         }
-        relayRuntime?.syncVisibility?.("relay_pageshow");
+        relayRuntime?.syncVisibility?.(RELAY_REASON_PAGESHOW);
     };
 
     return {

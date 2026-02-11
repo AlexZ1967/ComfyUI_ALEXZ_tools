@@ -363,11 +363,29 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         relay_text = (repo_root / "web" / "module_node_picker_tab_relay.js").read_text(
             encoding="utf-8"
         )
+        relay_facade_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_facade.js"
+        ).read_text(encoding="utf-8")
+        relay_constants_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_constants.js"
+        ).read_text(encoding="utf-8")
+        relay_events_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_events.js"
+        ).read_text(encoding="utf-8")
+        relay_lifecycle_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_lifecycle.js"
+        ).read_text(encoding="utf-8")
         relay_helpers_text = (
             repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_helpers.js"
         ).read_text(encoding="utf-8")
         relay_runtime_text = (
             repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_runtime.js"
+        ).read_text(encoding="utf-8")
+        relay_diagnostics_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_diagnostics.js"
+        ).read_text(encoding="utf-8")
+        relay_dom_ownership_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_dom_ownership.js"
         ).read_text(encoding="utf-8")
         relay_intent_text = (
             repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_intent.js"
@@ -420,31 +438,58 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap_bindings.js"
         ).read_text(encoding="utf-8")
+        relay_bridge_text = (
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_relay_bridge.js"
+        ).read_text(encoding="utf-8")
         runtime_projection_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_projection.js"
         ).read_text(encoding="utf-8")
         picker_runtime_text = (
-            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}"
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}\n{relay_bridge_text}"
         )
 
-        self.assertIn("export function bindModuleNodesTabRelay", relay_text)
-        self.assertIn("export function unbindModuleNodesTabRelay", relay_text)
+        self.assertIn("bindModuleNodesTabRelayFacade as bindModuleNodesTabRelay", relay_text)
+        self.assertIn("unbindModuleNodesTabRelayFacade as unbindModuleNodesTabRelay", relay_text)
+        self.assertIn("module_node_picker_tab_relay_facade.js", relay_text)
+        self.assertIn("export function bindModuleNodesTabRelayFacade", relay_facade_text)
+        self.assertIn("export function unbindModuleNodesTabRelayFacade", relay_facade_text)
+        self.assertIn("mountHost", relay_facade_text)
+        self.assertIn("mountHost", relay_runtime_text)
+        self.assertIn("module_node_picker_tab_relay_diagnostics.js", relay_runtime_text)
+        self.assertIn("module_node_picker_tab_relay_dom_ownership.js", relay_runtime_text)
+        self.assertIn("module_node_picker_tab_relay_constants.js", relay_facade_text)
+        self.assertIn("module_node_picker_tab_relay_events.js", relay_facade_text)
+        self.assertIn("module_node_picker_tab_relay_lifecycle.js", relay_facade_text)
+        self.assertIn("RELAY_REASON_INIT", relay_constants_text)
+        self.assertIn("RELAY_REASON_TICK", relay_constants_text)
+        self.assertIn("createRelayDomEventHandlers", relay_events_text)
+        self.assertIn("bindRelayDomEvents", relay_events_text)
+        self.assertIn("unbindRelayDomEvents", relay_events_text)
+        self.assertIn("createRelayBindState", relay_lifecycle_text)
+        self.assertIn("disposeRelayBindState", relay_lifecycle_text)
+        self.assertIn("buildRelayDiagnosticsPayload", relay_diagnostics_text)
+        self.assertIn("createRelayDiagnosticsEmitter", relay_diagnostics_text)
+        self.assertIn("createRelayDomOwnershipController", relay_dom_ownership_text)
         self.assertIn("easyuse_nodes_map", relay_helpers_text)
-        self.assertIn("relay_init", relay_text)
-        self.assertIn("relay_tick", relay_text)
+        self.assertIn("relay_init", relay_constants_text)
+        self.assertIn("relay_tick", relay_constants_text)
         self.assertIn("MIN_SYNC_INTERVAL_MS", relay_runtime_text)
         self.assertIn("dispose()", relay_runtime_text)
         self.assertIn("hasPendingForeignIntent()", relay_runtime_text)
-        self.assertIn("startModuleNodePickerRelayTickLoop", relay_text)
-        self.assertIn("createModuleNodePickerRelayIntentController", relay_text)
+        self.assertIn("startModuleNodePickerRelayTickLoop", relay_facade_text)
+        self.assertIn("createModuleNodePickerRelayIntentController", relay_facade_text)
         self.assertIn("passiveTickBudget", relay_tick_text)
         self.assertIn("isOwnButtonSelected", relay_tick_text)
-        self.assertIn("relay_pending_switch", relay_intent_text)
-        self.assertIn("relay_native_ok", relay_intent_text)
-        self.assertIn("relay_visibility", relay_intent_text)
-        self.assertIn("relay_pageshow", relay_intent_text)
-        self.assertIn("bindToken = Symbol", relay_text)
-        self.assertIn("isCurrentBinding", relay_text)
+        self.assertIn("RELAY_REASON_PENDING_SWITCH", relay_intent_text)
+        self.assertIn("RELAY_REASON_NATIVE_OK", relay_intent_text)
+        self.assertIn("RELAY_REASON_VISIBILITY", relay_intent_text)
+        self.assertIn("RELAY_REASON_PAGESHOW", relay_intent_text)
+        self.assertIn("relay_pending_switch", relay_constants_text)
+        self.assertIn("relay_native_ok", relay_constants_text)
+        self.assertIn("relay_visibility", relay_constants_text)
+        self.assertIn("relay_pageshow", relay_constants_text)
+        self.assertIn("bindToken = Symbol", relay_facade_text)
+        self.assertIn("isCurrentBinding", relay_facade_text)
         self.assertIn("[contenteditable]", relay_intent_text)
 
         self.assertIn("diag.active_tab=", debug_ui_text)
@@ -475,11 +520,14 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             ("centerNodeInCanvas(node, app)" in picker_runtime_text)
             or ("centerNodeInCanvas(node, appInstance)" in picker_runtime_text)
         )
+        self.assertIn("mountHost: container", picker_runtime_text)
         self.assertIn("MODULE_PICKER_GUARD_KEY", picker_text)
         self.assertIn("createModuleNodePickerSelectionController", ui_controllers_text)
         self.assertIn("fillModuleSelect: (options = {}) => selectionController.fillModuleSelect(options)", ui_controllers_text)
         self.assertIn("fillGroupSelect: (groups, options = {}) => selectionController.fillGroupSelect(groups, options)", ui_controllers_text)
         self.assertIn("createModuleNodePickerUiControllers", picker_runtime_text)
+        self.assertIn("bindModuleNodePickerRelayBridge", composer_text)
+        self.assertIn("export function bindModuleNodePickerRelayBridge", relay_bridge_text)
         self.assertNotIn("fillModuleSelectUi", picker_text)
         self.assertNotIn("fillGroupSelectUi", picker_text)
         self.assertIn("PICKER_CLEANUP_KEY", picker_runtime_text)
@@ -493,6 +541,15 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         relay_text = (repo_root / "web" / "module_node_picker_tab_relay.js").read_text(
             encoding="utf-8"
         )
+        relay_facade_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_facade.js"
+        ).read_text(encoding="utf-8")
+        relay_events_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_events.js"
+        ).read_text(encoding="utf-8")
+        relay_lifecycle_text = (
+            repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_lifecycle.js"
+        ).read_text(encoding="utf-8")
         helpers_text = (
             repo_root / "web" / "orchestration" / "relay" / "module_node_picker_tab_relay_helpers.js"
         ).read_text(encoding="utf-8")
@@ -520,17 +577,26 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap_bindings.js"
         ).read_text(encoding="utf-8")
+        relay_bridge_text = (
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_relay_bridge.js"
+        ).read_text(encoding="utf-8")
         runtime_projection_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_projection.js"
         ).read_text(encoding="utf-8")
         picker_runtime_text = (
-            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}"
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}\n{relay_bridge_text}"
         )
 
-        self.assertNotIn("setInterval(", relay_text)
-        self.assertNotIn("setTimeout(runTick", relay_text)
-        self.assertIn("startModuleNodePickerRelayTickLoop", relay_text)
-        self.assertIn("createModuleNodePickerRelayIntentController", relay_text)
+        self.assertNotIn("setInterval(", relay_facade_text)
+        self.assertNotIn("setTimeout(runTick", relay_facade_text)
+        self.assertIn("startModuleNodePickerRelayTickLoop", relay_facade_text)
+        self.assertIn("createModuleNodePickerRelayIntentController", relay_facade_text)
+        self.assertIn("bindRelayDomEvents", relay_facade_text)
+        self.assertIn("disposeRelayBindState", relay_facade_text)
+        self.assertIn("disposeRelayBindState", relay_lifecycle_text)
+        self.assertIn("module_node_picker_tab_relay_facade.js", relay_text)
+        self.assertIn("document.addEventListener", relay_events_text)
+        self.assertIn("document.removeEventListener", relay_events_text)
         self.assertIn("window.setTimeout(() =>", relay_intent_text)
         self.assertIn("window.setTimeout(runTick", relay_tick_text)
         self.assertNotIn("export function hasSidebarTabId", helpers_text)
@@ -635,11 +701,14 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap_bindings.js"
         ).read_text(encoding="utf-8")
+        relay_bridge_text = (
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_relay_bridge.js"
+        ).read_text(encoding="utf-8")
         runtime_projection_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_projection.js"
         ).read_text(encoding="utf-8")
         picker_runtime_text = (
-            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}"
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}\n{relay_bridge_text}"
         )
         actions_text = (
             repo_root / "web" / "orchestration" / "flow" / "actions" / "module_node_picker_actions.js"

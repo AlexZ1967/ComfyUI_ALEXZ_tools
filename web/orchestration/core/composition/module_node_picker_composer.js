@@ -12,7 +12,6 @@
  */
 
 import {
-    SIDEBAR_TAB_ID,
     DEFAULT_MODULE,
     NODE_PICKER_DEBUG_KEY,
     NODE_PICKER_DEBUG_STORAGE_KEY,
@@ -30,7 +29,6 @@ import {
     MODULE_MARK_REMOTE_UPDATE,
 } from "../../../constants/module_node_picker_constants.js";
 import {
-    bindModuleNodesTabRelay,
     unbindModuleNodesTabRelay,
 } from "../../../module_node_picker_tab_relay.js";
 import {
@@ -66,6 +64,7 @@ import { createModuleNodePickerRuntimeSetup } from "../../runtime/bootstrap/modu
 import { createModuleNodePickerUiStage } from "../../ui/module_node_picker_ui_stage.js";
 import { createModuleNodePickerFlowStage } from "../../flow/stage/module_node_picker_flow_stage.js";
 import { createModuleNodePickerStageBridge } from "./module_node_picker_stage_bridge.js";
+import { bindModuleNodePickerRelayBridge } from "./module_node_picker_relay_bridge.js";
 import { createModuleNodePickerRuntimeBootstrapBindings } from "../../runtime/bootstrap/module_node_picker_runtime_bootstrap_bindings.js";
 import { projectModuleNodePickerRuntimeSetup } from "../../runtime/bootstrap/module_node_picker_runtime_projection.js";
 import {
@@ -323,11 +322,12 @@ export function renderModuleNodePicker(container, options = {}) {
     const setCustomStatusChecked = uiStage.setCustomStatusChecked;
     const setComfyStatusChecked = uiStage.setComfyStatusChecked;
 
-    bindModuleNodesTabRelay({
-        app: appInstance,
+    bindModuleNodePickerRelayBridge({
+        appInstance,
         root,
-        sidebarTabId: SIDEBAR_TAB_ID,
-        onDiag: (diag) => debugUi?.setDiagnosticText?.(diag),
+        container,
+        pickerStore,
+        debugUi,
     });
 
     const flowStage = createModuleNodePickerFlowStage(buildFlowStageContext({

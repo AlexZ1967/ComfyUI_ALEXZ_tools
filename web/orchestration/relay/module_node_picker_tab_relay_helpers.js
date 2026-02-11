@@ -11,10 +11,11 @@
  *   helpers separated from the relay state machine.
  */
 
-const SIDEBAR_CONTEXT_SELECTOR =
-    ".side-bar, .sidebar, .comfy-sidebar, [class*='sidebar'], [class*='side-bar']";
-const TAB_CANDIDATE_SELECTOR =
-    ".side-bar-button, [class*='-tab-button'], [role='tab'], [aria-selected], [aria-controls*='tab']";
+import {
+    getRelayTabCandidateSelector,
+    isSidebarContextElement,
+    isTabButtonCandidateElement,
+} from "./module_node_picker_tab_relay_dom.js";
 
 /**
  * Return Sidebar API object for current ComfyUI build shape.
@@ -68,44 +69,11 @@ export function extractTabIdFromButton(buttonEl) {
  * Resolve sidebar tab-like button element from DOM event target/path.
  */
 export function resolveSidebarButtonFromEvent(event) {
-    const isTabButtonCandidate = (el) => {
-        if (!(el instanceof Element)) {
-            return false;
-        }
-        if (el.classList?.contains("side-bar-button")) {
-            return true;
-        }
-        if (extractTabIdFromButton(el)) {
-            return true;
-        }
-        const role = String(el.getAttribute("role") || "").toLowerCase();
-        if (role === "tab") {
-            return true;
-        }
-        const cls = String(el.className || "").toLowerCase();
-        if (cls.includes("tab")) {
-            return true;
-        }
-        if (el.hasAttribute("aria-selected")) {
-            return true;
-        }
-        const controls = String(el.getAttribute("aria-controls") || "").toLowerCase();
-        if (controls.includes("tab")) {
-            return true;
-        }
-        return false;
-    };
-
-    const isSidebarContextElement = (el) => {
-        if (!(el instanceof Element)) {
-            return false;
-        }
-        return Boolean(el.closest(SIDEBAR_CONTEXT_SELECTOR));
-    };
+    const tabCandidateSelector = getRelayTabCandidateSelector();
     const direct = event?.target;
     if (direct instanceof Element) {
-        const closest = direct.closest(TAB_CANDIDATE_SELECTOR);
-        if (closest && isTabButtonCandidate(closest) && isSidebarContextElement(closest)) {
+        const closest = direct.closest(tabCandidateSelector);
+        if (closest && isTabButtonCandidateElement(closest, extractTabIdFromButton) && isSidebarContextElement(closest)) {
             return closest;
         }
     }
@@ -114,7 +82,7 @@ export function resolveSidebarButtonFromEvent(event) {
             if (!(item instanceof Element)) {
                 continue;
             }
-            if (!isTabButtonCandidate(item)) {
+            if (!isTabButtonCandidateElement(item, extractTabIdFromButton)) {
                 continue;
             }
             if (isSidebarContextElement(item)) {

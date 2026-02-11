@@ -14,20 +14,34 @@
 import {
     getActiveSidebarTabId,
     isOwnButtonSelected,
-    getContainerState,
 } from "./module_node_picker_tab_relay_helpers.js";
+import {
+    buildRelayDiagnosticsPayload,
+    createRelayDiagnosticsEmitter,
+} from "./module_node_picker_tab_relay_diagnostics.js";
+import { createRelayDomOwnershipController } from "./module_node_picker_tab_relay_dom_ownership.js";
+import {
+    RELAY_FOREIGN_TAB_HIDE_MS,
+    RELAY_MIN_SYNC_INTERVAL_MS,
+    RELAY_REASON_INIT,
+    RELAY_REASON_FOREIGN_TAB_CLICK,
+    RELAY_REASON_OWN_TAB_CLICK,
+    RELAY_REASON_TICK,
+    RELAY_REASON_WAIT_FOREIGN_TAB,
+    isImmediateRelayReason,
+} from "./module_node_picker_tab_relay_constants.js";
 
 /**
  * Create relay runtime with deterministic attach/detach and diagnostics.
  */
-export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId, onDiag }) {
+export function createModuleNodePickerTabRelayRuntime({ app, root, mountHost, sidebarTabId, onDiag }) {
     let lastClickedTabId = "";
     let pendingForeignTabId = "";
     let pendingForeignTabAt = 0;
-    let lastDiagSig = "";
-    const homeContainer = root.parentElement instanceof Element ? root.parentElement : null;
-    const FOREIGN_TAB_HIDE_MS = 1600;
-    const MIN_SYNC_INTERVAL_MS = 48;
+    const emitDiagnostics = createRelayDiagnosticsEmitter(onDiag);
+    const domOwnership = createRelayDomOwnershipController({ root, mountHost });
+    const FOREIGN_TAB_HIDE_MS = RELAY_FOREIGN_TAB_HIDE_MS;
+    const MIN_SYNC_INTERVAL_MS = RELAY_MIN_SYNC_INTERVAL_MS;
     let lastSyncAt = 0;
     let pendingSyncReason = "";
     let pendingSyncClickedTabId = "";
@@ -38,51 +52,14 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
      * Emit deduplicated diagnostics payload to panel callback.
      */
     const emitDiag = (reason, clickedTabId = "") => {
-        const ownSelected = isOwnButtonSelected(sidebarTabId);
-        const containerState = getContainerState(root);
-        const diag = {
+        emitDiagnostics(buildRelayDiagnosticsPayload({
+            app,
+            root,
+            sidebarTabId,
             reason,
-            activeTabId: getActiveSidebarTabId(app) || "n/a",
-            lastClickedTabId: clickedTabId || lastClickedTabId || "n/a",
-            ownBtnFound: ownSelected !== null,
-            ownBtnSelected: ownSelected,
-            rootDisplay: root.style.display || "",
-            childNodesCount: containerState.childCount,
-            childNodesShort: containerState.childShort,
-        };
-        const sig = JSON.stringify(diag);
-        if (sig === lastDiagSig) {
-            return;
-        }
-        lastDiagSig = sig;
-        onDiag?.(diag);
-    };
-
-    /**
-     * Re-attach picker root into home container when needed.
-     */
-    const ensureRootAttached = () => {
-        if (root.isConnected) {
-            return true;
-        }
-        if (homeContainer && homeContainer.isConnected) {
-            homeContainer.appendChild(root);
-            return true;
-        }
-        return false;
-    };
-
-    /**
-     * Detach picker root from DOM when another sidebar tab should own panel area.
-     */
-    const ensureRootDetached = () => {
-        if (!root.isConnected) {
-            return true;
-        }
-        if (root.parentElement) {
-            root.parentElement.removeChild(root);
-        }
-        return true;
+            clickedTabId,
+            lastClickedTabId,
+        }));
     };
 
     /**
@@ -93,7 +70,7 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
         pendingForeignTabId = normalized;
         pendingForeignTabAt = Date.now();
         lastClickedTabId = normalized;
-        ensureRootDetached();
+        domOwnership.ensureDetached();
     };
 
     /**
@@ -136,19 +113,19 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
         if (shouldShow) {
             const needAttach = !root.isConnected || lastAppliedVisibilityState !== "shown";
             if (needAttach) {
-                ensureRootAttached();
+                domOwnership.ensureAttached();
             }
             root.style.display = "";
             lastAppliedVisibilityState = "shown";
         } else {
             const needDetach = root.isConnected || lastAppliedVisibilityState !== "hidden";
             if (needDetach) {
-                ensureRootDetached();
+                domOwnership.ensureDetached();
             }
             lastAppliedVisibilityState = "hidden";
         }
-        const effectiveReason = foreignIntentActive && reason !== "relay_own_tab_click"
-            ? "relay_wait_foreign_tab"
+        const effectiveReason = foreignIntentActive && reason !== RELAY_REASON_OWN_TAB_CLICK
+            ? RELAY_REASON_WAIT_FOREIGN_TAB
             : reason;
         emitDiag(effectiveReason, clickedTabId || pendingForeignTabId);
         lastSyncAt = Date.now();
@@ -160,14 +137,9 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
     const syncVisibility = (reason, clickedTabId = "") => {
         const now = Date.now();
         const elapsed = now - lastSyncAt;
-        const normalizedReason = String(reason || "relay_tick");
+        const normalizedReason = String(reason || RELAY_REASON_TICK);
         const normalizedTabId = String(clickedTabId || "");
-        const isImmediateReason =
-            normalizedReason === "relay_own_tab_click"
-            || normalizedReason === "relay_foreign_tab_click"
-            || normalizedReason === "relay_native_ok"
-            || normalizedReason === "relay_pending_switch"
-            || normalizedReason === "relay_init";
+        const isImmediateReason = isImmediateRelayReason(normalizedReason);
         if (isImmediateReason || elapsed >= MIN_SYNC_INTERVAL_MS) {
             if (pendingSyncTimer) {
                 window.clearTimeout(pendingSyncTimer);
@@ -186,7 +158,7 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
         const delay = Math.max(0, MIN_SYNC_INTERVAL_MS - elapsed);
         pendingSyncTimer = window.setTimeout(() => {
             pendingSyncTimer = 0;
-            const queuedReason = pendingSyncReason || "relay_tick";
+            const queuedReason = pendingSyncReason || RELAY_REASON_TICK;
             const queuedTabId = pendingSyncClickedTabId || "";
             pendingSyncReason = "";
             pendingSyncClickedTabId = "";
@@ -201,7 +173,7 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
         onOwnTabClick(tabId) {
             clearForeignTabIntent();
             lastClickedTabId = String(tabId || sidebarTabId);
-            syncVisibility("relay_own_tab_click", String(tabId || sidebarTabId));
+            syncVisibility(RELAY_REASON_OWN_TAB_CLICK, String(tabId || sidebarTabId));
         },
 
         /**
@@ -209,7 +181,7 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
          */
         onForeignTabClick(tabId) {
             markForeignTabIntent(tabId);
-            syncVisibility("relay_foreign_tab_click", String(tabId || ""));
+            syncVisibility(RELAY_REASON_FOREIGN_TAB_CLICK, String(tabId || ""));
         },
 
         /**

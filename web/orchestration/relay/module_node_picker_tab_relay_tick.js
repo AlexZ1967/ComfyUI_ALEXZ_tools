@@ -12,6 +12,12 @@
  */
 
 import { isOwnButtonSelected } from "./module_node_picker_tab_relay_helpers.js";
+import {
+    RELAY_PASSIVE_TICK_BUDGET_LIMIT,
+    RELAY_REASON_TICK,
+    RELAY_TICK_FAST_MS,
+    RELAY_TICK_IDLE_MS,
+} from "./module_node_picker_tab_relay_constants.js";
 
 /**
  * Start adaptive relay tick loop and return stop callback.
@@ -38,9 +44,9 @@ export function startModuleNodePickerRelayTickLoop(context = {}) {
         if (!isCurrentBinding()) {
             return;
         }
-        let nextDelayMs = 500;
+        let nextDelayMs = RELAY_TICK_FAST_MS;
         if (document.visibilityState === "hidden") {
-            nextDelayMs = 900;
+            nextDelayMs = RELAY_TICK_IDLE_MS;
             schedule(nextDelayMs);
             return;
         }
@@ -50,21 +56,21 @@ export function startModuleNodePickerRelayTickLoop(context = {}) {
             passiveTickBudget += 1;
             // When picker tab is inactive, run a sparse maintenance tick
             // instead of syncing on every timer pulse.
-            if (passiveTickBudget < 6) {
-                nextDelayMs = 900;
+            if (passiveTickBudget < RELAY_PASSIVE_TICK_BUDGET_LIMIT) {
+                nextDelayMs = RELAY_TICK_IDLE_MS;
                 schedule(nextDelayMs);
                 return;
             }
             passiveTickBudget = 0;
-            nextDelayMs = 900;
+            nextDelayMs = RELAY_TICK_IDLE_MS;
         } else {
             passiveTickBudget = 0;
         }
-        relayRuntime?.syncVisibility?.("relay_tick");
+        relayRuntime?.syncVisibility?.(RELAY_REASON_TICK);
         schedule(nextDelayMs);
     };
 
-    schedule(500);
+    schedule(RELAY_TICK_FAST_MS);
     return () => {
         if (timer) {
             window.clearTimeout(timer);

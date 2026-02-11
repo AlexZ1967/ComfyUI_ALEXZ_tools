@@ -1,5 +1,62 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.33 — 2026-02-11
+- Phase 2 relay runtime modular cleanup (no UX/behavior changes):
+  - extracted relay bind-state lifecycle helpers to:
+    - `web/orchestration/relay/module_node_picker_tab_relay_lifecycle.js`;
+    and switched facade unbind/bind-state creation to shared lifecycle helpers.
+  - extracted relay diagnostics payload + deduplicated emitter to:
+    - `web/orchestration/relay/module_node_picker_tab_relay_diagnostics.js`;
+    and switched relay runtime diagnostics path to shared diagnostics helpers.
+  - extracted relay DOM ownership (attach/detach + mount-host recovery) to:
+    - `web/orchestration/relay/module_node_picker_tab_relay_dom_ownership.js`;
+    and switched relay runtime visibility path to shared ownership controller.
+  - extracted composer relay bind wiring to:
+    - `web/orchestration/core/composition/module_node_picker_relay_bridge.js`;
+    and switched composer to bridge-based relay binding call.
+  - extended frontend baseline markers in `tests/test_phase0_baseline.py` for new relay modules.
+- Validation:
+  - `conda run -n p313 node --check` on changed relay modules,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (41 passed).
+
+## 0.16.32 — 2026-02-11
+- Phase 2 relay consistency and lightweight diagnostics:
+  - added shared relay reason/timing constants module:
+    - `web/orchestration/relay/module_node_picker_tab_relay_constants.js`;
+  - switched relay `runtime/intent/tick/facade` modules to shared constants (no behavior changes);
+  - added shared `isImmediateRelayReason()` helper in relay constants and switched runtime debounce bypass checks to that helper;
+  - updated relay baseline markers in `tests/test_phase0_baseline.py` for constants-based reason flow;
+  - added browser-context guards in relay facade bind/unbind to avoid non-browser initialization crashes;
+  - added explicit relay `mountHost` wiring (`composer -> relay facade -> relay runtime`) so root re-attach can recover even when initial parent container changes;
+  - normalized relay bind input in facade (`root` must be `Element`) and improved runtime host re-attach logic to move connected root back under preferred mount host when needed;
+  - extracted relay DOM candidate/context checks into:
+    - `web/orchestration/relay/module_node_picker_tab_relay_dom.js`;
+    and switched `module_node_picker_tab_relay_helpers.js` to shared DOM helper usage.
+  - gated relay diagnostics rendering in composer to debug-enabled mode only.
+- Validation:
+  - `conda run -n p313 node --check` on changed relay/composer modules,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (41 passed).
+
+## 0.16.31 — 2026-02-11
+- Phase 2 relay-state centralization:
+  - added shared relay state helper module:
+    - `web/orchestration/relay/module_node_picker_tab_relay_state.js`;
+  - switched relay facade to use shared state helper for read/write/clear of global relay runtime state key.
+- Validation:
+  - `conda run -n p313 node --check web/module_node_picker_tab_relay.js web/orchestration/relay/module_node_picker_tab_relay_facade.js web/orchestration/relay/module_node_picker_tab_relay_state.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (41 passed).
+
+## 0.16.30 — 2026-02-11
+- Phase 2 relay-entrypoint cleanup:
+  - extracted relay bind/unbind implementation into:
+    - `web/orchestration/relay/module_node_picker_tab_relay_facade.js`;
+  - converted `web/module_node_picker_tab_relay.js` into a stable public re-export shim that keeps existing import path unchanged.
+- Frontend baseline contract updates:
+  - updated `tests/test_phase0_baseline.py` relay markers to validate facade wiring and root-level relay re-export contract.
+- Validation:
+  - `conda run -n p313 node --check web/module_node_picker_tab_relay.js web/orchestration/relay/module_node_picker_tab_relay_facade.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (41 passed).
+
 ## 0.16.29 — 2026-02-11
 - Phase 2 reliability hardening for Module Node Picker initialization:
   - removed direct deep import of `scripts/app.js` from `web/orchestration/core/composition/module_node_picker_composer.js`,
