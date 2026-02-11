@@ -111,6 +111,31 @@ _GROUP_ORDER = (
 _UPDATE_TARGET_SCAN_WORKERS = 4
 
 
+def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
+    """Return whether custom-module remote update check was explicitly run in current session."""
+    cache = state if isinstance(state, dict) else _load_module_state()
+    meta = cache.get("__meta__") if isinstance(cache, dict) else None
+    if not isinstance(meta, dict):
+        return False
+    return bool(meta.get("custom_update_checked"))
+
+
+def _set_custom_update_checked(checked: bool) -> None:
+    """Persist custom-module update-check visibility gate for initial widget state."""
+    state = _load_module_state()
+    if not isinstance(state, dict):
+        return
+    meta_raw = state.get("__meta__")
+    meta = dict(meta_raw) if isinstance(meta_raw, dict) else {}
+    value = bool(checked)
+    if bool(meta.get("custom_update_checked")) == value:
+        return
+    meta["custom_update_checked"] = value
+    meta["custom_update_checked_at"] = _now_iso()
+    state["__meta__"] = meta
+    _save_module_state(state)
+
+
 def _normalize_log_mode(value: str | None) -> str:
     """Normalize console log mode for update jobs."""
     text = str(value or "").strip().lower()
@@ -761,6 +786,63 @@ def _manager_index() -> dict[str, dict[str, dict[str, Any]]]:
     return index
 
 
+def _manager_meta_for_module(module_name: str, repository_url: str | None = None) -> dict[str, Any] | None:
+    """Resolve ComfyUI-Manager metadata record for module by id/repository aliases."""
+    module_l = _canonical_custom_module_name(module_name).lower()
+    repo_norm = _normalize_repo_url(repository_url)
+    repo_gid = _github_id(repo_norm)
+    repo_name = _repo_name(repo_norm)
+    manager_data = _manager_index()
+    if repo_gid:
+        meta = manager_data["by_github"].get(repo_gid)
+        if isinstance(meta, dict):
+            return meta
+    if module_l:
+        meta = manager_data["by_id"].get(module_l)
+        if isinstance(meta, dict):
+            return meta
+    if repo_name:
+        meta = manager_data["by_repo_name"].get(repo_name.lower())
+        if isinstance(meta, dict):
+            return meta
+    return None
+
+
+def _manager_stats_last_update(repository_url: str | None) -> str:
+    """Return normalized last-update timestamp from Manager GitHub stats for repository URL."""
+    norm_repo = _normalize_repo_url(repository_url)
+    if not norm_repo:
+        return ""
+    stats = _manager_github_stats()
+    stats_meta = stats["by_url"].get(norm_repo)
+    if stats_meta is None:
+        repo_gid = _github_id(norm_repo)
+        if repo_gid:
+            stats_meta = stats["by_github"].get(repo_gid)
+    if not isinstance(stats_meta, dict):
+        return ""
+    remote_raw = stats_meta.get("last_update")
+    remote_dt = _parse_datetime(remote_raw)
+    return _to_iso(remote_dt) or ""
+
+
+def _infer_update_from_manager_stats(
+    repository_url: str | None,
+    installed_updated_at: str | None,
+) -> tuple[bool | None, str]:
+    """Infer update availability from Manager GitHub stats when git upstream is unavailable."""
+    remote_updated_at = _manager_stats_last_update(repository_url)
+    if not remote_updated_at:
+        return (None, "")
+    local_dt = _parse_datetime(installed_updated_at)
+    remote_dt = _parse_datetime(remote_updated_at)
+    if local_dt is None or remote_dt is None:
+        return (None, remote_updated_at)
+    # Keep a small tolerance for second-level timestamp differences.
+    needs_update = (remote_dt - local_dt).total_seconds() > 60.0
+    return (needs_update, remote_updated_at)
+
+
 def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
     """Run git command in non-interactive mode and return trimmed stdout on success."""
     result = _run_command(args, timeout=timeout, disable_git_prompt=True)
@@ -876,6 +958,39 @@ def _run_command(args: list[str], timeout: float = 120.0, disable_git_prompt: bo
     }
 
 
+def _tail_lines(text: str | None, max_lines: int = 80) -> str:
+    """Return tail lines from command output for concise console diagnostics."""
+    lines = [line for line in str(text or "").splitlines() if line.strip()]
+    if not lines:
+        return ""
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+    return "\n".join(["...", *lines[-max_lines:]])
+
+
+def _is_git_local_changes_block(text: str | None) -> bool:
+    """Check whether git pull failed because local changes must be stashed/committed first."""
+    lower = str(text or "").strip().lower()
+    if not lower:
+        return False
+    markers = (
+        # English git messages.
+        "please commit your changes or stash them before you merge",
+        "your local changes to the following files would be overwritten by merge",
+        "local changes would be overwritten by merge",
+        "the following untracked working tree files would be overwritten by merge",
+        "please move or remove them before you merge",
+        "cannot pull with rebase: you have unstaged changes",
+        "cannot pull with rebase: your index contains uncommitted changes",
+        # Russian git messages (localized output).
+        "сделайте коммит или спрячьте ваши изменения перед слиянием веток",
+        "ваши локальные изменения в указанных файлах будут перезаписаны при слиянии",
+        "указанные неотслеживаемые файлы в рабочем каталоге будут перезаписаны при слиянии",
+        "переместите эти файлы или удалите их перед переключением веток",
+    )
+    return any(marker in lower for marker in markers)
+
+
 def _module_dir(module_name: str) -> Path | None:
     """Resolve filesystem directory for a custom module by name."""
     module_name = _canonical_custom_module_name((module_name or "").strip())
@@ -907,15 +1022,51 @@ def _requirements_changed_between(module_dir: Path, before_commit: str, after_co
 
 def _module_needs_update_now(module_name: str) -> bool:
     """Check whether local module commit differs from tracked remote commit."""
-    git_state = _module_git_state(module_name)
+    module = _canonical_custom_module_name(module_name)
+    state = _load_module_state()
+    entry = state.get(module) if isinstance(state, dict) else None
+    cached_update: bool | None = None
+    if isinstance(entry, dict):
+        value = entry.get("update_available")
+        if isinstance(value, bool):
+            cached_update = value
+
+    git_state = _module_git_state(module)
     if not git_state:
-        return False
+        repository = ""
+        installed_updated_at = ""
+        if isinstance(entry, dict):
+            repository = str(entry.get("repository") or "")
+            installed_updated_at = str(entry.get("installed_updated_at") or "")
+        if not repository:
+            meta = _manager_meta_for_module(module, repository)
+            if isinstance(meta, dict):
+                repository = str(meta.get("repository") or "")
+        inferred, _ = _infer_update_from_manager_stats(repository, installed_updated_at)
+        if isinstance(inferred, bool):
+            return inferred
+        return bool(cached_update)
     behind = git_state.get("behind")
     if isinstance(behind, int):
         return behind > 0
     remote_head = (git_state.get("remote_head") or "").strip()
     installed = (git_state.get("installed_commit") or "").strip()
-    return bool(git_state.get("has_upstream") and remote_head and installed and remote_head != installed)
+    if bool(git_state.get("has_upstream") and remote_head and installed):
+        return remote_head != installed
+    repository = str(git_state.get("repository") or "")
+    installed_updated_at = str(git_state.get("installed_updated_at") or "")
+    if not repository and isinstance(entry, dict):
+        repository = str(entry.get("repository") or "")
+    if not installed_updated_at and isinstance(entry, dict):
+        installed_updated_at = str(entry.get("installed_updated_at") or "")
+    if not repository:
+        meta = _manager_meta_for_module(module, repository)
+        if isinstance(meta, dict):
+            repository = str(meta.get("repository") or "")
+    inferred, _ = _infer_update_from_manager_stats(repository, installed_updated_at)
+    if isinstance(inferred, bool):
+        return inferred
+    return bool(cached_update)
 
 
 def _module_worktree_signature(module_name: str) -> str:
@@ -973,6 +1124,7 @@ def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
             "updated_between_runs": False,
             "new_module_between_runs": False,
             "update_available": False,
+            "update_status": "",
         }
 
     state = _load_module_state()
@@ -982,6 +1134,8 @@ def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
     updated_between_runs = False
     new_module_between_runs = False
     update_available = False
+    update_status = ""
+    custom_update_checked = _custom_update_checked_flag(state) if group_name == "custom" else False
 
     if isinstance(entry, dict):
         startup_prev = (entry.get("pending_prev_commit") or entry.get("startup_prev_commit") or "").strip()
@@ -993,6 +1147,10 @@ def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
         )
         if group_name == "custom":
             update_available = bool(entry.get("update_available"))
+            if custom_update_checked:
+                cached_status = str(entry.get("update_status") or "").strip().lower()
+                if cached_status in {"can_update", "up_to_date", "unknown"}:
+                    update_status = cached_status
 
     tracker = state.get("__node_tracker__") if isinstance(state, dict) else None
     if isinstance(tracker, dict):
@@ -1013,6 +1171,7 @@ def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
         "updated_between_runs": updated_between_runs,
         "new_module_between_runs": new_module_between_runs,
         "update_available": update_available,
+        "update_status": update_status,
     }
 
 
@@ -1232,6 +1391,8 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
         "message": "",
         "updated": False,
         "requirements_changed": False,
+        "stashed_local_changes": False,
+        "stash_ref": "",
         "before_commit": "",
         "after_commit": "",
     }
@@ -1251,9 +1412,12 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
     branch = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "HEAD"]) or ""
     upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
     remote_name = _git_pick_remote(module_dir, upstream)
+    if not remote_name and _bootstrap_module_remote_from_manager(module, module_dir):
+        upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+        remote_name = _git_pick_remote(module_dir, upstream)
     if not remote_name:
         result["status"] = "no_remote"
-        result["message"] = "remote is not configured"
+        result["message"] = "remote is not configured and manager metadata did not provide repository URL"
         return result
 
     _run_git(["git", "-C", str(module_dir), "fetch", "--quiet", remote_name], timeout=20.0)
@@ -1290,15 +1454,44 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
             pull_cmd.append(remote_branch)
     _update_console_log(f"{module}: running {' '.join(pull_cmd)}", level="verbose")
     pull_started = time.perf_counter()
-    pull = _run_command(
-        pull_cmd,
-        timeout=timeout,
-        disable_git_prompt=True,
-    )
-    _update_console_log(
-        f"{module}: pull command finished in {time.perf_counter() - pull_started:.2f}s",
-        level="verbose",
-    )
+    pull = _run_command(pull_cmd, timeout=timeout, disable_git_prompt=True)
+    pull_elapsed = time.perf_counter() - pull_started
+    _update_console_log(f"{module}: pull command finished in {pull_elapsed:.2f}s", level="verbose")
+
+    if not pull.get("ok"):
+        error_text = "{stderr}\n{stdout}".format(
+            stderr=str(pull.get("stderr") or ""),
+            stdout=str(pull.get("stdout") or ""),
+        )
+        if _is_git_local_changes_block(error_text):
+            _update_console_log(f"{module}: local changes detected, trying auto-stash before update")
+            stash = _run_command(
+                [
+                    "git",
+                    "-C",
+                    str(module_dir),
+                    "stash",
+                    "push",
+                    "-u",
+                    "-m",
+                    "ALEXZ_tools auto-stash before module update",
+                ],
+                timeout=60.0,
+                disable_git_prompt=True,
+            )
+            if not stash.get("ok"):
+                result["status"] = "error"
+                result["message"] = str(stash.get("stderr") or stash.get("stdout") or "git stash failed")
+                return result
+            stash_out = str(stash.get("stdout") or stash.get("stderr") or "").strip()
+            result["stashed_local_changes"] = True
+            result["stash_ref"] = stash_out
+            _update_console_log(f"{module}: auto-stash created; retrying pull", level="verbose")
+            pull_started = time.perf_counter()
+            pull = _run_command(pull_cmd, timeout=timeout, disable_git_prompt=True)
+            pull_elapsed = time.perf_counter() - pull_started
+            _update_console_log(f"{module}: retry pull finished in {pull_elapsed:.2f}s", level="verbose")
+
     if not pull.get("ok"):
         result["status"] = "error"
         result["message"] = str(pull.get("stderr") or pull.get("stdout") or "git pull failed")
@@ -1310,14 +1503,20 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
     result["updated"] = updated
     if updated:
         result["status"] = "updated"
-        result["message"] = "module updated"
+        if result.get("stashed_local_changes"):
+            result["message"] = "module updated (local changes were stashed)"
+        else:
+            result["message"] = "module updated"
         requirements_changed = _requirements_changed_between(module_dir, before_commit, after_commit)
         result["requirements_changed"] = requirements_changed
         if requirements_changed:
             _set_module_requirements_pending(module, True, before_commit, after_commit)
     else:
         result["status"] = "up_to_date"
-        result["message"] = "already up to date"
+        if result.get("stashed_local_changes"):
+            result["message"] = "already up to date (local changes were stashed)"
+        else:
+            result["message"] = "already up to date"
     return result
 
 
@@ -1346,11 +1545,21 @@ def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> d
     cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)]
     _LOGGER.info("Installing requirements for module %s via %s", module, result["requirements_path"])
     run = _run_command(cmd, timeout=timeout)
+    run_stdout = _tail_lines(run.get("stdout"))
+    run_stderr = _tail_lines(run.get("stderr"))
     if not run.get("ok"):
         result["status"] = "error"
         result["message"] = str(run.get("stderr") or run.get("stdout") or "pip install failed")
+        if run_stdout:
+            _LOGGER.warning("Requirements pip stdout for module %s:\n%s", module, run_stdout)
+        if run_stderr:
+            _LOGGER.warning("Requirements pip stderr for module %s:\n%s", module, run_stderr)
         _LOGGER.error("Requirements install failed for module %s: %s", module, result["message"])
         return result
+    if run_stdout:
+        _LOGGER.info("Requirements pip output for module %s:\n%s", module, run_stdout)
+    if run_stderr:
+        _LOGGER.info("Requirements pip warnings for module %s:\n%s", module, run_stderr)
     result["status"] = "installed"
     result["message"] = "requirements installed"
     _set_module_requirements_pending(module, False)
@@ -1374,11 +1583,21 @@ def _install_comfyui_requirements(timeout: float = 1800.0) -> dict[str, Any]:
     result["requirements_path"] = str(req)
     _LOGGER.info("Installing ComfyUI requirements via %s", result["requirements_path"])
     run = _run_command([sys.executable, "-m", "pip", "install", "-r", str(req)], timeout=timeout)
+    run_stdout = _tail_lines(run.get("stdout"))
+    run_stderr = _tail_lines(run.get("stderr"))
     if not run.get("ok"):
         result["status"] = "error"
         result["message"] = str(run.get("stderr") or run.get("stdout") or "pip install failed")
+        if run_stdout:
+            _LOGGER.warning("ComfyUI requirements pip stdout:\n%s", run_stdout)
+        if run_stderr:
+            _LOGGER.warning("ComfyUI requirements pip stderr:\n%s", run_stderr)
         _LOGGER.error("ComfyUI requirements install failed: %s", result["message"])
         return result
+    if run_stdout:
+        _LOGGER.info("ComfyUI requirements pip output:\n%s", run_stdout)
+    if run_stderr:
+        _LOGGER.info("ComfyUI requirements pip warnings:\n%s", run_stderr)
     result["status"] = "installed"
     result["message"] = "ComfyUI requirements installed"
     _set_comfyui_requirements_pending(False)
@@ -1398,6 +1617,26 @@ def _module_repo_url(module_name: str) -> str | None:
         if out:
             return _normalize_repo_url(out)
     return None
+
+
+def _bootstrap_module_remote_from_manager(module_name: str, module_dir: Path) -> bool:
+    """Configure `origin` remote from ComfyUI-Manager metadata for repos without remotes."""
+    remotes = _git_remote_names(module_dir)
+    if remotes:
+        return True
+    meta = _manager_meta_for_module(module_name, None)
+    repo_url = _normalize_repo_url(meta.get("repository")) if isinstance(meta, dict) else None
+    if not repo_url:
+        return False
+    add = _run_command(
+        ["git", "-C", str(module_dir), "remote", "add", "origin", repo_url],
+        timeout=20.0,
+        disable_git_prompt=True,
+    )
+    if not add.get("ok"):
+        return False
+    _LOGGER.info("Configured origin remote from manager metadata for module %s: %s", module_name, repo_url)
+    return True
 
 
 def _module_git_state(module_name: str) -> dict[str, Any]:
@@ -1422,6 +1661,13 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
             resolved_ref, resolved_branch = _git_resolve_remote_ref(module_dir, remote_name, branch, upstream)
             remote_ref = resolved_ref or ""
             remote_branch = resolved_branch or ""
+        remote_repo_url = ""
+        if remote_name:
+            remote_repo_url = (
+                _run_git(["git", "-C", str(module_dir), "config", "--get", f"remote.{remote_name}.url"]) or ""
+            )
+        if not remote_repo_url:
+            remote_repo_url = _run_git(["git", "-C", str(module_dir), "config", "--get", "remote.origin.url"]) or ""
         remote_target = upstream or remote_ref
         remote_head = _run_git(["git", "-C", str(module_dir), "rev-parse", remote_target]) if remote_target else None
         remote_updated_at = (
@@ -1429,9 +1675,7 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
         )
         state: dict[str, Any] = {
             "module_path": str(module_dir),
-            "repository": _normalize_repo_url(
-                _run_git(["git", "-C", str(module_dir), "config", "--get", "remote.origin.url"])
-            ),
+            "repository": _normalize_repo_url(remote_repo_url),
             "installed_commit": _run_git(["git", "-C", str(module_dir), "rev-parse", "HEAD"]),
             "installed_updated_at": _run_git(["git", "-C", str(module_dir), "log", "-1", "--format=%cI"]),
             "remote_updated_at": remote_updated_at,
@@ -1476,6 +1720,11 @@ def _sync_module_upstream(module_name: str, timeout: float = 15.0) -> bool:
             continue
         upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
         remote_name = _git_pick_remote(module_dir, upstream)
+        if not remote_name and _bootstrap_module_remote_from_manager(module_name, module_dir):
+            upstream = _run_git(
+                ["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
+            )
+            remote_name = _git_pick_remote(module_dir, upstream)
         if not remote_name:
             return False
         _run_git(["git", "-C", str(module_dir), "fetch", "--quiet", remote_name], timeout=timeout)
@@ -2054,6 +2303,10 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
         git_state = _module_git_state(module_name)
         current_commit = (git_state.get("installed_commit") or "").strip()
         before = dict(entry)
+        manager_meta = _manager_meta_for_module(module_name, entry.get("repository"))
+        manager_repo = ""
+        if isinstance(manager_meta, dict):
+            manager_repo = str(manager_meta.get("repository") or "").strip()
 
         entry["last_checked_at"] = now
         needs_update: bool | None = None
@@ -2076,6 +2329,17 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
                     needs_update = behind > 0
                 elif git_state.get("has_upstream") and remote_head and current_commit:
                     needs_update = remote_head != current_commit
+        if manager_repo and not entry.get("repository"):
+            entry["repository"] = manager_repo
+        if not local_only:
+            inferred_update, inferred_remote_updated_at = _infer_update_from_manager_stats(
+                entry.get("repository"),
+                entry.get("installed_updated_at"),
+            )
+            if inferred_remote_updated_at and not entry.get("remote_updated_at"):
+                entry["remote_updated_at"] = inferred_remote_updated_at
+            if not isinstance(needs_update, bool) and isinstance(inferred_update, bool):
+                needs_update = inferred_update
 
         if isinstance(needs_update, bool):
             entry["update_available"] = needs_update
@@ -2375,8 +2639,6 @@ def _resolve_module_info(
     if sync_upstream and not cache_only:
         _sync_module_upstream(module_name)
 
-    manager_data = _manager_index()
-    module_l = (module_name or "").lower()
     state_cache = _load_module_state()
     cache_entry = state_cache.get(module_name) if isinstance(state_cache, dict) else None
 
@@ -2391,14 +2653,10 @@ def _resolve_module_info(
         repo_url = git_state.get("repository") if git_state else None
     if not repo_url and not cache_only:
         repo_url = _module_repo_url(module_name)
+    meta = _manager_meta_for_module(module_name, repo_url)
+    if isinstance(meta, dict) and not repo_url:
+        repo_url = meta.get("repository")
     repo_gid = _github_id(repo_url)
-    meta = None
-    if repo_gid:
-        meta = manager_data["by_github"].get(repo_gid)
-    if meta is None and module_l:
-        meta = manager_data["by_id"].get(module_l)
-    if meta is None and module_l:
-        meta = manager_data["by_repo_name"].get(module_l)
 
     if meta is not None:
         result["title"] = meta.get("title") or module_name
@@ -2462,20 +2720,15 @@ def _resolve_module_info(
             else:
                 result["update_available"] = True
                 result["update_status"] = "can_update"
-
-    stats_meta = None
-    stats = _manager_github_stats()
-    norm_repo = _normalize_repo_url(result.get("repository"))
-    if norm_repo:
-        stats_meta = stats["by_url"].get(norm_repo)
-    if stats_meta is None and repo_gid:
-        stats_meta = stats["by_github"].get(repo_gid)
-    if isinstance(stats_meta, dict):
-        remote_raw = stats_meta.get("last_update")
-        remote_dt = _parse_datetime(remote_raw)
-        if remote_dt is not None:
-            if not result.get("remote_updated_at"):
-                result["remote_updated_at"] = _to_iso(remote_dt) or ""
+    inferred_update, inferred_remote_updated_at = _infer_update_from_manager_stats(
+        result.get("repository"),
+        result.get("installed_updated_at"),
+    )
+    if inferred_remote_updated_at and not result.get("remote_updated_at"):
+        result["remote_updated_at"] = inferred_remote_updated_at
+    if not isinstance(result.get("update_available"), bool) and isinstance(inferred_update, bool):
+        result["update_available"] = inferred_update
+        result["update_status"] = "can_update" if inferred_update else "up_to_date"
 
     if not cache_only:
         _remember_module_state(module_name, result)
@@ -2718,10 +2971,7 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
         _refresh_console_log(f"update available modules: {', '.join(update_available_modules)}", level="verbose")
     unknown_update_modules = list((announce_summary or {}).get("unknown_update_modules") or [])
     if unknown_update_modules:
-        _refresh_console_log(
-            f"unknown update status modules: {', '.join(unknown_update_modules)}",
-            level="verbose",
-        )
+        _refresh_console_log(f"unknown update status modules: {', '.join(unknown_update_modules)}")
 
     _refresh_console_log("phase 3/3: checking ComfyUI status...")
     comfy_started = time.perf_counter()
@@ -2756,6 +3006,8 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
             unknown=modules_unknown_update,
         )
     )
+    # Mark that update status was explicitly refreshed and can be shown in UI cards.
+    _set_custom_update_checked(True)
     return {
         "status": "ok",
         "refreshed_at": _now_iso(),
@@ -2772,6 +3024,8 @@ def _ensure_runtime_state_ready() -> None:
     if _LAZY_REFRESH_DONE:
         return
     _load_module_state()
+    # On process start, hide stale remote-update status until user runs explicit refresh.
+    _set_custom_update_checked(False)
     _announce_tracked_module_updates(local_only=True)
     _track_comfyui_local_update()
     _LAZY_REFRESH_DONE = True
@@ -2789,6 +3043,8 @@ def _start_runtime_state_warmup() -> bool:
         existing = _RUNTIME_WARMUP_THREAD
         if existing is not None and existing.is_alive():
             return False
+        # Reset stale remote-update visibility immediately on first access.
+        _set_custom_update_checked(False)
 
         def _runner() -> None:
             """Warmup worker for runtime state cache used by first-open UI paths."""
@@ -3135,6 +3391,14 @@ def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summ
                     uptodate_count += 1
                 else:
                     failed_count += 1
+                    _update_console_log(
+                        "[{idx}/{total}] {target}: failed ({msg})".format(
+                            idx=idx,
+                            total=total,
+                            target=target,
+                            msg=str(item.get("message") or "unknown error"),
+                        )
+                    )
                 if bool(item.get("requirements_changed")):
                     requirements_modules.append(target)
                 _set_update_status(
@@ -3321,8 +3585,9 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             grouped = _build_group_catalog()
             modules_by_group = _build_group_modules(grouped)
             comfyui = _comfyui_git_status(mode=mode)
-            custom_modules_need_update = _count_custom_modules_need_update()
-            custom_modules_unknown_update = _count_custom_modules_unknown_update()
+            show_custom_update_status = _custom_update_checked_flag()
+            custom_modules_need_update = _count_custom_modules_need_update() if show_custom_update_status else 0
+            custom_modules_unknown_update = _count_custom_modules_unknown_update() if show_custom_update_status else 0
             runtime_warmup = _runtime_warmup_status()
             groups = []
             for group_id, group_title in _GROUP_ORDER:

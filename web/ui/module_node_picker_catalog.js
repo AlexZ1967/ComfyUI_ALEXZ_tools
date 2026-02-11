@@ -119,7 +119,7 @@ export function fillModuleSelectUi(context) {
         const badges = typeof moduleBadgesFromModuleEntry === "function"
             ? moduleBadgesFromModuleEntry(entry)
             : null;
-        if (badges?.updatedBetweenRuns || badges?.hasRemoteUpdate) {
+        if (badges?.updatedBetweenRuns || badges?.hasRemoteUpdate || badges?.hasUnknownUpdate) {
             moduleBadges.set(moduleName, badges);
         }
         if (typeof formatModuleOption === "function") {

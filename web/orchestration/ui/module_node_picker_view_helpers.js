@@ -32,7 +32,8 @@ export function createModuleNodePickerViewHelpers(context = {}) {
         : () => false;
     const customAlert = context?.customAlert || null;
     const customAlertText = context?.customAlertText || null;
-    const help = context?.help || null;
+    const selectionHelp = context?.selectionHelp || null;
+    const moduleHelp = context?.moduleHelp || null;
     const marks = context?.marks || {
         updatedMark: "✅",
         remoteUpdateMark: "🟥",
@@ -79,7 +80,7 @@ export function createModuleNodePickerViewHelpers(context = {}) {
         if (!shouldContinue()) {
             return;
         }
-        renderHelpText(help, text);
+        renderHelpText(selectionHelp, text);
     };
 
     const setHelpHintText = (text, tone = "neutral") => {
@@ -87,24 +88,24 @@ export function createModuleNodePickerViewHelpers(context = {}) {
             return;
         }
         if (String(tone || "").toLowerCase() === "warn") {
-            renderHelpHintTextWithTone(help, text, "warn");
+            renderHelpHintTextWithTone(selectionHelp, text, "warn");
             return;
         }
-        renderHelpHintText(help, text);
+        renderHelpHintText(selectionHelp, text);
     };
 
     const setHelpModuleSummary = (moduleName, nodeCount) => {
         if (!shouldContinue()) {
             return;
         }
-        renderHelpModuleSummary(help, moduleName, nodeCount, marks);
+        renderHelpModuleSummary(moduleHelp, moduleName, nodeCount, marks);
     };
 
     const setHelpModuleCardHint = (moduleName, nodeCount) => {
         if (!shouldContinue()) {
             return;
         }
-        renderHelpModuleCardHint(help, moduleName, nodeCount);
+        renderHelpModuleCardHint(moduleHelp, moduleName, nodeCount);
     };
 
     return {

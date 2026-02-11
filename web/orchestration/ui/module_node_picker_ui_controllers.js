@@ -78,7 +78,8 @@ export function createModuleNodePickerUiControllers(context = {}) {
         getActionBusy: () => busyUi.getActionBusy(),
         customAlert: context?.customAlert,
         customAlertText: context?.customAlertText,
-        help: context?.help,
+        selectionHelp: context?.selectionHelp,
+        moduleHelp: context?.moduleHelp,
         marks,
     });
     setHelpTextImpl = viewHelpers.setHelpText;

@@ -46,6 +46,7 @@ export function createModuleNodePickerCatalogController(context = {}) {
     const marks = context?.marks || {
         updatedMark: "✅",
         remoteUpdateMark: "🟥",
+        unknownUpdateMark: "🟨",
     };
     const renderNodeList = typeof context?.renderNodeList === "function"
         ? context.renderNodeList
@@ -116,6 +117,7 @@ export function createModuleNodePickerCatalogController(context = {}) {
                 marks: {
                     updatedMark: marks.updatedMark,
                     remoteUpdateMark: marks.remoteUpdateMark,
+                    unknownUpdateMark: marks.unknownUpdateMark,
                 },
             },
             moduleName

@@ -116,21 +116,6 @@ export function createModuleNodePickerLayout(container) {
     comfyAlert.style.display = "none";
     const comfyAlertText = document.createElement("div");
     comfyAlert.appendChild(comfyAlertText);
-    const comfyActions = document.createElement("div");
-    comfyActions.className = "alexz-mod-picker-status-card-actions";
-    comfyAlert.appendChild(comfyActions);
-    const comfyUpdateBtn = document.createElement("button");
-    comfyUpdateBtn.type = "button";
-    comfyUpdateBtn.className = "alexz-mod-picker-btn-small";
-    comfyUpdateBtn.textContent = "Update ComfyUI";
-    comfyUpdateBtn.style.display = "none";
-    comfyActions.appendChild(comfyUpdateBtn);
-    const comfyInstallReqBtn = document.createElement("button");
-    comfyInstallReqBtn.type = "button";
-    comfyInstallReqBtn.className = "alexz-mod-picker-btn-small";
-    comfyInstallReqBtn.textContent = "Install ComfyUI requirements";
-    comfyInstallReqBtn.style.display = "none";
-    comfyActions.appendChild(comfyInstallReqBtn);
     root.appendChild(comfyAlert);
 
     const customAlert = document.createElement("div");
@@ -138,15 +123,6 @@ export function createModuleNodePickerLayout(container) {
     customAlert.style.display = "none";
     const customAlertText = document.createElement("div");
     customAlert.appendChild(customAlertText);
-    const customActions = document.createElement("div");
-    customActions.className = "alexz-mod-picker-status-card-actions";
-    customAlert.appendChild(customActions);
-    const updateAllBtn = document.createElement("button");
-    updateAllBtn.type = "button";
-    updateAllBtn.textContent = "Update Custom Nodes";
-    updateAllBtn.className = "alexz-mod-picker-btn-small";
-    updateAllBtn.style.display = "none";
-    customActions.appendChild(updateAllBtn);
     root.appendChild(customAlert);
 
     const processHost = document.createElement("div");
@@ -155,6 +131,15 @@ export function createModuleNodePickerLayout(container) {
     const dividerBottom = document.createElement("div");
     dividerBottom.className = "alexz-mod-picker-divider";
     root.appendChild(dividerBottom);
+
+    const selectionLegendHint = document.createElement("div");
+    selectionLegendHint.className = "alexz-mod-picker-help-hint alexz-mod-picker-help-hint--selection-legend";
+    selectionLegendHint.textContent = "Маркеры состояния:\n✅ локально обновлен, 🟥 доступно обновление, 🟨 статус не определен";
+    root.appendChild(selectionLegendHint);
+
+    const selectionHelp = document.createElement("div");
+    selectionHelp.className = "alexz-mod-picker-help alexz-mod-picker-help--selection";
+    root.appendChild(selectionHelp);
 
     const categorySelect = document.createElement("select");
     categorySelect.className = "alexz-mod-picker-select";
@@ -199,9 +184,9 @@ export function createModuleNodePickerLayout(container) {
     moduleInfoWrap.className = "alexz-mod-picker-module-info-wrap";
     root.appendChild(moduleInfoWrap);
 
-    const help = document.createElement("div");
-    help.className = "alexz-mod-picker-help";
-    moduleInfoWrap.appendChild(help);
+    const moduleHelp = document.createElement("div");
+    moduleHelp.className = "alexz-mod-picker-help alexz-mod-picker-help--module";
+    moduleInfoWrap.appendChild(moduleHelp);
 
     const moduleInfo = document.createElement("div");
     moduleInfoWrap.appendChild(moduleInfo);
@@ -230,15 +215,12 @@ export function createModuleNodePickerLayout(container) {
         comfyModeSelect,
         comfyAlert,
         comfyAlertText,
-        comfyActions,
-        comfyUpdateBtn,
-        comfyInstallReqBtn,
         customAlert,
         customAlertText,
-        customActions,
-        updateAllBtn,
         processHost,
         dividerBottom,
+        selectionLegendHint,
+        selectionHelp,
         categorySelect,
         groupSelect,
         nodeSelect,
@@ -247,7 +229,7 @@ export function createModuleNodePickerLayout(container) {
         refreshLine,
         processActions,
         moduleInfoWrap,
-        help,
+        moduleHelp,
         moduleInfo,
         nodeList,
     };

@@ -27,6 +27,7 @@ import {
     COMFY_GROUP_ORDER,
     MODULE_MARK_UPDATED,
     MODULE_MARK_REMOTE_UPDATE,
+    MODULE_MARK_UNKNOWN_UPDATE,
 } from "../../../constants/module_node_picker_constants.js";
 import {
     unbindModuleNodesTabRelay,
@@ -117,9 +118,10 @@ export function renderModuleNodePicker(container, options = {}) {
         groupSelect,
         nodeSelect,
         moduleFilter,
+        selectionHelp,
         refreshLine,
         processActions,
-        help,
+        moduleHelp,
         moduleInfo,
         nodeList,
     } = createModuleNodePickerLayout(container);
@@ -256,6 +258,7 @@ export function renderModuleNodePicker(container, options = {}) {
         marks: {
             updatedMark: MODULE_MARK_UPDATED,
             remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+            unknownUpdateMark: MODULE_MARK_UNKNOWN_UPDATE,
         },
         defaultModule: DEFAULT_MODULE,
         comfyGroupOrder: COMFY_GROUP_ORDER,
@@ -281,7 +284,8 @@ export function renderModuleNodePicker(container, options = {}) {
         processUi,
         customAlert,
         customAlertText,
-        help,
+        selectionHelp,
+        moduleHelp,
         getComfyMode: () => comfyModeSelect.value,
         fmtDate,
         comfyAlert,
@@ -356,6 +360,7 @@ export function renderModuleNodePicker(container, options = {}) {
         marks: {
             updatedMark: MODULE_MARK_UPDATED,
             remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+            unknownUpdateMark: MODULE_MARK_UNKNOWN_UPDATE,
         },
         moduleBadgesFromInfo,
         setCatalogControlsLoading,

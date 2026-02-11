@@ -33,6 +33,7 @@ export function moduleBadgesFromInfo(info) {
     return {
         updatedBetweenRuns: Boolean(info?.updated_between_runs),
         hasRemoteUpdate: (Number.isFinite(behind) && behind > 0) || status === "can_update",
+        hasUnknownUpdate: status === "unknown",
     };
 }
 
@@ -40,9 +41,11 @@ export function moduleBadgesFromInfo(info) {
  * Derive module badge flags from lightweight catalog module entry.
  */
 export function moduleBadgesFromModuleEntry(entry) {
+    const status = String(entry?.update_status || "");
     return {
         updatedBetweenRuns: Boolean(entry?.updated_between_runs) || Boolean(entry?.new_module_between_runs),
         hasRemoteUpdate: Boolean(entry?.update_available),
+        hasUnknownUpdate: status === "unknown",
     };
 }
 
@@ -52,12 +55,16 @@ export function moduleBadgesFromModuleEntry(entry) {
 export function formatModuleOption(moduleName, count, badges, marks = {}) {
     const updatedMark = String(marks.updatedMark || "✅");
     const remoteUpdateMark = String(marks.remoteUpdateMark || "🟥");
+    const unknownUpdateMark = String(marks.unknownUpdateMark || "🟨");
     const markItems = [];
     if (badges?.updatedBetweenRuns) {
         markItems.push(updatedMark);
     }
     if (badges?.hasRemoteUpdate) {
         markItems.push(remoteUpdateMark);
+    }
+    if (badges?.hasUnknownUpdate) {
+        markItems.push(unknownUpdateMark);
     }
     const prefix = markItems.length ? `${markItems.join(" ")} ` : "";
     return `${prefix}${moduleName} (${count})`;

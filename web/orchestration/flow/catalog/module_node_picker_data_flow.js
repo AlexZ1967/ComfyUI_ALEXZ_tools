@@ -79,7 +79,7 @@ export async function loadModuleInfoFlow(options, context) {
         context?.renderModuleInfo?.(info);
         if (info) {
             const badges = context?.moduleBadgesFromInfo?.(info) || null;
-            if (badges?.updatedBetweenRuns || badges?.hasRemoteUpdate) {
+            if (badges?.updatedBetweenRuns || badges?.hasRemoteUpdate || badges?.hasUnknownUpdate) {
                 context?.moduleBadges?.set?.(selectedModule, badges);
             } else {
                 context?.moduleBadges?.delete?.(selectedModule);
@@ -140,16 +140,8 @@ export async function loadCatalogFlow(options, context) {
         }
         context?.setHelpText?.(`Ошибка загрузки: ${String(err)}`);
         const comfyAlert = context?.comfyAlert;
-        const comfyUpdateBtn = context?.comfyUpdateBtn;
-        const comfyInstallReqBtn = context?.comfyInstallReqBtn;
         if (comfyAlert) {
             comfyAlert.style.display = "none";
-        }
-        if (comfyUpdateBtn) {
-            comfyUpdateBtn.style.display = "none";
-        }
-        if (comfyInstallReqBtn) {
-            comfyInstallReqBtn.style.display = "none";
         }
         context?.setCustomModulesNeedUpdate?.(0);
         context?.setCustomModulesUnknownUpdate?.(0);

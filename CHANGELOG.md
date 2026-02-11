@@ -1,5 +1,59 @@
 # Changelog — ALEXZ_tools
 
+## 0.17.0 — 2026-02-12
+- Minor-version release for large Phase 2 refactor package in Module Node Picker:
+  - orchestration/UI/relay logic split into smaller modules and folders with stable wrappers;
+  - startup/warmup/default-selection flow stabilized (faster first open, persistent state behavior);
+  - refresh/update-status UX normalized (single-card progress/result behavior, less noisy UI state churn);
+  - monitoring statuses expanded and clarified (`✅` local update, `🟥` update available, `🟨` unknown status);
+  - CSS and UI composition structure cleaned up for easier further maintenance.
+- Documentation/metadata sync:
+  - package version aligned in `pyproject.toml` and `README.md` to `0.17.0`;
+  - changelog date/version baseline moved to `2026-02-12`.
+
+## 0.16.39 — 2026-02-11
+- Module Node Picker unknown-update UX improvements:
+  - added `🟨` module badge for `update_status=unknown` (no upstream/remote).
+  - selected module card now uses yellow border for unknown update status.
+  - module card status text for unknown state is now explicit:
+    `update status unknown (no upstream/remote)`.
+  - module legend now includes explanation for the yellow marker.
+  - backend `node_catalog` module entries now include `update_status`, so unknown-state badges render reliably in module dropdown.
+  - refresh summary log now prints unknown modules list in summary mode:
+    `unknown update status modules: ...`.
+
+## 0.16.38 — 2026-02-11
+- Module Node Picker switched to monitoring-only mode for updates:
+  - removed in-widget update/install actions for modules and ComfyUI (`Update module`, `Update Custom Nodes`, `Update ComfyUI`, requirements install buttons).
+  - status cards now only inform about update availability and unknown-check states.
+  - module card now keeps only informational and refresh actions (no pull/pip actions).
+- Updated Module Node Picker guide to match monitoring-only workflow.
+
+## 0.16.37 — 2026-02-11
+- Module update UX fix for `requirements.txt` follow-up action:
+  - `Install updated requirements` prompt is now shown after update-flow busy-lock is released, so the first click is not ignored while controls are still disabled.
+  - applies to post-update requirements prompt shown after `Update module` / `Update all`.
+- Backend install logging improvement:
+  - module and ComfyUI requirements installation now prints pip output/warnings tail to ComfyUI console for easier diagnostics of what was installed.
+
+## 0.16.36 — 2026-02-11
+- Custom update-card startup behavior fix:
+  - on first picker open after ComfyUI restart, custom update summary card is now hidden until explicit `Refresh Custom Nodes Info`.
+  - stale cached custom update counters from previous runs are no longer shown on initial load.
+  - backend now gates custom update counters with explicit-check flag (`custom_update_checked`) and resets that flag on startup/warmup.
+  - local startup scan (`local_only`) no longer injects manager-remote update inference before explicit refresh.
+
+## 0.16.35 — 2026-02-11
+- Module update robustness improvements for repositories with local changes and missing remotes:
+  - custom module update now auto-detects git pull conflicts caused by local uncommitted changes and retries after auto-stash (`git stash push -u`), similar to ComfyUI-Manager behavior.
+  - merge-conflict detector now supports localized git output (including Russian), so auto-stash retry works in non-English git environments.
+  - pull result now carries explicit stash marker metadata (`stashed_local_changes`, `stash_ref`) and clearer status messages.
+  - improved module update console logs: failed module updates now print concrete per-module error reasons (not only aggregate counters).
+- Update-check compatibility improvements:
+  - kept fallback update detection via ComfyUI-Manager metadata/statistics for modules with missing upstream tracking (e.g. `crt-nodes`-like cases).
+- Tests:
+  - added regression test for auto-stash + retry flow in `tests/test_module_browser_tracker.py`.
+
 ## 0.16.34 — 2026-02-11
 - Module refresh correctness fix for non-trackable custom repos:
   - backend now distinguishes between:

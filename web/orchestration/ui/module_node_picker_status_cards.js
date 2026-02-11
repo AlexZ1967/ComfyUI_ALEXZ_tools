@@ -26,17 +26,11 @@ export function createModuleNodePickerStatusCards(context = {}) {
     const getComfyMode = typeof context?.getComfyMode === "function"
         ? context.getComfyMode
         : () => "releases";
-    const getActionBusy = typeof context?.getActionBusy === "function"
-        ? context.getActionBusy
-        : () => false;
     const fmtDate = context?.fmtDate;
     const comfyAlert = context?.comfyAlert || null;
     const comfyAlertText = context?.comfyAlertText || null;
-    const comfyUpdateBtn = context?.comfyUpdateBtn || null;
-    const comfyInstallReqBtn = context?.comfyInstallReqBtn || null;
     const customAlert = context?.customAlert || null;
     const customAlertText = context?.customAlertText || null;
-    const updateAllBtn = context?.updateAllBtn || null;
     const getCustomModulesNeedUpdate = typeof context?.getCustomModulesNeedUpdate === "function"
         ? context.getCustomModulesNeedUpdate
         : () => 0;
@@ -68,12 +62,9 @@ export function createModuleNodePickerStatusCards(context = {}) {
         renderComfyAlertCard({
             info,
             comfyMode: getComfyMode(),
-            actionBusy: getActionBusy(),
             fmtDate,
             comfyAlert,
             comfyAlertText,
-            comfyUpdateBtn,
-            comfyInstallReqBtn,
         });
     };
 
@@ -85,10 +76,8 @@ export function createModuleNodePickerStatusCards(context = {}) {
             customModulesNeedUpdate: Number(getCustomModulesNeedUpdate() || 0),
             customModulesUnknownUpdate: Number(getCustomModulesUnknownUpdate() || 0),
             customStatusChecked,
-            actionBusy: getActionBusy(),
             customAlert,
             customAlertText,
-            updateAllBtn,
         });
     };
 

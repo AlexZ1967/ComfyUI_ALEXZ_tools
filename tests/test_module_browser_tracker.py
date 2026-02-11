@@ -69,7 +69,10 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self._orig_install_comfyui_requirements = self.api._install_comfyui_requirements
         self._orig_refresh_runtime_state = self.api._refresh_module_runtime_state
         self._orig_manager_index = self.api._manager_index
+        self._orig_manager_meta_for_module = self.api._manager_meta_for_module
         self._orig_manager_github_stats = self.api._manager_github_stats
+        self._orig_git_remote_names = self.api._git_remote_names
+        self._orig_bootstrap_module_remote_from_manager = self.api._bootstrap_module_remote_from_manager
         self._orig_module_repo_url = self.api._module_repo_url
         self._orig_module_local_readme_summary = self.api._module_local_readme_summary
         self._orig_remember_module_state = self.api._remember_module_state
@@ -104,7 +107,10 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._install_comfyui_requirements = self._orig_install_comfyui_requirements
         self.api._refresh_module_runtime_state = self._orig_refresh_runtime_state
         self.api._manager_index = self._orig_manager_index
+        self.api._manager_meta_for_module = self._orig_manager_meta_for_module
         self.api._manager_github_stats = self._orig_manager_github_stats
+        self.api._git_remote_names = self._orig_git_remote_names
+        self.api._bootstrap_module_remote_from_manager = self._orig_bootstrap_module_remote_from_manager
         self.api._module_repo_url = self._orig_module_repo_url
         self.api._module_local_readme_summary = self._orig_module_local_readme_summary
         self.api._remember_module_state = self._orig_remember_module_state
@@ -282,6 +288,104 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         result = self.api._pull_custom_module("modA")
         self.assertEqual(result.get("status"), "updated")
         self.assertTrue(bool(result.get("updated")))
+
+    def test_pull_custom_module_bootstraps_origin_from_manager_metadata(self):
+        """Ensure module update can configure origin from Manager metadata when remotes are absent."""
+        fake_module = os.path.join(os.getcwd(), "fake_module_bootstrap")
+        rev_parse_head_calls = {"count": 0}
+        remote_added = {"value": False}
+        self.api._module_dir = lambda module_name: fake_module if module_name == "modA" else None
+        self.api._git_remote_names = lambda repo_root: ["origin"] if remote_added["value"] else []
+        self.api._manager_meta_for_module = (
+            lambda module_name, repository_url=None: {"repository": "https://github.com/example/modA"}
+        )
+        self.api._requirements_changed_between = lambda module_dir, before, after: False
+
+        def fake_run_git(args, timeout=2.0):
+            cmd = " ".join(args)
+            table = {
+                f"git -C {fake_module} rev-parse --is-inside-work-tree": "true",
+                f"git -C {fake_module} rev-parse --abbrev-ref HEAD": "main",
+                f"git -C {fake_module} rev-parse --abbrev-ref --symbolic-full-name @{{u}}": None,
+                f"git -C {fake_module} remote": "origin",
+                f"git -C {fake_module} fetch --quiet origin": "",
+                f"git -C {fake_module} rev-parse --verify origin/main": "bbbb2222",
+                f"git -C {fake_module} symbolic-ref --quiet refs/remotes/origin/HEAD": "refs/remotes/origin/main",
+            }
+            if cmd == f"git -C {fake_module} rev-parse HEAD":
+                rev_parse_head_calls["count"] += 1
+                return "aaaa1111" if rev_parse_head_calls["count"] == 1 else "bbbb2222"
+            return table.get(cmd)
+
+        def fake_run_command(args, timeout=120.0, disable_git_prompt=False):
+            cmd = " ".join(args)
+            if cmd == f"git -C {fake_module} remote add origin https://github.com/example/modA":
+                remote_added["value"] = True
+                return {"ok": True, "returncode": 0, "stdout": "", "stderr": ""}
+            if cmd == f"git -C {fake_module} pull --ff-only origin main":
+                return {"ok": True, "returncode": 0, "stdout": "", "stderr": ""}
+            return {"ok": False, "returncode": 1, "stdout": "", "stderr": f"unexpected command: {cmd}"}
+
+        self.api._run_git = fake_run_git
+        self.api._run_command = fake_run_command
+
+        result = self.api._pull_custom_module("modA")
+        self.assertEqual(result.get("status"), "updated")
+        self.assertTrue(bool(result.get("updated")))
+
+    def test_pull_custom_module_auto_stashes_local_changes_and_retries(self):
+        """Ensure module update auto-stashes dirty worktree and retries pull successfully."""
+        fake_module = os.path.join(os.getcwd(), "fake_module_stash")
+        rev_parse_head_calls = {"count": 0}
+        pull_calls = {"count": 0}
+        self.api._module_dir = lambda module_name: fake_module if module_name == "modA" else None
+        self.api._requirements_changed_between = lambda module_dir, before, after: False
+
+        def fake_run_git(args, timeout=2.0):
+            cmd = " ".join(args)
+            table = {
+                f"git -C {fake_module} rev-parse --is-inside-work-tree": "true",
+                f"git -C {fake_module} rev-parse --abbrev-ref HEAD": "main",
+                f"git -C {fake_module} rev-parse --abbrev-ref --symbolic-full-name @{{u}}": "origin/main",
+                f"git -C {fake_module} fetch --quiet origin": "",
+                f"git -C {fake_module} rev-parse --verify origin/main": "bbbb2222",
+            }
+            if cmd == f"git -C {fake_module} rev-parse HEAD":
+                rev_parse_head_calls["count"] += 1
+                return "aaaa1111" if rev_parse_head_calls["count"] == 1 else "bbbb2222"
+            return table.get(cmd)
+
+        def fake_run_command(args, timeout=120.0, disable_git_prompt=False):
+            cmd = " ".join(args)
+            if cmd == f"git -C {fake_module} pull --ff-only":
+                pull_calls["count"] += 1
+                if pull_calls["count"] == 1:
+                    return {
+                        "ok": False,
+                        "returncode": 1,
+                        "stdout": "",
+                        "stderr": "Please commit your changes or stash them before you merge.",
+                    }
+                return {"ok": True, "returncode": 0, "stdout": "", "stderr": ""}
+            if cmd.startswith(f"git -C {fake_module} stash push -u -m "):
+                return {"ok": True, "returncode": 0, "stdout": "Saved working directory and index state", "stderr": ""}
+            return {"ok": False, "returncode": 1, "stdout": "", "stderr": f"unexpected command: {cmd}"}
+
+        self.api._run_git = fake_run_git
+        self.api._run_command = fake_run_command
+
+        result = self.api._pull_custom_module("modA")
+        self.assertEqual(result.get("status"), "updated")
+        self.assertTrue(bool(result.get("stashed_local_changes")))
+
+    def test_local_changes_block_detector_supports_russian_git_output(self):
+        """Ensure localized Russian git merge-block text is recognized for auto-stash retry."""
+        text = (
+            "Ошибка: Ваши локальные изменения в указанных файлах будут перезаписаны при слиянии.\n"
+            "Сделайте коммит или спрячьте ваши изменения перед слиянием веток.\n"
+            "Указанные неотслеживаемые файлы в рабочем каталоге будут перезаписаны при слиянии."
+        )
+        self.assertTrue(self.api._is_git_local_changes_block(text))
 
     def test_unseen_module_update_detected_between_runs(self):
         """Validate `test_unseen_module_update_detected_between_runs` behavior."""
@@ -570,6 +674,28 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         info = self.api._resolve_module_info("custom", "ComfyUI_ALEXZ_tools", force_refresh=True, cache_only=True)
         self.assertFalse(bool(info.get("updated_between_runs")))
 
+    def test_cached_module_flags_hide_unknown_until_custom_status_checked(self):
+        """Unknown update status badge must appear only after explicit custom status refresh."""
+        self.api._MODULE_STATE_CACHE = {
+            "__meta__": {"custom_update_checked": False},
+            "modA": {"update_status": "unknown", "update_available": None},
+        }
+        flags = self.api._cached_module_flags("custom", "modA")
+        self.assertEqual(flags.get("update_status"), "")
+
+        self.api._MODULE_STATE_CACHE["__meta__"]["custom_update_checked"] = True
+        flags = self.api._cached_module_flags("custom", "modA")
+        self.assertEqual(flags.get("update_status"), "unknown")
+
+    def test_cached_module_flags_non_custom_never_marks_unknown(self):
+        """Core/API/Extras modules must not receive unknown-update badge from custom state."""
+        self.api._MODULE_STATE_CACHE = {
+            "__meta__": {"custom_update_checked": True},
+            "SomeCoreModule": {"update_status": "unknown", "update_available": None},
+        }
+        flags = self.api._cached_module_flags("core", "SomeCoreModule")
+        self.assertEqual(flags.get("update_status"), "")
+
     def test_refresh_syncs_custom_module_upstreams(self):
         """Validate `test_refresh_syncs_custom_module_upstreams` behavior."""
         called = []
@@ -645,6 +771,8 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._discover_custom_modules = lambda: ["modA"]
         self.api._module_git_state = lambda module_name: {}
         self.api._module_worktree_signature = lambda module_name: ""
+        self.api._manager_index = lambda: {"by_github": {}, "by_id": {}, "by_repo_name": {}}
+        self.api._manager_github_stats = lambda: {"by_url": {}, "by_github": {}}
         self.api._build_node_snapshots = lambda: {}
 
         summary = self.api._announce_tracked_module_updates(local_only=False)
@@ -657,6 +785,60 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertIsInstance(entry, dict)
         self.assertIsNone(entry.get("update_available"))
         self.assertEqual(entry.get("update_status"), "unknown")
+
+    def test_announce_uses_manager_stats_when_git_upstream_missing(self):
+        """Ensure refresh marks module updatable when Manager stats show newer remote timestamp."""
+        self.api._discover_custom_modules = lambda: ["crt-nodes"]
+        self.api._module_worktree_signature = lambda module_name: ""
+        self.api._module_git_state = lambda module_name: {
+            "installed_commit": "1111aaaa",
+            "installed_updated_at": "2025-12-21T15:48:18+01:00",
+            "repository": "",
+            "has_upstream": False,
+            "behind": None,
+            "remote_head": "",
+        }
+        self.api._manager_index = lambda: {
+            "by_github": {},
+            "by_id": {
+                "crtnodes": {
+                    "title": "CRT-Nodes",
+                    "author": "CRT",
+                    "description": "CRT-Nodes is a collection of custom nodes for ComfyUI",
+                    "repository": "https://github.com/plugcrypt/CRT-Nodes",
+                },
+                "crt-nodes": {
+                    "title": "CRT-Nodes",
+                    "author": "CRT",
+                    "description": "CRT-Nodes is a collection of custom nodes for ComfyUI",
+                    "repository": "https://github.com/plugcrypt/CRT-Nodes",
+                },
+            },
+            "by_repo_name": {
+                "crt-nodes": {
+                    "title": "CRT-Nodes",
+                    "author": "CRT",
+                    "description": "CRT-Nodes is a collection of custom nodes for ComfyUI",
+                    "repository": "https://github.com/plugcrypt/CRT-Nodes",
+                }
+            },
+        }
+        self.api._manager_github_stats = lambda: {
+            "by_url": {
+                "https://github.com/plugcrypt/CRT-Nodes": {"last_update": "2026-01-27 16:19:58"}
+            },
+            "by_github": {"plugcrypt/crt-nodes": {"last_update": "2026-01-27 16:19:58"}},
+        }
+        self.api._build_node_snapshots = lambda: {}
+
+        summary = self.api._announce_tracked_module_updates(local_only=False)
+
+        self.assertEqual(summary.get("modules_need_update"), 1)
+        self.assertEqual(summary.get("modules_unknown_update"), 0)
+        self.assertIn("crt-nodes", summary.get("update_available_modules", []))
+        entry = self.api._load_module_state().get("crt-nodes")
+        self.assertTrue(bool(entry.get("update_available")))
+        self.assertEqual(entry.get("update_status"), "can_update")
 
     def test_resolve_update_targets_all_filters_modules(self):
         """Validate `test_resolve_update_targets_all_filters_modules` behavior."""

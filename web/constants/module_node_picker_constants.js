@@ -37,3 +37,4 @@ export const GROUP_LABELS = {
 export const COMFY_GROUP_ORDER = ["core", "core_extras", "api"];
 export const MODULE_MARK_UPDATED = "✅";
 export const MODULE_MARK_REMOTE_UPDATE = "🟥";
+export const MODULE_MARK_UNKNOWN_UPDATE = "🟨";

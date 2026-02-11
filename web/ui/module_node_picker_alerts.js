@@ -11,21 +11,18 @@
  */
 
 /**
- * Render ComfyUI status card and action-button visibility for update/requirements flows.
+ * Render ComfyUI status card for monitoring-only mode.
  */
 export function renderComfyAlertCard(context) {
     const info = context?.info || null;
     const comfyMode = String(context?.comfyMode || "releases");
-    const actionBusy = Boolean(context?.actionBusy);
     const fmtDate = typeof context?.fmtDate === "function"
         ? context.fmtDate
         : (value) => String(value || "n/a");
     const comfyAlert = context?.comfyAlert;
     const comfyAlertText = context?.comfyAlertText;
-    const comfyUpdateBtn = context?.comfyUpdateBtn;
-    const comfyInstallReqBtn = context?.comfyInstallReqBtn;
 
-    if (!comfyAlert || !comfyAlertText || !comfyUpdateBtn || !comfyInstallReqBtn) {
+    if (!comfyAlert || !comfyAlertText) {
         return;
     }
 
@@ -60,22 +57,13 @@ export function renderComfyAlertCard(context) {
         }
         if (requirementsPending) {
             comfyAlertText.textContent += ` requirements.txt install is pending${requirementsPendingAt}.`;
-            comfyInstallReqBtn.style.display = "";
-            comfyInstallReqBtn.disabled = actionBusy;
-        } else {
-            comfyInstallReqBtn.style.display = "none";
         }
-        comfyUpdateBtn.style.display = "";
-        comfyUpdateBtn.disabled = actionBusy;
         return;
     }
 
     if (requirementsPending) {
         comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
         comfyAlertText.textContent = `ComfyUI requirements.txt install is pending${requirementsPendingAt}.`;
-        comfyUpdateBtn.style.display = "none";
-        comfyInstallReqBtn.style.display = "";
-        comfyInstallReqBtn.disabled = actionBusy;
         return;
     }
 
@@ -88,29 +76,24 @@ export function renderComfyAlertCard(context) {
     } else {
         comfyAlertText.textContent = `ComfyUI is up to date (${mode} check).`;
     }
-    comfyUpdateBtn.style.display = "none";
-    comfyInstallReqBtn.style.display = "none";
 }
 
 /**
- * Render Custom Nodes global status card and update-all button visibility.
+ * Render Custom Nodes global status card for monitoring-only mode.
  */
 export function renderCustomAlertCard(context) {
     const customModulesNeedUpdate = Number(context?.customModulesNeedUpdate || 0);
     const customModulesUnknownUpdate = Number(context?.customModulesUnknownUpdate || 0);
     const customStatusChecked = Boolean(context?.customStatusChecked);
-    const actionBusy = Boolean(context?.actionBusy);
     const customAlert = context?.customAlert;
     const customAlertText = context?.customAlertText;
-    const updateAllBtn = context?.updateAllBtn;
 
-    if (!customAlert || !customAlertText || !updateAllBtn) {
+    if (!customAlert || !customAlertText) {
         return;
     }
 
-    if (customModulesNeedUpdate <= 0 && customModulesUnknownUpdate <= 0 && !customStatusChecked) {
+    if (!customStatusChecked) {
         customAlert.style.display = "none";
-        updateAllBtn.style.display = "none";
         return;
     }
     customAlert.classList.remove(
@@ -122,19 +105,14 @@ export function renderCustomAlertCard(context) {
     if (customModulesNeedUpdate > 0) {
         customAlert.classList.add("alexz-mod-picker-status-card--warn");
         customAlertText.textContent = `${customModulesNeedUpdate} custom modules require update.`;
-        updateAllBtn.textContent = `Update Custom Nodes (${customModulesNeedUpdate})`;
-        updateAllBtn.style.display = "";
-        updateAllBtn.disabled = actionBusy;
         return;
     }
     if (customModulesUnknownUpdate > 0) {
         customAlert.classList.add("alexz-mod-picker-status-card--warn");
         customAlertText.textContent =
             `${customModulesUnknownUpdate} custom modules could not be checked for updates (missing git remote/upstream).`;
-        updateAllBtn.style.display = "none";
         return;
     }
     customAlert.classList.add("alexz-mod-picker-status-card--neutral");
     customAlertText.textContent = "Custom Nodes: no updates required.";
-    updateAllBtn.style.display = "none";
 }

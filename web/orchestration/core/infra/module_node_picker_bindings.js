@@ -19,9 +19,6 @@ export function bindModuleNodePickerEvents(context) {
     const moduleFilter = context?.moduleFilter;
     const nodeSelect = context?.nodeSelect;
     const nodeList = context?.nodeList;
-    const updateAllBtn = context?.updateAllBtn;
-    const comfyUpdateBtn = context?.comfyUpdateBtn;
-    const comfyInstallReqBtn = context?.comfyInstallReqBtn;
     const comfyInfoBtn = context?.comfyInfoBtn;
     const comfyModeSelect = context?.comfyModeSelect;
     const refreshBtn = context?.refreshBtn;
@@ -34,9 +31,6 @@ export function bindModuleNodePickerEvents(context) {
     const loadModuleInfo = context?.loadModuleInfo;
     const isActionBusy = context?.isActionBusy;
     const setCustomStatusChecked = context?.setCustomStatusChecked;
-    const setProcessTarget = context?.setProcessTarget;
-    const runModuleUpdate = context?.runModuleUpdate;
-    const installComfyUIRequirementsFlow = context?.installComfyUIRequirementsFlow;
     const refreshComfyUIInfoFlow = context?.refreshComfyUIInfoFlow;
     const saveComfyCheckMode = context?.saveComfyCheckMode;
     const refreshCustomNodesInfoFlow = context?.refreshCustomNodesInfoFlow;
@@ -79,42 +73,6 @@ export function bindModuleNodePickerEvents(context) {
     };
     nodeSelect.onchange = onNodeSelectChange;
 
-    let onUpdateAllClick = null;
-    if (updateAllBtn) {
-        onUpdateAllClick = async () => {
-            if (isActionBusy?.()) {
-                return;
-            }
-            setCustomStatusChecked?.(true);
-            setProcessTarget?.("custom");
-            await runModuleUpdate?.("all", "");
-        };
-        updateAllBtn.onclick = onUpdateAllClick;
-    }
-
-    let onComfyUpdateClick = null;
-    if (comfyUpdateBtn) {
-        onComfyUpdateClick = async () => {
-            if (isActionBusy?.()) {
-                return;
-            }
-            setProcessTarget?.("comfy");
-            await runModuleUpdate?.("comfyui", "");
-        };
-        comfyUpdateBtn.onclick = onComfyUpdateClick;
-    }
-
-    let onComfyInstallReqClick = null;
-    if (comfyInstallReqBtn) {
-        onComfyInstallReqClick = async () => {
-            if (isActionBusy?.()) {
-                return;
-            }
-            await installComfyUIRequirementsFlow?.();
-        };
-        comfyInstallReqBtn.onclick = onComfyInstallReqClick;
-    }
-
     let onComfyInfoClick = null;
     if (comfyInfoBtn) {
         onComfyInfoClick = async () => {
@@ -155,15 +113,6 @@ export function bindModuleNodePickerEvents(context) {
         }
         if (nodeSelect.onchange === onNodeSelectChange) {
             nodeSelect.onchange = null;
-        }
-        if (updateAllBtn && updateAllBtn.onclick === onUpdateAllClick) {
-            updateAllBtn.onclick = null;
-        }
-        if (comfyUpdateBtn && comfyUpdateBtn.onclick === onComfyUpdateClick) {
-            comfyUpdateBtn.onclick = null;
-        }
-        if (comfyInstallReqBtn && comfyInstallReqBtn.onclick === onComfyInstallReqClick) {
-            comfyInstallReqBtn.onclick = null;
         }
         if (comfyInfoBtn && comfyInfoBtn.onclick === onComfyInfoClick) {
             comfyInfoBtn.onclick = null;

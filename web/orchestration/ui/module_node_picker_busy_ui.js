@@ -41,9 +41,6 @@ export function createBusyUiController(context) {
         const groupSelect = controls.groupSelect;
         const nodeSelect = controls.nodeSelect;
         const moduleFilter = controls.moduleFilter;
-        const updateAllBtn = controls.updateAllBtn;
-        const comfyUpdateBtn = controls.comfyUpdateBtn;
-        const comfyInstallReqBtn = controls.comfyInstallReqBtn;
         const moduleInfo = controls.moduleInfo;
         const nodeList = controls.nodeList;
 
@@ -67,15 +64,6 @@ export function createBusyUiController(context) {
         }
         if (moduleFilter) {
             moduleFilter.disabled = controlsBusy;
-        }
-        if (updateAllBtn) {
-            updateAllBtn.disabled = busy;
-        }
-        if (comfyUpdateBtn) {
-            comfyUpdateBtn.disabled = busy || comfyUpdateBtn.style.display === "none";
-        }
-        if (comfyInstallReqBtn) {
-            comfyInstallReqBtn.disabled = busy || comfyInstallReqBtn.style.display === "none";
         }
         if (moduleInfo) {
             moduleInfo.style.pointerEvents = controlsBusy ? "none" : "";

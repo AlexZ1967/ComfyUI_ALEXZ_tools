@@ -244,6 +244,7 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
     const syncUpdateAllButton = context?.syncUpdateAllButton;
     const setPendingUpdate = context?.setPendingUpdate;
     const clearPendingUpdate = context?.clearPendingUpdate;
+    let pendingRequirementsPrompt = null;
 
     if (!shouldContinueContext(context)) {
         return;
@@ -287,7 +288,7 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
             }
         }
         if (String(update.phase || "") === "done") {
-            await maybeInstallChangedRequirements?.(update);
+            pendingRequirementsPrompt = update;
         }
         let preferredGroup = currentGroup;
         let preferredModule = currentModule;
@@ -322,5 +323,13 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
         }
         setActionBusy?.(false);
         syncUpdateAllButton?.();
+    }
+    if (!shouldContinueContext(context)) {
+        return;
+    }
+    if (pendingRequirementsPrompt) {
+        // Show post-update requirements action only after busy-lock is released,
+        // otherwise the first click may be ignored while controls are still disabled.
+        await maybeInstallChangedRequirements?.(pendingRequirementsPrompt);
     }
 }

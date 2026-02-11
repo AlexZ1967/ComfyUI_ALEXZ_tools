@@ -61,20 +61,25 @@ export function renderNodeListPanel(context) {
     const legend = document.createElement("div");
     legend.className = "alexz-mod-picker-node-legend";
 
-    const updatedMark = String(marks.updatedMark || "✅");
-    const remoteUpdateMark = String(marks.remoteUpdateMark || "🟥");
-    const legendRows = [
-        "Метки модулей:",
-        `${updatedMark} модуль обновлен между запусками`,
-        `${remoteUpdateMark} для модуля доступно обновление`,
-        "Рамка ноды: красная = новая, зеленая = обновленная.",
-    ];
-    for (const text of legendRows) {
-        const row = document.createElement("div");
-        row.className = "alexz-mod-picker-node-legend-row";
-        row.textContent = text;
-        legend.appendChild(row);
-    }
+    const nodeColorRow = document.createElement("div");
+    nodeColorRow.className = "alexz-mod-picker-node-legend-row";
+    nodeColorRow.append("Рамка ноды: ");
+    const redWord = document.createElement("span");
+    redWord.className = "alexz-mod-picker-legend-color-red";
+    redWord.textContent = "красная";
+    nodeColorRow.appendChild(redWord);
+    nodeColorRow.append(" = новая, ");
+    const greenWord = document.createElement("span");
+    greenWord.className = "alexz-mod-picker-legend-color-green";
+    greenWord.textContent = "зеленая";
+    nodeColorRow.appendChild(greenWord);
+    nodeColorRow.append(" = обновленная, ");
+    const yellowWord = document.createElement("span");
+    yellowWord.className = "alexz-mod-picker-legend-color-yellow";
+    yellowWord.textContent = "желтая";
+    nodeColorRow.appendChild(yellowWord);
+    nodeColorRow.append(" = не определенная.");
+    legend.appendChild(nodeColorRow);
     nodeListEl.appendChild(legend);
 
     const groupEl = document.createElement("div");
@@ -140,8 +145,6 @@ export function renderModuleInfoCard(context) {
     const fmtDate = context?.fmtDate;
     const onExpandModule = context?.onExpandModule;
     const onRefreshModuleInfo = context?.onRefreshModuleInfo;
-    const onUpdateModule = context?.onUpdateModule;
-    const onInstallModuleRequirements = context?.onInstallModuleRequirements;
 
     if (!moduleInfoEl) {
         return;
@@ -153,8 +156,12 @@ export function renderModuleInfoCard(context) {
 
     const card = document.createElement("div");
     card.className = "alexz-mod-picker-module-card";
+    const updateStatus = String(info.update_status || "unknown");
     if (isModuleUpdated) {
         card.classList.add("alexz-mod-picker-module-card--updated");
+    }
+    if (updateStatus === "unknown") {
+        card.classList.add("alexz-mod-picker-module-card--unknown");
     }
     if (nodeCount > 0) {
         card.classList.add("alexz-mod-picker-module-card--clickable");
@@ -234,7 +241,6 @@ export function renderModuleInfoCard(context) {
         labelEl.className = "alexz-mod-picker-module-label";
         labelEl.textContent = "Status:";
         const valueEl = document.createElement("span");
-        const updateStatus = String(info.update_status || "unknown");
         if (updateStatus === "can_update") {
             statusRow.classList.add("warn");
             valueEl.textContent = "модуль требует обновления";
@@ -242,7 +248,8 @@ export function renderModuleInfoCard(context) {
             statusRow.classList.add("ok");
             valueEl.textContent = "модуль актуален";
         } else {
-            valueEl.textContent = "статус неизвестен";
+            statusRow.classList.add("unknown");
+            valueEl.textContent = "update status unknown (no upstream/remote)";
         }
         statusRow.appendChild(labelEl);
         statusRow.appendChild(valueEl);
@@ -280,45 +287,6 @@ export function renderModuleInfoCard(context) {
     };
     actionRow.appendChild(refreshInfoBtn);
 
-    if (isCustomGroup && String(info.update_status || "") === "can_update") {
-        const updateBtn = document.createElement("button");
-        updateBtn.type = "button";
-        updateBtn.className = "alexz-mod-picker-btn-small";
-        updateBtn.textContent = "Update module";
-        updateBtn.disabled = actionBusy;
-        updateBtn.onclick = async (event) => {
-            event.stopPropagation();
-            if (actionBusy || typeof onUpdateModule !== "function") {
-                return;
-            }
-            const moduleName = String(info.module || selectedModule || "").trim();
-            if (!moduleName) {
-                return;
-            }
-            await onUpdateModule(moduleName);
-        };
-        actionRow.appendChild(updateBtn);
-    }
-
-    if (isCustomGroup && Boolean(info.requirements_update_pending)) {
-        const installReqBtn = document.createElement("button");
-        installReqBtn.type = "button";
-        installReqBtn.className = "alexz-mod-picker-btn-small";
-        installReqBtn.textContent = "Install module requirements";
-        installReqBtn.disabled = actionBusy;
-        installReqBtn.onclick = async (event) => {
-            event.stopPropagation();
-            if (actionBusy || typeof onInstallModuleRequirements !== "function") {
-                return;
-            }
-            const moduleName = String(info.module || selectedModule || "").trim();
-            if (!moduleName) {
-                return;
-            }
-            await onInstallModuleRequirements(moduleName);
-        };
-        actionRow.appendChild(installReqBtn);
-    }
     card.appendChild(actionRow);
 
     if (info.new_module_between_runs) {

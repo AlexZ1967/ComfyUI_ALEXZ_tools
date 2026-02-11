@@ -41,6 +41,7 @@ export function createModuleNodePickerSelectionController(context = {}) {
     const marks = context?.marks || {
         updatedMark: "✅",
         remoteUpdateMark: "🟥",
+        unknownUpdateMark: "🟨",
     };
     const defaultModule = context?.defaultModule || "ComfyUI_ALEXZ_tools";
     const comfyGroupOrder = context?.comfyGroupOrder || [];
@@ -114,6 +115,7 @@ export function createModuleNodePickerSelectionController(context = {}) {
             marks: {
                 updatedMark: marks.updatedMark,
                 remoteUpdateMark: marks.remoteUpdateMark,
+                unknownUpdateMark: marks.unknownUpdateMark,
             },
             defaultModule,
             setExpandedModule: (value) => {
