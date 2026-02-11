@@ -468,6 +468,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         status_cards_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_status_cards.js"
         ).read_text(encoding="utf-8")
+        runtime_context_text = (
+            repo_root / "web" / "state" / "module_node_picker_runtime_context.js"
+        ).read_text(encoding="utf-8")
         view_helpers_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_view_helpers.js"
         ).read_text(encoding="utf-8")
@@ -488,14 +491,14 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_text)
-        self.assertIn("getRuntimePickerState", picker_text)
+        self.assertIn("getRuntimePickerState", runtime_state_text)
         self.assertIn("LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY", picker_text)
-        self.assertIn("clearLegacyPersistentFlags", picker_text)
-        self.assertIn("loadCustomStatusChecked", picker_text)
-        self.assertIn("saveCustomStatusChecked", picker_text)
+        self.assertIn("clearLegacyPersistentFlags", runtime_state_text)
+        self.assertIn("loadCustomStatusChecked", runtime_state_text)
+        self.assertIn("saveCustomStatusChecked", runtime_state_text)
         self.assertIn("setCustomStatusChecked", picker_text)
-        self.assertIn("loadComfyStatusChecked", picker_text)
-        self.assertIn("saveComfyStatusChecked", picker_text)
+        self.assertIn("loadComfyStatusChecked", runtime_state_text)
+        self.assertIn("saveComfyStatusChecked", runtime_state_text)
         self.assertIn("loadComfyInfoSnapshot", picker_text)
         self.assertIn("saveComfyInfoSnapshot", picker_text)
         self.assertIn("setComfyStatusChecked", picker_text)
@@ -550,6 +553,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("renderComfyAlertCard", status_cards_text)
         self.assertIn("renderCustomAlertCard", status_cards_text)
         self.assertIn("syncUpdateAllButton", status_cards_text)
+        self.assertIn("export function createModuleNodePickerRuntimeContext", runtime_context_text)
+        self.assertIn("createModuleNodePickerStore", runtime_context_text)
+        self.assertIn("createModuleDiagnosticsLogger", runtime_context_text)
+        self.assertIn("createRuntimeStatusAccessors", runtime_context_text)
         self.assertIn("export function createModuleNodePickerViewHelpers", view_helpers_text)
         self.assertIn("setProcessAction", view_helpers_text)
         self.assertIn("setRefreshLine", view_helpers_text)

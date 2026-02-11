@@ -79,15 +79,7 @@ import {
 } from "./orchestration/module_node_picker_resume_flow.js";
 import { createBusyUiController } from "./orchestration/module_node_picker_busy_ui.js";
 import { runStartupCoordinator } from "./orchestration/module_node_picker_startup_flow.js";
-import { createModuleNodePickerStore } from "./state/store.js";
-import {
-    getRuntimePickerState,
-    clearLegacyPersistentFlags,
-    createRuntimeStatusAccessors,
-    loadComfyCheckMode,
-    saveComfyCheckMode as persistComfyCheckMode,
-} from "./state/module_node_picker_runtime_state.js";
-import { createModuleDiagnosticsLogger } from "./diagnostics/logger.js";
+import { createModuleNodePickerRuntimeContext } from "./state/module_node_picker_runtime_context.js";
 
 const EXT_NAME = "ALEXZ.Tools.ModuleNodePicker";
 const SIDEBAR_TAB_ID = "alexz-module-nodes";
@@ -554,26 +546,23 @@ function renderPicker(container) {
         nodeList,
     } = createModuleNodePickerLayout(container);
 
-    const pickerStore = createModuleNodePickerStore({
-        defaultSelectedGroup: "custom",
-        defaultSelectedModule: DEFAULT_MODULE,
-        defaultDebugEnabled: Boolean(window[NODE_PICKER_DEBUG_KEY]),
-        selectedGroupStorageKey: NODE_PICKER_SELECTED_GROUP_STORAGE_KEY,
-        selectedModuleStorageKey: NODE_PICKER_SELECTED_MODULE_STORAGE_KEY,
-        debugStorageKey: NODE_PICKER_DEBUG_STORAGE_KEY,
+    const runtimeContext = createModuleNodePickerRuntimeContext({
+        windowObj: window,
+        defaultModule: DEFAULT_MODULE,
+        keys: {
+            debugRuntimeKey: NODE_PICKER_DEBUG_KEY,
+            selectedGroupStorageKey: NODE_PICKER_SELECTED_GROUP_STORAGE_KEY,
+            selectedModuleStorageKey: NODE_PICKER_SELECTED_MODULE_STORAGE_KEY,
+            debugStorageKey: NODE_PICKER_DEBUG_STORAGE_KEY,
+            runtimeStateKey: MODULE_PICKER_RUNTIME_STATE_KEY,
+            legacyCustomStatusCheckedKey: LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY,
+            legacyPendingCustomRefreshKey: LEGACY_PENDING_CUSTOM_REFRESH_STORAGE_KEY,
+            legacyPendingUpdateKey: LEGACY_PENDING_UPDATE_STORAGE_KEY,
+            comfyCheckModeStorageKey: COMFYUI_CHECK_MODE_STORAGE_KEY,
+        },
     });
-    const diagnosticsLogger = createModuleDiagnosticsLogger({
-        namespace: "ALEXZ_tools Node Picker",
-        maxEntries: 200,
-        debugEnabled: Boolean(pickerStore.get("debugEnabled")),
-    });
-    const runtimePickerState = getRuntimePickerState(window, MODULE_PICKER_RUNTIME_STATE_KEY);
-    clearLegacyPersistentFlags(window, {
-        customStatusCheckedKey: LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY,
-        pendingCustomRefreshKey: LEGACY_PENDING_CUSTOM_REFRESH_STORAGE_KEY,
-        pendingUpdateKey: LEGACY_PENDING_UPDATE_STORAGE_KEY,
-    });
-
+    const pickerStore = runtimeContext.pickerStore;
+    const diagnosticsLogger = runtimeContext.diagnosticsLogger;
     const {
         loadCustomStatusChecked,
         saveCustomStatusChecked,
@@ -590,12 +579,10 @@ function renderPicker(container) {
         hasPendingComfyInfoRefresh,
         setPendingComfyInfoRefresh,
         clearPendingComfyInfoRefresh,
-    } = createRuntimeStatusAccessors(runtimePickerState);
+    } = runtimeContext.runtimeStatus;
 
-    comfyModeSelect.value = loadComfyCheckMode(window, COMFYUI_CHECK_MODE_STORAGE_KEY);
-    const saveComfyCheckMode = (mode) => {
-        persistComfyCheckMode(window, COMFYUI_CHECK_MODE_STORAGE_KEY, mode);
-    };
+    comfyModeSelect.value = runtimeContext.comfyCheckMode;
+    const saveComfyCheckMode = (mode) => runtimeContext.saveComfyCheckMode(mode);
 
     let showHelpStatus = () => {};
     let debugUi = null;
