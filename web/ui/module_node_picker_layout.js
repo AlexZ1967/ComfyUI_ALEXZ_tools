@@ -132,14 +132,18 @@ export function createModuleNodePickerLayout(container) {
     dividerBottom.className = "alexz-mod-picker-divider";
     root.appendChild(dividerBottom);
 
+    const selectionBlock = document.createElement("div");
+    selectionBlock.className = "alexz-mod-picker-selection-block";
+    root.appendChild(selectionBlock);
+
     const selectionLegendHint = document.createElement("div");
     selectionLegendHint.className = "alexz-mod-picker-help-hint alexz-mod-picker-help-hint--selection-legend";
     selectionLegendHint.textContent = "Маркеры состояния:\n✅ локально обновлен, 🟥 доступно обновление, 🟨 статус не определен";
-    root.appendChild(selectionLegendHint);
+    selectionBlock.appendChild(selectionLegendHint);
 
     const selectionHelp = document.createElement("div");
     selectionHelp.className = "alexz-mod-picker-help alexz-mod-picker-help--selection";
-    root.appendChild(selectionHelp);
+    selectionBlock.appendChild(selectionHelp);
 
     const categorySelect = document.createElement("select");
     categorySelect.className = "alexz-mod-picker-select";
@@ -152,25 +156,25 @@ export function createModuleNodePickerLayout(container) {
     catCustom.textContent = "Custom Nodes";
     categorySelect.appendChild(catCustom);
     categorySelect.value = "custom";
-    root.appendChild(categorySelect);
+    selectionBlock.appendChild(categorySelect);
 
     const groupSelect = document.createElement("select");
     groupSelect.className = "alexz-mod-picker-select";
-    root.appendChild(groupSelect);
+    selectionBlock.appendChild(groupSelect);
 
     const nodeSelect = document.createElement("select");
     nodeSelect.className = "alexz-mod-picker-select";
-    root.appendChild(nodeSelect);
+    selectionBlock.appendChild(nodeSelect);
 
     const moduleFilter = document.createElement("input");
     moduleFilter.type = "text";
     moduleFilter.className = "alexz-mod-picker-select";
     moduleFilter.placeholder = "Фильтр модулей (например: Inpaint-Crop)";
-    root.appendChild(moduleFilter);
+    selectionBlock.appendChild(moduleFilter);
 
     const moduleHintDivider = document.createElement("div");
     moduleHintDivider.className = "alexz-mod-picker-divider";
-    root.appendChild(moduleHintDivider);
+    selectionBlock.appendChild(moduleHintDivider);
 
     const refreshLine = document.createElement("div");
     refreshLine.className = "alexz-mod-picker-refresh-line";
@@ -219,6 +223,7 @@ export function createModuleNodePickerLayout(container) {
         customAlertText,
         processHost,
         dividerBottom,
+        selectionBlock,
         selectionLegendHint,
         selectionHelp,
         categorySelect,

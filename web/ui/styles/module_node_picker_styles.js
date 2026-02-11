@@ -115,6 +115,11 @@ const STRUCTURE_STYLES = `
         flex-direction: column;
         gap: 4px;
     }
+    .alexz-mod-picker-selection-block {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
 `;
 
 /**
@@ -132,8 +137,8 @@ const HELP_AND_HINT_STYLES = `
         justify-content: flex-end;
     }
     .alexz-mod-picker-help--selection {
-        margin-top: 1px;
-        margin-bottom: 1px;
+        margin-top: 0;
+        margin-bottom: 0;
     }
     .alexz-mod-picker-help-main {
         font-size: 13px;
