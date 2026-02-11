@@ -145,6 +145,17 @@
   - все API-запросы picker привязаны к lifecycle per-render через `AbortController`; in-flight запросы теперь явно отменяются при dispose/re-render.
   - смена `ComfyUI check` режима отвязана от полной reload каталога (стабильные dropdown без фликера при быстрых переключениях).
   - финализирована семантика `ComfyUI check`: переключение — только сохранение настройки; сетевое обновление — только по явному `Refresh ComfyUI Info`.
+  - вынесена orchestration-логика category/group/module селекторов в отдельный модуль `web/orchestration/module_node_picker_selection_controller.js` (пополнение/фильтрация dropdown и sync со store), с сохранением прежнего UI-поведения.
+  - вынесена orchestration-логика long-running действий (refresh/update/resume/requirements follow-up + per-module refresh/install) в `web/orchestration/module_node_picker_action_flows.js`, а в `web/module_node_picker.js` оставлены только thin bindings и wiring зависимостей.
+  - вынесен token-based polling lifecycle (refresh/update progress loops) в `web/orchestration/module_node_picker_polling_controller.js`; dispose picker теперь инвалидирует poll-контроллер через единый API.
+  - вынесен рендер и UI-state панели модуля (module-card + node-list, включая expand/collapse состояние) в `web/orchestration/module_node_picker_module_panel_controller.js`.
+  - вынесен lifecycle/dispose controller picker instance в `web/orchestration/module_node_picker_lifecycle.js` (единая очистка токенов, polling, bind/unbind, startup cancel, debug/process/API cleanup).
+  - вынесена логика регистрации extension и fallback-монтажа в `web/orchestration/module_node_picker_registration.js`.
+  - централизованы константы picker (ID, storage-keys, group-labels, marks, defaults) в `web/constants/module_node_picker_constants.js`.
+  - вынесены helper-функции создания/позиционирования LiteGraph-нод в `web/ui/module_node_picker_node_factory.js`.
+  - полная композиция picker (`renderPicker`) перенесена из `web/module_node_picker.js` в `web/orchestration/module_node_picker_composer.js`; основной entrypoint теперь отвечает только за регистрацию extension/fallback wiring.
+  - вынесен wiring селекторов/busy/view/status-карточек в `web/orchestration/module_node_picker_ui_controllers.js` для дальнейшего уменьшения плотности композиционного кода.
+  - вынесен orchestration-бандл polling/catalog/actions/module-panel в `web/orchestration/module_node_picker_flow_wiring.js` для модульной сборки runtime-пайплайна.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

@@ -145,6 +145,17 @@ Deliverables:
   - bound all picker API calls to per-render lifecycle `AbortController` and cancel in-flight requests on picker dispose/re-render.
   - decoupled ComfyUI-check mode switch from full catalog reload to stabilize selector UI during rapid mode toggles.
   - finalized ComfyUI-check selector semantics: mode switch is config-only; network refresh occurs only by explicit user action.
+  - extracted category/group/module dropdown orchestration into `web/orchestration/module_node_picker_selection_controller.js` (population/filtering/store sync), preserving existing UI behavior.
+  - extracted long-running action orchestration (refresh/update/resume/requirements follow-up + per-module refresh/install) into `web/orchestration/module_node_picker_action_flows.js`, leaving `web/module_node_picker.js` with thin dependency wiring.
+  - extracted token-based polling lifecycle (refresh/update progress loops) into `web/orchestration/module_node_picker_polling_controller.js`; picker dispose now invalidates polling via a dedicated controller API.
+  - extracted module-card/node-list rendering orchestration (including expand/collapse UI state) into `web/orchestration/module_node_picker_module_panel_controller.js`.
+  - extracted picker instance lifecycle/dispose controller into `web/orchestration/module_node_picker_lifecycle.js` for centralized token/polling/event/startup/debug/process/API cleanup.
+  - extracted extension registration/fallback mount flow into `web/orchestration/module_node_picker_registration.js`.
+  - centralized picker constants (IDs/storage keys/group labels/marks/defaults) in `web/constants/module_node_picker_constants.js`.
+  - extracted LiteGraph node create/place helpers into `web/ui/module_node_picker_node_factory.js`.
+  - moved full picker composition from `web/module_node_picker.js` to `web/orchestration/module_node_picker_composer.js`; main entry file now only handles extension registration/fallback wiring.
+  - extracted selector/busy/view/status-card wiring into `web/orchestration/module_node_picker_ui_controllers.js` to further thin composition code.
+  - extracted polling/catalog/actions/module-panel composition into `web/orchestration/module_node_picker_flow_wiring.js` to keep runtime orchestration modular.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

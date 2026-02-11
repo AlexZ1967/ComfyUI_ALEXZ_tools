@@ -48,8 +48,8 @@ export async function runRefreshModuleInfoAction(moduleName, syncUpstream, conte
         if (!shouldContinueContext(context)) {
             return;
         }
-        await context?.loadModuleInfo?.({ forceRefresh: false, syncUpstream: false });
         context?.setActionBusy?.(false);
+        await context?.loadModuleInfo?.({ forceRefresh: false, syncUpstream: false });
         context?.syncUpdateAllButton?.();
     }
 }
@@ -91,8 +91,8 @@ export async function runInstallSingleModuleRequirementsAction(moduleName, conte
         if (!shouldContinueContext(context)) {
             return;
         }
-        await context?.loadModuleInfo?.({ forceRefresh: false, syncUpstream: false });
         context?.setActionBusy?.(false);
+        await context?.loadModuleInfo?.({ forceRefresh: false, syncUpstream: false });
         context?.syncUpdateAllButton?.();
     }
 }

@@ -109,7 +109,6 @@ export function renderNodeListPanel(context) {
             centerNode?.(node);
             app?.canvas?.selectNode?.(node, false);
             app?.graph?.setDirtyCanvas(true, true);
-            setHelpText?.(`Вставлена в граф: ${nodeInfo.display_name}`);
         };
 
         const nameEl = document.createElement("div");

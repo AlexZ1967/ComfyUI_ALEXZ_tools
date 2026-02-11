@@ -51,6 +51,16 @@ export function createModuleNodePickerRuntimeContext(context = {}) {
         pendingUpdateKey: keys.legacyPendingUpdateKey,
     });
 
+    // On first picker open after ComfyUI start, force a deterministic default
+    // selection (Custom_Nodes + project module) regardless of stale localStorage.
+    if (!runtimePickerState.__selection_initialized__) {
+        pickerStore.set({
+            selectedGroup: "custom",
+            selectedModule: defaultModule,
+        });
+        runtimePickerState.__selection_initialized__ = true;
+    }
+
     const runtimeStatus = createRuntimeStatusAccessors(runtimePickerState);
     const comfyCheckMode = loadComfyCheckMode(windowObj, keys.comfyCheckModeStorageKey);
     const persistComfyMode = (mode) => {

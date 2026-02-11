@@ -1,5 +1,28 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.12 — 2026-02-11
+- Phase 2 (tab-sync stabilization) continued:
+  - extracted category/group/module dropdown orchestration from `web/module_node_picker.js` into `web/orchestration/module_node_picker_selection_controller.js`,
+  - delegated module/group selector population and picker selection store sync to the new controller (behavior preserved),
+  - removed direct selector-UI imports (`fillModuleSelectUi`, `fillGroupSelectUi`) from main picker composition module,
+  - extracted refresh/update/resume action orchestration from `web/module_node_picker.js` into `web/orchestration/module_node_picker_action_flows.js`,
+  - moved ComfyUI/custom refresh flows, module update flow, per-module refresh/install flows, requirements follow-up flow, and pending-job resume flows behind one flow-factory (behavior preserved),
+  - extracted polling-token lifecycle (`refresh`/`update`) into `web/orchestration/module_node_picker_polling_controller.js`,
+  - removed direct polling-token state from `web/module_node_picker.js`; picker dispose now invalidates poller via controller API.
+  - extracted module-card/node-list rendering orchestration into `web/orchestration/module_node_picker_module_panel_controller.js` (expanded module state + render callbacks), reducing UI-state coupling inside `web/module_node_picker.js`.
+  - extracted picker instance lifecycle/dispose orchestration into `web/orchestration/module_node_picker_lifecycle.js` (cleanup hooks for catalog tokens, polling invalidation, event unbind, startup cancel, debug/process dispose, API client dispose).
+  - extracted extension registration/fallback mount orchestration into `web/orchestration/module_node_picker_registration.js`.
+  - centralized picker constants (IDs, storage keys, labels, marks, defaults) in `web/constants/module_node_picker_constants.js`.
+  - extracted node insertion helpers (LiteGraph node creation + canvas centering) into `web/ui/module_node_picker_node_factory.js`.
+  - moved full picker composition (`renderPicker`) from `web/module_node_picker.js` into `web/orchestration/module_node_picker_composer.js`.
+  - reduced `web/module_node_picker.js` to entrypoint-only registration and fallback wiring.
+  - extracted selector/busy/view/status-card wiring into `web/orchestration/module_node_picker_ui_controllers.js`, reducing composition density in `module_node_picker_composer.js`.
+  - extracted polling/catalog/update/module-panel orchestration bundle into `web/orchestration/module_node_picker_flow_wiring.js`; composer now wires this bundle via one runtime adapter.
+- Startup regression safety:
+  - kept deferred `loadModuleInfo`/`renderNodeList` binding so catalog controller and selection controller can initialize without TDZ/empty-dropdown regressions.
+- Regression tests:
+  - extended frontend contract markers in `tests/test_phase0_baseline.py` for the new selection-controller and action-flows modules/wiring.
+
 ## 0.16.11 — 2026-02-11
 - Phase 2 (tab-sync stabilization) continued:
   - extracted relay runtime logic to `web/orchestration/module_node_picker_tab_relay_runtime.js`,

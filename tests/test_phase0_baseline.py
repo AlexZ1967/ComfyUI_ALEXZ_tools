@@ -353,9 +353,28 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         layout_text = (
             repo_root / "web" / "ui" / "module_node_picker_layout.js"
         ).read_text(encoding="utf-8")
+        selection_controller_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_selection_controller.js"
+        ).read_text(encoding="utf-8")
+        ui_controllers_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_ui_controllers.js"
+        ).read_text(encoding="utf-8")
+        registration_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_registration.js"
+        ).read_text(encoding="utf-8")
+        constants_text = (
+            repo_root / "web" / "constants" / "module_node_picker_constants.js"
+        ).read_text(encoding="utf-8")
+        node_factory_text = (
+            repo_root / "web" / "ui" / "module_node_picker_node_factory.js"
+        ).read_text(encoding="utf-8")
         picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
             encoding="utf-8"
         )
+        composer_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
+        ).read_text(encoding="utf-8")
+        picker_runtime_text = f"{picker_text}\n{composer_text}"
 
         self.assertIn("export function bindModuleNodesTabRelay", relay_text)
         self.assertIn("export function unbindModuleNodesTabRelay", relay_text)
@@ -378,13 +397,33 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("catalogLoadToken", catalog_controller_text)
         self.assertIn("moduleInfoLoadToken", catalog_controller_text)
         self.assertIn("catalogLoadBusyCount", catalog_controller_text)
-        self.assertIn("setCatalogControlsLoading", picker_text)
+        self.assertIn("setCatalogControlsLoading", picker_runtime_text)
         self.assertIn("Loading groups...", busy_ui_text)
         self.assertIn("Loading modules...", busy_ui_text)
         self.assertIn("export function createModuleNodePickerLayout", layout_text)
         self.assertIn("Refresh ComfyUI Info", layout_text)
         self.assertIn("Refresh Custom Nodes Info", layout_text)
-        self.assertIn("PICKER_CLEANUP_KEY", picker_text)
+        self.assertIn("export function createModuleNodePickerSelectionController", selection_controller_text)
+        self.assertIn("fillModuleSelectUi", selection_controller_text)
+        self.assertIn("fillGroupSelectUi", selection_controller_text)
+        self.assertIn("export function registerModuleNodePickerExtension", registration_text)
+        self.assertIn("registerModuleNodePickerExtension({", picker_text)
+        self.assertIn("injectStyles?.()", registration_text)
+        self.assertIn("export const EXT_NAME", constants_text)
+        self.assertIn("export const GROUP_LABELS", constants_text)
+        self.assertIn("export const MODULE_MARK_UPDATED", constants_text)
+        self.assertIn("export function centerNodeInCanvas", node_factory_text)
+        self.assertIn("export function createNodeFromCatalogInfo", node_factory_text)
+        self.assertIn("createNodeFromCatalogInfo(nodeInfo, LiteGraph)", picker_runtime_text)
+        self.assertIn("centerNodeInCanvas(node, app)", picker_runtime_text)
+        self.assertIn("MODULE_PICKER_GUARD_KEY", picker_text)
+        self.assertIn("createModuleNodePickerSelectionController", ui_controllers_text)
+        self.assertIn("fillModuleSelect: (options = {}) => selectionController.fillModuleSelect(options)", ui_controllers_text)
+        self.assertIn("fillGroupSelect: (groups, options = {}) => selectionController.fillGroupSelect(groups, options)", ui_controllers_text)
+        self.assertIn("createModuleNodePickerUiControllers", picker_runtime_text)
+        self.assertNotIn("fillModuleSelectUi", picker_text)
+        self.assertNotIn("fillGroupSelectUi", picker_text)
+        self.assertIn("PICKER_CLEANUP_KEY", picker_runtime_text)
         data_flow_text = (repo_root / "web" / "orchestration" / "module_node_picker_data_flow.js").read_text(encoding="utf-8")
         self.assertIn("isRequestActive", data_flow_text)
         self.assertIn("totalNodes", data_flow_text)
@@ -401,6 +440,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
             encoding="utf-8"
         )
+        composer_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
+        ).read_text(encoding="utf-8")
+        picker_runtime_text = f"{picker_text}\n{composer_text}"
 
         self.assertNotIn("setInterval(", relay_text)
         self.assertIn("setTimeout(runTick", relay_text)
@@ -412,9 +455,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertNotIn("comfyModeReloadTimer", bindings_text)
         self.assertIn("return () => {", bindings_text)
         self.assertIn("onchange = null", bindings_text)
-        self.assertIn("unbindPickerEvents", picker_text)
+        self.assertIn("unbindPickerEvents", picker_runtime_text)
         self.assertIn("startupRetryDelayMs", bindings_text)
-        self.assertIn("cancelStartupLoad", picker_text)
+        self.assertIn("cancelStartupLoad", picker_runtime_text)
         actions_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")
@@ -423,6 +466,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         lifecycle_guard_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_lifecycle_guard.js"
+        ).read_text(encoding="utf-8")
+        lifecycle_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_lifecycle.js"
         ).read_text(encoding="utf-8")
         api_text = (
             repo_root / "web" / "api" / "module_node_picker_api.js"
@@ -433,13 +479,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("import { shouldContinueContext }", actions_text)
         self.assertIn("import { shouldContinueContext }", update_flow_text)
         self.assertIn("export function shouldContinueContext", lifecycle_guard_text)
-        self.assertIn("shouldContinue: isPickerAlive", picker_text)
-        self.assertNotIn("refreshComfyUIModeInfoFlow", picker_text)
+        self.assertIn("shouldContinue: isPickerAlive", picker_runtime_text)
+        self.assertNotIn("refreshComfyUIModeInfoFlow", picker_runtime_text)
         self.assertIn("dispose", process_text)
-        self.assertIn("processUi?.dispose?.()", picker_text)
+        self.assertIn("getProcessUi()?.dispose?.()", lifecycle_text)
         self.assertIn("AbortController", api_text)
         self.assertIn("API timeout after", api_text)
-        self.assertNotIn("!pickerDisposed && root.isConnected", picker_text)
+        self.assertNotIn("!pickerDisposed && root.isConnected", picker_runtime_text)
 
     def test_frontend_pending_resume_contract_markers_exist(self):
         """Freeze pending/resume markers for refresh/update lifecycle restoration."""
@@ -447,6 +493,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
             encoding="utf-8"
         )
+        composer_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_composer.js"
+        ).read_text(encoding="utf-8")
+        picker_runtime_text = f"{picker_text}\n{composer_text}"
         actions_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")
@@ -474,6 +524,24 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         view_helpers_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_view_helpers.js"
         ).read_text(encoding="utf-8")
+        action_flows_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_action_flows.js"
+        ).read_text(encoding="utf-8")
+        flow_wiring_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_flow_wiring.js"
+        ).read_text(encoding="utf-8")
+        ui_controllers_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_ui_controllers.js"
+        ).read_text(encoding="utf-8")
+        polling_controller_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_polling_controller.js"
+        ).read_text(encoding="utf-8")
+        module_panel_controller_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_module_panel_controller.js"
+        ).read_text(encoding="utf-8")
+        lifecycle_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_lifecycle.js"
+        ).read_text(encoding="utf-8")
         resume_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_resume_flow.js"
         ).read_text(encoding="utf-8")
@@ -490,37 +558,34 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_error_utils.js"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_text)
+        self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_runtime_text)
         self.assertIn("getRuntimePickerState", runtime_state_text)
-        self.assertIn("LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY", picker_text)
+        self.assertIn("LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY", picker_runtime_text)
         self.assertIn("clearLegacyPersistentFlags", runtime_state_text)
         self.assertIn("loadCustomStatusChecked", runtime_state_text)
         self.assertIn("saveCustomStatusChecked", runtime_state_text)
-        self.assertIn("setCustomStatusChecked", picker_text)
+        self.assertIn("setCustomStatusChecked", picker_runtime_text)
         self.assertIn("loadComfyStatusChecked", runtime_state_text)
         self.assertIn("saveComfyStatusChecked", runtime_state_text)
-        self.assertIn("loadComfyInfoSnapshot", picker_text)
-        self.assertIn("saveComfyInfoSnapshot", picker_text)
-        self.assertIn("setComfyStatusChecked", picker_text)
-        self.assertIn("hasPendingCustomRefresh", picker_text)
-        self.assertIn("setPendingCustomRefresh", picker_text)
-        self.assertIn("clearPendingCustomRefresh", picker_text)
-        self.assertIn("hasPendingUpdate", picker_text)
-        self.assertIn("setPendingUpdate", picker_text)
-        self.assertIn("clearPendingUpdate", picker_text)
-        self.assertIn("hasPendingComfyInfoRefresh", picker_text)
-        self.assertIn("setPendingComfyInfoRefresh", picker_text)
-        self.assertIn("clearPendingComfyInfoRefresh", picker_text)
-        self.assertIn("resumePendingCustomRefreshFlow", picker_text)
-        self.assertIn("resumePendingModuleUpdateFlow", picker_text)
-        self.assertIn("resumePendingComfyInfoRefreshFlow", picker_text)
-        self.assertIn("runStartupCoordinator", picker_text)
-        self.assertIn("resumePendingCustomRefreshFlowImpl", picker_text)
-        self.assertIn("resumePendingModuleUpdateFlowImpl", picker_text)
-        self.assertIn("resumePendingComfyInfoRefreshFlowImpl", picker_text)
-        self.assertIn("startCatalogStartupLoad", picker_text)
-        self.assertIn("isActionBusy: () => busyUi.isActionBusy()", picker_text)
-        self.assertIn("cancelStartupLoad = runStartupCoordinator(", picker_text)
+        self.assertIn("loadComfyInfoSnapshot", picker_runtime_text)
+        self.assertIn("saveComfyInfoSnapshot", picker_runtime_text)
+        self.assertIn("setComfyStatusChecked", picker_runtime_text)
+        self.assertIn("hasPendingCustomRefresh", picker_runtime_text)
+        self.assertIn("setPendingCustomRefresh", picker_runtime_text)
+        self.assertIn("clearPendingCustomRefresh", picker_runtime_text)
+        self.assertIn("hasPendingUpdate", picker_runtime_text)
+        self.assertIn("setPendingUpdate", picker_runtime_text)
+        self.assertIn("clearPendingUpdate", picker_runtime_text)
+        self.assertIn("hasPendingComfyInfoRefresh", picker_runtime_text)
+        self.assertIn("setPendingComfyInfoRefresh", picker_runtime_text)
+        self.assertIn("clearPendingComfyInfoRefresh", picker_runtime_text)
+        self.assertIn("resumePendingCustomRefreshFlow", picker_runtime_text)
+        self.assertIn("resumePendingModuleUpdateFlow", picker_runtime_text)
+        self.assertIn("resumePendingComfyInfoRefreshFlow", picker_runtime_text)
+        self.assertIn("runStartupCoordinator", picker_runtime_text)
+        self.assertIn("startCatalogStartupLoad", picker_runtime_text)
+        self.assertIn("isActionBusy: () => busyUi.isActionBusy()", picker_runtime_text)
+        self.assertIn("cancelStartupLoad = runStartupCoordinator(", picker_runtime_text)
         self.assertIn("onSettled", bindings_text)
         self.assertIn("settle()", bindings_text)
         self.assertIn("export function runStartupCoordinator", startup_flow_text)
@@ -532,6 +597,47 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("await resumePendingCustomRefreshFlow()", startup_flow_text)
         self.assertIn("await resumePendingModuleUpdateFlow()", startup_flow_text)
         self.assertIn("await resumePendingComfyInfoRefreshFlow()", startup_flow_text)
+        self.assertIn("export function createModuleNodePickerActionFlows", action_flows_text)
+        self.assertIn("runInstallComfyUIRequirementsFlow", action_flows_text)
+        self.assertIn("maybeInstallChangedRequirementsFlow", action_flows_text)
+        self.assertIn("runModuleUpdateFlow", action_flows_text)
+        self.assertIn("runRefreshComfyUIInfoAction", action_flows_text)
+        self.assertIn("runRefreshCustomNodesInfoAction", action_flows_text)
+        self.assertIn("runRefreshModuleInfoAction", action_flows_text)
+        self.assertIn("runInstallSingleModuleRequirementsAction", action_flows_text)
+        self.assertIn("resumePendingCustomRefreshFlowImpl", action_flows_text)
+        self.assertIn("resumePendingModuleUpdateFlowImpl", action_flows_text)
+        self.assertIn("resumePendingComfyInfoRefreshFlowImpl", action_flows_text)
+        self.assertNotIn("createModuleNodePickerActionFlows", picker_runtime_text)
+        self.assertNotIn("runRefreshModuleInfoAction", picker_runtime_text)
+        self.assertNotIn("runInstallSingleModuleRequirementsAction", picker_runtime_text)
+        self.assertNotIn("createModuleNodePickerPollingController", picker_runtime_text)
+        self.assertNotIn("createModuleNodePickerModulePanelController", picker_runtime_text)
+        self.assertIn("createModuleNodePickerLifecycle", picker_runtime_text)
+        self.assertIn("createModuleNodePickerUiControllers", picker_runtime_text)
+        self.assertIn("createModuleNodePickerFlowWiring", picker_runtime_text)
+        self.assertIn("export function createModuleNodePickerFlowWiring", flow_wiring_text)
+        self.assertIn("createModuleNodePickerPollingController", flow_wiring_text)
+        self.assertIn("createModuleNodePickerCatalogController", flow_wiring_text)
+        self.assertIn("createModuleNodePickerActionFlows", flow_wiring_text)
+        self.assertIn("createModuleNodePickerModulePanelController", flow_wiring_text)
+        self.assertIn("export function createModuleNodePickerUiControllers", ui_controllers_text)
+        self.assertIn("createModuleNodePickerSelectionController", ui_controllers_text)
+        self.assertIn("createModuleNodePickerViewHelpers", ui_controllers_text)
+        self.assertIn("createModuleNodePickerStatusCards", ui_controllers_text)
+        self.assertIn("createBusyUiController", ui_controllers_text)
+        self.assertIn("getPollingController()?.invalidate?.()", lifecycle_text)
+        self.assertIn("export function createModuleNodePickerPollingController", polling_controller_text)
+        self.assertIn("pollRefreshProgressLoop", polling_controller_text)
+        self.assertIn("pollUpdateProgressLoop", polling_controller_text)
+        self.assertIn("invalidate", polling_controller_text)
+        self.assertIn("export function createModuleNodePickerModulePanelController", module_panel_controller_text)
+        self.assertIn("renderNodeListPanel", module_panel_controller_text)
+        self.assertIn("renderModuleInfoCard", module_panel_controller_text)
+        self.assertIn("export function createModuleNodePickerLifecycle", lifecycle_text)
+        self.assertIn("getCatalogController", lifecycle_text)
+        self.assertIn("getPollingController", lifecycle_text)
+        self.assertIn("dispose", lifecycle_text)
         self.assertIn("export async function resumePendingCustomRefreshFlow", resume_flow_text)
         self.assertIn("export async function resumePendingModuleUpdateFlow", resume_flow_text)
         self.assertIn("export async function resumePendingComfyInfoRefreshFlow", resume_flow_text)
@@ -549,7 +655,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("loadCatalog", catalog_controller_text)
         self.assertIn("loadModuleInfo", catalog_controller_text)
         self.assertIn("bumpRequestTokens", catalog_controller_text)
-        self.assertIn("renderModuleInfo: (...args) => renderModuleInfo(...args)", picker_text)
+        self.assertIn("renderModuleInfo: (...args) => renderModuleInfoImpl(...args)", flow_wiring_text)
         self.assertIn("export function createModuleNodePickerStatusCards", status_cards_text)
         self.assertIn("renderComfyAlertCard", status_cards_text)
         self.assertIn("renderCustomAlertCard", status_cards_text)
@@ -558,6 +664,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("createModuleNodePickerStore", runtime_context_text)
         self.assertIn("createModuleDiagnosticsLogger", runtime_context_text)
         self.assertIn("createRuntimeStatusAccessors", runtime_context_text)
+        self.assertIn("__selection_initialized__", runtime_context_text)
         self.assertIn("export function createModuleNodePickerViewHelpers", view_helpers_text)
         self.assertIn("setProcessAction", view_helpers_text)
         self.assertIn("setRefreshLine", view_helpers_text)
@@ -567,7 +674,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export function createRuntimeStatusAccessors", runtime_state_text)
         self.assertIn("export function loadComfyCheckMode", runtime_state_text)
         self.assertIn("export function saveComfyCheckMode", runtime_state_text)
-        self.assertIn("import { isCanceledRequestError }", picker_text)
+        self.assertIn("import { isCanceledRequestError }", picker_runtime_text)
         self.assertIn("import { isCanceledRequestError }", actions_text)
         self.assertIn("import { isCanceledRequestError }", update_flow_text)
         self.assertIn("export function isCanceledRequestError", error_utils_text)
