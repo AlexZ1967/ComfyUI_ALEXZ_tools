@@ -444,6 +444,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         startup_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_startup_flow.js"
         ).read_text(encoding="utf-8")
+        resume_flow_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_resume_flow.js"
+        ).read_text(encoding="utf-8")
         error_utils_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_error_utils.js"
         ).read_text(encoding="utf-8")
@@ -473,6 +476,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("resumePendingModuleUpdateFlow", picker_text)
         self.assertIn("resumePendingComfyInfoRefreshFlow", picker_text)
         self.assertIn("runStartupCoordinator", picker_text)
+        self.assertIn("resumePendingCustomRefreshFlowImpl", picker_text)
+        self.assertIn("resumePendingModuleUpdateFlowImpl", picker_text)
+        self.assertIn("resumePendingComfyInfoRefreshFlowImpl", picker_text)
         self.assertIn("startCatalogStartupLoad", picker_text)
         self.assertIn("isActionBusy: () => actionBusy || startupBusy", picker_text)
         self.assertIn("cancelStartupLoad = runStartupCoordinator(", picker_text)
@@ -487,6 +493,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("await resumePendingCustomRefreshFlow()", startup_flow_text)
         self.assertIn("await resumePendingModuleUpdateFlow()", startup_flow_text)
         self.assertIn("await resumePendingComfyInfoRefreshFlow()", startup_flow_text)
+        self.assertIn("export async function resumePendingCustomRefreshFlow", resume_flow_text)
+        self.assertIn("export async function resumePendingModuleUpdateFlow", resume_flow_text)
+        self.assertIn("export async function resumePendingComfyInfoRefreshFlow", resume_flow_text)
         self.assertIn("import { isCanceledRequestError }", picker_text)
         self.assertIn("import { isCanceledRequestError }", actions_text)
         self.assertIn("import { isCanceledRequestError }", update_flow_text)

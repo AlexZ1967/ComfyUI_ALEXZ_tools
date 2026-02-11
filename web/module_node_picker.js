@@ -81,6 +81,11 @@ import {
     runModuleNodePickerStartupLoad,
 } from "./orchestration/module_node_picker_bindings.js";
 import { isCanceledRequestError } from "./orchestration/module_node_picker_error_utils.js";
+import {
+    resumePendingCustomRefreshFlow as resumePendingCustomRefreshFlowImpl,
+    resumePendingModuleUpdateFlow as resumePendingModuleUpdateFlowImpl,
+    resumePendingComfyInfoRefreshFlow as resumePendingComfyInfoRefreshFlowImpl,
+} from "./orchestration/module_node_picker_resume_flow.js";
 import { runStartupCoordinator } from "./orchestration/module_node_picker_startup_flow.js";
 import { createModuleNodePickerStore } from "./state/store.js";
 import { createModuleDiagnosticsLogger } from "./diagnostics/logger.js";
@@ -1668,233 +1673,67 @@ function renderPicker(container) {
      * Restore in-flight Custom Nodes refresh after picker re-open/re-render.
      */
     const resumePendingCustomRefreshFlow = async () => {
-        if (!hasPendingCustomRefresh()) {
-            return;
-        }
-        if (!isPickerAlive()) {
-            return;
-        }
-        setCustomStatusChecked(true);
-        setActionBusy(true);
-        setProcessTarget("custom");
-        setProcessAction("", "", null);
-        setRefreshLine("Resuming Custom Nodes refresh status...", "neutral");
-        setCustomRefreshCardLine("Resuming Custom Nodes refresh status...", "neutral");
-        try {
-            const payload = await fetchModuleRefreshStatusApi();
-            if (!isPickerAlive()) {
-                return;
-            }
-            const refresh = payload?.refresh || {};
-            const line = formatRefreshLine(refresh);
-            setRefreshLine(line.text, line.tone);
-            setCustomRefreshCardLine(line.text, line.tone);
-            if (Boolean(refresh?.running)) {
-                const ok = await pollRefreshProgress();
-                if (!isPickerAlive()) {
-                    return;
-                }
-                if (!ok) {
-                    setRefreshLine("Custom Nodes refresh finished with errors.", "warn");
-                    setCustomRefreshCardLine("Custom Nodes refresh finished with errors.", "warn");
-                } else {
-                    try {
-                        await acknowledgeAllModuleNoveltyApi();
-                    } catch (err) {
-                        if (isPickerAlive()) {
-                            const message = `Refresh completed, but novelty reset failed: ${String(err)}`;
-                            setRefreshLine(message, "warn");
-                            setCustomRefreshCardLine(message, "warn");
-                        }
-                    }
-                }
-                if (!isPickerAlive()) {
-                    return;
-                }
-                await loadCatalog();
-                if (!isPickerAlive()) {
-                    return;
-                }
-                clearPendingCustomRefresh();
-                return;
-            }
-            if (String(refresh?.phase || "") === "done") {
-                try {
-                    await acknowledgeAllModuleNoveltyApi();
-                } catch (err) {
-                    if (isPickerAlive()) {
-                        const message = `Refresh completed, but novelty reset failed: ${String(err)}`;
-                        setRefreshLine(message, "warn");
-                        setCustomRefreshCardLine(message, "warn");
-                    }
-                }
-            }
-            if (String(refresh?.phase || "") === "done" || String(refresh?.phase || "") === "error") {
-                await loadCatalog();
-            }
-            clearPendingCustomRefresh();
-        } catch (err) {
-            if (!isPickerAlive()) {
-                return;
-            }
-            const message = String(err || "");
-            if (isCanceledRequestError(err)) {
-                return;
-            }
-            const line = `Failed to restore refresh status: ${message}`;
-            setRefreshLine(line, "warn");
-            setCustomRefreshCardLine(line, "warn");
-        } finally {
-            if (!isPickerAlive()) {
-                return;
-            }
-            setActionBusy(false);
-        }
+        return resumePendingCustomRefreshFlowImpl({
+            hasPendingCustomRefresh,
+            shouldContinue: isPickerAlive,
+            setCustomStatusChecked,
+            setActionBusy,
+            setProcessTarget,
+            setProcessAction,
+            setRefreshLine,
+            setCustomRefreshCardLine,
+            fetchModuleRefreshStatus: fetchModuleRefreshStatusApi,
+            pollRefreshProgress,
+            acknowledgeAllModuleNovelty: acknowledgeAllModuleNoveltyApi,
+            loadCatalog,
+            clearPendingCustomRefresh,
+            formatRefreshLine,
+            isCanceledRequestError,
+        });
     };
 
     /**
      * Restore in-flight module-update job after picker re-open/re-render.
      */
     const resumePendingModuleUpdateFlow = async () => {
-        if (!hasPendingUpdate()) {
-            return;
-        }
-        if (!isPickerAlive()) {
-            return;
-        }
-        setActionBusy(true);
-        setProcessAction("", "", null);
-        setRefreshLine("Resuming module update status...", "neutral");
-        try {
-            const payload = await fetchModuleUpdateStatusApi();
-            if (!isPickerAlive()) {
-                return;
-            }
-            const update = payload?.update || {};
-            const scope = String(update?.scope || "").trim().toLowerCase();
-            setProcessTarget(scope === "comfyui" ? "comfy" : "custom");
-            const line = formatUpdateLine(update);
-            setRefreshLine(line.text, line.tone);
-
-            if (Boolean(update?.running)) {
-                const done = await pollUpdateProgress();
-                if (!isPickerAlive()) {
-                    return;
-                }
-                if (!done) {
-                    return;
-                }
-                if (!Boolean(done?.running) && String(done?.phase || "") !== "starting") {
-                    clearPendingUpdate();
-                }
-                if (String(done?.phase || "") === "done") {
-                    await maybeInstallChangedRequirements(done);
-                }
-                if (!isPickerAlive()) {
-                    return;
-                }
-                await loadCatalog();
-                if (!isPickerAlive()) {
-                    return;
-                }
-                await loadModuleInfo();
-                return;
-            }
-
-            const phase = String(update?.phase || "").trim().toLowerCase();
-            if (phase === "done" || phase === "error") {
-                if (phase === "done") {
-                    await maybeInstallChangedRequirements(update);
-                }
-                if (!isPickerAlive()) {
-                    return;
-                }
-                await loadCatalog();
-                if (!isPickerAlive()) {
-                    return;
-                }
-                await loadModuleInfo();
-                clearPendingUpdate();
-                return;
-            }
-
-            // Stale marker: no active/terminal update job available.
-            clearPendingUpdate();
-            setRefreshLine("No pending module update job found.", "neutral");
-        } catch (err) {
-            if (!isPickerAlive()) {
-                return;
-            }
-            const message = String(err || "");
-            if (isCanceledRequestError(err)) {
-                return;
-            }
-            setRefreshLine(`Failed to restore update status: ${message}`, "warn");
-        } finally {
-            if (!isPickerAlive()) {
-                return;
-            }
-            setActionBusy(false);
-        }
+        return resumePendingModuleUpdateFlowImpl({
+            hasPendingUpdate,
+            shouldContinue: isPickerAlive,
+            setActionBusy,
+            setProcessAction,
+            setRefreshLine,
+            fetchModuleUpdateStatus: fetchModuleUpdateStatusApi,
+            setProcessTarget,
+            formatUpdateLine,
+            pollUpdateProgress,
+            clearPendingUpdate,
+            maybeInstallChangedRequirements,
+            loadCatalog,
+            loadModuleInfo,
+            isCanceledRequestError,
+        });
     };
 
     /**
      * Restore interrupted ComfyUI info refresh after picker re-open/re-render.
      */
     const resumePendingComfyInfoRefreshFlow = async () => {
-        if (!hasPendingComfyInfoRefresh()) {
-            return;
-        }
-        if (!isPickerAlive()) {
-            return;
-        }
-        setActionBusy(true);
-        setProcessTarget("comfy");
-        setProcessAction("", "", null);
-        setRefreshLine("Resuming ComfyUI info refresh...", "neutral");
-        if (comfyAlert && comfyAlertText) {
-            comfyAlert.style.display = "block";
-            comfyAlert.classList.remove(
-                "alexz-mod-picker-status-card--warn",
-                "alexz-mod-picker-status-card--ok",
-                "alexz-mod-picker-status-card--neutral"
-            );
-            comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
-            comfyAlertText.textContent = "Resuming ComfyUI info refresh...";
-        }
-        try {
-            const payload = await fetchComfyUIInfoApi(true, true, comfyModeSelect.value);
-            if (!isPickerAlive()) {
-                return;
-            }
-            renderComfyAlert(payload?.comfyui || null);
-            clearPendingComfyInfoRefresh();
-        } catch (err) {
-            if (!isPickerAlive()) {
-                return;
-            }
-            const message = String(err || "");
-            if (isCanceledRequestError(err)) {
-                return;
-            }
-            if (comfyAlert && comfyAlertText) {
-                comfyAlert.style.display = "block";
-                comfyAlert.classList.remove(
-                    "alexz-mod-picker-status-card--warn",
-                    "alexz-mod-picker-status-card--ok",
-                    "alexz-mod-picker-status-card--neutral"
-                );
-                comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
-                comfyAlertText.textContent = `Failed to restore ComfyUI info refresh: ${message}`;
-            }
-            clearPendingComfyInfoRefresh();
-        } finally {
-            if (!isPickerAlive()) {
-                return;
-            }
-            setActionBusy(false);
-            syncUpdateAllButton();
-        }
+        return resumePendingComfyInfoRefreshFlowImpl({
+            hasPendingComfyInfoRefresh,
+            shouldContinue: isPickerAlive,
+            setActionBusy,
+            setProcessTarget,
+            setProcessAction,
+            setRefreshLine,
+            comfyAlert,
+            comfyAlertText,
+            fetchComfyUIInfo: fetchComfyUIInfoApi,
+            getComfyMode: () => comfyModeSelect.value,
+            renderComfyAlert,
+            clearPendingComfyInfoRefresh,
+            syncUpdateAllButton,
+            isCanceledRequestError,
+        });
     };
 
     unbindPickerEvents = bindModuleNodePickerEvents({
