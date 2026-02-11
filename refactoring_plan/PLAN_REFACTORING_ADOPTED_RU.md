@@ -202,6 +202,7 @@
     - `web/orchestration/core/composition/` для composition/stage-bridge/context сборки,
     - `web/orchestration/core/infra/` для инфраструктурных модулей bindings/error/registration.
   - `module_node_picker_composer.js` + `module_node_picker_context_builders.js` + `module_node_picker_stage_bridge.js` перенесены в `core/composition/`, `module_node_picker_bindings.js` + `module_node_picker_error_utils.js` + `module_node_picker_registration.js` перенесены в `core/infra/`, затем обновлены зависимые импорты, шапки `Module:`, ссылки в плане и пути в baseline frontend-тестах.
+  - убран хрупкий глубокий импорт `scripts/app.js` из composer; теперь `app` передается из entrypoint через dependency injection (`renderModuleNodePicker(container, { appInstance: app })`), что снижает риск поломки инициализации после переносов файлов.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

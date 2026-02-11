@@ -202,6 +202,7 @@ Deliverables:
     - `web/orchestration/core/composition/` for composition/stage-bridge/context assembly,
     - `web/orchestration/core/infra/` for bindings/error/registration infrastructure.
   - moved `module_node_picker_composer.js` + `module_node_picker_context_builders.js` + `module_node_picker_stage_bridge.js` into `core/composition/`, moved `module_node_picker_bindings.js` + `module_node_picker_error_utils.js` + `module_node_picker_registration.js` into `core/infra/`, then updated dependent imports, module headers, plan path references, and baseline test path markers.
+  - removed fragile deep `scripts/app.js` import from composer and switched to dependency injection from entrypoint (`renderModuleNodePicker(container, { appInstance: app })`) to reduce startup break risk after folder moves.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

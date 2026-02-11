@@ -11,7 +11,6 @@
  *   catalog rendering and update operations.
  */
 
-import { app } from "../../../../../../scripts/app.js";
 import {
     SIDEBAR_TAB_ID,
     DEFAULT_MODULE,
@@ -79,7 +78,14 @@ import {
 /**
  * Render Module Node Picker UI and bind all panel event handlers.
  */
-export function renderModuleNodePicker(container) {
+export function renderModuleNodePicker(container, options = {}) {
+    const appInstance = options?.appInstance;
+    if (!appInstance) {
+        if (container) {
+            container.innerHTML = "<div style=\"padding:8px;color:#f66;\">Module Nodes initialization error: app instance is missing.</div>";
+        }
+        return;
+    }
     const prevCleanup = container?.[PICKER_CLEANUP_KEY];
     if (typeof prevCleanup === "function") {
         try {
@@ -318,7 +324,7 @@ export function renderModuleNodePicker(container) {
     const setComfyStatusChecked = uiStage.setComfyStatusChecked;
 
     bindModuleNodesTabRelay({
-        app,
+        app: appInstance,
         root,
         sidebarTabId: SIDEBAR_TAB_ID,
         onDiag: (diag) => debugUi?.setDiagnosticText?.(diag),
@@ -398,8 +404,8 @@ export function renderModuleNodePicker(container) {
         setHelpModuleCardHint,
         setHelpModuleSummary,
         createNodeByInfo: (nodeInfo) => createNodeFromCatalogInfo(nodeInfo, LiteGraph),
-        app,
-        centerNode: (node) => centerNodeInCanvas(node, app),
+        app: appInstance,
+        centerNode: (node) => centerNodeInCanvas(node, appInstance),
         fmtDate,
         busyUi,
         getNodesForSelectedGroup,

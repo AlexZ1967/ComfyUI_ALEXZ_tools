@@ -36,5 +36,5 @@ registerModuleNodePickerExtension({
     injectStyles: injectModuleNodePickerStyles,
     cleanupFallbackButtons: cleanupModuleNodePickerFallbackButtons,
     attachFallbackButton: attachModuleNodePickerFallbackButton,
-    renderPicker: (container) => renderModuleNodePicker(container),
+    renderPicker: (container) => renderModuleNodePicker(container, { appInstance: app }),
 });

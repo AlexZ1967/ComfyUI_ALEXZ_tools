@@ -1,5 +1,17 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.29 — 2026-02-11
+- Phase 2 reliability hardening for Module Node Picker initialization:
+  - removed direct deep import of `scripts/app.js` from `web/orchestration/core/composition/module_node_picker_composer.js`,
+  - `app` instance is now injected from entrypoint (`web/module_node_picker.js`) via:
+    - `renderModuleNodePicker(container, { appInstance: app })`,
+  - added explicit guard in composer for missing injected app instance to avoid silent startup failures.
+- Test/contract updates:
+  - updated frontend baseline marker in `tests/test_phase0_baseline.py` to support both legacy and injected app center-node wiring markers.
+- Validation:
+  - `conda run -n p313 node --check web/module_node_picker.js web/orchestration/core/composition/module_node_picker_composer.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (41 passed).
+
 ## 0.16.28 — 2026-02-11
 - Phase 2 orchestration-core structure cleanup continued:
   - split `web/orchestration/core/` into semantic subfolders:

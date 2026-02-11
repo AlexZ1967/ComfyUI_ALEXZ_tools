@@ -471,7 +471,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export function centerNodeInCanvas", node_factory_text)
         self.assertIn("export function createNodeFromCatalogInfo", node_factory_text)
         self.assertIn("createNodeFromCatalogInfo(nodeInfo, LiteGraph)", picker_runtime_text)
-        self.assertIn("centerNodeInCanvas(node, app)", picker_runtime_text)
+        self.assertTrue(
+            ("centerNodeInCanvas(node, app)" in picker_runtime_text)
+            or ("centerNodeInCanvas(node, appInstance)" in picker_runtime_text)
+        )
         self.assertIn("MODULE_PICKER_GUARD_KEY", picker_text)
         self.assertIn("createModuleNodePickerSelectionController", ui_controllers_text)
         self.assertIn("fillModuleSelect: (options = {}) => selectionController.fillModuleSelect(options)", ui_controllers_text)
