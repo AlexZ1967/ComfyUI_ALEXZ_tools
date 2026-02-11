@@ -265,6 +265,34 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("snapshots", phases)
         self.assertIn("done", phases)
 
+    def test_runtime_warmup_status_contract(self):
+        """Freeze runtime warmup status payload shape for first-open catalog UX."""
+        orig_lazy = self.api._LAZY_REFRESH_DONE
+        orig_thread = self.api._RUNTIME_WARMUP_THREAD
+        try:
+            self.api._LAZY_REFRESH_DONE = False
+            self.api._RUNTIME_WARMUP_THREAD = None
+            status = self.api._runtime_warmup_status()
+            self.assertEqual(set(status.keys()), {"running", "done"})
+            self.assertIs(status["running"], False)
+            self.assertIs(status["done"], False)
+        finally:
+            self.api._LAZY_REFRESH_DONE = orig_lazy
+            self.api._RUNTIME_WARMUP_THREAD = orig_thread
+
+    def test_start_runtime_warmup_noop_when_already_ready(self):
+        """Ensure warmup starter is a no-op once lazy runtime state is ready."""
+        orig_lazy = self.api._LAZY_REFRESH_DONE
+        orig_thread = self.api._RUNTIME_WARMUP_THREAD
+        try:
+            self.api._LAZY_REFRESH_DONE = True
+            self.api._RUNTIME_WARMUP_THREAD = None
+            started = self.api._start_runtime_state_warmup()
+            self.assertIs(started, False)
+        finally:
+            self.api._LAZY_REFRESH_DONE = orig_lazy
+            self.api._RUNTIME_WARMUP_THREAD = orig_thread
+
     def test_filter_modules_exact_priority_over_partial(self):
         """Ensure exact query hit has priority over fuzzy substring matches."""
         modules = ["ComfyUI_ALEXZ_tools", "ComfyUI_ALEXZ_tools_extra", "ComfyUI-Other"]
@@ -341,6 +369,12 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         relay_runtime_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_runtime.js"
         ).read_text(encoding="utf-8")
+        relay_intent_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_intent.js"
+        ).read_text(encoding="utf-8")
+        relay_tick_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_tick.js"
+        ).read_text(encoding="utf-8")
         busy_ui_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
         ).read_text(encoding="utf-8")
@@ -395,12 +429,17 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("MIN_SYNC_INTERVAL_MS", relay_runtime_text)
         self.assertIn("dispose()", relay_runtime_text)
         self.assertIn("hasPendingForeignIntent()", relay_runtime_text)
-        self.assertIn("passiveTickBudget", relay_text)
-        self.assertIn("relay_visibility", relay_text)
-        self.assertIn("relay_pageshow", relay_text)
+        self.assertIn("startModuleNodePickerRelayTickLoop", relay_text)
+        self.assertIn("createModuleNodePickerRelayIntentController", relay_text)
+        self.assertIn("passiveTickBudget", relay_tick_text)
+        self.assertIn("isOwnButtonSelected", relay_tick_text)
+        self.assertIn("relay_pending_switch", relay_intent_text)
+        self.assertIn("relay_native_ok", relay_intent_text)
+        self.assertIn("relay_visibility", relay_intent_text)
+        self.assertIn("relay_pageshow", relay_intent_text)
         self.assertIn("bindToken = Symbol", relay_text)
-        self.assertIn("isCurrentBinding()", relay_text)
-        self.assertIn("[contenteditable]", relay_text)
+        self.assertIn("isCurrentBinding", relay_text)
+        self.assertIn("[contenteditable]", relay_intent_text)
 
         self.assertIn("diag.active_tab=", debug_ui_text)
         self.assertIn("diag.last_clicked_tab=", debug_ui_text)
@@ -448,6 +487,12 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         helpers_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_helpers.js"
         ).read_text(encoding="utf-8")
+        relay_intent_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_intent.js"
+        ).read_text(encoding="utf-8")
+        relay_tick_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_tick.js"
+        ).read_text(encoding="utf-8")
         picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
             encoding="utf-8"
         )
@@ -468,7 +513,11 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         )
 
         self.assertNotIn("setInterval(", relay_text)
-        self.assertIn("setTimeout(runTick", relay_text)
+        self.assertNotIn("setTimeout(runTick", relay_text)
+        self.assertIn("startModuleNodePickerRelayTickLoop", relay_text)
+        self.assertIn("createModuleNodePickerRelayIntentController", relay_text)
+        self.assertIn("window.setTimeout(() =>", relay_intent_text)
+        self.assertIn("window.setTimeout(runTick", relay_tick_text)
         self.assertNotIn("export function hasSidebarTabId", helpers_text)
         bindings_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_bindings.js"
@@ -577,6 +626,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         module_panel_controller_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_module_panel_controller.js"
+        ).read_text(encoding="utf-8")
+        warmup_controller_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_warmup_controller.js"
         ).read_text(encoding="utf-8")
         lifecycle_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_lifecycle.js"
@@ -698,6 +750,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export function createModuleNodePickerModulePanelController", module_panel_controller_text)
         self.assertIn("renderNodeListPanel", module_panel_controller_text)
         self.assertIn("renderModuleInfoCard", module_panel_controller_text)
+        self.assertIn("export function createModuleNodePickerWarmupController", warmup_controller_text)
+        self.assertIn("handleCatalogResult", warmup_controller_text)
+        self.assertIn("setWarmupIndicator", warmup_controller_text)
         self.assertIn("export function createModuleNodePickerLifecycle", lifecycle_text)
         self.assertIn("getCatalogController", lifecycle_text)
         self.assertIn("getPollingController", lifecycle_text)

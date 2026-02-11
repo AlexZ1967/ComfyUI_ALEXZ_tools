@@ -162,6 +162,10 @@ Deliverables:
   - extracted flow-stage assembly into `web/orchestration/module_node_picker_flow_stage.js` (polling/catalog/action/module-panel composition adapter).
   - extracted large composer dependency maps into `web/orchestration/module_node_picker_context_builders.js` (runtime-setup/ui-stage/flow-stage/runtime-bootstrap context builders), reducing `module_node_picker_composer.js` size while preserving behavior.
   - split pending resume internals into focused modules (`module_node_picker_resume_custom_refresh.js`, `module_node_picker_resume_module_update.js`, `module_node_picker_resume_comfy_refresh.js`) while preserving stable facade exports in `module_node_picker_resume_flow.js`.
+  - extracted runtime warmup polling orchestration into `web/orchestration/module_node_picker_warmup_controller.js` and kept first-open marker auto-hydration behavior in background.
+  - extracted relay adaptive tick-loop into `web/orchestration/module_node_picker_tab_relay_tick.js` and kept binding/runtime behavior unchanged.
+  - extracted relay tab-intent/event orchestration into `web/orchestration/module_node_picker_tab_relay_intent.js` and simplified `module_node_picker_tab_relay.js` listener wiring.
+  - extracted Module Node Picker CSS into `web/orchestration/styles/module_node_picker_styles.js` with grouped, documented style sections to separate presentation tuning from orchestration logic.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

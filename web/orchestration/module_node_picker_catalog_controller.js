@@ -17,6 +17,7 @@ import {
     loadModuleInfoFlow,
     loadCatalogFlow,
 } from "./module_node_picker_data_flow.js";
+import { createModuleNodePickerWarmupController } from "./module_node_picker_warmup_controller.js";
 
 /**
  * Create catalog controller used by picker composition layer.
@@ -89,35 +90,13 @@ export function createModuleNodePickerCatalogController(context = {}) {
     let moduleInfoLoadToken = 0;
     let catalogLoadToken = 0;
     let catalogLoadBusyCount = 0;
-    let warmupPollTimer = 0;
-    let warmupPollAttempts = 0;
-    const WARMUP_POLL_MAX_ATTEMPTS = 30;
-    const WARMUP_POLL_DELAY_MS = 1000;
 
-    const clearWarmupPoll = () => {
-        if (warmupPollTimer) {
-            window.clearTimeout(warmupPollTimer);
-            warmupPollTimer = 0;
-        }
-    };
-
-    const scheduleWarmupPoll = () => {
-        if (warmupPollAttempts >= WARMUP_POLL_MAX_ATTEMPTS) {
-            return;
-        }
-        clearWarmupPoll();
-        warmupPollTimer = window.setTimeout(() => {
-            warmupPollTimer = 0;
-            if (!shouldContinue()) {
-                return;
-            }
-            void loadCatalog({
-                warmupPoll: true,
-                preferredGroup: getSelectedGroup(),
-                preferredModule: getSelectedModule(),
-            });
-        }, WARMUP_POLL_DELAY_MS);
-    };
+    const warmupController = createModuleNodePickerWarmupController({
+        shouldContinue,
+        setWarmupIndicator,
+        maxAttempts: 30,
+        delayMs: 1000,
+    });
 
     const getNodesForSelectedGroup = () => {
         const group = getSelectedGroup();
@@ -177,8 +156,7 @@ export function createModuleNodePickerCatalogController(context = {}) {
         const isWarmupPoll = Boolean(options?.warmupPoll);
         const token = ++catalogLoadToken;
         if (!isWarmupPoll) {
-            warmupPollAttempts = 0;
-            clearWarmupPoll();
+            warmupController.onManualLoadStart();
             catalogLoadBusyCount += 1;
             if (catalogLoadBusyCount === 1) {
                 setCatalogControlsLoading(true);
@@ -210,18 +188,11 @@ export function createModuleNodePickerCatalogController(context = {}) {
             if (token !== catalogLoadToken || !shouldContinue()) {
                 return result;
             }
-            const warmup = result?.runtimeWarmup || null;
-            if (result?.ok && warmup && !Boolean(warmup.done)) {
-                setWarmupIndicator(true);
-                warmupPollAttempts += 1;
-                scheduleWarmupPoll();
-            } else if (warmup && Boolean(warmup.done)) {
-                warmupPollAttempts = 0;
-                clearWarmupPoll();
-                setWarmupIndicator(false);
-            } else if (!warmup) {
-                setWarmupIndicator(false);
-            }
+            warmupController.handleCatalogResult(result, () => ({
+                warmupPoll: true,
+                preferredGroup: getSelectedGroup(),
+                preferredModule: getSelectedModule(),
+            }));
             return result;
         } finally {
             if (!isWarmupPoll) {
@@ -236,9 +207,7 @@ export function createModuleNodePickerCatalogController(context = {}) {
     const bumpRequestTokens = () => {
         moduleInfoLoadToken += 1;
         catalogLoadToken += 1;
-        warmupPollAttempts = 0;
-        clearWarmupPoll();
-        setWarmupIndicator(false);
+        warmupController.dispose();
     };
 
     return {

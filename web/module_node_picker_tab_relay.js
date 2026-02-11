@@ -10,13 +10,9 @@
  *   Synchronizes panel attachment/visibility with sidebar tab state and reports diagnostics.
  */
 
-import {
-    getActiveSidebarTabId,
-    resolveSidebarButtonFromEvent,
-    isOwnButtonSelected,
-    inferTabIdFromButton,
-} from "./orchestration/module_node_picker_tab_relay_helpers.js";
 import { createModuleNodePickerTabRelayRuntime } from "./orchestration/module_node_picker_tab_relay_runtime.js";
+import { startModuleNodePickerRelayTickLoop } from "./orchestration/module_node_picker_tab_relay_tick.js";
+import { createModuleNodePickerRelayIntentController } from "./orchestration/module_node_picker_tab_relay_intent.js";
 
 const TAB_RELAY_STATE_KEY = "__alexz_module_picker_tab_relay_state_v2__";
 
@@ -33,6 +29,12 @@ export function unbindModuleNodesTabRelay() {
     }
     if (state.tickTimer) {
         window.clearTimeout(state.tickTimer);
+    }
+    if (typeof state.stopTick === "function") {
+        state.stopTick();
+    }
+    if (typeof state.stopIntent === "function") {
+        state.stopIntent();
     }
     // Backward-compat cleanup for previous relay state shape.
     if (state.tickInterval) {
@@ -67,8 +69,6 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     unbindModuleNodesTabRelay();
 
     const bindToken = Symbol("alexz_module_picker_relay_bind");
-    let relayTimer = 0;
-    let passiveTickBudget = 0;
     const relayRuntime = createModuleNodePickerTabRelayRuntime({
         app,
         root,
@@ -80,136 +80,33 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         return Boolean(state && state.bindToken === bindToken);
     };
 
-    /**
-     * Process sidebar button interaction and schedule relay correction if needed.
-     */
-    const processTabId = (tabId) => {
-        if (tabId === sidebarTabId) {
-            relayRuntime.onOwnTabClick(sidebarTabId);
-            return;
-        }
-        relayRuntime.onForeignTabClick(tabId);
-        if (isOwnButtonSelected(sidebarTabId) !== true) {
-            return;
-        }
-        if (relayTimer) {
-            window.clearTimeout(relayTimer);
-        }
-        relayTimer = window.setTimeout(() => {
-            if (!isCurrentBinding()) {
-                return;
-            }
-            relayTimer = 0;
-            const liveState = window[TAB_RELAY_STATE_KEY];
-            if (liveState) {
-                liveState.relayTimer = 0;
-            }
-            const activeTabId = getActiveSidebarTabId(app);
-            const ownSelected = isOwnButtonSelected(sidebarTabId);
-            if (activeTabId === tabId || ownSelected === false) {
-                relayRuntime.clearForeignIntent();
-                relayRuntime.syncVisibility("relay_native_ok", tabId);
-                return;
-            }
-            // Do not force tab activation from relay. Only re-evaluate visibility.
-            relayRuntime.syncVisibility("relay_pending_switch", tabId);
-        }, 60);
-        const liveState = window[TAB_RELAY_STATE_KEY];
-        if (liveState) {
-            liveState.relayTimer = relayTimer;
-        }
-    };
-
-    /**
-     * Global event handler used to detect sidebar tab interactions.
-     */
-    const handleEvent = (event) => {
-        if (!isCurrentBinding()) {
-            return;
-        }
-        // React only to primary-button pointer/mouse events.
-        if (event?.type === "pointerdown" || event?.type === "mousedown") {
-            const button = Number(event?.button);
-            if (Number.isFinite(button) && button !== 0) {
-                return;
-            }
-        }
-        const direct = event?.target;
-        // Ignore any interaction that originates inside picker root,
-        // including text-node targets emitted by some browser/event paths.
-        if (direct instanceof Node && root.contains(direct)) {
-            return;
-        }
-        if (typeof event?.composedPath === "function" && event.composedPath().includes(root)) {
-            return;
-        }
-        const button = resolveSidebarButtonFromEvent(event);
-        if (!button) {
-            return;
-        }
-        const tabId = inferTabIdFromButton(app, button);
-        if (!tabId) {
-            return;
-        }
-        processTabId(tabId);
-    };
+    const relayIntent = createModuleNodePickerRelayIntentController({
+        app,
+        root,
+        sidebarTabId,
+        relayRuntime,
+        isCurrentBinding,
+        getLiveState: () => window[TAB_RELAY_STATE_KEY],
+    });
 
     const supportsPointer = typeof window !== "undefined" && "PointerEvent" in window;
-    const onPointerDown = supportsPointer ? ((event) => handleEvent(event)) : null;
-    const onMouseDown = supportsPointer ? null : ((event) => handleEvent(event));
-    const onKeyUp = (event) => {
-        if (!isCurrentBinding()) {
-            return;
-        }
-        const key = String(event?.key || "");
-        const relevantKeys = [
-            "Enter",
-            " ",
-            "Spacebar",
-            "ArrowLeft",
-            "ArrowRight",
-            "ArrowUp",
-            "ArrowDown",
-            "Home",
-            "End",
-            "Tab",
-        ];
-        if (key && !relevantKeys.includes(key)) {
-            return;
-        }
-        const target = event?.target;
-        if (target instanceof Node && root.contains(target)) {
-            return;
-        }
-        if (target instanceof Element) {
-            if (target.closest("input, textarea, [contenteditable]")) {
-                return;
-            }
-        }
-        relayRuntime.syncVisibility("relay_keyup");
-    };
-    const onVisibilityChange = () => {
-        if (!isCurrentBinding()) {
-            return;
-        }
-        relayRuntime.syncVisibility("relay_visibility");
-    };
-    const onPageShow = () => {
-        if (!isCurrentBinding()) {
-            return;
-        }
-        relayRuntime.syncVisibility("relay_pageshow");
-    };
+    const onPointerDown = supportsPointer ? ((event) => relayIntent.handleEvent(event)) : null;
+    const onMouseDown = supportsPointer ? null : ((event) => relayIntent.handleEvent(event));
+    const onKeyUp = (event) => relayIntent.onKeyUp(event);
+    const onVisibilityChange = () => relayIntent.onVisibilityChange();
+    const onPageShow = () => relayIntent.onPageShow();
 
     const relayState = {
         bindToken,
-        relayTimer,
+        relayTimer: 0,
         tickTimer: 0,
         onPointerDown,
         onMouseDown,
         onKeyUp,
         onVisibilityChange,
         onPageShow,
+        stopIntent: () => relayIntent.dispose?.(),
+        stopTick: () => {},
         dispose: () => relayRuntime.dispose?.(),
     };
     window[TAB_RELAY_STATE_KEY] = relayState;
@@ -224,45 +121,16 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     document.addEventListener("visibilitychange", onVisibilityChange, true);
     window.addEventListener("pageshow", onPageShow, true);
 
-    const runTick = () => {
-        if (!isCurrentBinding()) {
-            return;
-        }
-        let nextDelayMs = 500;
-        if (document.visibilityState === "hidden") {
-            nextDelayMs = 900;
+    relayState.stopTick = startModuleNodePickerRelayTickLoop({
+        isCurrentBinding,
+        relayRuntime,
+        sidebarTabId,
+        setTickTimer: (timer) => {
             const liveState = window[TAB_RELAY_STATE_KEY];
             if (liveState) {
-                liveState.tickTimer = window.setTimeout(runTick, nextDelayMs);
+                liveState.tickTimer = timer;
             }
-            return;
-        }
-        const ownTabSelected = isOwnButtonSelected(sidebarTabId) === true;
-        const keepFastTick = ownTabSelected || relayRuntime.hasPendingForeignIntent();
-        if (!keepFastTick) {
-            passiveTickBudget += 1;
-            // When picker tab is inactive, run a sparse maintenance tick
-            // instead of syncing on every timer pulse.
-            if (passiveTickBudget < 6) {
-                nextDelayMs = 900;
-                const liveState = window[TAB_RELAY_STATE_KEY];
-                if (liveState) {
-                    liveState.tickTimer = window.setTimeout(runTick, nextDelayMs);
-                }
-                return;
-            }
-            passiveTickBudget = 0;
-            nextDelayMs = 900;
-        } else {
-            passiveTickBudget = 0;
-        }
-        relayRuntime.syncVisibility("relay_tick");
-        const liveState = window[TAB_RELAY_STATE_KEY];
-        if (liveState) {
-            liveState.tickTimer = window.setTimeout(runTick, nextDelayMs);
-        }
-    };
-
-    relayState.tickTimer = window.setTimeout(runTick, 500);
+        },
+    });
     relayRuntime.syncVisibility("relay_init");
 }

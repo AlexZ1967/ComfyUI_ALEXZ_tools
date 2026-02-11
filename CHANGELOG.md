@@ -1,5 +1,16 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.18 — 2026-02-11
+- Phase 2 maintainability step for Module Node Picker UI styles:
+  - extracted picker CSS from `web/ui/module_node_picker_shell.js` into a dedicated stylesheet source module:
+    - `web/orchestration/styles/module_node_picker_styles.js`,
+  - grouped styles into explicit sections (root layout, header/debug, structure, help/hints, status cards, module card, controls, node list, fallback button),
+  - added detailed English comments in the style module describing which selectors control which widget area,
+  - kept runtime behavior unchanged by preserving one-shot style injection in `injectModuleNodePickerStyles()` and switching style source to `getModuleNodePickerStyleText()`.
+- Validation:
+  - `conda run -n p313 node --check web/orchestration/styles/module_node_picker_styles.js web/ui/module_node_picker_shell.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed, 40 tests).
+
 ## 0.16.17 — 2026-02-11
 - Module Node Picker first-open latency reduction:
   - moved runtime-state warmup to non-blocking background worker in `utils/module_node_browser_api.py` (`_start_runtime_state_warmup`),
@@ -10,8 +21,14 @@
   - added silent catalog auto-reload loop in `web/orchestration/module_node_picker_catalog_controller.js` while warmup is not finished,
   - novelty/update markers now self-appear after warmup completion without tab switching,
   - added compact header hint (`warming up...`) near widget title while warmup is running.
+  - extracted warmup polling orchestration to `web/orchestration/module_node_picker_warmup_controller.js` (catalog controller simplified, behavior preserved).
+  - extracted relay passive tick-loop orchestration to `web/orchestration/module_node_picker_tab_relay_tick.js` (tab relay bindings simplified, behavior preserved).
+  - extracted relay tab-intent/event handling orchestration to `web/orchestration/module_node_picker_tab_relay_intent.js` (pointer/mouse/keyup/visibility/pageshow handling centralized, behavior preserved).
+- Baseline guardrails:
+  - added warmup contract tests in `tests/test_phase0_baseline.py` for `_runtime_warmup_status()` and `_start_runtime_state_warmup()` no-op behavior after warmup completion.
+  - updated frontend relay contract checks for new tick-loop and tab-intent module markers.
 - Validation:
-  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed).
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed, 40 tests).
 
 ## 0.16.16 — 2026-02-11
 - Phase 2 (tab-sync stabilization) continued:

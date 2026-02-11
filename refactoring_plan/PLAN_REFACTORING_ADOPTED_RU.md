@@ -162,6 +162,10 @@
   - вынесена flow-stage сборка в `web/orchestration/module_node_picker_flow_stage.js` (adapter-композиция polling/catalog/action/module-panel контроллеров).
   - крупные dependency-map объекты composer вынесены в `web/orchestration/module_node_picker_context_builders.js` (контекст-билдеры для runtime-setup/ui-stage/flow-stage/runtime-bootstrap), что уменьшило размер `module_node_picker_composer.js` без изменения поведения.
   - внутренности pending-resume логики разнесены по отдельным модулям (`module_node_picker_resume_custom_refresh.js`, `module_node_picker_resume_module_update.js`, `module_node_picker_resume_comfy_refresh.js`) при сохранении стабильного фасада экспортов в `module_node_picker_resume_flow.js`.
+  - orchestration polling/runtime warmup вынесена в `web/orchestration/module_node_picker_warmup_controller.js`; авто-подхват маркеров после первого открытия сохраняется в фоновом режиме.
+  - адаптивный relay tick-loop вынесен в `web/orchestration/module_node_picker_tab_relay_tick.js`; bind/runtime слой релея упрощен без изменения поведения.
+  - relay tab-intent/event orchestration вынесена в `web/orchestration/module_node_picker_tab_relay_intent.js`; wiring listeners в `module_node_picker_tab_relay.js` упрощен при сохранении поведения.
+  - CSS Module Node Picker вынесен в `web/orchestration/styles/module_node_picker_styles.js` с секциями и подробными комментариями, чтобы отделить правки оформления от orchestration-логики.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.
