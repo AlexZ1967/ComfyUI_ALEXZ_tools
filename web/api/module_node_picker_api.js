@@ -119,8 +119,11 @@ export async function fetchComfyUIInfo(
     options = {}
 ) {
     const mode = normalizeComfyMode(comfyMode);
+    const logMode = String(options?.logMode || "summary").trim().toLowerCase() === "verbose"
+        ? "verbose"
+        : "summary";
     return fetchApiJson(
-        `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}&acknowledge=${acknowledge ? "1" : "0"}&mode=${mode}`,
+        `/alexz_tools/comfyui_info?refresh=${forceRefresh ? "1" : "0"}&acknowledge=${acknowledge ? "1" : "0"}&mode=${mode}&log_mode=${logMode}`,
         {
             cache: "no-store",
             signal: options?.signal,

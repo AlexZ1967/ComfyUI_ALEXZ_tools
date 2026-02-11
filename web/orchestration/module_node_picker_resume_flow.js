@@ -302,6 +302,9 @@ export async function resumePendingComfyInfoRefreshFlow(context) {
     const getComfyMode = typeof context?.getComfyMode === "function"
         ? context.getComfyMode
         : () => "releases";
+    const getLogMode = typeof context?.getLogMode === "function"
+        ? context.getLogMode
+        : () => "summary";
     const renderComfyAlert = typeof context?.renderComfyAlert === "function"
         ? context.renderComfyAlert
         : () => {};
@@ -338,7 +341,7 @@ export async function resumePendingComfyInfoRefreshFlow(context) {
         comfyAlertText.textContent = "Resuming ComfyUI info refresh...";
     }
     try {
-        const payload = await fetchComfyUIInfo(true, true, getComfyMode());
+        const payload = await fetchComfyUIInfo(true, true, getComfyMode(), { logMode: getLogMode() });
         if (!shouldContinue()) {
             return;
         }

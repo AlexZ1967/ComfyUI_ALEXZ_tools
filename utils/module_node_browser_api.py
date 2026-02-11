@@ -2576,7 +2576,8 @@ def _refresh_progress(
     )
     if line != _REFRESH_LOG_LAST:
         _REFRESH_LOG_LAST = line
-        _LOGGER.info("Module refresh: %s", line)
+        # Keep detailed state transitions in logger debug to avoid duplicate console lines.
+        _LOGGER.debug("Module refresh: %s", line)
         if phase == "sync" and total > 0 and module:
             _refresh_console_log(
                 "sync [{current}/{total}] {module}: {message}".format(
@@ -2605,6 +2606,7 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     _MODULE_INFO_CACHE.clear()
     _CUSTOM_MODULE_ALIAS_CACHE = None
     _clear_comfyui_status_cache()
+    refresh_started = time.perf_counter()
     _refresh_console_log(
         "runtime refresh started (sync_upstreams={sync}, log_mode={mode})".format(
             sync="on" if sync_upstreams else "off",
@@ -2616,10 +2618,12 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     if sync_upstreams:
         module_names = _discover_custom_modules()
         total = len(module_names)
-        _refresh_console_log(f"upstream sync enabled for {total} custom module(s)")
+        _refresh_console_log(f"phase 1/3: upstream sync enabled for {total} custom module(s)")
         progress_cb(phase="sync", current=0, total=total, remaining=total, message="sync_upstreams")
         for idx, module_name in enumerate(module_names, start=1):
+            sync_started = time.perf_counter()
             synced = _sync_module_upstream(module_name)
+            elapsed = time.perf_counter() - sync_started
             status = "synced" if synced else "skip"
             progress_cb(
                 phase="sync",
@@ -2627,13 +2631,14 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
                 total=total,
                 remaining=total - idx,
                 module=module_name,
-                message=status,
+                message=f"{status} ({elapsed:.2f}s)",
             )
     else:
-        _refresh_console_log("upstream sync skipped (fast mode)")
+        _refresh_console_log("phase 1/3: upstream sync skipped (fast mode)")
         progress_cb(phase="sync", current=0, total=0, remaining=0, message="fast_mode")
 
-    _refresh_console_log("recomputing module snapshots...")
+    scan_started = time.perf_counter()
+    _refresh_console_log("phase 2/3: recomputing module snapshots and local git deltas...")
     progress_cb(phase="snapshots", current=0, total=0, remaining=0, message="recompute_snapshots")
     announce_summary = _announce_tracked_module_updates()
     modules_need_update = 0
@@ -2649,9 +2654,11 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
         for value in new_modules_map.values():
             if isinstance(value, list):
                 new_modules_count += len(value)
+    scan_elapsed = time.perf_counter() - scan_started
     _refresh_console_log(
-        "module scan: checked={checked}, need_update={need}, commit_changed={commit}, local_changed={local}, "
-        "node_changed={node}, new_modules={new}".format(
+        "phase 2/3 done in {elapsed:.2f}s: checked={checked}, need_update={need}, commit_changed={commit}, "
+        "local_changed={local}, node_changed={node}, new_modules={new}".format(
+            elapsed=scan_elapsed,
             checked=modules_checked,
             need=modules_need_update,
             commit=len(commit_changed),
@@ -2670,9 +2677,14 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     if update_available_modules:
         _refresh_console_log(f"update available modules: {', '.join(update_available_modules)}", level="verbose")
 
+    _refresh_console_log("phase 3/3: checking ComfyUI status...")
+    comfy_started = time.perf_counter()
     comfyui = _comfyui_git_status(force_refresh=True)
+    comfy_elapsed = time.perf_counter() - comfy_started
     _refresh_console_log(
-        "ComfyUI status: update_status={status}, behind={behind}, ahead={ahead}, local={local}, remote={remote}".format(
+        "phase 3/3 done in {elapsed:.2f}s: ComfyUI status={status}, behind={behind}, ahead={ahead}, "
+        "local={local}, remote={remote}".format(
+            elapsed=comfy_elapsed,
             status=str(comfyui.get("update_status") or "unknown"),
             behind=str(comfyui.get("behind") if comfyui.get("behind") is not None else "-"),
             ahead=str(comfyui.get("ahead") if comfyui.get("ahead") is not None else "-"),
@@ -2689,7 +2701,13 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
         message="done",
     )
     _LAZY_REFRESH_DONE = True
-    _refresh_console_log("runtime refresh finished")
+    total_elapsed = time.perf_counter() - refresh_started
+    _refresh_console_log(
+        "runtime refresh finished in {elapsed:.2f}s (modules_need_update={need})".format(
+            elapsed=total_elapsed,
+            need=modules_need_update,
+        )
+    )
     return {
         "status": "ok",
         "refreshed_at": _now_iso(),
@@ -3279,7 +3297,16 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             ack_raw = (request.query.get("acknowledge", "1") or "1").strip().lower()
             acknowledge = ack_raw not in {"0", "false", "no", "off"}
             mode = _normalize_comfyui_mode(request.query.get("mode", ""))
+            log_mode = _normalize_log_mode(request.query.get("log_mode", "summary"))
+            _set_update_console_log_mode(log_mode)
             if force_refresh:
+                _refresh_console_log(
+                    "ComfyUI info refresh started (mode={mode}, acknowledge={ack}, log_mode={log})".format(
+                        mode=mode,
+                        ack="on" if acknowledge else "off",
+                        log=log_mode,
+                    )
+                )
                 _LOGGER.info(
                     "ComfyUI info refresh requested: mode=%s acknowledge=%s",
                     mode,
@@ -3289,6 +3316,28 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                 _acknowledge_comfyui_novelty()
             comfyui = _comfyui_git_status(force_refresh=force_refresh, mode=mode)
             if force_refresh:
+                _refresh_console_log(
+                    "ComfyUI status: update_status={status}, update_available={avail}, local={local}, remote={remote}, "
+                    "behind={behind}, ahead={ahead}, mode={mode}".format(
+                        status=str(comfyui.get("update_status") or "unknown"),
+                        avail=bool(comfyui.get("update_available")),
+                        local=str(comfyui.get("installed_commit_short") or "unknown"),
+                        remote=str(comfyui.get("remote_commit_short") or "unknown"),
+                        behind=str(comfyui.get("behind") if comfyui.get("behind") is not None else "-"),
+                        ahead=str(comfyui.get("ahead") if comfyui.get("ahead") is not None else "-"),
+                        mode=str(comfyui.get("check_mode") or mode),
+                    )
+                )
+                _refresh_console_log(
+                    "ComfyUI refs: path={path}, remote={remote_name}, branch={branch}, upstream={upstream}, remote_ref={remote_ref}".format(
+                        path=str(comfyui.get("path") or "-"),
+                        remote_name=str(comfyui.get("remote_name") or "-"),
+                        branch=str(comfyui.get("branch") or "-"),
+                        upstream=str(comfyui.get("upstream") or "-"),
+                        remote_ref=str(comfyui.get("remote_ref") or "-"),
+                    ),
+                    level="verbose",
+                )
                 _LOGGER.info(
                     "ComfyUI info refresh finished: update_status=%s update_available=%s local=%s remote=%s mode=%s",
                     str(comfyui.get("update_status") or "unknown"),
@@ -3297,6 +3346,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                     str(comfyui.get("remote_commit_short") or "unknown"),
                     str(comfyui.get("check_mode") or mode),
                 )
+                _refresh_console_log("ComfyUI info refresh finished")
             return web.json_response({"status": "ok", "comfyui": comfyui})
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("ComfyUI info API error: %s", exc, exc_info=True)

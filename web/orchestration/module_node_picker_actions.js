@@ -114,6 +114,7 @@ export async function runRefreshComfyUIInfoAction(context) {
     const comfyAlertText = context?.comfyAlertText;
     const comfyUpdateBtn = context?.comfyUpdateBtn;
     const comfyInstallReqBtn = context?.comfyInstallReqBtn;
+    const logMode = typeof context?.getLogMode === "function" ? context.getLogMode() : "summary";
     if (comfyAlert && comfyAlertText) {
         comfyAlert.style.display = "block";
         comfyAlert.classList.remove(
@@ -125,7 +126,7 @@ export async function runRefreshComfyUIInfoAction(context) {
         comfyAlertText.textContent = "Refreshing ComfyUI info...";
     }
     try {
-        const payload = await context?.fetchComfyUIInfo?.(true, true, context?.getComfyMode?.());
+        const payload = await context?.fetchComfyUIInfo?.(true, true, context?.getComfyMode?.(), { logMode });
         if (!shouldContinueContext(context)) {
             return;
         }
