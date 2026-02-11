@@ -130,6 +130,7 @@ Deliverables:
   - removed unused relay fallback tab-id heuristic helper to simplify sync surface.
   - replaced fixed relay interval loop with adaptive timeout scheduling to lower background sync pressure.
   - narrowed relay tab-candidate matching to explicit tab-like sidebar controls (fewer false-positive sidebar button captures).
+  - added catalog-load request token guard to prevent stale async catalog responses from overwriting active UI state.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

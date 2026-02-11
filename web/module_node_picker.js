@@ -759,6 +759,7 @@ function renderPicker(container) {
     const moduleNodeDiffs = new Map();
     const moduleInlineStatus = new Map();
     const updatedModulesSession = new Set();
+    let catalogLoadToken = 0;
     let refreshPollToken = 0;
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
@@ -1105,7 +1106,9 @@ function renderPicker(container) {
      * Load full node catalog from backend and refresh picker UI state.
      */
     const loadCatalog = async (options = {}) => {
+        const token = ++catalogLoadToken;
         return loadCatalogFlow(options, {
+            isRequestActive: () => token === catalogLoadToken,
             fetchNodeCatalog,
             getComfyMode: () => comfyModeSelect.value,
             catalogByGroup,

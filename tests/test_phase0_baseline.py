@@ -363,6 +363,8 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("diag.active_tab=", picker_text)
         self.assertIn("diag.last_clicked_tab=", picker_text)
         self.assertIn("diag.child_nodes_short=", picker_text)
+        self.assertIn("catalogLoadToken", picker_text)
+        self.assertIn("isRequestActive", (repo_root / "web" / "orchestration" / "module_node_picker_data_flow.js").read_text(encoding="utf-8"))
 
     def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):
         """Ensure non-forced ComfyUI status request returns cached/unknown data without git calls."""
