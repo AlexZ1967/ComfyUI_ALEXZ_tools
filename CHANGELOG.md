@@ -62,6 +62,9 @@
 - ComfyUI mode-switch UX fix:
   - switching `ComfyUI check` now refreshes only ComfyUI status card (no full catalog reload),
   - prevents flicker/reset of group/module dropdowns during fast mode toggles.
+- ComfyUI mode-switch behavior correction:
+  - `ComfyUI check` selector now only persists mode choice,
+  - backend refresh happens only on explicit `Refresh ComfyUI Info` action.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

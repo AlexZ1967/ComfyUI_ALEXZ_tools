@@ -38,13 +38,9 @@ export function bindModuleNodePickerEvents(context) {
     const runModuleUpdate = context?.runModuleUpdate;
     const installComfyUIRequirementsFlow = context?.installComfyUIRequirementsFlow;
     const refreshComfyUIInfoFlow = context?.refreshComfyUIInfoFlow;
-    const refreshComfyUIModeInfoFlow = context?.refreshComfyUIModeInfoFlow;
     const saveComfyCheckMode = context?.saveComfyCheckMode;
-    const loadCatalog = context?.loadCatalog;
     const refreshCustomNodesInfoFlow = context?.refreshCustomNodesInfoFlow;
     const setExpandedModule = context?.setExpandedModule;
-    let comfyModeReloadTimer = 0;
-    let comfyModeReloadToken = 0;
 
     if (!groupSelect || !categorySelect || !moduleFilter || !nodeSelect) {
         return () => {};
@@ -132,22 +128,8 @@ export function bindModuleNodePickerEvents(context) {
 
     let onComfyModeChange = null;
     if (comfyModeSelect) {
-        onComfyModeChange = async () => {
+        onComfyModeChange = () => {
             saveComfyCheckMode?.(comfyModeSelect.value);
-            const token = ++comfyModeReloadToken;
-            if (comfyModeReloadTimer) {
-                window.clearTimeout(comfyModeReloadTimer);
-            }
-            comfyModeReloadTimer = window.setTimeout(async () => {
-                if (token !== comfyModeReloadToken) {
-                    return;
-                }
-                if (typeof refreshComfyUIModeInfoFlow === "function") {
-                    await refreshComfyUIModeInfoFlow();
-                    return;
-                }
-                await loadCatalog?.();
-            }, 120);
         };
         comfyModeSelect.onchange = onComfyModeChange;
     }
@@ -162,11 +144,6 @@ export function bindModuleNodePickerEvents(context) {
     }
 
     return () => {
-        comfyModeReloadToken += 1;
-        if (comfyModeReloadTimer) {
-            window.clearTimeout(comfyModeReloadTimer);
-            comfyModeReloadTimer = 0;
-        }
         if (groupSelect.onchange === onGroupChange) {
             groupSelect.onchange = null;
         }

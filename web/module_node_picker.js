@@ -1451,37 +1451,6 @@ function renderPicker(container) {
         });
     };
 
-    /**
-     * Lightweight ComfyUI card refresh used on check-mode switch.
-     * Avoids full catalog reload to prevent selector flicker.
-     */
-    const refreshComfyUIModeInfoFlow = async () => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        try {
-            const payload = await fetchComfyUIInfo(false, false, comfyModeSelect.value);
-            if (!isPickerAlive()) {
-                return;
-            }
-            renderComfyAlert(payload?.comfyui || null);
-        } catch (err) {
-            if (!isPickerAlive()) {
-                return;
-            }
-            if (comfyAlert && comfyAlertText) {
-                comfyAlert.style.display = "block";
-                comfyAlert.classList.remove(
-                    "alexz-mod-picker-status-card--warn",
-                    "alexz-mod-picker-status-card--ok",
-                    "alexz-mod-picker-status-card--neutral"
-                );
-                comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
-                comfyAlertText.textContent = `Failed to load ComfyUI status: ${String(err)}`;
-            }
-        }
-    };
-
     const refreshCustomNodesInfoFlow = async () => {
         return runRefreshCustomNodesInfoAction({
             shouldContinue: isPickerAlive,
@@ -1525,7 +1494,6 @@ function renderPicker(container) {
         runModuleUpdate,
         installComfyUIRequirementsFlow,
         refreshComfyUIInfoFlow,
-        refreshComfyUIModeInfoFlow,
         saveComfyCheckMode,
         loadCatalog,
         refreshCustomNodesInfoFlow,

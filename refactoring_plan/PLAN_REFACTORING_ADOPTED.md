@@ -143,6 +143,7 @@ Deliverables:
   - added selector loading-state placeholders with disable/enable lifecycle during catalog load to avoid transient empty dropdown UX.
   - added frontend API timeout boundaries (AbortController) to prevent indefinite pending requests from blocking picker UX.
   - decoupled ComfyUI-check mode switch from full catalog reload to stabilize selector UI during rapid mode toggles.
+  - finalized ComfyUI-check selector semantics: mode switch is config-only; network refresh occurs only by explicit user action.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

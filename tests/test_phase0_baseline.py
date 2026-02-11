@@ -393,9 +393,8 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         bindings_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_bindings.js"
         ).read_text(encoding="utf-8")
-        self.assertIn("comfyModeReloadTimer", bindings_text)
-        self.assertIn("window.setTimeout", bindings_text)
-        self.assertIn("refreshComfyUIModeInfoFlow", bindings_text)
+        self.assertIn("saveComfyCheckMode?.(comfyModeSelect.value)", bindings_text)
+        self.assertNotIn("comfyModeReloadTimer", bindings_text)
         self.assertIn("return () => {", bindings_text)
         self.assertIn("onchange = null", bindings_text)
         self.assertIn("unbindPickerEvents", picker_text)
@@ -420,7 +419,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("import { shouldContinueContext }", update_flow_text)
         self.assertIn("export function shouldContinueContext", lifecycle_guard_text)
         self.assertIn("shouldContinue: isPickerAlive", picker_text)
-        self.assertIn("refreshComfyUIModeInfoFlow", picker_text)
+        self.assertNotIn("refreshComfyUIModeInfoFlow", picker_text)
         self.assertIn("dispose", process_text)
         self.assertIn("processUi?.dispose?.()", picker_text)
         self.assertIn("AbortController", api_text)
