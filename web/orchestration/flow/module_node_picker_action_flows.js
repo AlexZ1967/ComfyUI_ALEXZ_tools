@@ -15,7 +15,7 @@ import {
     runInstallComfyUIRequirementsFlow,
     maybeInstallChangedRequirementsFlow,
     runModuleUpdateFlow,
-} from "./module_node_picker_update_flow.js";
+} from "./progress/module_node_picker_update_flow.js";
 import {
     runRefreshModuleInfoAction,
     runInstallSingleModuleRequirementsAction,
@@ -26,7 +26,7 @@ import {
     resumePendingCustomRefreshFlow as resumePendingCustomRefreshFlowImpl,
     resumePendingModuleUpdateFlow as resumePendingModuleUpdateFlowImpl,
     resumePendingComfyInfoRefreshFlow as resumePendingComfyInfoRefreshFlowImpl,
-} from "./module_node_picker_resume_flow.js";
+} from "./resume/module_node_picker_resume_flow.js";
 
 /**
  * Create composed long-running action flows used by Module Node Picker.

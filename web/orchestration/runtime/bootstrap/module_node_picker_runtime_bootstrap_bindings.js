@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/runtime/module_node_picker_runtime_bootstrap_bindings.js
+ * Module: web/orchestration/runtime/bootstrap/module_node_picker_runtime_bootstrap_bindings.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -11,7 +11,7 @@
  *   composition code remains focused on wiring stages instead of inline lambdas.
  */
 
-import { runModuleNodePickerStartupLoad } from "../core/module_node_picker_bindings.js";
+import { runModuleNodePickerStartupLoad } from "../../core/module_node_picker_bindings.js";
 
 /**
  * Build runtime-bootstrap callback adapters from flow/stage dependencies.

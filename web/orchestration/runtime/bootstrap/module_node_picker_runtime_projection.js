@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/runtime/module_node_picker_runtime_projection.js
+ * Module: web/orchestration/runtime/bootstrap/module_node_picker_runtime_projection.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

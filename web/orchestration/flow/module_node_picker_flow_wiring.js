@@ -11,7 +11,7 @@
  *   panel rendering into a reusable runtime bundle used by the picker composer.
  */
 
-import { createModuleNodePickerPollingController } from "./module_node_picker_polling_controller.js";
+import { createModuleNodePickerPollingController } from "./progress/module_node_picker_polling_controller.js";
 import { createModuleNodePickerCatalogController } from "./module_node_picker_catalog_controller.js";
 import { createModuleNodePickerActionFlows } from "./module_node_picker_action_flows.js";
 import { createModuleNodePickerModulePanelController } from "./module_node_picker_module_panel_controller.js";

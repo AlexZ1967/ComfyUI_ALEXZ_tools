@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/runtime/module_node_picker_lifecycle.js
+ * Module: web/orchestration/runtime/lifecycle/module_node_picker_lifecycle.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

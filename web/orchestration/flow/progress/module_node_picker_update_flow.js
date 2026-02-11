@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/flow/module_node_picker_update_flow.js
+ * Module: web/orchestration/flow/progress/module_node_picker_update_flow.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -10,8 +10,8 @@
  *   Keeps long-running polling and update flows outside the main UI file.
  */
 
-import { shouldContinueContext } from "../runtime/module_node_picker_lifecycle_guard.js";
-import { isCanceledRequestError } from "../core/module_node_picker_error_utils.js";
+import { shouldContinueContext } from "../../runtime/lifecycle/module_node_picker_lifecycle_guard.js";
+import { isCanceledRequestError } from "../../core/module_node_picker_error_utils.js";
 
 /**
  * Poll custom-module refresh status until completion or failure.

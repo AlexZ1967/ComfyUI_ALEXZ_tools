@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/runtime/module_node_picker_startup_flow.js
+ * Module: web/orchestration/runtime/bootstrap/module_node_picker_startup_flow.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -108,4 +108,3 @@ export function runStartupCoordinator(context) {
         resolveCatalogSettled();
     };
 }
-

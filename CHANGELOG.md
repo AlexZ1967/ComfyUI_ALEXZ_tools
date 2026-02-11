@@ -1,5 +1,48 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.25 — 2026-02-11
+- Phase 2 runtime-structure cleanup continued:
+  - introduced semantic runtime subfolders:
+    - `web/orchestration/runtime/bootstrap/`,
+    - `web/orchestration/runtime/lifecycle/`.
+  - moved modules:
+    - to `runtime/bootstrap/`:
+      - `module_node_picker_runtime_setup.js`,
+      - `module_node_picker_runtime_bootstrap.js`,
+      - `module_node_picker_runtime_bootstrap_bindings.js`,
+      - `module_node_picker_runtime_projection.js`,
+      - `module_node_picker_startup_flow.js`,
+      - `module_node_picker_warmup_controller.js`;
+    - to `runtime/lifecycle/`:
+      - `module_node_picker_lifecycle.js`,
+      - `module_node_picker_lifecycle_guard.js`.
+  - updated dependent imports in composer, flow modules, and runtime modules.
+  - updated module header paths and baseline contract path markers in `tests/test_phase0_baseline.py`.
+- Validation:
+  - `conda run -n p313 node --check` on changed orchestration files,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (40 passed).
+
+## 0.16.24 — 2026-02-11
+- Phase 2 flow-structure cleanup continued:
+  - introduced semantic flow subfolders:
+    - `web/orchestration/flow/progress/`,
+    - `web/orchestration/flow/resume/`.
+  - moved modules:
+    - to `flow/progress/`:
+      - `module_node_picker_update_flow.js`,
+      - `module_node_picker_polling_controller.js`;
+    - to `flow/resume/`:
+      - `module_node_picker_resume_flow.js`,
+      - `module_node_picker_resume_custom_refresh.js`,
+      - `module_node_picker_resume_module_update.js`,
+      - `module_node_picker_resume_comfy_refresh.js`.
+  - updated dependent imports in flow wiring/actions and updated module header paths for moved files.
+  - updated baseline contract file-path markers in `tests/test_phase0_baseline.py`.
+- Validation:
+  - `conda run -n p313 node --check web/orchestration/flow/module_node_picker_action_flows.js web/orchestration/flow/module_node_picker_flow_wiring.js`,
+  - `find web/orchestration/flow -type f -name '*.js' | xargs conda run -n p313 node --check`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (40 passed).
+
 ## 0.16.23 — 2026-02-11
 - Phase 2 orchestration structure cleanup continued:
   - introduced semantic subfolders for remaining flat orchestration modules:

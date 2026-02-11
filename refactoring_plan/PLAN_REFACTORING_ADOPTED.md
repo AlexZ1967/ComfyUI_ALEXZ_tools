@@ -182,6 +182,14 @@ Deliverables:
     - `web/orchestration/api/` for lifecycle-bound API client wrapper.
   - moved remaining flat `module_node_picker_*` orchestration modules into `core/ui/api` groups, updated all dependent imports, updated module headers, and updated frontend baseline contract test paths.
   - fixed post-move runtime import paths in `module_node_picker_runtime_setup.js` (`process` UI + runtime context imports) to preserve runtime behavior.
+  - split flow orchestration by responsibility:
+    - `web/orchestration/flow/progress/` for refresh/update polling and progress loops,
+    - `web/orchestration/flow/resume/` for pending-refresh/update/comfy resume flows.
+  - moved `module_node_picker_update_flow.js` and `module_node_picker_polling_controller.js` into `flow/progress/`, moved resume modules into `flow/resume/`, then updated all dependent imports, module headers, and baseline test path markers.
+  - split runtime orchestration by responsibility:
+    - `web/orchestration/runtime/bootstrap/` for runtime setup/bootstrap/startup/warmup modules,
+    - `web/orchestration/runtime/lifecycle/` for lifecycle guards and picker instance disposal.
+  - moved runtime modules into `bootstrap/lifecycle` groups, updated dependent imports in composer/flow/runtime modules, updated module headers, and refreshed baseline test path markers.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

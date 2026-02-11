@@ -10,7 +10,7 @@
  *   Keeps button-driven async workflows outside the main picker render file.
  */
 
-import { shouldContinueContext } from "../runtime/module_node_picker_lifecycle_guard.js";
+import { shouldContinueContext } from "../runtime/lifecycle/module_node_picker_lifecycle_guard.js";
 import { isCanceledRequestError } from "../core/module_node_picker_error_utils.js";
 
 /**

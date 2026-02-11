@@ -182,6 +182,14 @@
     - `web/orchestration/api/` для lifecycle-bound API client обертки.
   - оставшиеся плоские `module_node_picker_*` orchestration-модули перенесены в группы `core/ui/api`, обновлены зависимые импорты, шапки `Module:` и пути в baseline-контрактных frontend-тестах.
   - исправлены runtime-пути импортов после переноса в `module_node_picker_runtime_setup.js` (импорты `process` UI и runtime-context), чтобы сохранить рабочее runtime-поведение.
+  - flow-orchestration дополнительно разделен по ответственности:
+    - `web/orchestration/flow/progress/` для refresh/update polling и progress loops,
+    - `web/orchestration/flow/resume/` для pending-refresh/update/comfy resume flows.
+  - `module_node_picker_update_flow.js` и `module_node_picker_polling_controller.js` перенесены в `flow/progress/`, resume-модули перенесены в `flow/resume/`, затем обновлены зависимые импорты, шапки `Module:` и пути в baseline frontend-тестах.
+  - runtime-orchestration дополнительно разделен по ответственности:
+    - `web/orchestration/runtime/bootstrap/` для runtime setup/bootstrap/startup/warmup модулей,
+    - `web/orchestration/runtime/lifecycle/` для lifecycle guard и dispose-логики picker instance.
+  - runtime-модули перенесены в группы `bootstrap/lifecycle`, обновлены зависимые импорты в composer/flow/runtime модулях, шапки `Module:` и пути в baseline frontend-тестах.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

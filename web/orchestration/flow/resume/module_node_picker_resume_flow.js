@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/flow/module_node_picker_resume_flow.js
+ * Module: web/orchestration/flow/resume/module_node_picker_resume_flow.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
