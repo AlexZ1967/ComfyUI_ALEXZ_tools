@@ -722,6 +722,10 @@ function renderPicker(container) {
     comfyModeSelect.value = loadComfyCheckMode();
 
     let debugEnabled = Boolean(pickerStore.get("debugEnabled"));
+    const unsubscribeDebug = pickerStore.subscribe("debugEnabled", (value) => {
+        debugEnabled = Boolean(value);
+        applyDebugUiState();
+    });
     const applyDebugUiState = () => {
         window[NODE_PICKER_DEBUG_KEY] = Boolean(debugEnabled);
         diagnosticsLogger.setDebugEnabled(Boolean(debugEnabled));
@@ -729,10 +733,6 @@ function renderPicker(container) {
         debugCard.style.display = debugEnabled ? "block" : "none";
         debugToggle.textContent = debugEnabled ? "Debug: ON" : "Debug";
     };
-    pickerStore.subscribe("debugEnabled", (value) => {
-        debugEnabled = Boolean(value);
-        applyDebugUiState();
-    });
     applyDebugUiState();
     debugToggle.addEventListener("click", () => {
         pickerStore.set({ debugEnabled: !Boolean(pickerStore.get("debugEnabled")) });
@@ -776,6 +776,7 @@ function renderPicker(container) {
     let customStatusChecked = false;
     let actionBusy = false;
     let expandedModule = "";
+    let unbindPickerEvents = () => {};
 
     let pickerDisposed = false;
     const isPickerAlive = () => !pickerDisposed && root.isConnected;
@@ -788,7 +789,20 @@ function renderPicker(container) {
         moduleInfoLoadToken += 1;
         refreshPollToken += 1;
         updatePollToken += 1;
+        try {
+            unbindPickerEvents?.();
+        } catch (_err) {
+            // Ignore stale event-unbind errors.
+        }
+        try {
+            unsubscribeDebug?.();
+        } catch (_err) {
+            // Ignore stale store-unsubscribe errors.
+        }
         unbindModuleNodesTabRelay();
+        if (container?.[PICKER_CLEANUP_KEY] === disposePickerInstance) {
+            container[PICKER_CLEANUP_KEY] = null;
+        }
     };
     container[PICKER_CLEANUP_KEY] = disposePickerInstance;
 
@@ -1385,7 +1399,7 @@ function renderPicker(container) {
         });
     };
 
-    bindModuleNodePickerEvents({
+    unbindPickerEvents = bindModuleNodePickerEvents({
         groupSelect,
         categorySelect,
         moduleFilter,
@@ -1418,7 +1432,7 @@ function renderPicker(container) {
         setExpandedModule: (value) => {
             expandedModule = String(value || "").trim();
         },
-    });
+    }) || (() => {});
 
     runModuleNodePickerStartupLoad({
         pickerStore,

@@ -377,6 +377,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         helpers_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_helpers.js"
         ).read_text(encoding="utf-8")
+        picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
+            encoding="utf-8"
+        )
 
         self.assertNotIn("setInterval(", relay_text)
         self.assertIn("setTimeout(runTick", relay_text)
@@ -386,6 +389,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("comfyModeReloadTimer", bindings_text)
         self.assertIn("window.setTimeout", bindings_text)
+        self.assertIn("return () => {", bindings_text)
+        self.assertIn("onchange = null", bindings_text)
+        self.assertIn("unbindPickerEvents", picker_text)
 
     def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):
         """Ensure non-forced ComfyUI status request returns cached/unknown data without git calls."""

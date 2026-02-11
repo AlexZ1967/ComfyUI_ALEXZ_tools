@@ -46,10 +46,10 @@ export function bindModuleNodePickerEvents(context) {
     let comfyModeReloadToken = 0;
 
     if (!groupSelect || !categorySelect || !moduleFilter || !nodeSelect) {
-        return;
+        return () => {};
     }
 
-    groupSelect.onchange = () => {
+    const onGroupChange = () => {
         if (typeof isCustomCategory === "function" && isCustomCategory()) {
             return;
         }
@@ -57,8 +57,9 @@ export function bindModuleNodePickerEvents(context) {
         fillModuleSelect?.();
         syncUpdateAllButton?.();
     };
+    groupSelect.onchange = onGroupChange;
 
-    categorySelect.onchange = () => {
+    const onCategoryChange = () => {
         if (groupSelect) {
             groupSelect.style.display = (typeof isCustomCategory === "function" && isCustomCategory()) ? "none" : "";
         }
@@ -66,10 +67,12 @@ export function bindModuleNodePickerEvents(context) {
         fillModuleSelect?.();
         syncUpdateAllButton?.();
     };
+    categorySelect.onchange = onCategoryChange;
 
-    moduleFilter.oninput = () => fillModuleSelect?.();
+    const onModuleFilterInput = () => fillModuleSelect?.();
+    moduleFilter.oninput = onModuleFilterInput;
 
-    nodeSelect.onchange = () => {
+    const onNodeSelectChange = () => {
         setExpandedModule?.("");
         if (nodeList) {
             nodeList.innerHTML = "";
@@ -77,9 +80,11 @@ export function bindModuleNodePickerEvents(context) {
         syncPickerSelectionState?.();
         loadModuleInfo?.();
     };
+    nodeSelect.onchange = onNodeSelectChange;
 
+    let onUpdateAllClick = null;
     if (updateAllBtn) {
-        updateAllBtn.onclick = async () => {
+        onUpdateAllClick = async () => {
             if (isActionBusy?.()) {
                 return;
             }
@@ -87,38 +92,46 @@ export function bindModuleNodePickerEvents(context) {
             setProcessTarget?.("custom");
             await runModuleUpdate?.("all", "");
         };
+        updateAllBtn.onclick = onUpdateAllClick;
     }
 
+    let onComfyUpdateClick = null;
     if (comfyUpdateBtn) {
-        comfyUpdateBtn.onclick = async () => {
+        onComfyUpdateClick = async () => {
             if (isActionBusy?.()) {
                 return;
             }
             setProcessTarget?.("comfy");
             await runModuleUpdate?.("comfyui", "");
         };
+        comfyUpdateBtn.onclick = onComfyUpdateClick;
     }
 
+    let onComfyInstallReqClick = null;
     if (comfyInstallReqBtn) {
-        comfyInstallReqBtn.onclick = async () => {
+        onComfyInstallReqClick = async () => {
             if (isActionBusy?.()) {
                 return;
             }
             await installComfyUIRequirementsFlow?.();
         };
+        comfyInstallReqBtn.onclick = onComfyInstallReqClick;
     }
 
+    let onComfyInfoClick = null;
     if (comfyInfoBtn) {
-        comfyInfoBtn.onclick = async () => {
+        onComfyInfoClick = async () => {
             if (isActionBusy?.()) {
                 return;
             }
             await refreshComfyUIInfoFlow?.();
         };
+        comfyInfoBtn.onclick = onComfyInfoClick;
     }
 
+    let onComfyModeChange = null;
     if (comfyModeSelect) {
-        comfyModeSelect.onchange = async () => {
+        onComfyModeChange = async () => {
             saveComfyCheckMode?.(comfyModeSelect.value);
             const token = ++comfyModeReloadToken;
             if (comfyModeReloadTimer) {
@@ -131,14 +144,55 @@ export function bindModuleNodePickerEvents(context) {
                 await loadCatalog?.();
             }, 120);
         };
+        comfyModeSelect.onchange = onComfyModeChange;
     }
 
+    let onRefreshClick = null;
     if (refreshBtn) {
-        refreshBtn.onclick = async () => {
+        onRefreshClick = async () => {
             setCustomStatusChecked?.(true);
             await refreshCustomNodesInfoFlow?.();
         };
+        refreshBtn.onclick = onRefreshClick;
     }
+
+    return () => {
+        comfyModeReloadToken += 1;
+        if (comfyModeReloadTimer) {
+            window.clearTimeout(comfyModeReloadTimer);
+            comfyModeReloadTimer = 0;
+        }
+        if (groupSelect.onchange === onGroupChange) {
+            groupSelect.onchange = null;
+        }
+        if (categorySelect.onchange === onCategoryChange) {
+            categorySelect.onchange = null;
+        }
+        if (moduleFilter.oninput === onModuleFilterInput) {
+            moduleFilter.oninput = null;
+        }
+        if (nodeSelect.onchange === onNodeSelectChange) {
+            nodeSelect.onchange = null;
+        }
+        if (updateAllBtn && updateAllBtn.onclick === onUpdateAllClick) {
+            updateAllBtn.onclick = null;
+        }
+        if (comfyUpdateBtn && comfyUpdateBtn.onclick === onComfyUpdateClick) {
+            comfyUpdateBtn.onclick = null;
+        }
+        if (comfyInstallReqBtn && comfyInstallReqBtn.onclick === onComfyInstallReqClick) {
+            comfyInstallReqBtn.onclick = null;
+        }
+        if (comfyInfoBtn && comfyInfoBtn.onclick === onComfyInfoClick) {
+            comfyInfoBtn.onclick = null;
+        }
+        if (comfyModeSelect && comfyModeSelect.onchange === onComfyModeChange) {
+            comfyModeSelect.onchange = null;
+        }
+        if (refreshBtn && refreshBtn.onclick === onRefreshClick) {
+            refreshBtn.onclick = null;
+        }
+    };
 }
 
 /**

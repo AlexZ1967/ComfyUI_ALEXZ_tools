@@ -35,6 +35,9 @@
 - Picker request/load flow hardening:
   - added early exit for `loadCatalog`/`loadModuleInfo` when picker instance is disposed (prevents unnecessary stale fetches),
   - added small debounce for `ComfyUI check` mode switch to avoid burst catalog reloads during fast toggles.
+- Event lifecycle cleanup:
+  - `bindModuleNodePickerEvents(...)` now returns unbind cleanup that clears handlers and debounce timer,
+  - picker dispose now calls event unbind + debug-store unsubscribe to avoid stale listeners between re-renders.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

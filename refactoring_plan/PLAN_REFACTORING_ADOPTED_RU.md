@@ -134,6 +134,7 @@
   - добавлен render-lifecycle cleanup hook picker и request-token guard для `loadModuleInfo` (устаревшие async-ответы не перезаписывают карточку модуля между рендерами).
   - очищены relay helpers: удален неиспользуемый helper и вынесены selector-константы для tab/sidebar матчей.
   - добавлены early-exit guards для загрузки каталога/инфо модуля на disposed-instance и debounce смены `ComfyUI check` режима.
+  - добавлен явный cleanup жизненного цикла UI-событий (unbind callbacks + cleanup таймеров + unsubscribe store при dispose picker).
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.
