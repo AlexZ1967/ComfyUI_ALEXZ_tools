@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/flow/module_node_picker_action_flows.js
+ * Module: web/orchestration/flow/actions/module_node_picker_action_flows.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -15,7 +15,7 @@ import {
     runInstallComfyUIRequirementsFlow,
     maybeInstallChangedRequirementsFlow,
     runModuleUpdateFlow,
-} from "./progress/module_node_picker_update_flow.js";
+} from "../progress/module_node_picker_update_flow.js";
 import {
     runRefreshModuleInfoAction,
     runInstallSingleModuleRequirementsAction,
@@ -26,7 +26,7 @@ import {
     resumePendingCustomRefreshFlow as resumePendingCustomRefreshFlowImpl,
     resumePendingModuleUpdateFlow as resumePendingModuleUpdateFlowImpl,
     resumePendingComfyInfoRefreshFlow as resumePendingComfyInfoRefreshFlowImpl,
-} from "./resume/module_node_picker_resume_flow.js";
+} from "../resume/module_node_picker_resume_flow.js";
 
 /**
  * Create composed long-running action flows used by Module Node Picker.

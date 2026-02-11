@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/flow/module_node_picker_data_flow.js
+ * Module: web/orchestration/flow/catalog/module_node_picker_data_flow.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

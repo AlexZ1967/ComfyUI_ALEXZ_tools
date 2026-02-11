@@ -12,8 +12,8 @@
  */
 
 import { createModuleNodePickerPollingController } from "./progress/module_node_picker_polling_controller.js";
-import { createModuleNodePickerCatalogController } from "./module_node_picker_catalog_controller.js";
-import { createModuleNodePickerActionFlows } from "./module_node_picker_action_flows.js";
+import { createModuleNodePickerCatalogController } from "./catalog/module_node_picker_catalog_controller.js";
+import { createModuleNodePickerActionFlows } from "./actions/module_node_picker_action_flows.js";
 import { createModuleNodePickerModulePanelController } from "./module_node_picker_module_panel_controller.js";
 
 /**

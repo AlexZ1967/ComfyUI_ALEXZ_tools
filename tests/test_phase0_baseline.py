@@ -382,7 +382,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_debug_ui.js"
         ).read_text(encoding="utf-8")
         catalog_controller_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_catalog_controller.js"
+            repo_root / "web" / "orchestration" / "flow" / "catalog" / "module_node_picker_catalog_controller.js"
         ).read_text(encoding="utf-8")
         layout_text = (
             repo_root / "web" / "ui" / "module_node_picker_layout.js"
@@ -480,7 +480,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertNotIn("fillModuleSelectUi", picker_text)
         self.assertNotIn("fillGroupSelectUi", picker_text)
         self.assertIn("PICKER_CLEANUP_KEY", picker_runtime_text)
-        data_flow_text = (repo_root / "web" / "orchestration" / "flow" / "module_node_picker_data_flow.js").read_text(encoding="utf-8")
+        data_flow_text = (repo_root / "web" / "orchestration" / "flow" / "catalog" / "module_node_picker_data_flow.js").read_text(encoding="utf-8")
         self.assertIn("isRequestActive", data_flow_text)
         self.assertIn("totalNodes", data_flow_text)
 
@@ -542,7 +542,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("startupRetryDelayMs", bindings_text)
         self.assertIn("cancelStartupLoad", picker_runtime_text)
         actions_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_actions.js"
+            repo_root / "web" / "orchestration" / "flow" / "actions" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")
         update_flow_text = (
             repo_root / "web" / "orchestration" / "flow" / "progress" / "module_node_picker_update_flow.js"
@@ -601,7 +601,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}"
         )
         actions_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_actions.js"
+            repo_root / "web" / "orchestration" / "flow" / "actions" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")
         update_flow_text = (
             repo_root / "web" / "orchestration" / "flow" / "progress" / "module_node_picker_update_flow.js"
@@ -616,7 +616,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "api" / "module_node_picker_api_client.js"
         ).read_text(encoding="utf-8")
         catalog_controller_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_catalog_controller.js"
+            repo_root / "web" / "orchestration" / "flow" / "catalog" / "module_node_picker_catalog_controller.js"
         ).read_text(encoding="utf-8")
         status_cards_text = (
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_status_cards.js"
@@ -628,7 +628,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_view_helpers.js"
         ).read_text(encoding="utf-8")
         action_flows_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_action_flows.js"
+            repo_root / "web" / "orchestration" / "flow" / "actions" / "module_node_picker_action_flows.js"
         ).read_text(encoding="utf-8")
         flow_wiring_text = (
             repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_wiring.js"

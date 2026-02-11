@@ -1,5 +1,23 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.26 — 2026-02-11
+- Phase 2 flow-structure cleanup continued:
+  - introduced semantic flow subfolders:
+    - `web/orchestration/flow/actions/`,
+    - `web/orchestration/flow/catalog/`.
+  - moved modules:
+    - to `flow/actions/`:
+      - `module_node_picker_actions.js`,
+      - `module_node_picker_action_flows.js`;
+    - to `flow/catalog/`:
+      - `module_node_picker_catalog_controller.js`,
+      - `module_node_picker_data_flow.js`.
+  - updated dependent imports in flow wiring and moved modules.
+  - updated module header paths and baseline contract path markers in `tests/test_phase0_baseline.py`.
+- Validation:
+  - `find web/orchestration/flow -type f -name '*.js' | xargs conda run -n p313 node --check`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (40 passed).
+
 ## 0.16.25 — 2026-02-11
 - Phase 2 runtime-structure cleanup continued:
   - introduced semantic runtime subfolders:

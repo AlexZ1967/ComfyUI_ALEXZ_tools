@@ -97,9 +97,9 @@
 - Вынесены крупные части picker в отдельные модули при сохранении поведения:
   - UI: `web/ui/module_node_picker_renderers.js`, `web/ui/module_node_picker_alerts.js`,
     `web/ui/module_node_picker_process.js`, `web/ui/module_node_picker_catalog.js`
-  - orchestration: `web/orchestration/module_node_picker_update_flow.js`,
-    `web/orchestration/module_node_picker_data_flow.js`,
-    `web/orchestration/module_node_picker_actions.js`,
+  - orchestration: `web/orchestration/flow/progress/module_node_picker_update_flow.js`,
+    `web/orchestration/flow/catalog/module_node_picker_data_flow.js`,
+    `web/orchestration/flow/actions/module_node_picker_actions.js`,
     `web/orchestration/core/module_node_picker_bindings.js`
 
 Критерии выхода:
@@ -146,7 +146,7 @@
   - смена `ComfyUI check` режима отвязана от полной reload каталога (стабильные dropdown без фликера при быстрых переключениях).
   - финализирована семантика `ComfyUI check`: переключение — только сохранение настройки; сетевое обновление — только по явному `Refresh ComfyUI Info`.
   - вынесена orchestration-логика category/group/module селекторов в отдельный модуль `web/orchestration/ui/module_node_picker_selection_controller.js` (пополнение/фильтрация dropdown и sync со store), с сохранением прежнего UI-поведения.
-  - вынесена orchestration-логика long-running действий (refresh/update/resume/requirements follow-up + per-module refresh/install) в `web/orchestration/module_node_picker_action_flows.js`, а в `web/module_node_picker.js` оставлены только thin bindings и wiring зависимостей.
+  - вынесена orchestration-логика long-running действий (refresh/update/resume/requirements follow-up + per-module refresh/install) в `web/orchestration/flow/actions/module_node_picker_action_flows.js`, а в `web/module_node_picker.js` оставлены только thin bindings и wiring зависимостей.
   - вынесен token-based polling lifecycle (refresh/update progress loops) в `web/orchestration/module_node_picker_polling_controller.js`; dispose picker теперь инвалидирует poll-контроллер через единый API.
   - вынесен рендер и UI-state панели модуля (module-card + node-list, включая expand/collapse состояние) в `web/orchestration/module_node_picker_module_panel_controller.js`.
   - вынесен lifecycle/dispose controller picker instance в `web/orchestration/module_node_picker_lifecycle.js` (единая очистка токенов, polling, bind/unbind, startup cancel, debug/process/API cleanup).
@@ -190,6 +190,10 @@
     - `web/orchestration/runtime/bootstrap/` для runtime setup/bootstrap/startup/warmup модулей,
     - `web/orchestration/runtime/lifecycle/` для lifecycle guard и dispose-логики picker instance.
   - runtime-модули перенесены в группы `bootstrap/lifecycle`, обновлены зависимые импорты в composer/flow/runtime модулях, шапки `Module:` и пути в baseline frontend-тестах.
+  - оставшийся flow-раздел дополнительно разделен по ответственности:
+    - `web/orchestration/flow/actions/` для action-handlers и composed action flows,
+    - `web/orchestration/flow/catalog/` для catalog/module-info data controllers и loaders.
+  - `module_node_picker_actions.js` + `module_node_picker_action_flows.js` перенесены в `flow/actions/`, `module_node_picker_catalog_controller.js` + `module_node_picker_data_flow.js` перенесены в `flow/catalog/`, затем обновлены зависимые импорты, шапки `Module:` и пути в baseline frontend-тестах.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

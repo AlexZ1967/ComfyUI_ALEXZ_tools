@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/flow/module_node_picker_catalog_controller.js
+ * Module: web/orchestration/flow/catalog/module_node_picker_catalog_controller.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -17,7 +17,7 @@ import {
     loadModuleInfoFlow,
     loadCatalogFlow,
 } from "./module_node_picker_data_flow.js";
-import { createModuleNodePickerWarmupController } from "../runtime/bootstrap/module_node_picker_warmup_controller.js";
+import { createModuleNodePickerWarmupController } from "../../runtime/bootstrap/module_node_picker_warmup_controller.js";
 
 /**
  * Create catalog controller used by picker composition layer.

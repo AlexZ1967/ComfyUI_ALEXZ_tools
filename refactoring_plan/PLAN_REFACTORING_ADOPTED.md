@@ -97,9 +97,9 @@ Deliverables:
 - Extracted large picker sections into focused modules while preserving behavior:
   - UI: `web/ui/module_node_picker_renderers.js`, `web/ui/module_node_picker_alerts.js`,
     `web/ui/module_node_picker_process.js`, `web/ui/module_node_picker_catalog.js`
-  - orchestration: `web/orchestration/module_node_picker_update_flow.js`,
-    `web/orchestration/module_node_picker_data_flow.js`,
-    `web/orchestration/module_node_picker_actions.js`,
+  - orchestration: `web/orchestration/flow/progress/module_node_picker_update_flow.js`,
+    `web/orchestration/flow/catalog/module_node_picker_data_flow.js`,
+    `web/orchestration/flow/actions/module_node_picker_actions.js`,
     `web/orchestration/core/module_node_picker_bindings.js`
 
 Exit criteria:
@@ -146,7 +146,7 @@ Deliverables:
   - decoupled ComfyUI-check mode switch from full catalog reload to stabilize selector UI during rapid mode toggles.
   - finalized ComfyUI-check selector semantics: mode switch is config-only; network refresh occurs only by explicit user action.
   - extracted category/group/module dropdown orchestration into `web/orchestration/ui/module_node_picker_selection_controller.js` (population/filtering/store sync), preserving existing UI behavior.
-  - extracted long-running action orchestration (refresh/update/resume/requirements follow-up + per-module refresh/install) into `web/orchestration/module_node_picker_action_flows.js`, leaving `web/module_node_picker.js` with thin dependency wiring.
+  - extracted long-running action orchestration (refresh/update/resume/requirements follow-up + per-module refresh/install) into `web/orchestration/flow/actions/module_node_picker_action_flows.js`, leaving `web/module_node_picker.js` with thin dependency wiring.
   - extracted token-based polling lifecycle (refresh/update progress loops) into `web/orchestration/module_node_picker_polling_controller.js`; picker dispose now invalidates polling via a dedicated controller API.
   - extracted module-card/node-list rendering orchestration (including expand/collapse UI state) into `web/orchestration/module_node_picker_module_panel_controller.js`.
   - extracted picker instance lifecycle/dispose controller into `web/orchestration/module_node_picker_lifecycle.js` for centralized token/polling/event/startup/debug/process/API cleanup.
@@ -190,6 +190,10 @@ Deliverables:
     - `web/orchestration/runtime/bootstrap/` for runtime setup/bootstrap/startup/warmup modules,
     - `web/orchestration/runtime/lifecycle/` for lifecycle guards and picker instance disposal.
   - moved runtime modules into `bootstrap/lifecycle` groups, updated dependent imports in composer/flow/runtime modules, updated module headers, and refreshed baseline test path markers.
+  - split remaining flow responsibilities into dedicated subfolders:
+    - `web/orchestration/flow/actions/` for action handlers and composed action flows,
+    - `web/orchestration/flow/catalog/` for catalog/module-info data controllers and loaders.
+  - moved `module_node_picker_actions.js` + `module_node_picker_action_flows.js` into `flow/actions/`, moved `module_node_picker_catalog_controller.js` + `module_node_picker_data_flow.js` into `flow/catalog/`, then updated dependent imports, module headers, and baseline test path markers.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
