@@ -11,7 +11,7 @@
  *   coordinator wiring so the picker composer remains focused on composition.
  */
 
-import { bindModuleNodePickerEvents } from "../../core/module_node_picker_bindings.js";
+import { bindModuleNodePickerEvents } from "../../core/infra/module_node_picker_bindings.js";
 import { runStartupCoordinator } from "./module_node_picker_startup_flow.js";
 
 /**

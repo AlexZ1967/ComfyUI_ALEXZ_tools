@@ -1,5 +1,26 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.28 — 2026-02-11
+- Phase 2 orchestration-core structure cleanup continued:
+  - split `web/orchestration/core/` into semantic subfolders:
+    - `web/orchestration/core/composition/`,
+    - `web/orchestration/core/infra/`.
+  - moved modules:
+    - to `core/composition/`:
+      - `module_node_picker_composer.js`,
+      - `module_node_picker_context_builders.js`,
+      - `module_node_picker_stage_bridge.js`;
+    - to `core/infra/`:
+      - `module_node_picker_bindings.js`,
+      - `module_node_picker_error_utils.js`,
+      - `module_node_picker_registration.js`.
+  - updated dependent imports in runtime/bootstrap and flow modules.
+  - updated module header paths and baseline contract path markers in `tests/test_phase0_baseline.py`.
+  - updated plan document path references for moved core modules.
+- Validation:
+  - `conda run -n p313 node --check web/module_node_picker.js web/orchestration/core/composition/module_node_picker_composer.js web/orchestration/core/composition/module_node_picker_context_builders.js web/orchestration/core/composition/module_node_picker_stage_bridge.js web/orchestration/core/infra/module_node_picker_bindings.js web/orchestration/core/infra/module_node_picker_registration.js web/orchestration/core/infra/module_node_picker_error_utils.js web/orchestration/runtime/bootstrap/module_node_picker_runtime_bootstrap.js web/orchestration/runtime/bootstrap/module_node_picker_runtime_bootstrap_bindings.js web/orchestration/flow/actions/module_node_picker_actions.js web/orchestration/flow/progress/module_node_picker_update_flow.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (40 passed).
+
 ## 0.16.27 — 2026-02-11
 - Phase 2 flow-structure cleanup continued:
   - introduced semantic flow subfolders:

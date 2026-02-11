@@ -394,7 +394,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_ui_controllers.js"
         ).read_text(encoding="utf-8")
         registration_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_registration.js"
+            repo_root / "web" / "orchestration" / "core" / "infra" / "module_node_picker_registration.js"
         ).read_text(encoding="utf-8")
         constants_text = (
             repo_root / "web" / "constants" / "module_node_picker_constants.js"
@@ -406,10 +406,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             encoding="utf-8"
         )
         composer_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_composer.js"
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
         context_builders_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_context_builders.js"
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_context_builders.js"
         ).read_text(encoding="utf-8")
         ui_stage_text = (
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_ui_stage.js"
@@ -503,10 +503,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             encoding="utf-8"
         )
         composer_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_composer.js"
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
         context_builders_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_context_builders.js"
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_context_builders.js"
         ).read_text(encoding="utf-8")
         ui_stage_text = (
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_ui_stage.js"
@@ -532,7 +532,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("window.setTimeout(runTick", relay_tick_text)
         self.assertNotIn("export function hasSidebarTabId", helpers_text)
         bindings_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_bindings.js"
+            repo_root / "web" / "orchestration" / "core" / "infra" / "module_node_picker_bindings.js"
         ).read_text(encoding="utf-8")
         self.assertIn("saveComfyCheckMode?.(comfyModeSelect.value)", bindings_text)
         self.assertNotIn("comfyModeReloadTimer", bindings_text)
@@ -573,6 +573,44 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("API timeout after", api_text)
         self.assertNotIn("!pickerDisposed && root.isConnected", picker_runtime_text)
 
+    def test_frontend_core_subfolder_import_contract_markers_exist(self):
+        """Ensure the core split keeps semantic composition/infra import paths."""
+        repo_root = Path(__file__).resolve().parents[1]
+        entry_text = (repo_root / "web" / "module_node_picker.js").read_text(
+            encoding="utf-8"
+        )
+        runtime_bootstrap_text = (
+            repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap.js"
+        ).read_text(encoding="utf-8")
+        runtime_bootstrap_bindings_text = (
+            repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap_bindings.js"
+        ).read_text(encoding="utf-8")
+        flow_actions_text = (
+            repo_root / "web" / "orchestration" / "flow" / "actions" / "module_node_picker_actions.js"
+        ).read_text(encoding="utf-8")
+        flow_update_text = (
+            repo_root / "web" / "orchestration" / "flow" / "progress" / "module_node_picker_update_flow.js"
+        ).read_text(encoding="utf-8")
+        composer_text = (
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_composer.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("./orchestration/core/infra/module_node_picker_registration.js", entry_text)
+        self.assertIn("./orchestration/core/composition/module_node_picker_composer.js", entry_text)
+        self.assertIn("../../core/infra/module_node_picker_bindings.js", runtime_bootstrap_text)
+        self.assertIn("../../core/infra/module_node_picker_bindings.js", runtime_bootstrap_bindings_text)
+        self.assertIn("../../core/infra/module_node_picker_error_utils.js", flow_actions_text)
+        self.assertIn("../../core/infra/module_node_picker_error_utils.js", flow_update_text)
+        self.assertIn("../infra/module_node_picker_error_utils.js", composer_text)
+
+        self.assertNotIn("./orchestration/core/module_node_picker_registration.js", entry_text)
+        self.assertNotIn("./orchestration/core/module_node_picker_composer.js", entry_text)
+        self.assertNotIn("../../core/module_node_picker_bindings.js", runtime_bootstrap_text)
+        self.assertNotIn("../../core/module_node_picker_bindings.js", runtime_bootstrap_bindings_text)
+        self.assertNotIn("../../core/module_node_picker_error_utils.js", flow_actions_text)
+        self.assertNotIn("../../core/module_node_picker_error_utils.js", flow_update_text)
+        self.assertNotIn("./module_node_picker_error_utils.js", composer_text)
+
     def test_frontend_pending_resume_contract_markers_exist(self):
         """Freeze pending/resume markers for refresh/update lifecycle restoration."""
         repo_root = Path(__file__).resolve().parents[1]
@@ -580,10 +618,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             encoding="utf-8"
         )
         composer_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_composer.js"
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_composer.js"
         ).read_text(encoding="utf-8")
         context_builders_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_context_builders.js"
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_context_builders.js"
         ).read_text(encoding="utf-8")
         ui_stage_text = (
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_ui_stage.js"
@@ -607,7 +645,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "flow" / "progress" / "module_node_picker_update_flow.js"
         ).read_text(encoding="utf-8")
         bindings_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_bindings.js"
+            repo_root / "web" / "orchestration" / "core" / "infra" / "module_node_picker_bindings.js"
         ).read_text(encoding="utf-8")
         startup_flow_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_startup_flow.js"
@@ -673,13 +711,13 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "state" / "module_node_picker_runtime_state.js"
         ).read_text(encoding="utf-8")
         error_utils_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_error_utils.js"
+            repo_root / "web" / "orchestration" / "core" / "infra" / "module_node_picker_error_utils.js"
         ).read_text(encoding="utf-8")
         runtime_setup_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_setup.js"
         ).read_text(encoding="utf-8")
         stage_bridge_text = (
-            repo_root / "web" / "orchestration" / "core" / "module_node_picker_stage_bridge.js"
+            repo_root / "web" / "orchestration" / "core" / "composition" / "module_node_picker_stage_bridge.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap_bindings.js"

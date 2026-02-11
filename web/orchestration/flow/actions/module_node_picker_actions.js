@@ -11,7 +11,7 @@
  */
 
 import { shouldContinueContext } from "../../runtime/lifecycle/module_node_picker_lifecycle_guard.js";
-import { isCanceledRequestError } from "../../core/module_node_picker_error_utils.js";
+import { isCanceledRequestError } from "../../core/infra/module_node_picker_error_utils.js";
 
 /**
  * Refresh selected module info and keep result inline in module card.

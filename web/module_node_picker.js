@@ -23,8 +23,8 @@ import {
     cleanupModuleNodePickerFallbackButtons,
     attachModuleNodePickerFallbackButton,
 } from "./ui/module_node_picker_shell.js";
-import { registerModuleNodePickerExtension } from "./orchestration/core/module_node_picker_registration.js";
-import { renderModuleNodePicker } from "./orchestration/core/module_node_picker_composer.js";
+import { registerModuleNodePickerExtension } from "./orchestration/core/infra/module_node_picker_registration.js";
+import { renderModuleNodePicker } from "./orchestration/core/composition/module_node_picker_composer.js";
 
 registerModuleNodePickerExtension({
     windowObj: window,

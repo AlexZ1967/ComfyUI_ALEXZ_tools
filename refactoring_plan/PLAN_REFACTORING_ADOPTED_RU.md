@@ -100,7 +100,7 @@
   - orchestration: `web/orchestration/flow/progress/module_node_picker_update_flow.js`,
     `web/orchestration/flow/catalog/module_node_picker_data_flow.js`,
     `web/orchestration/flow/actions/module_node_picker_actions.js`,
-    `web/orchestration/core/module_node_picker_bindings.js`
+    `web/orchestration/core/infra/module_node_picker_bindings.js`
 
 Критерии выхода:
 - Нет UX-регрессий.
@@ -150,24 +150,24 @@
   - вынесен token-based polling lifecycle (refresh/update progress loops) в `web/orchestration/module_node_picker_polling_controller.js`; dispose picker теперь инвалидирует poll-контроллер через единый API.
   - вынесен рендер и UI-state панели модуля (module-card + node-list, включая expand/collapse состояние) в `web/orchestration/module_node_picker_module_panel_controller.js`.
   - вынесен lifecycle/dispose controller picker instance в `web/orchestration/module_node_picker_lifecycle.js` (единая очистка токенов, polling, bind/unbind, startup cancel, debug/process/API cleanup).
-  - вынесена логика регистрации extension и fallback-монтажа в `web/orchestration/core/module_node_picker_registration.js`.
+  - вынесена логика регистрации extension и fallback-монтажа в `web/orchestration/core/infra/module_node_picker_registration.js`.
   - централизованы константы picker (ID, storage-keys, group-labels, marks, defaults) в `web/constants/module_node_picker_constants.js`.
   - вынесены helper-функции создания/позиционирования LiteGraph-нод в `web/ui/module_node_picker_node_factory.js`.
-  - полная композиция picker (`renderPicker`) перенесена из `web/module_node_picker.js` в `web/orchestration/core/module_node_picker_composer.js`; основной entrypoint теперь отвечает только за регистрацию extension/fallback wiring.
+  - полная композиция picker (`renderPicker`) перенесена из `web/module_node_picker.js` в `web/orchestration/core/composition/module_node_picker_composer.js`; основной entrypoint теперь отвечает только за регистрацию extension/fallback wiring.
   - вынесен wiring селекторов/busy/view/status-карточек в `web/orchestration/ui/module_node_picker_ui_controllers.js` для дальнейшего уменьшения плотности композиционного кода.
   - вынесен orchestration-бандл polling/catalog/actions/module-panel в `web/orchestration/module_node_picker_flow_wiring.js` для модульной сборки runtime-пайплайна.
   - вынесен runtime-bootstrap (bind events, восстановление ComfyUI-card, wiring startup coordinator) в `web/orchestration/module_node_picker_runtime_bootstrap.js`.
   - вынесен базовый runtime-setup (runtime context, lifecycle, API client, debug/process controllers) в `web/orchestration/module_node_picker_runtime_setup.js`.
   - вынесена UI-stage сборка в `web/orchestration/ui/module_node_picker_ui_stage.js` (adapter-композиция selector/busy/view/status контроллеров).
   - вынесена flow-stage сборка в `web/orchestration/module_node_picker_flow_stage.js` (adapter-композиция polling/catalog/action/module-panel контроллеров).
-  - крупные dependency-map объекты composer вынесены в `web/orchestration/core/module_node_picker_context_builders.js` (контекст-билдеры для runtime-setup/ui-stage/flow-stage/runtime-bootstrap), что уменьшило размер `module_node_picker_composer.js` без изменения поведения.
+  - крупные dependency-map объекты composer вынесены в `web/orchestration/core/composition/module_node_picker_context_builders.js` (контекст-билдеры для runtime-setup/ui-stage/flow-stage/runtime-bootstrap), что уменьшило размер `module_node_picker_composer.js` без изменения поведения.
   - внутренности pending-resume логики разнесены по отдельным модулям (`module_node_picker_resume_custom_refresh.js`, `module_node_picker_resume_module_update.js`, `module_node_picker_resume_comfy_refresh.js`) при сохранении стабильного фасада экспортов в `module_node_picker_resume_flow.js`.
   - orchestration polling/runtime warmup вынесена в `web/orchestration/module_node_picker_warmup_controller.js`; авто-подхват маркеров после первого открытия сохраняется в фоновом режиме.
   - адаптивный relay tick-loop вынесен в `web/orchestration/module_node_picker_tab_relay_tick.js`; bind/runtime слой релея упрощен без изменения поведения.
   - relay tab-intent/event orchestration вынесена в `web/orchestration/module_node_picker_tab_relay_intent.js`; wiring listeners в `module_node_picker_tab_relay.js` упрощен при сохранении поведения.
   - CSS Module Node Picker вынесен в `web/orchestration/styles/module_node_picker_styles.js` с секциями и подробными комментариями, чтобы отделить правки оформления от orchestration-логики.
   - CSS Module Node Picker перемещен в UI-слой (`web/ui/styles/module_node_picker_styles.js`) для корректного разделения ответственности по директориям.
-  - wiring deferred-stage из composer вынесен в `web/orchestration/core/module_node_picker_stage_bridge.js`, чтобы централизовать handoff flow-stage и adapter callbacks без изменения поведения.
+  - wiring deferred-stage из composer вынесен в `web/orchestration/core/composition/module_node_picker_stage_bridge.js`, чтобы централизовать handoff flow-stage и adapter callbacks без изменения поведения.
   - runtime-bootstrap callback bindings вынесены из composer в `web/orchestration/module_node_picker_runtime_bootstrap_bindings.js`, чтобы снизить плотность inline-callback кода в композиции.
   - проекция/распаковка runtime-setup вынесена в `web/orchestration/module_node_picker_runtime_projection.js`, что уменьшило шум flat-mapping полей в composer.
   - устранено зависание индикатора warmup: warmup-poller привязан к reload каталога, добавлены fail-safe ветки сброса индикатора при исчерпании retry-бюджета и ошибках poll.
@@ -198,6 +198,10 @@
     - `web/orchestration/flow/stage/` для stage-адаптеров (`flow_stage`, `flow_wiring`),
     - `web/orchestration/flow/panel/` для контроллера рендера панели модуля.
   - `module_node_picker_flow_stage.js` + `module_node_picker_flow_wiring.js` перенесены в `flow/stage/`, `module_node_picker_module_panel_controller.js` перенесен в `flow/panel/`, затем обновлены зависимые импорты, шапки `Module:` и пути в baseline frontend-тестах.
+  - core-слой orchestration дополнительно разделен по ответственности:
+    - `web/orchestration/core/composition/` для composition/stage-bridge/context сборки,
+    - `web/orchestration/core/infra/` для инфраструктурных модулей bindings/error/registration.
+  - `module_node_picker_composer.js` + `module_node_picker_context_builders.js` + `module_node_picker_stage_bridge.js` перенесены в `core/composition/`, `module_node_picker_bindings.js` + `module_node_picker_error_utils.js` + `module_node_picker_registration.js` перенесены в `core/infra/`, затем обновлены зависимые импорты, шапки `Module:`, ссылки в плане и пути в baseline frontend-тестах.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

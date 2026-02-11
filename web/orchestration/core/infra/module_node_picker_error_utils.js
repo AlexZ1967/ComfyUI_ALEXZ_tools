@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/core/module_node_picker_error_utils.js
+ * Module: web/orchestration/core/infra/module_node_picker_error_utils.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

@@ -11,7 +11,7 @@
  *   composition code remains focused on wiring stages instead of inline lambdas.
  */
 
-import { runModuleNodePickerStartupLoad } from "../../core/module_node_picker_bindings.js";
+import { runModuleNodePickerStartupLoad } from "../../core/infra/module_node_picker_bindings.js";
 
 /**
  * Build runtime-bootstrap callback adapters from flow/stage dependencies.
