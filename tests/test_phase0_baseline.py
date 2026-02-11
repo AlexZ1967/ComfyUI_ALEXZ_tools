@@ -426,6 +426,40 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("API timeout after", api_text)
         self.assertNotIn("!pickerDisposed && root.isConnected", picker_text)
 
+    def test_frontend_pending_resume_contract_markers_exist(self):
+        """Freeze pending/resume markers for refresh/update lifecycle restoration."""
+        repo_root = Path(__file__).resolve().parents[1]
+        picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
+            encoding="utf-8"
+        )
+        actions_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
+        ).read_text(encoding="utf-8")
+        update_flow_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_update_flow.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("CUSTOM_STATUS_CHECKED_STORAGE_KEY", picker_text)
+        self.assertIn("PENDING_CUSTOM_REFRESH_STORAGE_KEY", picker_text)
+        self.assertIn("PENDING_UPDATE_STORAGE_KEY", picker_text)
+        self.assertIn("loadCustomStatusChecked", picker_text)
+        self.assertIn("saveCustomStatusChecked", picker_text)
+        self.assertIn("setCustomStatusChecked", picker_text)
+        self.assertIn("hasPendingCustomRefresh", picker_text)
+        self.assertIn("setPendingCustomRefresh", picker_text)
+        self.assertIn("clearPendingCustomRefresh", picker_text)
+        self.assertIn("hasPendingUpdate", picker_text)
+        self.assertIn("setPendingUpdate", picker_text)
+        self.assertIn("clearPendingUpdate", picker_text)
+        self.assertIn("resumePendingCustomRefreshFlow", picker_text)
+        self.assertIn("resumePendingModuleUpdateFlow", picker_text)
+        self.assertIn("void resumePendingCustomRefreshFlow()", picker_text)
+        self.assertIn("void resumePendingModuleUpdateFlow()", picker_text)
+        self.assertIn("setCustomStatusChecked?.(true)", actions_text)
+        self.assertIn("setPendingCustomRefresh?.(true)", actions_text)
+        self.assertIn("setPendingUpdate?.(true)", update_flow_text)
+        self.assertIn("clearPendingUpdate?.()", update_flow_text)
+
     def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):
         """Ensure non-forced ComfyUI status request returns cached/unknown data without git calls."""
         orig_run_git = self.api._run_git

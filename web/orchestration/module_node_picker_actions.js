@@ -163,6 +163,8 @@ export async function runRefreshCustomNodesInfoAction(context) {
     if (!shouldContinueContext(context)) {
         return;
     }
+    context?.setCustomStatusChecked?.(true);
+    context?.setPendingCustomRefresh?.(true);
     context?.setActionBusy?.(true);
     context?.setProcessTarget?.("custom");
     context?.setProcessAction?.("", "", null);
@@ -217,5 +219,9 @@ export async function runRefreshCustomNodesInfoAction(context) {
     if (!shouldContinueContext(context)) {
         return;
     }
-    await context?.loadCatalog?.();
+    try {
+        await context?.loadCatalog?.();
+    } finally {
+        context?.clearPendingCustomRefresh?.();
+    }
 }

@@ -232,10 +232,13 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
     const loadCatalog = context?.loadCatalog;
     const loadModuleInfo = context?.loadModuleInfo;
     const syncUpdateAllButton = context?.syncUpdateAllButton;
+    const setPendingUpdate = context?.setPendingUpdate;
+    const clearPendingUpdate = context?.clearPendingUpdate;
 
     if (!shouldContinueContext(context)) {
         return;
     }
+    setPendingUpdate?.(true);
     setActionBusy?.(true);
     try {
         if (!shouldContinueContext(context)) {
@@ -258,6 +261,9 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
         }
         if (!update) {
             return;
+        }
+        if (!Boolean(update?.running) && String(update?.phase || "") !== "starting") {
+            clearPendingUpdate?.();
         }
         const currentGroup = String(getSelectedGroup?.() || "");
         const currentModule = String(getSelectedModule?.() || "").trim();
@@ -298,6 +304,7 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
         if (!shouldContinueContext(context)) {
             return;
         }
+        clearPendingUpdate?.();
         setRefreshLine?.(`Update failed (${String(err)}).`, "warn");
     } finally {
         if (!shouldContinueContext(context)) {

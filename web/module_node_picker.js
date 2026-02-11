@@ -93,6 +93,9 @@ const NODE_PICKER_DEBUG_STORAGE_KEY = "alexz_module_picker_debug";
 const NODE_PICKER_SELECTED_GROUP_STORAGE_KEY = "alexz_module_picker_selected_group";
 const NODE_PICKER_SELECTED_MODULE_STORAGE_KEY = "alexz_module_picker_selected_module";
 const COMFYUI_CHECK_MODE_STORAGE_KEY = "alexz_comfyui_check_mode";
+const CUSTOM_STATUS_CHECKED_STORAGE_KEY = "alexz_module_picker_custom_status_checked";
+const PENDING_CUSTOM_REFRESH_STORAGE_KEY = "alexz_module_picker_pending_custom_refresh";
+const PENDING_UPDATE_STORAGE_KEY = "alexz_module_picker_pending_update";
 const PICKER_CLEANUP_KEY = "__alexz_module_node_picker_cleanup__";
 const GROUP_LABELS = {
     core: "Core_Nodes",
@@ -720,6 +723,64 @@ function renderPicker(container) {
             // Ignore storage failures and keep runtime value only.
         }
     };
+    const loadCustomStatusChecked = () => {
+        try {
+            const raw = window.localStorage?.getItem(CUSTOM_STATUS_CHECKED_STORAGE_KEY);
+            const normalized = String(raw || "").trim().toLowerCase();
+            return normalized === "1" || normalized === "true" || normalized === "yes";
+        } catch (_err) {
+            return false;
+        }
+    };
+    const saveCustomStatusChecked = (checked) => {
+        try {
+            if (checked) {
+                window.localStorage?.setItem(CUSTOM_STATUS_CHECKED_STORAGE_KEY, "1");
+            } else {
+                window.localStorage?.removeItem(CUSTOM_STATUS_CHECKED_STORAGE_KEY);
+            }
+        } catch (_err) {
+            // Ignore storage failures and keep runtime value only.
+        }
+    };
+    const hasPendingCustomRefresh = () => {
+        try {
+            return window.localStorage?.getItem(PENDING_CUSTOM_REFRESH_STORAGE_KEY) === "1";
+        } catch (_err) {
+            return false;
+        }
+    };
+    const setPendingCustomRefresh = (pending) => {
+        try {
+            if (pending) {
+                window.localStorage?.setItem(PENDING_CUSTOM_REFRESH_STORAGE_KEY, "1");
+            } else {
+                window.localStorage?.removeItem(PENDING_CUSTOM_REFRESH_STORAGE_KEY);
+            }
+        } catch (_err) {
+            // Ignore storage failures and keep runtime behavior.
+        }
+    };
+    const clearPendingCustomRefresh = () => setPendingCustomRefresh(false);
+    const hasPendingUpdate = () => {
+        try {
+            return window.localStorage?.getItem(PENDING_UPDATE_STORAGE_KEY) === "1";
+        } catch (_err) {
+            return false;
+        }
+    };
+    const setPendingUpdate = (pending) => {
+        try {
+            if (pending) {
+                window.localStorage?.setItem(PENDING_UPDATE_STORAGE_KEY, "1");
+            } else {
+                window.localStorage?.removeItem(PENDING_UPDATE_STORAGE_KEY);
+            }
+        } catch (_err) {
+            // Ignore storage failures and keep runtime behavior.
+        }
+    };
+    const clearPendingUpdate = () => setPendingUpdate(false);
     comfyModeSelect.value = loadComfyCheckMode();
 
     let debugEnabled = Boolean(pickerStore.get("debugEnabled"));
@@ -775,7 +836,7 @@ function renderPicker(container) {
     let refreshPollToken = 0;
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
-    let customStatusChecked = false;
+    let customStatusChecked = loadCustomStatusChecked();
     let actionBusy = false;
     let expandedModule = "";
     let unbindPickerEvents = () => {};
@@ -1016,6 +1077,32 @@ function renderPicker(container) {
         }
         processUi.setLine(text, tone);
     };
+
+    /**
+     * Mirror refresh-line tone/text into Custom Nodes status card.
+     */
+    const setCustomRefreshCardLine = (text, tone = "neutral") => {
+        if (!isPickerAlive()) {
+            return;
+        }
+        if (!customAlert || !customAlertText) {
+            return;
+        }
+        customAlert.style.display = "block";
+        customAlert.classList.remove(
+            "alexz-mod-picker-status-card--warn",
+            "alexz-mod-picker-status-card--ok",
+            "alexz-mod-picker-status-card--neutral"
+        );
+        if (tone === "warn") {
+            customAlert.classList.add("alexz-mod-picker-status-card--warn");
+        } else if (tone === "ok") {
+            customAlert.classList.add("alexz-mod-picker-status-card--ok");
+        } else {
+            customAlert.classList.add("alexz-mod-picker-status-card--neutral");
+        }
+        customAlertText.textContent = String(text || "");
+    };
     /**
      * Render compact diagnostics block for tab-sync troubleshooting.
      */
@@ -1135,6 +1222,15 @@ function renderPicker(container) {
         renderCustomAlert();
     };
 
+    /**
+     * Set persisted flag that Custom Nodes status was explicitly checked.
+     */
+    const setCustomStatusChecked = (checked) => {
+        customStatusChecked = Boolean(checked);
+        saveCustomStatusChecked(customStatusChecked);
+        renderCustomAlert();
+    };
+
 
     /**
      * Poll update status endpoint until module update job finishes.
@@ -1204,6 +1300,8 @@ function renderPicker(container) {
             loadCatalog,
             loadModuleInfo,
             syncUpdateAllButton,
+            setPendingUpdate,
+            clearPendingUpdate,
         });
     };
 
@@ -1493,7 +1591,184 @@ function renderPicker(container) {
             pollRefreshProgress,
             acknowledgeAllModuleNovelty: acknowledgeAllModuleNoveltyApi,
             loadCatalog,
+            setCustomStatusChecked,
+            setPendingCustomRefresh,
+            clearPendingCustomRefresh,
         });
+    };
+
+    /**
+     * Restore in-flight Custom Nodes refresh after picker re-open/re-render.
+     */
+    const resumePendingCustomRefreshFlow = async () => {
+        if (!hasPendingCustomRefresh()) {
+            return;
+        }
+        if (!isPickerAlive()) {
+            return;
+        }
+        setCustomStatusChecked(true);
+        setActionBusy(true);
+        setProcessTarget("custom");
+        setProcessAction("", "", null);
+        setRefreshLine("Resuming Custom Nodes refresh status...", "neutral");
+        setCustomRefreshCardLine("Resuming Custom Nodes refresh status...", "neutral");
+        try {
+            const payload = await fetchModuleRefreshStatusApi();
+            if (!isPickerAlive()) {
+                return;
+            }
+            const refresh = payload?.refresh || {};
+            const line = formatRefreshLine(refresh);
+            setRefreshLine(line.text, line.tone);
+            setCustomRefreshCardLine(line.text, line.tone);
+            if (Boolean(refresh?.running)) {
+                const ok = await pollRefreshProgress();
+                if (!isPickerAlive()) {
+                    return;
+                }
+                if (!ok) {
+                    setRefreshLine("Custom Nodes refresh finished with errors.", "warn");
+                    setCustomRefreshCardLine("Custom Nodes refresh finished with errors.", "warn");
+                } else {
+                    try {
+                        await acknowledgeAllModuleNoveltyApi();
+                    } catch (err) {
+                        if (isPickerAlive()) {
+                            const message = `Refresh completed, but novelty reset failed: ${String(err)}`;
+                            setRefreshLine(message, "warn");
+                            setCustomRefreshCardLine(message, "warn");
+                        }
+                    }
+                }
+                if (!isPickerAlive()) {
+                    return;
+                }
+                await loadCatalog();
+                if (!isPickerAlive()) {
+                    return;
+                }
+                clearPendingCustomRefresh();
+                return;
+            }
+            if (String(refresh?.phase || "") === "done") {
+                try {
+                    await acknowledgeAllModuleNoveltyApi();
+                } catch (err) {
+                    if (isPickerAlive()) {
+                        const message = `Refresh completed, but novelty reset failed: ${String(err)}`;
+                        setRefreshLine(message, "warn");
+                        setCustomRefreshCardLine(message, "warn");
+                    }
+                }
+            }
+            if (String(refresh?.phase || "") === "done" || String(refresh?.phase || "") === "error") {
+                await loadCatalog();
+            }
+            clearPendingCustomRefresh();
+        } catch (err) {
+            if (!isPickerAlive()) {
+                return;
+            }
+            const message = String(err || "");
+            if (message.includes("canceled")) {
+                return;
+            }
+            const line = `Failed to restore refresh status: ${message}`;
+            setRefreshLine(line, "warn");
+            setCustomRefreshCardLine(line, "warn");
+        } finally {
+            if (!isPickerAlive()) {
+                return;
+            }
+            setActionBusy(false);
+        }
+    };
+
+    /**
+     * Restore in-flight module-update job after picker re-open/re-render.
+     */
+    const resumePendingModuleUpdateFlow = async () => {
+        if (!hasPendingUpdate()) {
+            return;
+        }
+        if (!isPickerAlive()) {
+            return;
+        }
+        setActionBusy(true);
+        setProcessAction("", "", null);
+        setRefreshLine("Resuming module update status...", "neutral");
+        try {
+            const payload = await fetchModuleUpdateStatusApi();
+            if (!isPickerAlive()) {
+                return;
+            }
+            const update = payload?.update || {};
+            const scope = String(update?.scope || "").trim().toLowerCase();
+            setProcessTarget(scope === "comfyui" ? "comfy" : "custom");
+            const line = formatUpdateLine(update);
+            setRefreshLine(line.text, line.tone);
+
+            if (Boolean(update?.running)) {
+                const done = await pollUpdateProgress();
+                if (!isPickerAlive()) {
+                    return;
+                }
+                if (!done) {
+                    return;
+                }
+                if (!Boolean(done?.running) && String(done?.phase || "") !== "starting") {
+                    clearPendingUpdate();
+                }
+                if (String(done?.phase || "") === "done") {
+                    await maybeInstallChangedRequirements(done);
+                }
+                if (!isPickerAlive()) {
+                    return;
+                }
+                await loadCatalog();
+                if (!isPickerAlive()) {
+                    return;
+                }
+                await loadModuleInfo();
+                return;
+            }
+
+            const phase = String(update?.phase || "").trim().toLowerCase();
+            if (phase === "done" || phase === "error") {
+                if (phase === "done") {
+                    await maybeInstallChangedRequirements(update);
+                }
+                if (!isPickerAlive()) {
+                    return;
+                }
+                await loadCatalog();
+                if (!isPickerAlive()) {
+                    return;
+                }
+                await loadModuleInfo();
+                clearPendingUpdate();
+                return;
+            }
+
+            // Stale marker: no active/terminal update job available.
+            clearPendingUpdate();
+            setRefreshLine("No pending module update job found.", "neutral");
+        } catch (err) {
+            if (!isPickerAlive()) {
+                return;
+            }
+            const message = String(err || "");
+            if (message.includes("canceled")) {
+                return;
+            }
+            setRefreshLine(`Failed to restore update status: ${message}`, "warn");
+        } finally {
+            if (!isPickerAlive()) {
+                return;
+            }
+            setActionBusy(false);
+        }
     };
 
     unbindPickerEvents = bindModuleNodePickerEvents({
@@ -1516,9 +1791,7 @@ function renderPicker(container) {
         syncPickerSelectionState,
         loadModuleInfo,
         isActionBusy: () => actionBusy,
-        setCustomStatusChecked: (value) => {
-            customStatusChecked = Boolean(value);
-        },
+        setCustomStatusChecked,
         setProcessTarget,
         runModuleUpdate,
         installComfyUIRequirementsFlow,
@@ -1539,6 +1812,8 @@ function renderPicker(container) {
         startupRetries: 2,
         startupRetryDelayMs: 250,
     }) || (() => {});
+    void resumePendingCustomRefreshFlow();
+    void resumePendingModuleUpdateFlow();
 }
 
 /**
