@@ -124,7 +124,8 @@
   - уменьшен шум событий relay (единый pointer/mouse путь, без per-button listeners),
   - добавлены debounce синхронизации и явный dispose cleanup при unbind,
   - снижено давление пассивного `relay_tick`, когда вкладка picker не активна,
-  - распознавание tab-click в relay ограничено только sidebar-контекстом и tab-controls (меньше ложных срабатываний от кликов по контенту).
+  - распознавание tab-click в relay ограничено только sidebar-контекстом и tab-controls (меньше ложных срабатываний от кликов по контенту),
+  - `relay_keyup` ограничен навигационными/tab-клавишами и исключает target'ы ввода текста.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

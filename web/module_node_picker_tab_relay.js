@@ -142,7 +142,34 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     const supportsPointer = typeof window !== "undefined" && "PointerEvent" in window;
     const onPointerDown = supportsPointer ? ((event) => handleEvent(event)) : null;
     const onMouseDown = supportsPointer ? null : ((event) => handleEvent(event));
-    const onKeyUp = () => relayRuntime.syncVisibility("relay_keyup");
+    const onKeyUp = (event) => {
+        const key = String(event?.key || "");
+        const relevantKeys = [
+            "Enter",
+            " ",
+            "Spacebar",
+            "ArrowLeft",
+            "ArrowRight",
+            "ArrowUp",
+            "ArrowDown",
+            "Home",
+            "End",
+            "Tab",
+        ];
+        if (key && !relevantKeys.includes(key)) {
+            return;
+        }
+        const target = event?.target;
+        if (target instanceof Node && root.contains(target)) {
+            return;
+        }
+        if (target instanceof Element) {
+            if (target.closest("input, textarea, [contenteditable='true']")) {
+                return;
+            }
+        }
+        relayRuntime.syncVisibility("relay_keyup");
+    };
     const onVisibilityChange = () => relayRuntime.syncVisibility("relay_visibility");
     const onPageShow = () => relayRuntime.syncVisibility("relay_pageshow");
 

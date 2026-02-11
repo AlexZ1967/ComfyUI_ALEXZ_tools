@@ -125,6 +125,7 @@ Deliverables:
   - added relay runtime debounce and explicit dispose cleanup on unbind,
   - reduced passive tick pressure when picker tab is inactive.
   - constrained relay click detection to sidebar-context tab controls only (fewer false positives from content area clicks).
+  - constrained keyup-driven relay sync to tab/navigation keys and non-input targets.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
