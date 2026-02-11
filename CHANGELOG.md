@@ -53,6 +53,9 @@
 - Startup catalog resilience:
   - added bounded startup retry loop for initial catalog load when backend returns temporary empty state,
   - startup retry timer is now explicitly canceled on picker dispose to prevent stale late reloads.
+- Selector loading-state UX:
+  - added explicit loading placeholders/disable-state for group/module selectors during catalog load,
+  - prevents empty-looking dropdowns during startup/retry windows and re-enables controls after load completion.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

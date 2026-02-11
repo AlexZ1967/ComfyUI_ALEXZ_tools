@@ -140,6 +140,7 @@
   - устранено дублирование lifecycle-guard логики: общий helper вынесен в отдельный orchestration-модуль.
   - исправлена семантика startup-liveness (жизненный цикл вместо `root.isConnected`), устранен баг пустых селектов при первом открытии.
   - добавлен bounded startup-retry загрузки каталога с явной отменой таймера при dispose (для transient пустого backend-состояния при старте).
+  - добавлены loading placeholders + disable/enable lifecycle для селектов во время загрузки каталога (без визуально пустых dropdown на старте).
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

@@ -770,6 +770,7 @@ function renderPicker(container) {
     const moduleInlineStatus = new Map();
     const updatedModulesSession = new Set();
     let catalogLoadToken = 0;
+    let catalogLoadBusyCount = 0;
     let moduleInfoLoadToken = 0;
     let refreshPollToken = 0;
     let updatePollToken = 0;
@@ -890,6 +891,37 @@ function renderPicker(container) {
             partial.selectedModule = selectedModule;
         }
         pickerStore.set(partial);
+    };
+
+    /**
+     * Toggle selector controls into loading/ready state with safe placeholders.
+     */
+    const setCatalogControlsLoading = (loading) => {
+        if (!isPickerAlive()) {
+            return;
+        }
+        const busy = Boolean(loading);
+        if (groupSelect) {
+            groupSelect.disabled = busy;
+            if (busy && groupSelect.options.length === 0) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "Loading groups...";
+                groupSelect.appendChild(opt);
+            }
+        }
+        if (nodeSelect) {
+            nodeSelect.disabled = busy;
+            if (busy && nodeSelect.options.length === 0) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "Loading modules...";
+                nodeSelect.appendChild(opt);
+            }
+        }
+        if (moduleFilter) {
+            moduleFilter.disabled = busy;
+        }
     };
 
     /**
@@ -1211,30 +1243,41 @@ function renderPicker(container) {
             return;
         }
         const token = ++catalogLoadToken;
-        return loadCatalogFlow(options, {
-            isRequestActive: () => token === catalogLoadToken && isPickerAlive(),
-            fetchNodeCatalog,
-            getComfyMode: () => comfyModeSelect.value,
-            catalogByGroup,
-            setCustomModulesNeedUpdate: (value) => {
-                customModulesNeedUpdate = Number(value || 0);
-            },
-            renderComfyAlert,
-            fillGroupSelect,
-            groupLabels: GROUP_LABELS,
-            setHelpText,
-            syncUpdateAllButton,
-            comfyAlert,
-            comfyAlertText,
-            comfyUpdateBtn,
-            comfyInstallReqBtn,
-            groupSelect,
-            nodeSelect,
-            clearModuleInfo: () => {
-                moduleInfo.innerHTML = "";
-            },
-            nodeList,
-        });
+        catalogLoadBusyCount += 1;
+        if (catalogLoadBusyCount === 1) {
+            setCatalogControlsLoading(true);
+        }
+        try {
+            return await loadCatalogFlow(options, {
+                isRequestActive: () => token === catalogLoadToken && isPickerAlive(),
+                fetchNodeCatalog,
+                getComfyMode: () => comfyModeSelect.value,
+                catalogByGroup,
+                setCustomModulesNeedUpdate: (value) => {
+                    customModulesNeedUpdate = Number(value || 0);
+                },
+                renderComfyAlert,
+                fillGroupSelect,
+                groupLabels: GROUP_LABELS,
+                setHelpText,
+                syncUpdateAllButton,
+                comfyAlert,
+                comfyAlertText,
+                comfyUpdateBtn,
+                comfyInstallReqBtn,
+                groupSelect,
+                nodeSelect,
+                clearModuleInfo: () => {
+                    moduleInfo.innerHTML = "";
+                },
+                nodeList,
+            });
+        } finally {
+            catalogLoadBusyCount = Math.max(0, catalogLoadBusyCount - 1);
+            if (catalogLoadBusyCount === 0) {
+                setCatalogControlsLoading(false);
+            }
+        }
     };
 
     /**

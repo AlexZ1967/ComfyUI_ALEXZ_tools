@@ -140,6 +140,7 @@ Deliverables:
   - deduplicated lifecycle guard logic into a shared orchestration helper module.
   - corrected startup liveness semantics to lifecycle-based checks, preventing first-open catalog skip/empty-select regression.
   - added bounded startup catalog retry with explicit dispose cancellation to handle transient initial empty backend state.
+  - added selector loading-state placeholders with disable/enable lifecycle during catalog load to avoid transient empty dropdown UX.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
