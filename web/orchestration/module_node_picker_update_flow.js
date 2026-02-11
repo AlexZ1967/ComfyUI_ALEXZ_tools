@@ -11,6 +11,7 @@
  */
 
 import { shouldContinueContext } from "./module_node_picker_lifecycle_guard.js";
+import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
 
 /**
  * Poll custom-module refresh status until completion or failure.
@@ -34,6 +35,9 @@ export async function pollRefreshProgressLoop(context) {
             payload = await fetchModuleRefreshStatus();
         } catch (err) {
             if (!shouldContinueContext(context)) {
+                return false;
+            }
+            if (isCanceledRequestError(err)) {
                 return false;
             }
             setRefreshLine?.(`Custom Nodes refresh status failed (${String(err)}).`, "warn");
@@ -90,6 +94,9 @@ export async function pollUpdateProgressLoop(context) {
             payload = await fetchModuleUpdateStatus();
         } catch (err) {
             if (!shouldContinueContext(context)) {
+                return null;
+            }
+            if (isCanceledRequestError(err)) {
                 return null;
             }
             setRefreshLine?.(`Update status failed (${String(err)}).`, "warn");

@@ -82,6 +82,9 @@
   - avoids cross-flow UI races on `actionBusy`/process target and reduces startup flicker,
   - startup now uses a single coordinator: pending resumes first (if any), then catalog startup load, preventing parallel startup race between restore and catalog bootstrap.
   - added startup-settled callback contract in startup loader and unified `startupBusy` lock in UI controls, so action buttons stay disabled until startup bootstrap truly completes.
+- Canceled-request handling hardening:
+  - added shared error-classifier `web/orchestration/module_node_picker_error_utils.js`,
+  - resume/action/poll flows now suppress non-actionable warnings for intentionally canceled/aborted requests.
 - Regression guardrails:
   - added frontend contract checks for pending/resume markers and session-runtime status in `tests/test_phase0_baseline.py`.
 - ComfyUI mode-switch UX fix:

@@ -80,6 +80,7 @@ import {
     bindModuleNodePickerEvents,
     runModuleNodePickerStartupLoad,
 } from "./orchestration/module_node_picker_bindings.js";
+import { isCanceledRequestError } from "./orchestration/module_node_picker_error_utils.js";
 import { createModuleNodePickerStore } from "./state/store.js";
 import { createModuleDiagnosticsLogger } from "./diagnostics/logger.js";
 
@@ -1733,7 +1734,7 @@ function renderPicker(container) {
                 return;
             }
             const message = String(err || "");
-            if (message.includes("canceled")) {
+            if (isCanceledRequestError(err)) {
                 return;
             }
             const line = `Failed to restore refresh status: ${message}`;
@@ -1821,7 +1822,7 @@ function renderPicker(container) {
                 return;
             }
             const message = String(err || "");
-            if (message.includes("canceled")) {
+            if (isCanceledRequestError(err)) {
                 return;
             }
             setRefreshLine(`Failed to restore update status: ${message}`, "warn");
@@ -1869,7 +1870,7 @@ function renderPicker(container) {
                 return;
             }
             const message = String(err || "");
-            if (message.includes("canceled")) {
+            if (isCanceledRequestError(err)) {
                 return;
             }
             if (comfyAlert && comfyAlertText) {

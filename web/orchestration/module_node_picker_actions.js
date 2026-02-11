@@ -11,6 +11,7 @@
  */
 
 import { shouldContinueContext } from "./module_node_picker_lifecycle_guard.js";
+import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
 
 /**
  * Refresh selected module info and keep result inline in module card.
@@ -132,6 +133,9 @@ export async function runRefreshComfyUIInfoAction(context) {
         context?.clearPendingComfyInfoRefresh?.();
     } catch (err) {
         if (!shouldContinueContext(context)) {
+            return;
+        }
+        if (isCanceledRequestError(err)) {
             return;
         }
         if (comfyAlert && comfyAlertText) {

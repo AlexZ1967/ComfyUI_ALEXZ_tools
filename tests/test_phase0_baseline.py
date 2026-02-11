@@ -441,6 +441,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         bindings_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_bindings.js"
         ).read_text(encoding="utf-8")
+        error_utils_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_error_utils.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_text)
         self.assertIn("getRuntimePickerState", picker_text)
@@ -479,6 +482,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("cancelStartupLoad = runStartupSequence()", picker_text)
         self.assertIn("onSettled", bindings_text)
         self.assertIn("settle()", bindings_text)
+        self.assertIn("import { isCanceledRequestError }", picker_text)
+        self.assertIn("import { isCanceledRequestError }", actions_text)
+        self.assertIn("import { isCanceledRequestError }", update_flow_text)
+        self.assertIn("export function isCanceledRequestError", error_utils_text)
         self.assertIn("setPendingComfyInfoRefresh?.(true)", actions_text)
         self.assertIn("setComfyStatusChecked?.(true)", actions_text)
         self.assertIn("clearPendingComfyInfoRefresh?.()", actions_text)
