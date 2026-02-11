@@ -132,6 +132,7 @@ Deliverables:
   - narrowed relay tab-candidate matching to explicit tab-like sidebar controls (fewer false-positive sidebar button captures).
   - added catalog-load request token guard to prevent stale async catalog responses from overwriting active UI state.
   - added picker render-lifecycle cleanup hook and module-info request token guard to prevent stale async UI writes between re-renders.
+  - cleaned relay helpers by removing unused API and centralizing tab/sidebar selector constants.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

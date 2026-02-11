@@ -11,6 +11,11 @@
  *   helpers separated from the relay state machine.
  */
 
+const SIDEBAR_CONTEXT_SELECTOR =
+    ".side-bar, .sidebar, .comfy-sidebar, [class*='sidebar'], [class*='side-bar']";
+const TAB_CANDIDATE_SELECTOR =
+    ".side-bar-button, [class*='-tab-button'], [role='tab'], [aria-selected], [aria-controls*='tab']";
+
 /**
  * Return Sidebar API object for current ComfyUI build shape.
  */
@@ -95,17 +100,11 @@ export function resolveSidebarButtonFromEvent(event) {
         if (!(el instanceof Element)) {
             return false;
         }
-        return Boolean(
-            el.closest(
-                ".side-bar, .sidebar, .comfy-sidebar, [class*='sidebar'], [class*='side-bar']"
-            )
-        );
+        return Boolean(el.closest(SIDEBAR_CONTEXT_SELECTOR));
     };
     const direct = event?.target;
     if (direct instanceof Element) {
-        const closest = direct.closest(
-            ".side-bar-button, [class*='-tab-button'], [role='tab'], [aria-selected], [aria-controls*='tab']"
-        );
+        const closest = direct.closest(TAB_CANDIDATE_SELECTOR);
         if (closest && isTabButtonCandidate(closest) && isSidebarContextElement(closest)) {
             return closest;
         }
@@ -166,17 +165,6 @@ export function collectSidebarTabDescriptors(app) {
         }
     }
     return out;
-}
-
-/**
- * Check whether sidebar exposes tab with the requested id.
- */
-export function hasSidebarTabId(app, tabId) {
-    if (!tabId) {
-        return false;
-    }
-    const descriptors = collectSidebarTabDescriptors(app);
-    return descriptors.some((x) => String(x.id || "") === String(tabId));
 }
 
 /**

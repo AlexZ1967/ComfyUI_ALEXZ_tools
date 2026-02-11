@@ -27,6 +27,9 @@
 - Picker lifecycle and module-info race protection:
   - added per-render picker cleanup hook to invalidate stale async work and unbind relay before next render,
   - added request token guard for `loadModuleInfo` so stale module-info responses cannot overwrite current module card.
+- Relay helper cleanup:
+  - removed unused `hasSidebarTabId` helper,
+  - centralized sidebar/tab candidate selectors as module constants for cleaner and safer maintenance.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,
