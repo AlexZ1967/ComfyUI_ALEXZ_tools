@@ -56,26 +56,17 @@ import {
     formatRefreshLine,
     formatUpdateLine,
 } from "../ui/module_node_picker_status.js";
-import {
-    createProcessUiController,
-} from "../ui/module_node_picker_process.js";
 import { createModuleNodePickerLayout } from "../ui/module_node_picker_layout.js";
 import {
     centerNodeInCanvas,
     createNodeFromCatalogInfo,
 } from "../ui/module_node_picker_node_factory.js";
-import {
-    bindModuleNodePickerEvents,
-    runModuleNodePickerStartupLoad,
-} from "./module_node_picker_bindings.js";
-import { createModuleNodePickerApiClient } from "./module_node_picker_api_client.js";
+import { runModuleNodePickerStartupLoad } from "./module_node_picker_bindings.js";
 import { createModuleNodePickerFlowWiring } from "./module_node_picker_flow_wiring.js";
 import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
-import { createModuleNodePickerDebugUi } from "./module_node_picker_debug_ui.js";
 import { createModuleNodePickerUiControllers } from "./module_node_picker_ui_controllers.js";
-import { runStartupCoordinator } from "./module_node_picker_startup_flow.js";
-import { createModuleNodePickerLifecycle } from "./module_node_picker_lifecycle.js";
-import { createModuleNodePickerRuntimeContext } from "../state/module_node_picker_runtime_context.js";
+import { initializeModuleNodePickerRuntime } from "./module_node_picker_runtime_bootstrap.js";
+import { createModuleNodePickerRuntimeSetup } from "./module_node_picker_runtime_setup.js";
 
 /**
  * Render Module Node Picker UI and bind all panel event handlers.
@@ -119,10 +110,20 @@ export function renderModuleNodePicker(container) {
         nodeList,
     } = createModuleNodePickerLayout(container);
 
-    const runtimeContext = createModuleNodePickerRuntimeContext({
+    let showHelpStatus = () => {};
+    let pollingController = null;
+    let customModulesNeedUpdate = 0;
+    let modulePanelController = null;
+    let catalogController = null;
+    let selectionController = null;
+    let statusCards = null;
+    let unbindPickerEvents = () => {};
+    let cancelStartupLoad = () => {};
+    let apiClientRef = null;
+    const runtimeSetup = createModuleNodePickerRuntimeSetup({
         windowObj: window,
         defaultModule: DEFAULT_MODULE,
-        keys: {
+        runtimeKeys: {
             debugRuntimeKey: NODE_PICKER_DEBUG_KEY,
             selectedGroupStorageKey: NODE_PICKER_SELECTED_GROUP_STORAGE_KEY,
             selectedModuleStorageKey: NODE_PICKER_SELECTED_MODULE_STORAGE_KEY,
@@ -133,9 +134,40 @@ export function renderModuleNodePicker(container) {
             legacyPendingUpdateKey: LEGACY_PENDING_UPDATE_STORAGE_KEY,
             comfyCheckModeStorageKey: COMFYUI_CHECK_MODE_STORAGE_KEY,
         },
+        comfyModeSelect,
+        processHost,
+        refreshLine,
+        processActions,
+        comfyAlert,
+        customAlert,
+        debugToggle,
+        debugCard,
+        debugCopyBtn,
+        diagnostics,
+        debugStateKey: NODE_PICKER_DEBUG_KEY,
+        getShowHelpStatus: () => showHelpStatus,
+        getCatalogController: () => catalogController,
+        getPollingController: () => pollingController,
+        getUnbindPickerEvents: () => unbindPickerEvents,
+        getCancelStartupLoad: () => cancelStartupLoad,
+        getApiClient: () => apiClientRef,
+        unbindTabRelay: () => unbindModuleNodesTabRelay(),
+        container,
+        cleanupKey: PICKER_CLEANUP_KEY,
+        fetchNodeCatalog,
+        fetchModuleInfo,
+        fetchComfyUIInfo,
+        refreshModuleRuntimeState,
+        fetchModuleRefreshStatus,
+        acknowledgeAllModuleNovelty,
+        startModuleUpdate,
+        fetchModuleUpdateStatus,
+        installModuleRequirements,
+        installComfyUIRequirements,
     });
-    const pickerStore = runtimeContext.pickerStore;
-    const diagnosticsLogger = runtimeContext.diagnosticsLogger;
+    apiClientRef = runtimeSetup.apiClient;
+    const pickerStore = runtimeSetup.pickerStore;
+    const diagnosticsLogger = runtimeSetup.diagnosticsLogger;
     const {
         loadCustomStatusChecked,
         saveCustomStatusChecked,
@@ -152,124 +184,32 @@ export function renderModuleNodePicker(container) {
         hasPendingComfyInfoRefresh,
         setPendingComfyInfoRefresh,
         clearPendingComfyInfoRefresh,
-    } = runtimeContext.runtimeStatus;
-
-    comfyModeSelect.value = runtimeContext.comfyCheckMode;
-    const saveComfyCheckMode = (mode) => runtimeContext.saveComfyCheckMode(mode);
-
-    let showHelpStatus = () => {};
-    let debugUi = null;
-
-    const catalogByGroup = new Map();
-    const moduleCatalogByGroup = new Map();
-    const moduleCounts = new Map();
-    const moduleOptions = new Map();
-    const moduleBadges = new Map();
-    const moduleNodeDiffs = new Map();
-    const moduleInlineStatus = new Map();
-    const updatedModulesSession = new Set();
-    let pollingController = null;
-    let customModulesNeedUpdate = 0;
-    let modulePanelController = null;
-    let catalogController = null;
-    let selectionController = null;
-    let statusCards = null;
-    let unbindPickerEvents = () => {};
-    let processUi = null;
-    let cancelStartupLoad = () => {};
-    let apiClient = null;
-    const lifecycle = createModuleNodePickerLifecycle({
-        getCatalogController: () => catalogController,
-        getPollingController: () => pollingController,
-        getUnbindPickerEvents: () => unbindPickerEvents,
-        getCancelStartupLoad: () => cancelStartupLoad,
-        getDebugUi: () => debugUi,
-        getProcessUi: () => processUi,
-        getApiClient: () => apiClient,
-        unbindTabRelay: () => unbindModuleNodesTabRelay(),
-        container,
-        cleanupKey: PICKER_CLEANUP_KEY,
-    });
-    // Keep async/UI flows active for this picker instance even if the root is
-    // temporarily detached during sidebar transitions; lifecycle is governed by
-    // explicit dispose, not transient DOM attachment state.
-    const isPickerAlive = () => lifecycle.isPickerAlive();
-    apiClient = createModuleNodePickerApiClient({
-        fetchNodeCatalog,
-        fetchModuleInfo,
-        fetchComfyUIInfo,
-        refreshModuleRuntimeState,
-        fetchModuleRefreshStatus,
-        acknowledgeAllModuleNovelty,
-        startModuleUpdate,
-        fetchModuleUpdateStatus,
-        installModuleRequirements,
-        installComfyUIRequirements,
-    });
-    const fetchNodeCatalogApi = apiClient.fetchNodeCatalogApi;
-    const fetchModuleInfoApi = apiClient.fetchModuleInfoApi;
-    const fetchComfyUIInfoApi = apiClient.fetchComfyUIInfoApi;
-    const refreshModuleRuntimeStateApi = apiClient.refreshModuleRuntimeStateApi;
-    const fetchModuleRefreshStatusApi = apiClient.fetchModuleRefreshStatusApi;
-    const acknowledgeAllModuleNoveltyApi = apiClient.acknowledgeAllModuleNoveltyApi;
-    const startModuleUpdateApi = apiClient.startModuleUpdateApi;
-    const fetchModuleUpdateStatusApi = apiClient.fetchModuleUpdateStatusApi;
-    const installModuleRequirementsApi = apiClient.installModuleRequirementsApi;
-    const installComfyUIRequirementsApi = apiClient.installComfyUIRequirementsApi;
-    debugUi = createModuleNodePickerDebugUi({
-        shouldContinue: isPickerAlive,
-        windowObj: window,
-        debugStateKey: NODE_PICKER_DEBUG_KEY,
-        pickerStore,
-        diagnosticsLogger,
-        debugToggle,
-        debugCard,
-        debugCopyBtn,
-        diagnostics,
-        onCopyStatus: (message) => showHelpStatus(message),
-    });
-    const disposePickerInstance = () => lifecycle.dispose();
-
-    /**
-     * Store one-line module action result shown inside module card.
-     */
-    const setModuleInlineStatus = (moduleName, text, tone = "neutral") => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        const key = String(moduleName || "").trim();
-        if (!key) {
-            return;
-        }
-        if (!text) {
-            moduleInlineStatus.delete(key);
-            return;
-        }
-        moduleInlineStatus.set(key, {
-            text: String(text),
-            tone: String(tone || "neutral"),
-        });
-    };
-
-    processUi = createProcessUiController({
-        processHost,
-        refreshLine,
-        processActions,
-        comfyAlert,
-        customAlert,
-        diagnosticsLogger,
-        defaultTarget: () => "custom",
-    });
-
-    /**
-     * Mount progress inline block into the selected top status card.
-     */
-    const setProcessTarget = (target) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        processUi.setTarget(target);
-    };
+    } = runtimeSetup.runtimeStatus;
+    const saveComfyCheckMode = runtimeSetup.saveComfyCheckMode;
+    const catalogByGroup = runtimeSetup.catalogByGroup;
+    const moduleCatalogByGroup = runtimeSetup.moduleCatalogByGroup;
+    const moduleCounts = runtimeSetup.moduleCounts;
+    const moduleOptions = runtimeSetup.moduleOptions;
+    const moduleBadges = runtimeSetup.moduleBadges;
+    const moduleNodeDiffs = runtimeSetup.moduleNodeDiffs;
+    const moduleInlineStatus = runtimeSetup.moduleInlineStatus;
+    const updatedModulesSession = runtimeSetup.updatedModulesSession;
+    const isPickerAlive = runtimeSetup.isPickerAlive;
+    const fetchNodeCatalogApi = runtimeSetup.fetchNodeCatalogApi;
+    const fetchModuleInfoApi = runtimeSetup.fetchModuleInfoApi;
+    const fetchComfyUIInfoApi = runtimeSetup.fetchComfyUIInfoApi;
+    const refreshModuleRuntimeStateApi = runtimeSetup.refreshModuleRuntimeStateApi;
+    const fetchModuleRefreshStatusApi = runtimeSetup.fetchModuleRefreshStatusApi;
+    const acknowledgeAllModuleNoveltyApi = runtimeSetup.acknowledgeAllModuleNoveltyApi;
+    const startModuleUpdateApi = runtimeSetup.startModuleUpdateApi;
+    const fetchModuleUpdateStatusApi = runtimeSetup.fetchModuleUpdateStatusApi;
+    const installModuleRequirementsApi = runtimeSetup.installModuleRequirementsApi;
+    const installComfyUIRequirementsApi = runtimeSetup.installComfyUIRequirementsApi;
+    const debugUi = runtimeSetup.debugUi;
+    const processUi = runtimeSetup.processUi;
+    const setProcessTarget = runtimeSetup.setProcessTarget;
+    const setModuleInlineStatus = runtimeSetup.setModuleInlineStatus;
+    const disposePickerInstance = runtimeSetup.disposePickerInstance;
 
     let loadModuleInfo = async () => {};
     let renderNodeList = () => {};
@@ -485,7 +425,7 @@ export function renderModuleNodePicker(container) {
     resumePendingModuleUpdateFlow = (...args) => flowWiring.actionFlows.resumePendingModuleUpdateFlow(...args);
     resumePendingComfyInfoRefreshFlow = (...args) => flowWiring.actionFlows.resumePendingComfyInfoRefreshFlow(...args);
 
-    unbindPickerEvents = bindModuleNodePickerEvents({
+    const runtimeBootstrap = initializeModuleNodePickerRuntime({
         groupSelect,
         categorySelect,
         moduleFilter,
@@ -514,17 +454,10 @@ export function renderModuleNodePicker(container) {
         loadCatalog,
         refreshCustomNodesInfoFlow,
         setExpandedModule: (value) => setExpandedModule(value),
-    }) || (() => {});
-
-    // Restore last ComfyUI status card across widget switches in current session.
-    if (statusCards?.getComfyStatusChecked?.() && !hasPendingComfyInfoRefresh()) {
-        const lastComfyInfo = loadComfyInfoSnapshot();
-        if (lastComfyInfo) {
-            renderComfyAlert(lastComfyInfo);
-        }
-    }
-
-    cancelStartupLoad = runStartupCoordinator({
+        statusCards,
+        hasPendingComfyInfoRefresh,
+        loadComfyInfoSnapshot,
+        renderComfyAlert,
         shouldContinue: isPickerAlive,
         setStartupBusy,
         startCatalogStartupLoad: (options = {}) => runModuleNodePickerStartupLoad({
@@ -538,9 +471,10 @@ export function renderModuleNodePicker(container) {
         }),
         hasPendingCustomRefresh,
         hasPendingUpdate,
-        hasPendingComfyInfoRefresh,
         resumePendingCustomRefreshFlow,
         resumePendingModuleUpdateFlow,
         resumePendingComfyInfoRefreshFlow,
     });
+    unbindPickerEvents = runtimeBootstrap.unbindPickerEvents;
+    cancelStartupLoad = runtimeBootstrap.cancelStartupLoad;
 }

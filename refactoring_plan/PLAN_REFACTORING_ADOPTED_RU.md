@@ -156,6 +156,8 @@
   - полная композиция picker (`renderPicker`) перенесена из `web/module_node_picker.js` в `web/orchestration/module_node_picker_composer.js`; основной entrypoint теперь отвечает только за регистрацию extension/fallback wiring.
   - вынесен wiring селекторов/busy/view/status-карточек в `web/orchestration/module_node_picker_ui_controllers.js` для дальнейшего уменьшения плотности композиционного кода.
   - вынесен orchestration-бандл polling/catalog/actions/module-panel в `web/orchestration/module_node_picker_flow_wiring.js` для модульной сборки runtime-пайплайна.
+  - вынесен runtime-bootstrap (bind events, восстановление ComfyUI-card, wiring startup coordinator) в `web/orchestration/module_node_picker_runtime_bootstrap.js`.
+  - вынесен базовый runtime-setup (runtime context, lifecycle, API client, debug/process controllers) в `web/orchestration/module_node_picker_runtime_setup.js`.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

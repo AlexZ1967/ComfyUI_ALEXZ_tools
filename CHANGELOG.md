@@ -18,6 +18,8 @@
   - reduced `web/module_node_picker.js` to entrypoint-only registration and fallback wiring.
   - extracted selector/busy/view/status-card wiring into `web/orchestration/module_node_picker_ui_controllers.js`, reducing composition density in `module_node_picker_composer.js`.
   - extracted polling/catalog/update/module-panel orchestration bundle into `web/orchestration/module_node_picker_flow_wiring.js`; composer now wires this bundle via one runtime adapter.
+  - extracted runtime bootstrap (event binding + ComfyUI card restore + startup coordinator wiring) into `web/orchestration/module_node_picker_runtime_bootstrap.js`.
+  - extracted runtime setup (runtime context + lifecycle + API client + debug/process controllers) into `web/orchestration/module_node_picker_runtime_setup.js`.
 - Startup regression safety:
   - kept deferred `loadModuleInfo`/`renderNodeList` binding so catalog controller and selection controller can initialize without TDZ/empty-dropdown regressions.
 - Regression tests:

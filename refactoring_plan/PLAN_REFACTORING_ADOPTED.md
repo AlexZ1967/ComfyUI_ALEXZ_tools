@@ -156,6 +156,8 @@ Deliverables:
   - moved full picker composition from `web/module_node_picker.js` to `web/orchestration/module_node_picker_composer.js`; main entry file now only handles extension registration/fallback wiring.
   - extracted selector/busy/view/status-card wiring into `web/orchestration/module_node_picker_ui_controllers.js` to further thin composition code.
   - extracted polling/catalog/actions/module-panel composition into `web/orchestration/module_node_picker_flow_wiring.js` to keep runtime orchestration modular.
+  - extracted runtime bootstrap (event binding, ComfyUI-card restore, startup coordinator wiring) into `web/orchestration/module_node_picker_runtime_bootstrap.js`.
+  - extracted base runtime setup (runtime context, lifecycle, API client, debug/process controllers) into `web/orchestration/module_node_picker_runtime_setup.js`.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

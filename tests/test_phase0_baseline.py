@@ -470,6 +470,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         lifecycle_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_lifecycle.js"
         ).read_text(encoding="utf-8")
+        runtime_bootstrap_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap.js"
+        ).read_text(encoding="utf-8")
         api_text = (
             repo_root / "web" / "api" / "module_node_picker_api.js"
         ).read_text(encoding="utf-8")
@@ -533,6 +536,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         ui_controllers_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_ui_controllers.js"
         ).read_text(encoding="utf-8")
+        runtime_bootstrap_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap.js"
+        ).read_text(encoding="utf-8")
         polling_controller_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_polling_controller.js"
         ).read_text(encoding="utf-8")
@@ -556,6 +562,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         error_utils_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_error_utils.js"
+        ).read_text(encoding="utf-8")
+        runtime_setup_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_runtime_setup.js"
         ).read_text(encoding="utf-8")
 
         self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_runtime_text)
@@ -582,10 +591,11 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("resumePendingCustomRefreshFlow", picker_runtime_text)
         self.assertIn("resumePendingModuleUpdateFlow", picker_runtime_text)
         self.assertIn("resumePendingComfyInfoRefreshFlow", picker_runtime_text)
-        self.assertIn("runStartupCoordinator", picker_runtime_text)
+        self.assertIn("initializeModuleNodePickerRuntime", picker_runtime_text)
+        self.assertIn("runStartupCoordinator", runtime_bootstrap_text)
         self.assertIn("startCatalogStartupLoad", picker_runtime_text)
         self.assertIn("isActionBusy: () => busyUi.isActionBusy()", picker_runtime_text)
-        self.assertIn("cancelStartupLoad = runStartupCoordinator(", picker_runtime_text)
+        self.assertIn("const cancelStartupLoad = runStartupCoordinator({", runtime_bootstrap_text)
         self.assertIn("onSettled", bindings_text)
         self.assertIn("settle()", bindings_text)
         self.assertIn("export function runStartupCoordinator", startup_flow_text)
@@ -613,9 +623,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertNotIn("runInstallSingleModuleRequirementsAction", picker_runtime_text)
         self.assertNotIn("createModuleNodePickerPollingController", picker_runtime_text)
         self.assertNotIn("createModuleNodePickerModulePanelController", picker_runtime_text)
-        self.assertIn("createModuleNodePickerLifecycle", picker_runtime_text)
+        self.assertIn("createModuleNodePickerLifecycle", runtime_setup_text)
         self.assertIn("createModuleNodePickerUiControllers", picker_runtime_text)
         self.assertIn("createModuleNodePickerFlowWiring", picker_runtime_text)
+        self.assertIn("createModuleNodePickerRuntimeSetup", picker_runtime_text)
         self.assertIn("export function createModuleNodePickerFlowWiring", flow_wiring_text)
         self.assertIn("createModuleNodePickerPollingController", flow_wiring_text)
         self.assertIn("createModuleNodePickerCatalogController", flow_wiring_text)
@@ -626,6 +637,14 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("createModuleNodePickerViewHelpers", ui_controllers_text)
         self.assertIn("createModuleNodePickerStatusCards", ui_controllers_text)
         self.assertIn("createBusyUiController", ui_controllers_text)
+        self.assertIn("export function initializeModuleNodePickerRuntime", runtime_bootstrap_text)
+        self.assertIn("bindModuleNodePickerEvents", runtime_bootstrap_text)
+        self.assertIn("export function createModuleNodePickerRuntimeSetup", runtime_setup_text)
+        self.assertIn("createModuleNodePickerRuntimeContext", runtime_setup_text)
+        self.assertIn("createModuleNodePickerLifecycle", runtime_setup_text)
+        self.assertIn("createModuleNodePickerApiClient", runtime_setup_text)
+        self.assertIn("createModuleNodePickerDebugUi", runtime_setup_text)
+        self.assertIn("createProcessUiController", runtime_setup_text)
         self.assertIn("getPollingController()?.invalidate?.()", lifecycle_text)
         self.assertIn("export function createModuleNodePickerPollingController", polling_controller_text)
         self.assertIn("pollRefreshProgressLoop", polling_controller_text)
