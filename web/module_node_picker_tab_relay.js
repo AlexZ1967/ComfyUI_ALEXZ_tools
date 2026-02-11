@@ -74,11 +74,7 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     /**
      * Process sidebar button interaction and schedule relay correction if needed.
      */
-    const processTabButton = (button) => {
-        const tabId = inferTabIdFromButton(app, button);
-        if (!tabId) {
-            return;
-        }
+    const processTabId = (tabId) => {
         if (tabId === sidebarTabId) {
             relayRuntime.onOwnTabClick(sidebarTabId);
             return;
@@ -133,7 +129,7 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         if (!tabId) {
             return;
         }
-        processTabButton(button);
+        processTabId(tabId);
     };
 
     const supportsPointer = typeof window !== "undefined" && "PointerEvent" in window;

@@ -350,7 +350,6 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("easyuse_nodes_map", relay_helpers_text)
         self.assertIn("relay_init", relay_text)
         self.assertIn("relay_tick", relay_text)
-        self.assertIn("relay_unknown_tab_click", relay_runtime_text)
         self.assertIn("MIN_SYNC_INTERVAL_MS", relay_runtime_text)
         self.assertIn("dispose()", relay_runtime_text)
         self.assertIn("hasPendingForeignIntent()", relay_runtime_text)

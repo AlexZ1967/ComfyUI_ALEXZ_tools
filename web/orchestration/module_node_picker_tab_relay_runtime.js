@@ -165,7 +165,6 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
         const isImmediateReason =
             normalizedReason === "relay_own_tab_click"
             || normalizedReason === "relay_foreign_tab_click"
-            || normalizedReason === "relay_unknown_tab_click"
             || normalizedReason === "relay_native_ok"
             || normalizedReason === "relay_pending_switch"
             || normalizedReason === "relay_init";
@@ -211,21 +210,6 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
         onForeignTabClick(tabId) {
             markForeignTabIntent(tabId);
             syncVisibility("relay_foreign_tab_click", String(tabId || ""));
-        },
-
-        /**
-         * Mark unknown foreign click source and emit unknown-tab diagnostic reason.
-         */
-        onUnknownForeignTabClick(tabId) {
-            markForeignTabIntent(tabId);
-            syncVisibility("relay_unknown_tab_click", String(tabId || ""));
-        },
-
-        /**
-         * Keep temporary pending foreign tab id for delayed re-check.
-         */
-        getPendingForeignTabId() {
-            return String(pendingForeignTabId || "");
         },
 
         /**

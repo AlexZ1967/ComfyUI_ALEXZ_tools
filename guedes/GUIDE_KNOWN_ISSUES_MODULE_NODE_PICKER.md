@@ -13,7 +13,7 @@
 4. Повторите цикл `Module Nodes -> NodesMap` еще 1-2 раза.
 
 Если проблема проявилась, в `Module Nodes` diagnostics-блок обычно показывает:
-- `diag.reason=relay_tick` (или `relay_unknown_tab_click`),
+- `diag.reason=relay_tick`,
 - `diag.active_tab=alexz-module-nodes`,
 - `diag.last_clicked_tab=easyuse_nodes_map` (или `(unknown-other-tab)`),
 - `diag.child_nodes_short=ROOT`.
