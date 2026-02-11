@@ -169,54 +169,6 @@ export function hasSidebarTabId(app, tabId) {
 }
 
 /**
- * Infer tab id when clicked button has no stable id/class markers.
- */
-export function inferFallbackTabIdFromContext(app, event, sidebarTabId) {
-    const knownNodesMapId = "easyuse_nodes_map";
-    const descriptors = collectSidebarTabDescriptors(app);
-    const composed = typeof event?.composedPath === "function" ? event.composedPath() : [];
-    const chunks = [];
-    for (const item of composed) {
-        if (!(item instanceof Element)) {
-            continue;
-        }
-        const cls = String(item.className || "").toLowerCase();
-        const text = String(item.textContent || "").toLowerCase().trim();
-        const title = String(item.getAttribute("title") || item.getAttribute("aria-label") || "").toLowerCase().trim();
-        if (cls) {
-            chunks.push(cls);
-        }
-        if (text) {
-            chunks.push(text);
-        }
-        if (title) {
-            chunks.push(title);
-        }
-    }
-    const hay = chunks.join(" | ");
-    if (hay.includes("nodesmap") || hay.includes("nodes map")) {
-        if (hasSidebarTabId(app, knownNodesMapId)) {
-            return knownNodesMapId;
-        }
-    }
-    if (hay.includes("pi-sitemap") && hasSidebarTabId(app, knownNodesMapId)) {
-        return knownNodesMapId;
-    }
-    // Generic fallback by title match from descriptors.
-    for (const item of descriptors) {
-        const id = String(item.id || "");
-        const title = String(item.title || "").toLowerCase();
-        if (!id || id === sidebarTabId) {
-            continue;
-        }
-        if (title.includes("nodesmap") || title.includes("nodes map")) {
-            return id;
-        }
-    }
-    return "";
-}
-
-/**
  * Infer target tab id from button metadata, title, and known variants.
  */
 export function inferTabIdFromButton(app, button) {
