@@ -10,20 +10,7 @@
  *   Keeps long-running polling and update flows outside the main UI file.
  */
 
-/**
- * Return true while current picker/action context is still valid.
- */
-function shouldContinueContext(context) {
-    const fn = context?.shouldContinue;
-    if (typeof fn !== "function") {
-        return true;
-    }
-    try {
-        return fn() !== false;
-    } catch (_err) {
-        return false;
-    }
-}
+import { shouldContinueContext } from "./module_node_picker_lifecycle_guard.js";
 
 /**
  * Poll custom-module refresh status until completion or failure.

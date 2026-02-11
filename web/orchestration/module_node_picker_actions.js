@@ -10,20 +10,7 @@
  *   Keeps button-driven async workflows outside the main picker render file.
  */
 
-/**
- * Return true while current picker/action context is still valid.
- */
-function shouldContinueContext(context) {
-    const fn = context?.shouldContinue;
-    if (typeof fn !== "function") {
-        return true;
-    }
-    try {
-        return fn() !== false;
-    } catch (_err) {
-        return false;
-    }
-}
+import { shouldContinueContext } from "./module_node_picker_lifecycle_guard.js";
 
 /**
  * Refresh selected module info and keep result inline in module card.

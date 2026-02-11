@@ -398,11 +398,15 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         update_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_update_flow.js"
         ).read_text(encoding="utf-8")
+        lifecycle_guard_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_lifecycle_guard.js"
+        ).read_text(encoding="utf-8")
         process_text = (
             repo_root / "web" / "ui" / "module_node_picker_process.js"
         ).read_text(encoding="utf-8")
-        self.assertIn("shouldContinueContext", actions_text)
-        self.assertIn("shouldContinueContext", update_flow_text)
+        self.assertIn("import { shouldContinueContext }", actions_text)
+        self.assertIn("import { shouldContinueContext }", update_flow_text)
+        self.assertIn("export function shouldContinueContext", lifecycle_guard_text)
         self.assertIn("shouldContinue: isPickerAlive", picker_text)
         self.assertIn("dispose", process_text)
         self.assertIn("processUi?.dispose?.()", picker_text)

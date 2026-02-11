@@ -137,6 +137,7 @@
   - добавлен явный cleanup жизненного цикла UI-событий (unbind callbacks + cleanup таймеров + unsubscribe store при dispose picker).
   - liveness-aware cancellation guards протянуты через refresh/update/install orchestration (исключены stale UI-мутации после dispose).
   - добавлен явный lifecycle dispose для process-controller (прогресс-хост гарантированно очищается/отцепляется между re-render).
+  - устранено дублирование lifecycle-guard логики: общий helper вынесен в отдельный orchestration-модуль.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

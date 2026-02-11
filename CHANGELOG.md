@@ -44,6 +44,9 @@
 - Process UI lifecycle cleanup:
   - added `dispose()` to inline process controller and invoke it from picker dispose path,
   - ensures progress host/buttons are detached/cleared between re-renders and cannot leak stale state.
+- Guard-logic deduplication:
+  - extracted shared `shouldContinueContext(...)` into `web/orchestration/module_node_picker_lifecycle_guard.js`,
+  - switched actions/update orchestration to import the shared guard instead of duplicating local implementations.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

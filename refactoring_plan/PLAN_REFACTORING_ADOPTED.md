@@ -137,6 +137,7 @@ Deliverables:
   - introduced explicit UI event lifecycle cleanup (unbind callbacks + timer cleanup + store unsubscribe on picker dispose).
   - propagated liveness-aware cancellation guards through refresh/update/install orchestration to prevent stale post-dispose UI mutations.
   - added explicit process-controller dispose lifecycle to fully clear/detach progress host between picker re-renders.
+  - deduplicated lifecycle guard logic into a shared orchestration helper module.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
