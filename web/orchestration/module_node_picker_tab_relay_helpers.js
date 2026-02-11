@@ -77,7 +77,18 @@ export function resolveSidebarButtonFromEvent(event) {
         if (role === "tab") {
             return true;
         }
-        return String(el.tagName || "").toLowerCase() === "button";
+        const cls = String(el.className || "").toLowerCase();
+        if (cls.includes("tab")) {
+            return true;
+        }
+        if (el.hasAttribute("aria-selected")) {
+            return true;
+        }
+        const controls = String(el.getAttribute("aria-controls") || "").toLowerCase();
+        if (controls.includes("tab")) {
+            return true;
+        }
+        return false;
     };
 
     const isSidebarContextElement = (el) => {
@@ -93,7 +104,7 @@ export function resolveSidebarButtonFromEvent(event) {
     const direct = event?.target;
     if (direct instanceof Element) {
         const closest = direct.closest(
-            ".side-bar-button, [class*='-tab-button'], [role='tab'], button"
+            ".side-bar-button, [class*='-tab-button'], [role='tab'], [aria-selected], [aria-controls*='tab']"
         );
         if (closest && isTabButtonCandidate(closest) && isSidebarContextElement(closest)) {
             return closest;

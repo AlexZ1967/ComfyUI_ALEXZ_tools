@@ -129,6 +129,7 @@ Deliverables:
   - introduced bind-token guards so stale relay callbacks from prior binds cannot mutate current tab visibility.
   - removed unused relay fallback tab-id heuristic helper to simplify sync surface.
   - replaced fixed relay interval loop with adaptive timeout scheduling to lower background sync pressure.
+  - narrowed relay tab-candidate matching to explicit tab-like sidebar controls (fewer false-positive sidebar button captures).
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
