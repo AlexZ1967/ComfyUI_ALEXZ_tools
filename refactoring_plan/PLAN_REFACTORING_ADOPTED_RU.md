@@ -131,6 +131,7 @@
   - фиксированный interval relay заменен на адаптивный timeout-loop (ниже фоновое давление синхронизации),
   - матчинг tab-кандидатов в relay сужен до явных tab-like sidebar controls (меньше ложных захватов обычных кнопок).
   - добавлен request-token guard загрузки каталога, чтобы устаревшие async-ответы не перезаписывали актуальный UI-стейт.
+  - добавлен render-lifecycle cleanup hook picker и request-token guard для `loadModuleInfo` (устаревшие async-ответы не перезаписывают карточку модуля между рендерами).
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

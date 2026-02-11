@@ -93,6 +93,7 @@ const NODE_PICKER_DEBUG_STORAGE_KEY = "alexz_module_picker_debug";
 const NODE_PICKER_SELECTED_GROUP_STORAGE_KEY = "alexz_module_picker_selected_group";
 const NODE_PICKER_SELECTED_MODULE_STORAGE_KEY = "alexz_module_picker_selected_module";
 const COMFYUI_CHECK_MODE_STORAGE_KEY = "alexz_comfyui_check_mode";
+const PICKER_CLEANUP_KEY = "__alexz_module_node_picker_cleanup__";
 const GROUP_LABELS = {
     core: "Core_Nodes",
     core_extras: "Core_Extras_Nodes",
@@ -505,6 +506,14 @@ function createNodeByInfo(nodeInfo) {
  * Render Module Node Picker UI and bind all panel event handlers.
  */
 function renderPicker(container) {
+    const prevCleanup = container?.[PICKER_CLEANUP_KEY];
+    if (typeof prevCleanup === "function") {
+        try {
+            prevCleanup();
+        } catch (_err) {
+            // Ignore stale cleanup errors from previous picker instance.
+        }
+    }
     unbindModuleNodesTabRelay();
 
     container.innerHTML = "";
@@ -760,6 +769,7 @@ function renderPicker(container) {
     const moduleInlineStatus = new Map();
     const updatedModulesSession = new Set();
     let catalogLoadToken = 0;
+    let moduleInfoLoadToken = 0;
     let refreshPollToken = 0;
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
@@ -767,10 +777,28 @@ function renderPicker(container) {
     let actionBusy = false;
     let expandedModule = "";
 
+    let pickerDisposed = false;
+    const isPickerAlive = () => !pickerDisposed && root.isConnected;
+    const disposePickerInstance = () => {
+        if (pickerDisposed) {
+            return;
+        }
+        pickerDisposed = true;
+        catalogLoadToken += 1;
+        moduleInfoLoadToken += 1;
+        refreshPollToken += 1;
+        updatePollToken += 1;
+        unbindModuleNodesTabRelay();
+    };
+    container[PICKER_CLEANUP_KEY] = disposePickerInstance;
+
     /**
      * Store one-line module action result shown inside module card.
      */
     const setModuleInlineStatus = (moduleName, text, tone = "neutral") => {
+        if (!isPickerAlive()) {
+            return;
+        }
         const key = String(moduleName || "").trim();
         if (!key) {
             return;
@@ -799,6 +827,9 @@ function renderPicker(container) {
      * Mount progress inline block into the selected top status card.
      */
     const setProcessTarget = (target) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         processUi.setTarget(target);
     };
 
@@ -835,6 +866,9 @@ function renderPicker(container) {
      * Render ComfyUI status card based on selected update-check mode.
      */
     const renderComfyAlert = (info) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         renderComfyAlertCard({
             info,
             comfyMode: comfyModeSelect.value,
@@ -851,6 +885,9 @@ function renderPicker(container) {
      * Render Custom Nodes status card and global update button.
      */
     const renderCustomAlert = () => {
+        if (!isPickerAlive()) {
+            return;
+        }
         renderCustomAlertCard({
             customModulesNeedUpdate,
             customStatusChecked,
@@ -873,6 +910,9 @@ function renderPicker(container) {
      * Show a process action row with optional button (e.g., install requirements).
      */
     const setProcessAction = (label, btnText, onClick) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         processUi.setAction(label, btnText, onClick, actionBusy);
     };
 
@@ -880,12 +920,18 @@ function renderPicker(container) {
      * Update inline process text with optional color tone.
      */
     const setRefreshLine = (text, tone = "neutral") => {
+        if (!isPickerAlive()) {
+            return;
+        }
         processUi.setLine(text, tone);
     };
     /**
      * Render compact diagnostics block for tab-sync troubleshooting.
      */
     const setDiagnosticText = (diag) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         const lines = [
             `diag.ts=${new Date().toLocaleTimeString()}`,
             `diag.reason=${diag?.reason || "unknown"}`,
@@ -910,6 +956,9 @@ function renderPicker(container) {
      * Replace help area with plain status/help text.
      */
     const setHelpText = (text) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         renderHelpText(help, text);
     };
 
@@ -917,6 +966,9 @@ function renderPicker(container) {
      * Replace help area with compact hint-like message.
      */
     const setHelpHintText = (text, tone = "neutral") => {
+        if (!isPickerAlive()) {
+            return;
+        }
         if (String(tone || "").toLowerCase() === "warn") {
             renderHelpHintTextWithTone(help, text, "warn");
             return;
@@ -928,6 +980,9 @@ function renderPicker(container) {
      * Render expanded-module help summary with insertion hints and legend.
      */
     const setHelpModuleSummary = (moduleName, nodeCount) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         renderHelpModuleSummary(help, moduleName, nodeCount, {
             updatedMark: MODULE_MARK_UPDATED,
             remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
@@ -938,6 +993,9 @@ function renderPicker(container) {
      * Render collapsed-module hint shown before node list expansion.
      */
     const setHelpModuleCardHint = (moduleName, nodeCount) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         renderHelpModuleCardHint(help, moduleName, nodeCount);
     };
 
@@ -962,6 +1020,9 @@ function renderPicker(container) {
      * Enable/disable actionable UI controls during long-running operations.
      */
     const setActionBusy = (busy) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         actionBusy = Boolean(busy);
         refreshBtn.disabled = actionBusy;
         comfyInfoBtn.disabled = actionBusy;
@@ -1086,7 +1147,9 @@ function renderPicker(container) {
      * Load and render module info for currently selected group/module.
      */
     const loadModuleInfo = async (options = {}) => {
+        const token = ++moduleInfoLoadToken;
         return loadModuleInfoFlow(options, {
+            isRequestActive: () => token === moduleInfoLoadToken && isPickerAlive(),
             getSelectedModule: () => String(nodeSelect.value || ""),
             getSelectedGroup,
             fetchModuleInfo,
@@ -1108,7 +1171,7 @@ function renderPicker(container) {
     const loadCatalog = async (options = {}) => {
         const token = ++catalogLoadToken;
         return loadCatalogFlow(options, {
-            isRequestActive: () => token === catalogLoadToken,
+            isRequestActive: () => token === catalogLoadToken && isPickerAlive(),
             fetchNodeCatalog,
             getComfyMode: () => comfyModeSelect.value,
             catalogByGroup,
@@ -1229,6 +1292,9 @@ function renderPicker(container) {
      * Render node cards for currently selected module and bind insertion actions.
      */
     const renderNodeList = () => {
+        if (!isPickerAlive()) {
+            return;
+        }
         renderNodeListPanel({
             nodeListEl: nodeList,
             selectedModule: nodeSelect.value,
@@ -1253,6 +1319,9 @@ function renderPicker(container) {
      * Render module metadata card, status rows, and per-module action buttons.
      */
     const renderModuleInfo = (info) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         const selectedModule = String(nodeSelect.value || "").trim();
         const nodeCount = moduleCounts.get(selectedModule) || 0;
         renderModuleInfoCard({

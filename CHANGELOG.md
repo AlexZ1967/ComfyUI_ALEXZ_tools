@@ -24,6 +24,9 @@
   - now accepts only explicit tab-like controls (`side-bar-button`, `*-tab-button`, `role=tab`, `aria-selected`, tab-like `aria-controls`).
 - Catalog-load race protection:
   - added request token guard for node-catalog loading so stale async responses cannot override fresh selector/card state.
+- Picker lifecycle and module-info race protection:
+  - added per-render picker cleanup hook to invalidate stale async work and unbind relay before next render,
+  - added request token guard for `loadModuleInfo` so stale module-info responses cannot overwrite current module card.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

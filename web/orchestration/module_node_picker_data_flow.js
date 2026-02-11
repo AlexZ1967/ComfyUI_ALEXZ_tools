@@ -54,6 +54,7 @@ export async function loadModuleInfoFlow(options, context) {
     const forceRefresh = Boolean(options?.forceRefresh);
     const syncUpstream = Boolean(options?.syncUpstream);
     const throwOnError = Boolean(options?.throwOnError);
+    const isRequestActive = context?.isRequestActive;
     const selectedModule = String(context?.getSelectedModule?.() || "");
     const selectedGroup = String(context?.getSelectedGroup?.() || "");
     if (!selectedModule || selectedModule === "-1") {
@@ -65,6 +66,9 @@ export async function loadModuleInfoFlow(options, context) {
             forceRefresh,
             syncUpstream,
         });
+        if (typeof isRequestActive === "function" && !isRequestActive()) {
+            return;
+        }
         if (
             String(context?.getSelectedModule?.() || "") !== selectedModule
             || String(context?.getSelectedGroup?.() || "") !== selectedGroup
@@ -85,6 +89,9 @@ export async function loadModuleInfoFlow(options, context) {
             context?.renderNodeList?.();
         }
     } catch (err) {
+        if (typeof isRequestActive === "function" && !isRequestActive()) {
+            return;
+        }
         context?.clearModuleInfo?.();
         if (throwOnError) {
             throw err;
