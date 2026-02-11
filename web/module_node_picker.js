@@ -42,10 +42,8 @@ import {
     renderModuleInfoCard,
 } from "./ui/module_node_picker_renderers.js";
 import {
-    renderComfyAlertCard,
-    renderCustomAlertCard,
-} from "./ui/module_node_picker_alerts.js";
-import { createProcessUiController } from "./ui/module_node_picker_process.js";
+    createProcessUiController,
+} from "./ui/module_node_picker_process.js";
 import { createModuleNodePickerLayout } from "./ui/module_node_picker_layout.js";
 import {
     fillModuleSelectUi,
@@ -71,6 +69,7 @@ import {
 import { createModuleNodePickerApiClient } from "./orchestration/module_node_picker_api_client.js";
 import { createModuleNodePickerCatalogController } from "./orchestration/module_node_picker_catalog_controller.js";
 import { createModuleNodePickerViewHelpers } from "./orchestration/module_node_picker_view_helpers.js";
+import { createModuleNodePickerStatusCards } from "./orchestration/module_node_picker_status_cards.js";
 import { isCanceledRequestError } from "./orchestration/module_node_picker_error_utils.js";
 import { createModuleNodePickerDebugUi } from "./orchestration/module_node_picker_debug_ui.js";
 import {
@@ -612,10 +611,9 @@ function renderPicker(container) {
     let refreshPollToken = 0;
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
-    let customStatusChecked = loadCustomStatusChecked();
-    let comfyStatusChecked = loadComfyStatusChecked();
     let expandedModule = "";
     let catalogController = null;
+    let statusCards = null;
     let unbindPickerEvents = () => {};
     let processUi = null;
     let cancelStartupLoad = () => {};
@@ -809,54 +807,30 @@ function renderPicker(container) {
     });
     showHelpStatus = setHelpText;
 
-    /**
-     * Render ComfyUI status card based on selected update-check mode.
-     */
-    const renderComfyAlert = (info) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        if (info && typeof info === "object") {
-            comfyStatusChecked = true;
-            saveComfyStatusChecked(true);
-            saveComfyInfoSnapshot(info);
-        }
-        renderComfyAlertCard({
-            info,
-            comfyMode: comfyModeSelect.value,
-            actionBusy: busyUi.getActionBusy(),
-            fmtDate,
-            comfyAlert,
-            comfyAlertText,
-            comfyUpdateBtn,
-            comfyInstallReqBtn,
-        });
-    };
-
-    /**
-     * Render Custom Nodes status card and global update button.
-     */
-    const renderCustomAlert = () => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        renderCustomAlertCard({
-            customModulesNeedUpdate,
-            customStatusChecked,
-            actionBusy: busyUi.getActionBusy(),
-            customAlert,
-            customAlertText,
-            updateAllBtn,
-        });
-    };
-
-    /**
-     * Return node catalog entries for currently selected group.
-     */
-    const getNodesForSelectedGroup = () => {
-        const group = getSelectedGroup();
-        return catalogByGroup.get(group) || [];
-    };
+    statusCards = createModuleNodePickerStatusCards({
+        shouldContinue: isPickerAlive,
+        getComfyMode: () => comfyModeSelect.value,
+        getActionBusy: () => busyUi.getActionBusy(),
+        fmtDate,
+        comfyAlert,
+        comfyAlertText,
+        comfyUpdateBtn,
+        comfyInstallReqBtn,
+        customAlert,
+        customAlertText,
+        updateAllBtn,
+        getCustomModulesNeedUpdate: () => customModulesNeedUpdate,
+        saveCustomStatusChecked,
+        saveComfyStatusChecked,
+        saveComfyInfoSnapshot,
+        initialCustomStatusChecked: loadCustomStatusChecked(),
+        initialComfyStatusChecked: loadComfyStatusChecked(),
+    });
+    const renderComfyAlert = (info) => statusCards.renderComfyAlert(info);
+    const renderCustomAlert = () => statusCards.renderCustomAlert();
+    const syncUpdateAllButton = () => statusCards.syncUpdateAllButton();
+    const setCustomStatusChecked = (checked) => statusCards.setCustomStatusChecked(checked);
+    const setComfyStatusChecked = (checked) => statusCards.setComfyStatusChecked(checked);
 
     bindModuleNodesTabRelay({
         app,
@@ -882,31 +856,6 @@ function renderPicker(container) {
             sleepMs: 400,
         });
     };
-
-    /**
-     * Toggle visibility and label of the global custom-nodes update button.
-     */
-    const syncUpdateAllButton = () => {
-        renderCustomAlert();
-    };
-
-    /**
-     * Set persisted flag that Custom Nodes status was explicitly checked.
-     */
-    const setCustomStatusChecked = (checked) => {
-        customStatusChecked = Boolean(checked);
-        saveCustomStatusChecked(customStatusChecked);
-        renderCustomAlert();
-    };
-
-    /**
-     * Set persisted-in-session flag that ComfyUI status was explicitly checked.
-     */
-    const setComfyStatusChecked = (checked) => {
-        comfyStatusChecked = Boolean(checked);
-        saveComfyStatusChecked(comfyStatusChecked);
-    };
-
 
     /**
      * Poll update status endpoint until module update job finishes.
@@ -1321,7 +1270,7 @@ function renderPicker(container) {
     }) || (() => {});
 
     // Restore last ComfyUI status card across widget switches in current session.
-    if (comfyStatusChecked && !hasPendingComfyInfoRefresh()) {
+    if (statusCards?.getComfyStatusChecked?.() && !hasPendingComfyInfoRefresh()) {
         const lastComfyInfo = loadComfyInfoSnapshot();
         if (lastComfyInfo) {
             renderComfyAlert(lastComfyInfo);

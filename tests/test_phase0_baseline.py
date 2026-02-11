@@ -465,6 +465,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         catalog_controller_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_catalog_controller.js"
         ).read_text(encoding="utf-8")
+        status_cards_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_status_cards.js"
+        ).read_text(encoding="utf-8")
         view_helpers_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_view_helpers.js"
         ).read_text(encoding="utf-8")
@@ -543,6 +546,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("loadCatalog", catalog_controller_text)
         self.assertIn("loadModuleInfo", catalog_controller_text)
         self.assertIn("bumpRequestTokens", catalog_controller_text)
+        self.assertIn("export function createModuleNodePickerStatusCards", status_cards_text)
+        self.assertIn("renderComfyAlertCard", status_cards_text)
+        self.assertIn("renderCustomAlertCard", status_cards_text)
+        self.assertIn("syncUpdateAllButton", status_cards_text)
         self.assertIn("export function createModuleNodePickerViewHelpers", view_helpers_text)
         self.assertIn("setProcessAction", view_helpers_text)
         self.assertIn("setRefreshLine", view_helpers_text)
