@@ -103,6 +103,7 @@ export async function runRefreshComfyUIInfoAction(context) {
     if (!shouldContinueContext(context)) {
         return;
     }
+    context?.setComfyStatusChecked?.(true);
     context?.setPendingComfyInfoRefresh?.(true);
     context?.setActionBusy?.(true);
     context?.setProcessTarget?.("comfy");

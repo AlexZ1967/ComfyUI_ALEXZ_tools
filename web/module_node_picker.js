@@ -523,6 +523,8 @@ function getRuntimePickerState() {
         pendingCustomRefresh: false,
         pendingUpdate: false,
         pendingComfyInfoRefresh: false,
+        comfyStatusChecked: false,
+        comfyLastInfo: null,
     };
     window[MODULE_PICKER_RUNTIME_STATE_KEY] = created;
     return created;
@@ -764,6 +766,22 @@ function renderPicker(container) {
     const saveCustomStatusChecked = (checked) => {
         runtimePickerState.customStatusChecked = Boolean(checked);
     };
+    const loadComfyStatusChecked = () => {
+        return Boolean(runtimePickerState.comfyStatusChecked);
+    };
+    const saveComfyStatusChecked = (checked) => {
+        runtimePickerState.comfyStatusChecked = Boolean(checked);
+    };
+    const loadComfyInfoSnapshot = () => {
+        const info = runtimePickerState.comfyLastInfo;
+        if (!info || typeof info !== "object") {
+            return null;
+        }
+        return { ...info };
+    };
+    const saveComfyInfoSnapshot = (info) => {
+        runtimePickerState.comfyLastInfo = (info && typeof info === "object") ? { ...info } : null;
+    };
     const hasPendingCustomRefresh = () => {
         return Boolean(runtimePickerState.pendingCustomRefresh);
     };
@@ -841,6 +859,7 @@ function renderPicker(container) {
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
     let customStatusChecked = loadCustomStatusChecked();
+    let comfyStatusChecked = loadComfyStatusChecked();
     let actionBusy = false;
     let expandedModule = "";
     let unbindPickerEvents = () => {};
@@ -1024,6 +1043,11 @@ function renderPicker(container) {
     const renderComfyAlert = (info) => {
         if (!isPickerAlive()) {
             return;
+        }
+        if (info && typeof info === "object") {
+            comfyStatusChecked = true;
+            saveComfyStatusChecked(true);
+            saveComfyInfoSnapshot(info);
         }
         renderComfyAlertCard({
             info,
@@ -1233,6 +1257,14 @@ function renderPicker(container) {
         customStatusChecked = Boolean(checked);
         saveCustomStatusChecked(customStatusChecked);
         renderCustomAlert();
+    };
+
+    /**
+     * Set persisted-in-session flag that ComfyUI status was explicitly checked.
+     */
+    const setComfyStatusChecked = (checked) => {
+        comfyStatusChecked = Boolean(checked);
+        saveComfyStatusChecked(comfyStatusChecked);
     };
 
 
@@ -1579,6 +1611,7 @@ function renderPicker(container) {
             getComfyMode: () => comfyModeSelect.value,
             renderComfyAlert,
             syncUpdateAllButton,
+            setComfyStatusChecked,
             setPendingComfyInfoRefresh,
             clearPendingComfyInfoRefresh,
         });
@@ -1868,6 +1901,14 @@ function renderPicker(container) {
             expandedModule = String(value || "").trim();
         },
     }) || (() => {});
+
+    // Restore last ComfyUI status card across widget switches in current session.
+    if (comfyStatusChecked && !hasPendingComfyInfoRefresh()) {
+        const lastComfyInfo = loadComfyInfoSnapshot();
+        if (lastComfyInfo) {
+            renderComfyAlert(lastComfyInfo);
+        }
+    }
 
     cancelStartupLoad = runModuleNodePickerStartupLoad({
         pickerStore,
