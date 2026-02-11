@@ -1019,6 +1019,7 @@ function renderPicker(container) {
     const pollRefreshProgress = async () => {
         const token = ++refreshPollToken;
         return pollRefreshProgressLoop({
+            shouldContinue: isPickerAlive,
             isTokenActive: () => token === refreshPollToken,
             fetchModuleRefreshStatus,
             formatRefreshLine,
@@ -1064,6 +1065,7 @@ function renderPicker(container) {
     const pollUpdateProgress = async () => {
         const token = ++updatePollToken;
         return pollUpdateProgressLoop({
+            shouldContinue: isPickerAlive,
             isTokenActive: () => token === updatePollToken,
             fetchModuleUpdateStatus,
             formatUpdateLine,
@@ -1077,6 +1079,7 @@ function renderPicker(container) {
      */
     const installComfyUIRequirementsFlow = async () => {
         return runInstallComfyUIRequirementsFlow({
+            shouldContinue: isPickerAlive,
             setActionBusy,
             setProcessTarget,
             setRefreshLine,
@@ -1094,6 +1097,7 @@ function renderPicker(container) {
      */
     const maybeInstallChangedRequirements = async (update) => {
         return maybeInstallChangedRequirementsFlow(update, {
+            shouldContinue: isPickerAlive,
             setRefreshLine,
             setProcessAction,
             installComfyUIRequirementsFlow,
@@ -1108,6 +1112,7 @@ function renderPicker(container) {
      */
     const runModuleUpdate = async (scope, moduleName) => {
         return runModuleUpdateFlow(scope, moduleName, {
+            shouldContinue: isPickerAlive,
             setActionBusy,
             setProcessTarget,
             setProcessAction,
@@ -1282,6 +1287,7 @@ function renderPicker(container) {
      */
     const refreshModuleInfoFlow = async (moduleName, syncUpstream) => {
         return runRefreshModuleInfoAction(moduleName, syncUpstream, {
+            shouldContinue: isPickerAlive,
             setProcessTarget,
             setRefreshLine,
             setProcessAction,
@@ -1297,6 +1303,7 @@ function renderPicker(container) {
      */
     const installSingleModuleRequirementsFlow = async (moduleName) => {
         return runInstallSingleModuleRequirementsAction(moduleName, {
+            shouldContinue: isPickerAlive,
             setProcessTarget,
             setRefreshLine,
             setProcessAction,
@@ -1369,6 +1376,7 @@ function renderPicker(container) {
 
     const refreshComfyUIInfoFlow = async () => {
         return runRefreshComfyUIInfoAction({
+            shouldContinue: isPickerAlive,
             setActionBusy,
             setProcessTarget,
             setProcessAction,
@@ -1386,6 +1394,7 @@ function renderPicker(container) {
 
     const refreshCustomNodesInfoFlow = async () => {
         return runRefreshCustomNodesInfoAction({
+            shouldContinue: isPickerAlive,
             setActionBusy,
             setProcessTarget,
             setProcessAction,

@@ -11,6 +11,21 @@
  */
 
 /**
+ * Return true while current picker/action context is still valid.
+ */
+function shouldContinueContext(context) {
+    const fn = context?.shouldContinue;
+    if (typeof fn !== "function") {
+        return true;
+    }
+    try {
+        return fn() !== false;
+    } catch (_err) {
+        return false;
+    }
+}
+
+/**
  * Poll custom-module refresh status until completion or failure.
  */
 export async function pollRefreshProgressLoop(context) {
@@ -26,12 +41,18 @@ export async function pollRefreshProgressLoop(context) {
     if (typeof isTokenActive !== "function" || typeof fetchModuleRefreshStatus !== "function") {
         return false;
     }
-    while (isTokenActive()) {
+    while (isTokenActive() && shouldContinueContext(context)) {
         let payload;
         try {
             payload = await fetchModuleRefreshStatus();
         } catch (err) {
+            if (!shouldContinueContext(context)) {
+                return false;
+            }
             setRefreshLine?.(`Custom Nodes refresh status failed (${String(err)}).`, "warn");
+            return false;
+        }
+        if (!shouldContinueContext(context)) {
             return false;
         }
         const refresh = payload?.refresh || {};
@@ -76,12 +97,18 @@ export async function pollUpdateProgressLoop(context) {
     if (typeof isTokenActive !== "function" || typeof fetchModuleUpdateStatus !== "function") {
         return null;
     }
-    while (isTokenActive()) {
+    while (isTokenActive() && shouldContinueContext(context)) {
         let payload;
         try {
             payload = await fetchModuleUpdateStatus();
         } catch (err) {
+            if (!shouldContinueContext(context)) {
+                return null;
+            }
             setRefreshLine?.(`Update status failed (${String(err)}).`, "warn");
+            return null;
+        }
+        if (!shouldContinueContext(context)) {
             return null;
         }
         const update = payload?.update || {};
@@ -111,20 +138,35 @@ export async function runInstallComfyUIRequirementsFlow(context) {
     const setProcessAction = context?.setProcessAction;
     const syncUpdateAllButton = context?.syncUpdateAllButton;
 
+    if (!shouldContinueContext(context)) {
+        return;
+    }
     setActionBusy?.(true);
     setProcessTarget?.("comfy");
     try {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         setRefreshLine?.("Installing ComfyUI dependencies (pip)...", "neutral");
         const install = await installComfyUIRequirements?.();
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         if (String(install?.status || "") !== "installed") {
             setRefreshLine?.("ComfyUI dependencies install failed.", "warn");
             return;
         }
         const comfyPayload = await fetchComfyUIInfo?.(false, false, getComfyMode?.());
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         renderComfyAlert?.(comfyPayload?.comfyui || null);
         setRefreshLine?.("ComfyUI dependencies installed.", "ok");
         setProcessAction?.("", "", null);
     } finally {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         setActionBusy?.(false);
         syncUpdateAllButton?.();
     }
@@ -134,6 +176,9 @@ export async function runInstallComfyUIRequirementsFlow(context) {
  * Handle requirements-install prompts after update completion.
  */
 export async function maybeInstallChangedRequirementsFlow(update, context) {
+    if (!shouldContinueContext(context)) {
+        return;
+    }
     const setRefreshLine = context?.setRefreshLine;
     const setProcessAction = context?.setProcessAction;
     const installComfyUIRequirementsFlow = context?.installComfyUIRequirementsFlow;
@@ -201,8 +246,14 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
     const loadModuleInfo = context?.loadModuleInfo;
     const syncUpdateAllButton = context?.syncUpdateAllButton;
 
+    if (!shouldContinueContext(context)) {
+        return;
+    }
     setActionBusy?.(true);
     try {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         if (String(scope || "") === "comfyui") {
             setProcessTarget?.("comfy");
         } else {
@@ -211,7 +262,13 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
         setProcessAction?.("", "", null);
         setRefreshLine?.("Starting update...", "neutral");
         await startModuleUpdate?.(scope, moduleName);
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         const update = await pollUpdateProgress?.();
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         if (!update) {
             return;
         }
@@ -246,10 +303,19 @@ export async function runModuleUpdateFlow(scope, moduleName, context) {
             }
         }
         await loadCatalog?.({ preferredGroup, preferredModule, autoExpandModule });
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         await loadModuleInfo?.();
     } catch (err) {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         setRefreshLine?.(`Update failed (${String(err)}).`, "warn");
     } finally {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         setActionBusy?.(false);
         syncUpdateAllButton?.();
     }

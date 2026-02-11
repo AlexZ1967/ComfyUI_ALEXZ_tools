@@ -38,6 +38,9 @@
 - Event lifecycle cleanup:
   - `bindModuleNodePickerEvents(...)` now returns unbind cleanup that clears handlers and debounce timer,
   - picker dispose now calls event unbind + debug-store unsubscribe to avoid stale listeners between re-renders.
+- Long-running flow cancellation guards:
+  - added shared `shouldContinue` guards across actions/update orchestration so refresh/update flows stop cleanly after picker dispose,
+  - wired picker liveness check into polling/update/install/refresh contexts to block late UI writes from stale async tasks.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

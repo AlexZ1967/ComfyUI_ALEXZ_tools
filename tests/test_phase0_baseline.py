@@ -392,6 +392,15 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("return () => {", bindings_text)
         self.assertIn("onchange = null", bindings_text)
         self.assertIn("unbindPickerEvents", picker_text)
+        actions_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
+        ).read_text(encoding="utf-8")
+        update_flow_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_update_flow.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("shouldContinueContext", actions_text)
+        self.assertIn("shouldContinueContext", update_flow_text)
+        self.assertIn("shouldContinue: isPickerAlive", picker_text)
 
     def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):
         """Ensure non-forced ComfyUI status request returns cached/unknown data without git calls."""

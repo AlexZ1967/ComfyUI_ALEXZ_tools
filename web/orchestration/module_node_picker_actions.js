@@ -11,11 +11,29 @@
  */
 
 /**
+ * Return true while current picker/action context is still valid.
+ */
+function shouldContinueContext(context) {
+    const fn = context?.shouldContinue;
+    if (typeof fn !== "function") {
+        return true;
+    }
+    try {
+        return fn() !== false;
+    } catch (_err) {
+        return false;
+    }
+}
+
+/**
  * Refresh selected module info and keep result inline in module card.
  */
 export async function runRefreshModuleInfoAction(moduleName, syncUpstream, context) {
     const normalized = String(moduleName || "").trim();
     if (!normalized) {
+        return;
+    }
+    if (!shouldContinueContext(context)) {
         return;
     }
     context?.setProcessTarget?.("");
@@ -29,10 +47,19 @@ export async function runRefreshModuleInfoAction(moduleName, syncUpstream, conte
             syncUpstream: Boolean(syncUpstream),
             throwOnError: true,
         });
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         context?.setModuleInlineStatus?.(normalized, "Module info updated.", "ok");
     } catch (err) {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         context?.setModuleInlineStatus?.(normalized, `Failed to refresh module info: ${String(err)}`, "warn");
     } finally {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         await context?.loadModuleInfo?.({ forceRefresh: false, syncUpstream: false });
         context?.setActionBusy?.(false);
         context?.syncUpdateAllButton?.();
@@ -47,6 +74,9 @@ export async function runInstallSingleModuleRequirementsAction(moduleName, conte
     if (!normalized) {
         return;
     }
+    if (!shouldContinueContext(context)) {
+        return;
+    }
     context?.setProcessTarget?.("custom");
     context?.setRefreshLine?.(`Installing requirements for ${normalized}...`, "neutral");
     context?.setProcessAction?.("", "", null);
@@ -54,6 +84,9 @@ export async function runInstallSingleModuleRequirementsAction(moduleName, conte
     context?.setActionBusy?.(true);
     try {
         const install = await context?.installModuleRequirements?.([normalized]);
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         const failed = Number(install?.failed || 0);
         const installed = Number(install?.installed || 0);
         if (failed > 0 || installed <= 0) {
@@ -62,8 +95,14 @@ export async function runInstallSingleModuleRequirementsAction(moduleName, conte
             context?.setModuleInlineStatus?.(normalized, "Module requirements installed.", "ok");
         }
     } catch (err) {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         context?.setModuleInlineStatus?.(normalized, `Module requirements install failed: ${String(err)}`, "warn");
     } finally {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         await context?.loadModuleInfo?.({ forceRefresh: false, syncUpstream: false });
         context?.setActionBusy?.(false);
         context?.syncUpdateAllButton?.();
@@ -74,6 +113,9 @@ export async function runInstallSingleModuleRequirementsAction(moduleName, conte
  * Refresh ComfyUI info card with forced upstream sync.
  */
 export async function runRefreshComfyUIInfoAction(context) {
+    if (!shouldContinueContext(context)) {
+        return;
+    }
     context?.setActionBusy?.(true);
     context?.setProcessTarget?.("comfy");
     context?.setProcessAction?.("", "", null);
@@ -94,8 +136,14 @@ export async function runRefreshComfyUIInfoAction(context) {
     }
     try {
         const payload = await context?.fetchComfyUIInfo?.(true, true, context?.getComfyMode?.());
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         context?.renderComfyAlert?.(payload?.comfyui || null);
     } catch (err) {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         if (comfyAlert && comfyAlertText) {
             comfyAlert.classList.remove(
                 "alexz-mod-picker-status-card--warn",
@@ -113,6 +161,9 @@ export async function runRefreshComfyUIInfoAction(context) {
             comfyInstallReqBtn.style.display = "none";
         }
     } finally {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         context?.setActionBusy?.(false);
         context?.syncUpdateAllButton?.();
     }
@@ -122,6 +173,9 @@ export async function runRefreshComfyUIInfoAction(context) {
  * Refresh custom modules runtime state and reload catalog.
  */
 export async function runRefreshCustomNodesInfoAction(context) {
+    if (!shouldContinueContext(context)) {
+        return;
+    }
     context?.setActionBusy?.(true);
     context?.setProcessTarget?.("custom");
     context?.setProcessAction?.("", "", null);
@@ -140,20 +194,41 @@ export async function runRefreshCustomNodesInfoAction(context) {
     }
     try {
         await context?.refreshModuleRuntimeState?.();
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         const ok = await context?.pollRefreshProgress?.();
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         if (!ok) {
             context?.setRefreshLine?.("Custom Nodes refresh finished with errors.", "warn");
         } else {
             try {
                 await context?.acknowledgeAllModuleNovelty?.();
+                if (!shouldContinueContext(context)) {
+                    return;
+                }
             } catch (err) {
+                if (!shouldContinueContext(context)) {
+                    return;
+                }
                 context?.setRefreshLine?.(`Refresh completed, but novelty reset failed: ${String(err)}`, "warn");
             }
         }
     } catch (err) {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         context?.setRefreshLine?.(`Custom Nodes refresh error: ${String(err)}`, "warn");
     } finally {
+        if (!shouldContinueContext(context)) {
+            return;
+        }
         context?.setActionBusy?.(false);
+    }
+    if (!shouldContinueContext(context)) {
+        return;
     }
     await context?.loadCatalog?.();
 }
