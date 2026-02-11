@@ -175,6 +175,7 @@ Deliverables:
     - `web/orchestration/relay/` for tab-relay internals,
     - `web/orchestration/runtime/` for runtime/bootstrap/lifecycle/warmup internals,
     and updated imports/tests accordingly.
+  - introduced `web/orchestration/flow/` subfolder for pipeline/data/update/resume orchestration modules and moved related files out of flat root folder with updated imports/test markers.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

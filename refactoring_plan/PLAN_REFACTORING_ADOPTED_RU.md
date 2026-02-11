@@ -175,6 +175,7 @@
     - `web/orchestration/relay/` для tab-relay внутренних модулей,
     - `web/orchestration/runtime/` для runtime/bootstrap/lifecycle/warmup модулей,
     с обновлением импортов и тестовых путей.
+  - введена подпапка `web/orchestration/flow/` для pipeline/data/update/resume orchestration-модулей; связанные файлы вынесены из плоского корня с обновлением импортов и test-маркеров.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

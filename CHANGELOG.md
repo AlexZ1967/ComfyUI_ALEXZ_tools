@@ -1,5 +1,32 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.22 — 2026-02-11
+- Phase 2 orchestration structure cleanup continued:
+  - introduced `web/orchestration/flow/` subfolder for pipeline-oriented modules,
+  - moved flow modules:
+    - `module_node_picker_data_flow.js`,
+    - `module_node_picker_action_flows.js`,
+    - `module_node_picker_actions.js`,
+    - `module_node_picker_update_flow.js`,
+    - `module_node_picker_resume_flow.js`,
+    - `module_node_picker_resume_custom_refresh.js`,
+    - `module_node_picker_resume_module_update.js`,
+    - `module_node_picker_resume_comfy_refresh.js`,
+    - `module_node_picker_flow_wiring.js`,
+    - `module_node_picker_flow_stage.js`,
+    - `module_node_picker_catalog_controller.js`,
+    - `module_node_picker_polling_controller.js`,
+    - `module_node_picker_module_panel_controller.js`.
+  - updated imports to new `flow/` locations in composer and dependent modules.
+  - updated module headers in moved files to reflect new paths.
+  - updated baseline test file-path markers in `tests/test_phase0_baseline.py`.
+- Docs path naming fix:
+  - renamed docs folder `guedes/` to `guides/` (typo fix),
+  - updated README and docs-check guide links to `guides/...`.
+- Validation:
+  - `conda run -n p313 node --check` for changed relay/runtime/flow/composer modules,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed, 40 tests).
+
 ## 0.16.21 — 2026-02-11
 - Phase 2 orchestration structure cleanup:
   - introduced semantic subfolders in `web/orchestration`:
@@ -384,7 +411,7 @@
   - module query filtering behavior (`exact` priority over `partial`),
   - `module_nodes` payload shape built from catalog data,
   - frontend tab-relay marker contract (critical relay reasons + diagnostics keys).
-- Extended `guedes/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md` with reproducible baseline steps and expected diagnostics fingerprints for the `Module Nodes -> NodesMap` empty-panel issue.
+- Extended `guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md` with reproducible baseline steps and expected diagnostics fingerprints for the `Module Nodes -> NodesMap` empty-panel issue.
 - Added manual Phase 0 smoke checklist to known-issues guide for repeatable pre/post-refactor verification.
 
 ## 0.16.0 — 2026-02-10

@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_polling_controller.js
+ * Module: web/orchestration/flow/module_node_picker_polling_controller.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

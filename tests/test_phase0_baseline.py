@@ -382,7 +382,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_debug_ui.js"
         ).read_text(encoding="utf-8")
         catalog_controller_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_catalog_controller.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_catalog_controller.js"
         ).read_text(encoding="utf-8")
         layout_text = (
             repo_root / "web" / "ui" / "module_node_picker_layout.js"
@@ -415,7 +415,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap_bindings.js"
@@ -480,7 +480,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertNotIn("fillModuleSelectUi", picker_text)
         self.assertNotIn("fillGroupSelectUi", picker_text)
         self.assertIn("PICKER_CLEANUP_KEY", picker_runtime_text)
-        data_flow_text = (repo_root / "web" / "orchestration" / "module_node_picker_data_flow.js").read_text(encoding="utf-8")
+        data_flow_text = (repo_root / "web" / "orchestration" / "flow" / "module_node_picker_data_flow.js").read_text(encoding="utf-8")
         self.assertIn("isRequestActive", data_flow_text)
         self.assertIn("totalNodes", data_flow_text)
 
@@ -512,7 +512,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap_bindings.js"
@@ -542,10 +542,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("startupRetryDelayMs", bindings_text)
         self.assertIn("cancelStartupLoad", picker_runtime_text)
         actions_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")
         update_flow_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_update_flow.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_update_flow.js"
         ).read_text(encoding="utf-8")
         lifecycle_guard_text = (
             repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_lifecycle_guard.js"
@@ -589,7 +589,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap_bindings.js"
@@ -601,10 +601,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}\n{runtime_projection_text}"
         )
         actions_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_actions.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_actions.js"
         ).read_text(encoding="utf-8")
         update_flow_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_update_flow.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_update_flow.js"
         ).read_text(encoding="utf-8")
         bindings_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_bindings.js"
@@ -616,7 +616,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_api_client.js"
         ).read_text(encoding="utf-8")
         catalog_controller_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_catalog_controller.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_catalog_controller.js"
         ).read_text(encoding="utf-8")
         status_cards_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_status_cards.js"
@@ -628,10 +628,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_view_helpers.js"
         ).read_text(encoding="utf-8")
         action_flows_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_action_flows.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_action_flows.js"
         ).read_text(encoding="utf-8")
         flow_wiring_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_flow_wiring.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_wiring.js"
         ).read_text(encoding="utf-8")
         ui_controllers_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_ui_controllers.js"
@@ -640,10 +640,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_runtime_bootstrap.js"
         ).read_text(encoding="utf-8")
         polling_controller_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_polling_controller.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_polling_controller.js"
         ).read_text(encoding="utf-8")
         module_panel_controller_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_module_panel_controller.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_module_panel_controller.js"
         ).read_text(encoding="utf-8")
         warmup_controller_text = (
             repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_warmup_controller.js"
@@ -652,16 +652,16 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "runtime" / "module_node_picker_lifecycle.js"
         ).read_text(encoding="utf-8")
         resume_flow_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_resume_flow.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_resume_flow.js"
         ).read_text(encoding="utf-8")
         resume_custom_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_resume_custom_refresh.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_resume_custom_refresh.js"
         ).read_text(encoding="utf-8")
         resume_update_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_resume_module_update.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_resume_module_update.js"
         ).read_text(encoding="utf-8")
         resume_comfy_text = (
-            repo_root / "web" / "orchestration" / "module_node_picker_resume_comfy_refresh.js"
+            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_resume_comfy_refresh.js"
         ).read_text(encoding="utf-8")
         busy_ui_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
