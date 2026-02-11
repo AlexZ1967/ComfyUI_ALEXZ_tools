@@ -10,7 +10,8 @@
   - added relay sync debounce and runtime `dispose()` cleanup on unbind,
   - avoided redundant attach/detach DOM operations in relay runtime,
   - tightened relay tab-button detection to sidebar-context tab controls only (reduced false positives from content clicks),
-  - filtered `relay_keyup` handling to tab/navigation keys and excluded text-input targets to reduce noisy sync cycles.
+  - filtered `relay_keyup` handling to tab/navigation keys and excluded text-input targets to reduce noisy sync cycles,
+  - added relay bind-token guards so stale timers/listeners from previous binds cannot apply visibility updates.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

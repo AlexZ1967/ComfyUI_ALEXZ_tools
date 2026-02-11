@@ -62,6 +62,7 @@ export function unbindModuleNodesTabRelay() {
 export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     unbindModuleNodesTabRelay();
 
+    const bindToken = Symbol("alexz_module_picker_relay_bind");
     let relayTimer = 0;
     let passiveTickBudget = 0;
     const relayRuntime = createModuleNodePickerTabRelayRuntime({
@@ -70,6 +71,10 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         sidebarTabId,
         onDiag,
     });
+    const isCurrentBinding = () => {
+        const state = window[TAB_RELAY_STATE_KEY];
+        return Boolean(state && state.bindToken === bindToken);
+    };
 
     /**
      * Process sidebar button interaction and schedule relay correction if needed.
@@ -87,6 +92,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
             window.clearTimeout(relayTimer);
         }
         relayTimer = window.setTimeout(() => {
+            if (!isCurrentBinding()) {
+                return;
+            }
             relayTimer = 0;
             const liveState = window[TAB_RELAY_STATE_KEY];
             if (liveState) {
@@ -112,6 +120,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
      * Global event handler used to detect sidebar tab interactions.
      */
     const handleEvent = (event) => {
+        if (!isCurrentBinding()) {
+            return;
+        }
         // React only to primary-button pointer/mouse events.
         if (event?.type === "pointerdown" || event?.type === "mousedown") {
             const button = Number(event?.button);
@@ -143,6 +154,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     const onPointerDown = supportsPointer ? ((event) => handleEvent(event)) : null;
     const onMouseDown = supportsPointer ? null : ((event) => handleEvent(event));
     const onKeyUp = (event) => {
+        if (!isCurrentBinding()) {
+            return;
+        }
         const key = String(event?.key || "");
         const relevantKeys = [
             "Enter",
@@ -164,14 +178,37 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
             return;
         }
         if (target instanceof Element) {
-            if (target.closest("input, textarea, [contenteditable='true']")) {
+            if (target.closest("input, textarea, [contenteditable]")) {
                 return;
             }
         }
         relayRuntime.syncVisibility("relay_keyup");
     };
-    const onVisibilityChange = () => relayRuntime.syncVisibility("relay_visibility");
-    const onPageShow = () => relayRuntime.syncVisibility("relay_pageshow");
+    const onVisibilityChange = () => {
+        if (!isCurrentBinding()) {
+            return;
+        }
+        relayRuntime.syncVisibility("relay_visibility");
+    };
+    const onPageShow = () => {
+        if (!isCurrentBinding()) {
+            return;
+        }
+        relayRuntime.syncVisibility("relay_pageshow");
+    };
+
+    const relayState = {
+        bindToken,
+        relayTimer,
+        tickInterval: 0,
+        onPointerDown,
+        onMouseDown,
+        onKeyUp,
+        onVisibilityChange,
+        onPageShow,
+        dispose: () => relayRuntime.dispose?.(),
+    };
+    window[TAB_RELAY_STATE_KEY] = relayState;
 
     if (onPointerDown) {
         document.addEventListener("pointerdown", onPointerDown, true);
@@ -184,6 +221,9 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     window.addEventListener("pageshow", onPageShow, true);
 
     const tickInterval = window.setInterval(() => {
+        if (!isCurrentBinding()) {
+            return;
+        }
         if (document.visibilityState === "hidden") {
             return;
         }
@@ -203,15 +243,6 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         relayRuntime.syncVisibility("relay_tick");
     }, 500);
 
+    relayState.tickInterval = tickInterval;
     relayRuntime.syncVisibility("relay_init");
-    window[TAB_RELAY_STATE_KEY] = {
-        relayTimer,
-        tickInterval,
-        onPointerDown,
-        onMouseDown,
-        onKeyUp,
-        onVisibilityChange,
-        onPageShow,
-        dispose: () => relayRuntime.dispose?.(),
-    };
 }
