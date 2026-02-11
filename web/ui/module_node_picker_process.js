@@ -25,6 +25,7 @@ export function createProcessUiController(context) {
         : () => "custom";
 
     let processTarget = "";
+    let disposed = false;
 
     const normalizeTarget = (target) => {
         const normalized = String(target || "").trim().toLowerCase();
@@ -35,6 +36,9 @@ export function createProcessUiController(context) {
     };
 
     const setTarget = (target) => {
+        if (disposed) {
+            return "";
+        }
         if (!processHost) {
             return "";
         }
@@ -55,12 +59,18 @@ export function createProcessUiController(context) {
     };
 
     const ensureMounted = () => {
+        if (disposed) {
+            return;
+        }
         if (!processHost?.parentElement) {
             setTarget(processTarget || defaultTarget());
         }
     };
 
     const setAction = (label, btnText, onClick, disabled = false) => {
+        if (disposed) {
+            return;
+        }
         if (!processHost || !processActions || !refreshLine) {
             return;
         }
@@ -89,6 +99,9 @@ export function createProcessUiController(context) {
     };
 
     const setLine = (text, tone = "neutral") => {
+        if (disposed) {
+            return;
+        }
         if (!processHost || !processActions || !refreshLine) {
             return;
         }
@@ -112,11 +125,35 @@ export function createProcessUiController(context) {
     };
 
     const setButtonsDisabled = (disabled) => {
+        if (disposed) {
+            return;
+        }
         if (!processActions) {
             return;
         }
         for (const btn of processActions.querySelectorAll(".alexz-mod-picker-btn-small")) {
             btn.disabled = Boolean(disabled);
+        }
+    };
+
+    const dispose = () => {
+        if (disposed) {
+            return;
+        }
+        disposed = true;
+        processTarget = "";
+        if (refreshLine) {
+            refreshLine.textContent = "";
+            refreshLine.classList.remove(
+                "alexz-mod-picker-refresh-line--ok",
+                "alexz-mod-picker-refresh-line--warn"
+            );
+        }
+        if (processActions) {
+            processActions.innerHTML = "";
+        }
+        if (processHost?.parentElement) {
+            processHost.parentElement.removeChild(processHost);
         }
     };
 
@@ -126,5 +163,6 @@ export function createProcessUiController(context) {
         setAction,
         setLine,
         setButtonsDisabled,
+        dispose,
     };
 }

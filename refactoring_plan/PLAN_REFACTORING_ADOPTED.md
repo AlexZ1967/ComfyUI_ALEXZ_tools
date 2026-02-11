@@ -136,6 +136,7 @@ Deliverables:
   - added disposed-instance early-exit guards for catalog/module-info loads plus debounced ComfyUI-check mode reload.
   - introduced explicit UI event lifecycle cleanup (unbind callbacks + timer cleanup + store unsubscribe on picker dispose).
   - propagated liveness-aware cancellation guards through refresh/update/install orchestration to prevent stale post-dispose UI mutations.
+  - added explicit process-controller dispose lifecycle to fully clear/detach progress host between picker re-renders.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

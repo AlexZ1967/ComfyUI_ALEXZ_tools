@@ -41,6 +41,9 @@
 - Long-running flow cancellation guards:
   - added shared `shouldContinue` guards across actions/update orchestration so refresh/update flows stop cleanly after picker dispose,
   - wired picker liveness check into polling/update/install/refresh contexts to block late UI writes from stale async tasks.
+- Process UI lifecycle cleanup:
+  - added `dispose()` to inline process controller and invoke it from picker dispose path,
+  - ensures progress host/buttons are detached/cleared between re-renders and cannot leak stale state.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

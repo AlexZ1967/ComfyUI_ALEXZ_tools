@@ -777,6 +777,7 @@ function renderPicker(container) {
     let actionBusy = false;
     let expandedModule = "";
     let unbindPickerEvents = () => {};
+    let processUi = null;
 
     let pickerDisposed = false;
     const isPickerAlive = () => !pickerDisposed && root.isConnected;
@@ -798,6 +799,11 @@ function renderPicker(container) {
             unsubscribeDebug?.();
         } catch (_err) {
             // Ignore stale store-unsubscribe errors.
+        }
+        try {
+            processUi?.dispose?.();
+        } catch (_err) {
+            // Ignore stale process-ui dispose errors.
         }
         unbindModuleNodesTabRelay();
         if (container?.[PICKER_CLEANUP_KEY] === disposePickerInstance) {
@@ -827,7 +833,7 @@ function renderPicker(container) {
         });
     };
 
-    const processUi = createProcessUiController({
+    processUi = createProcessUiController({
         processHost,
         refreshLine,
         processActions,
