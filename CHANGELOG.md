@@ -88,6 +88,7 @@
   - extracted pending resume flows (Custom refresh, module update, ComfyUI info refresh) into dedicated orchestration module `web/orchestration/module_node_picker_resume_flow.js` with thin wrappers in picker (behavior preserved).
   - extracted runtime/session-state helpers into dedicated state module `web/state/module_node_picker_runtime_state.js` (pending/status markers + storage preferences), preserving existing behavior.
   - extracted busy/loading UI-state handling into dedicated orchestration module `web/orchestration/module_node_picker_busy_ui.js` (startup/action/catalog locks), keeping control-freeze behavior unchanged.
+  - extracted static DOM layout construction into dedicated UI module `web/ui/module_node_picker_layout.js`, reducing main picker complexity while preserving element structure.
 - Canceled-request handling hardening:
   - added shared error-classifier `web/orchestration/module_node_picker_error_utils.js`,
   - resume/action/poll flows now suppress non-actionable warnings for intentionally canceled/aborted requests.

@@ -344,6 +344,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         busy_ui_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
         ).read_text(encoding="utf-8")
+        layout_text = (
+            repo_root / "web" / "ui" / "module_node_picker_layout.js"
+        ).read_text(encoding="utf-8")
         picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
             encoding="utf-8"
         )
@@ -372,6 +375,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("setCatalogControlsLoading", picker_text)
         self.assertIn("Loading groups...", busy_ui_text)
         self.assertIn("Loading modules...", busy_ui_text)
+        self.assertIn("export function createModuleNodePickerLayout", layout_text)
+        self.assertIn("Refresh ComfyUI Info", layout_text)
+        self.assertIn("Refresh Custom Nodes Info", layout_text)
         self.assertIn("PICKER_CLEANUP_KEY", picker_text)
         data_flow_text = (repo_root / "web" / "orchestration" / "module_node_picker_data_flow.js").read_text(encoding="utf-8")
         self.assertIn("isRequestActive", data_flow_text)
