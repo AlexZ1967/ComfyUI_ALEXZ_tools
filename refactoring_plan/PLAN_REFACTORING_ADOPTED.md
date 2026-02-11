@@ -109,12 +109,13 @@ Exit criteria:
 
 ## Phase 2 — Tab-Sync Stabilization
 
-Status: 🚧 in progress (started 2026-02-11)
+Status: ✅ completed (2026-02-12)
 
 Deliverables:
 - Keep one tab synchronization mechanism as primary path.
 - Remove or hard-disable competing sync paths that cause ownership conflicts.
 - Ensure deterministic attach/detach for picker root when tab changes.
+- Third-party `NodesMap` direct-switch issue is tracked as a known issue and scoped out of this phase.
 - Progress checkpoint (2026-02-11):
   - removed legacy/competing sync paths and kept single relay path,
   - split relay internals into focused modules:
@@ -218,8 +219,9 @@ Deliverables:
   - extracted composer relay-bind wiring into `web/orchestration/core/composition/module_node_picker_relay_bridge.js` so composition body keeps relay boot logic in a focused bridge module.
 
 Exit criteria:
-- Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
-- No duplicate roots and no empty panel regressions.
+- Repeated transitions for standard tabs are stable (`Module Nodes -> Workflows/PNG Info -> Module Nodes`).
+- No duplicate roots and no empty panel regressions inside `Module Node Picker` itself.
+- External direct-switch `NodesMap` issue is documented with workaround in `guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md`.
 
 ## Phase 3 — Backend Modular Split (No API Changes)
 

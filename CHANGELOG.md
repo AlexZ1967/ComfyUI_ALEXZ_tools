@@ -1,5 +1,14 @@
 # Changelog — ALEXZ_tools
 
+## 0.17.1 — 2026-02-12
+- Module Node Picker UI consistency:
+  - aligned selection-legend hint placement/spacing with module-card hint behavior for uniform UX near controls.
+- Refactoring plan progress:
+  - Phase 2 marked as completed in adopted plans (`RU`/`EN`) with explicit scope note:
+    external `NodesMap` direct-switch issue remains documented as third-party known issue and workaround.
+- Metadata sync:
+  - package/version fields updated to `0.17.1` in `pyproject.toml` and `README.md`.
+
 ## 0.17.0 — 2026-02-12
 - Minor-version release for large Phase 2 refactor package in Module Node Picker:
   - orchestration/UI/relay logic split into smaller modules and folders with stable wrappers;
