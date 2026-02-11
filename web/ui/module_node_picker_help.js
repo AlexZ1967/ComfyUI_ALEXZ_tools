@@ -28,38 +28,12 @@ export function renderHelpModuleSummary(helpEl, moduleName, nodeCount, marks = {
     if (!helpEl) {
         return;
     }
-    const updatedMark = String(marks.updatedMark || "✅");
-    const remoteUpdateMark = String(marks.remoteUpdateMark || "🟥");
-
     helpEl.innerHTML = "";
-
-    const main = document.createElement("div");
-    main.className = "alexz-mod-picker-help-main";
-    main.append("Модуль ");
-    const moduleStrong = document.createElement("strong");
-    moduleStrong.textContent = String(moduleName || "unknown");
-    main.appendChild(moduleStrong);
-    main.append(": нод ");
-    const countStrong = document.createElement("strong");
-    countStrong.textContent = String(Math.max(0, Number(nodeCount) || 0));
-    main.appendChild(countStrong);
-    main.append(".");
-    helpEl.appendChild(main);
 
     const hint1 = document.createElement("div");
     hint1.className = "alexz-mod-picker-help-hint";
-    hint1.textContent = "Кликните ноду для вставки в граф.";
+    hint1.textContent = "Кликните карточку модуля, чтобы скрыть список нод.";
     helpEl.appendChild(hint1);
-
-    const hint2 = document.createElement("div");
-    hint2.className = "alexz-mod-picker-help-hint";
-    hint2.textContent = `Метки модулей: ${updatedMark} обновлен между запусками, ${remoteUpdateMark} доступно обновление.`;
-    helpEl.appendChild(hint2);
-
-    const hint3 = document.createElement("div");
-    hint3.className = "alexz-mod-picker-help-hint";
-    hint3.textContent = "Рамка ноды: красная = новая, зеленая = обновленная.";
-    helpEl.appendChild(hint3);
 }
 
 /**
@@ -70,19 +44,6 @@ export function renderHelpModuleCardHint(helpEl, moduleName, nodeCount) {
         return;
     }
     helpEl.innerHTML = "";
-
-    const main = document.createElement("div");
-    main.className = "alexz-mod-picker-help-main";
-    main.append("Модуль ");
-    const moduleStrong = document.createElement("strong");
-    moduleStrong.textContent = String(moduleName || "unknown");
-    main.appendChild(moduleStrong);
-    main.append(": нод ");
-    const countStrong = document.createElement("strong");
-    countStrong.textContent = String(Math.max(0, Number(nodeCount) || 0));
-    main.appendChild(countStrong);
-    main.append(".");
-    helpEl.appendChild(main);
 
     const hint = document.createElement("div");
     hint.className = "alexz-mod-picker-help-hint";

@@ -177,11 +177,20 @@ function injectStyles() {
         flex-direction: column;
         gap: 3px;
         min-height: 2.2em;
+        justify-content: flex-end;
+    }
+    .alexz-mod-picker-module-info-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
     }
     .alexz-mod-picker-help-main {
         font-size: 13px;
         line-height: 1.3;
         opacity: 0.95;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
     }
     .alexz-mod-picker-help-main strong {
         font-weight: 700;
@@ -191,6 +200,10 @@ function injectStyles() {
         line-height: 1.3;
         opacity: 0.78;
         font-style: italic;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        margin-bottom: 0;
     }
     .alexz-mod-picker-refresh-line {
         font-size: 12px;
@@ -385,6 +398,25 @@ function injectStyles() {
         margin-top: 2px;
         background: var(--comfy-input-bg, rgba(255,255,255,0.03));
     }
+    .alexz-mod-picker-node-legend {
+        padding: 0;
+        margin-top: 2px;
+        margin-bottom: 6px;
+        border: none;
+        background: transparent;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .alexz-mod-picker-node-legend-row {
+        font-size: 11px;
+        line-height: 1.3;
+        opacity: 0.78;
+        font-style: italic;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
     .alexz-mod-picker-group-title {
         font-size: 12px;
         font-weight: 700;
@@ -561,6 +593,7 @@ function renderPicker(container) {
 
     const comfyAlert = document.createElement("div");
     comfyAlert.className = "alexz-mod-picker-status-card alexz-mod-picker-status-card--neutral";
+    comfyAlert.style.display = "none";
     const comfyAlertText = document.createElement("div");
     comfyAlert.appendChild(comfyAlertText);
     const comfyActions = document.createElement("div");
@@ -629,6 +662,10 @@ function renderPicker(container) {
     moduleFilter.placeholder = "Фильтр модулей (например: Inpaint-Crop)";
     root.appendChild(moduleFilter);
 
+    const moduleHintDivider = document.createElement("div");
+    moduleHintDivider.className = "alexz-mod-picker-divider";
+    root.appendChild(moduleHintDivider);
+
     const refreshLine = document.createElement("div");
     refreshLine.className = "alexz-mod-picker-refresh-line";
     processHost.appendChild(refreshLine);
@@ -694,12 +731,16 @@ function renderPicker(container) {
         }
     });
 
+    const moduleInfoWrap = document.createElement("div");
+    moduleInfoWrap.className = "alexz-mod-picker-module-info-wrap";
+    root.appendChild(moduleInfoWrap);
+
     const help = document.createElement("div");
     help.className = "alexz-mod-picker-help";
-    root.appendChild(help);
+    moduleInfoWrap.appendChild(help);
 
     const moduleInfo = document.createElement("div");
-    root.appendChild(moduleInfo);
+    moduleInfoWrap.appendChild(moduleInfo);
 
     const nodeList = document.createElement("div");
     root.appendChild(nodeList);
@@ -1062,6 +1103,7 @@ function renderPicker(container) {
             comfyAlert,
             comfyAlertText,
             comfyUpdateBtn,
+            comfyInstallReqBtn,
             groupSelect,
             nodeSelect,
             clearModuleInfo: () => {
@@ -1176,6 +1218,10 @@ function renderPicker(container) {
             setHelpModuleCardHint,
             setHelpModuleSummary,
             moduleNodeDiffs,
+            marks: {
+                updatedMark: MODULE_MARK_UPDATED,
+                remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+            },
             createNodeByInfo,
             app,
             centerNode,

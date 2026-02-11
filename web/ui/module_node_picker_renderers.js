@@ -25,6 +25,7 @@ export function renderNodeListPanel(context) {
     const createNodeByInfo = context?.createNodeByInfo;
     const app = context?.app;
     const centerNode = context?.centerNode;
+    const marks = context?.marks || {};
 
     if (!nodeListEl) {
         return;
@@ -55,6 +56,25 @@ export function renderNodeListPanel(context) {
         updatedNodes: new Set(),
         markAllUpdated: false,
     };
+
+    const legend = document.createElement("div");
+    legend.className = "alexz-mod-picker-node-legend";
+
+    const updatedMark = String(marks.updatedMark || "✅");
+    const remoteUpdateMark = String(marks.remoteUpdateMark || "🟥");
+    const legendRows = [
+        "Метки модулей:",
+        `${updatedMark} модуль обновлен между запусками`,
+        `${remoteUpdateMark} для модуля доступно обновление`,
+        "Рамка ноды: красная = новая, зеленая = обновленная.",
+    ];
+    for (const text of legendRows) {
+        const row = document.createElement("div");
+        row.className = "alexz-mod-picker-node-legend-row";
+        row.textContent = text;
+        legend.appendChild(row);
+    }
+    nodeListEl.appendChild(legend);
 
     const groupEl = document.createElement("div");
     groupEl.className = "alexz-mod-picker-group";

@@ -34,17 +34,11 @@ export function unbindModuleNodesTabRelay() {
     if (state.tickInterval) {
         window.clearInterval(state.tickInterval);
     }
-    if (state.bindButtonsInterval) {
-        window.clearInterval(state.bindButtonsInterval);
-    }
     if (state.onPointerDown) {
         document.removeEventListener("pointerdown", state.onPointerDown, true);
     }
     if (state.onMouseDown) {
         document.removeEventListener("mousedown", state.onMouseDown, true);
-    }
-    if (state.onClick) {
-        document.removeEventListener("click", state.onClick, true);
     }
     if (state.onKeyUp) {
         document.removeEventListener("keyup", state.onKeyUp, true);
@@ -54,16 +48,6 @@ export function unbindModuleNodesTabRelay() {
     }
     if (state.onPageShow) {
         window.removeEventListener("pageshow", state.onPageShow, true);
-    }
-    if (Array.isArray(state.boundButtons)) {
-        for (const item of state.boundButtons) {
-            if (!item?.el || !item?.handler) {
-                continue;
-            }
-            item.el.removeEventListener("pointerdown", item.handler, true);
-            item.el.removeEventListener("mousedown", item.handler, true);
-            item.el.removeEventListener("click", item.handler, true);
-        }
     }
     window[TAB_RELAY_STATE_KEY] = null;
 }
@@ -152,7 +136,6 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     const supportsPointer = typeof window !== "undefined" && "PointerEvent" in window;
     const onPointerDown = supportsPointer ? ((event) => handleEvent(event)) : null;
     const onMouseDown = supportsPointer ? null : ((event) => handleEvent(event));
-    const onClick = null;
     const onKeyUp = () => relayRuntime.syncVisibility("relay_keyup");
     const onVisibilityChange = () => relayRuntime.syncVisibility("relay_visibility");
     const onPageShow = () => relayRuntime.syncVisibility("relay_pageshow");
@@ -167,7 +150,6 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     document.addEventListener("visibilitychange", onVisibilityChange, true);
     window.addEventListener("pageshow", onPageShow, true);
 
-    const bindButtonsInterval = 0;
     const tickInterval = window.setInterval(() => {
         if (document.visibilityState === "hidden") {
             return;
@@ -192,13 +174,10 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     window[TAB_RELAY_STATE_KEY] = {
         relayTimer,
         tickInterval,
-        bindButtonsInterval,
         onPointerDown,
         onMouseDown,
-        onClick,
         onKeyUp,
         onVisibilityChange,
         onPageShow,
-        boundButtons: [],
     };
 }

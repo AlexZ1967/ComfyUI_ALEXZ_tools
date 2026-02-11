@@ -105,7 +105,6 @@ export async function loadCatalogFlow(options, context) {
         context?.catalogByGroup?.clear?.();
         const groups = payload?.groups || [];
         context?.setCustomModulesNeedUpdate?.(Number(payload?.custom_modules_need_update || 0));
-        context?.renderComfyAlert?.(payload?.comfyui || null);
         context?.fillGroupSelect?.(groups, { preferredGroup, preferredModule, autoExpandModule });
         const groupLabels = context?.groupLabels || {};
         const summary = groups
@@ -119,16 +118,16 @@ export async function loadCatalogFlow(options, context) {
     } catch (err) {
         context?.setHelpText?.(`Ошибка загрузки: ${String(err)}`);
         const comfyAlert = context?.comfyAlert;
-        const comfyAlertText = context?.comfyAlertText;
         const comfyUpdateBtn = context?.comfyUpdateBtn;
-        if (comfyAlert && comfyAlertText) {
-            comfyAlert.classList.remove("alexz-mod-picker-status-card--warn", "alexz-mod-picker-status-card--ok");
-            comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
-            comfyAlert.style.display = "block";
-            comfyAlertText.textContent = "ComfyUI status unavailable (catalog load failed).";
+        const comfyInstallReqBtn = context?.comfyInstallReqBtn;
+        if (comfyAlert) {
+            comfyAlert.style.display = "none";
         }
         if (comfyUpdateBtn) {
             comfyUpdateBtn.style.display = "none";
+        }
+        if (comfyInstallReqBtn) {
+            comfyInstallReqBtn.style.display = "none";
         }
         context?.setCustomModulesNeedUpdate?.(0);
         if (context?.groupSelect) {
