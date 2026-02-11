@@ -441,6 +441,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         bindings_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_bindings.js"
         ).read_text(encoding="utf-8")
+        startup_flow_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_startup_flow.js"
+        ).read_text(encoding="utf-8")
         error_utils_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_error_utils.js"
         ).read_text(encoding="utf-8")
@@ -469,19 +472,21 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("resumePendingCustomRefreshFlow", picker_text)
         self.assertIn("resumePendingModuleUpdateFlow", picker_text)
         self.assertIn("resumePendingComfyInfoRefreshFlow", picker_text)
-        self.assertIn("runStartupSequence", picker_text)
-        self.assertIn("hasPendingWork", picker_text)
-        self.assertIn("runCatalogStartupLoad", picker_text)
-        self.assertIn("shouldContinueStartup", picker_text)
-        self.assertIn("setStartupBusy(true)", picker_text)
-        self.assertIn("setStartupBusy(false)", picker_text)
+        self.assertIn("runStartupCoordinator", picker_text)
+        self.assertIn("startCatalogStartupLoad", picker_text)
         self.assertIn("isActionBusy: () => actionBusy || startupBusy", picker_text)
-        self.assertIn("await resumePendingCustomRefreshFlow()", picker_text)
-        self.assertIn("await resumePendingModuleUpdateFlow()", picker_text)
-        self.assertIn("await resumePendingComfyInfoRefreshFlow()", picker_text)
-        self.assertIn("cancelStartupLoad = runStartupSequence()", picker_text)
+        self.assertIn("cancelStartupLoad = runStartupCoordinator(", picker_text)
         self.assertIn("onSettled", bindings_text)
         self.assertIn("settle()", bindings_text)
+        self.assertIn("export function runStartupCoordinator", startup_flow_text)
+        self.assertIn("setStartupBusy(true)", startup_flow_text)
+        self.assertIn("setStartupBusy(false)", startup_flow_text)
+        self.assertIn("shouldContinueStartup", startup_flow_text)
+        self.assertIn("hasPendingWork", startup_flow_text)
+        self.assertIn("runCatalogStartupLoad", startup_flow_text)
+        self.assertIn("await resumePendingCustomRefreshFlow()", startup_flow_text)
+        self.assertIn("await resumePendingModuleUpdateFlow()", startup_flow_text)
+        self.assertIn("await resumePendingComfyInfoRefreshFlow()", startup_flow_text)
         self.assertIn("import { isCanceledRequestError }", picker_text)
         self.assertIn("import { isCanceledRequestError }", actions_text)
         self.assertIn("import { isCanceledRequestError }", update_flow_text)

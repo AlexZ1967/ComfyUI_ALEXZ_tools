@@ -84,6 +84,7 @@
   - added startup-settled callback contract in startup loader and unified `startupBusy` lock in UI controls, so action buttons stay disabled until startup bootstrap truly completes.
   - startup coordinator now starts catalog bootstrap immediately while restore flows run, so selectors/module cards are populated early and do not stay empty during long restore operations.
   - while startup/restore is active, picker UI is frozen (selectors/cards/buttons disabled) except progress/status rendering; state unfreezes only after startup settles.
+  - extracted startup coordinator into dedicated orchestration module `web/orchestration/module_node_picker_startup_flow.js` (behavior preserved, lower complexity in main picker module).
 - Canceled-request handling hardening:
   - added shared error-classifier `web/orchestration/module_node_picker_error_utils.js`,
   - resume/action/poll flows now suppress non-actionable warnings for intentionally canceled/aborted requests.

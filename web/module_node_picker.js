@@ -81,6 +81,7 @@ import {
     runModuleNodePickerStartupLoad,
 } from "./orchestration/module_node_picker_bindings.js";
 import { isCanceledRequestError } from "./orchestration/module_node_picker_error_utils.js";
+import { runStartupCoordinator } from "./orchestration/module_node_picker_startup_flow.js";
 import { createModuleNodePickerStore } from "./state/store.js";
 import { createModuleDiagnosticsLogger } from "./diagnostics/logger.js";
 
@@ -1937,79 +1938,25 @@ function renderPicker(container) {
         }
     }
 
-    const runStartupSequence = () => {
-        let sequenceCanceled = false;
-        let cancelCatalogStartupLoad = () => {};
-        const shouldContinueStartup = () => !sequenceCanceled && isPickerAlive();
-        let resolveCatalogSettled = () => {};
-        const catalogSettledPromise = new Promise((resolve) => {
-            resolveCatalogSettled = resolve;
-        });
-
-        const runCatalogStartupLoad = () => {
-            if (!shouldContinueStartup()) {
-                resolveCatalogSettled();
-                return;
-            }
-            cancelCatalogStartupLoad = runModuleNodePickerStartupLoad({
-                pickerStore,
-                defaultModule: DEFAULT_MODULE,
-                loadCatalog,
-                shouldContinue: shouldContinueStartup,
-                startupRetries: 2,
-                startupRetryDelayMs: 250,
-                onSettled: () => {
-                    if (!shouldContinueStartup()) {
-                        resolveCatalogSettled();
-                        return;
-                    }
-                    resolveCatalogSettled();
-                },
-            }) || (() => {});
-        };
-
-        const run = async () => {
-            setStartupBusy(true);
-            try {
-                runCatalogStartupLoad();
-                const hasPendingWork = hasPendingCustomRefresh()
-                    || hasPendingUpdate()
-                    || hasPendingComfyInfoRefresh();
-                if (hasPendingWork) {
-                    await resumePendingCustomRefreshFlow();
-                    if (!shouldContinueStartup()) {
-                        return;
-                    }
-                    await resumePendingModuleUpdateFlow();
-                    if (!shouldContinueStartup()) {
-                        return;
-                    }
-                    await resumePendingComfyInfoRefreshFlow();
-                    if (!shouldContinueStartup()) {
-                        return;
-                    }
-                }
-                await catalogSettledPromise;
-            } finally {
-                if (shouldContinueStartup()) {
-                    setStartupBusy(false);
-                }
-            }
-        };
-
-        void run();
-        return () => {
-            sequenceCanceled = true;
-            try {
-                cancelCatalogStartupLoad?.();
-            } catch (_err) {
-                // Ignore stale startup-load cleanup errors.
-            }
-            resolveCatalogSettled();
-        };
-    };
-
-    cancelStartupLoad = runStartupSequence();
+    cancelStartupLoad = runStartupCoordinator({
+        shouldContinue: isPickerAlive,
+        setStartupBusy,
+        startCatalogStartupLoad: (options = {}) => runModuleNodePickerStartupLoad({
+            pickerStore,
+            defaultModule: DEFAULT_MODULE,
+            loadCatalog,
+            shouldContinue: isPickerAlive,
+            startupRetries: 2,
+            startupRetryDelayMs: 250,
+            onSettled: options?.onSettled,
+        }),
+        hasPendingCustomRefresh,
+        hasPendingUpdate,
+        hasPendingComfyInfoRefresh,
+        resumePendingCustomRefreshFlow,
+        resumePendingModuleUpdateFlow,
+        resumePendingComfyInfoRefreshFlow,
+    });
 }
 
 /**
