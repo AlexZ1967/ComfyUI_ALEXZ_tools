@@ -1,7 +1,7 @@
 """
 Module: utils/module_node_browser_api.py
 Author: AlexZ1967
-Last updated: 2026-02-10
+Last updated: 2026-02-11
 
 Description:
     Backend API for Module Node Picker widget.
@@ -25,6 +25,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashlib import sha1
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -55,6 +56,7 @@ _LAZY_REFRESH_DONE = False
 _REFRESH_LOCK = threading.Lock()
 _REFRESH_THREAD: threading.Thread | None = None
 _REFRESH_LOG_LAST = ""
+_REFRESH_CONSOLE_LOG_LAST = ""
 _REFRESH_STATUS: dict[str, Any] = {
     "running": False,
     "phase": "idle",
@@ -73,6 +75,7 @@ _REFRESH_STATUS: dict[str, Any] = {
 _UPDATE_LOCK = threading.Lock()
 _UPDATE_THREAD: threading.Thread | None = None
 _UPDATE_LOG_LAST = ""
+_UPDATE_CONSOLE_LOG_MODE = "summary"
 _UPDATE_STATUS: dict[str, Any] = {
     "running": False,
     "phase": "idle",
@@ -102,6 +105,58 @@ _GROUP_ORDER = (
     ("api", "API_Nodes"),
     ("custom", "Custom_Nodes"),
 )
+_UPDATE_TARGET_SCAN_WORKERS = 4
+
+
+def _normalize_log_mode(value: str | None) -> str:
+    """Normalize console log mode for update jobs."""
+    text = str(value or "").strip().lower()
+    return "verbose" if text in {"verbose", "debug", "full", "detailed"} else "summary"
+
+
+def _set_update_console_log_mode(mode: str | None) -> str:
+    """Set active console log mode for update jobs and return normalized value."""
+    global _UPDATE_CONSOLE_LOG_MODE
+    normalized = _normalize_log_mode(mode)
+    with _UPDATE_LOCK:
+        _UPDATE_CONSOLE_LOG_MODE = normalized
+    return normalized
+
+
+def _get_update_console_log_mode() -> str:
+    """Read active console log mode for update jobs."""
+    with _UPDATE_LOCK:
+        return _UPDATE_CONSOLE_LOG_MODE
+
+
+def _update_console_log(message: str, level: str = "summary") -> None:
+    """Print update-progress line to ComfyUI console according to selected log mode."""
+    if _normalize_log_mode(level) == "verbose" and _get_update_console_log_mode() != "verbose":
+        return
+    text = str(message or "").strip()
+    if not text:
+        return
+    try:
+        print(f"ALEXZ_tools Module update: {text}", flush=True)
+    except Exception:
+        pass
+
+
+def _refresh_console_log(message: str, level: str = "summary") -> None:
+    """Print refresh-progress line to ComfyUI console according to selected log mode."""
+    global _REFRESH_CONSOLE_LOG_LAST
+    if _normalize_log_mode(level) == "verbose" and _get_update_console_log_mode() != "verbose":
+        return
+    text = str(message or "").strip()
+    if not text:
+        return
+    if text == _REFRESH_CONSOLE_LOG_LAST:
+        return
+    _REFRESH_CONSOLE_LOG_LAST = text
+    try:
+        print(f"ALEXZ_tools Module refresh: {text}", flush=True)
+    except Exception:
+        pass
 
 
 _ALEXZ_ANNOTATIONS = {
@@ -704,25 +759,62 @@ def _manager_index() -> dict[str, dict[str, dict[str, Any]]]:
 
 
 def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
-    """Run a git command in the target directory with safe non-interactive environment."""
-    env = os.environ.copy()
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    env.setdefault("GIT_ASKPASS", "echo")
+    """Run git command in non-interactive mode and return trimmed stdout on success."""
+    result = _run_command(args, timeout=timeout, disable_git_prompt=True)
+    if not result.get("ok"):
+        return None
+    out = str(result.get("stdout") or "").strip()
+    return out or None
+
+
+def _extract_git_repo_from_args(args: list[str]) -> str | None:
+    """Extract normalized git working directory from `git -C <path>` argument list."""
+    if not args or str(args[0]).strip() != "git":
+        return None
+    try:
+        idx = args.index("-C")
+    except ValueError:
+        return None
+    if idx + 1 >= len(args):
+        return None
+    try:
+        return str(Path(str(args[idx + 1])).resolve())
+    except Exception:
+        return str(args[idx + 1])
+
+
+def _is_git_dubious_ownership_error(text: str) -> bool:
+    """Check whether git stderr/stdout indicates `safe.directory` ownership protection."""
+    lower = (text or "").strip().lower()
+    return "detected dubious ownership in repository" in lower and "safe.directory" in lower
+
+
+def _try_mark_git_safe_directory(repo_dir: str, env: dict[str, str], timeout: float = 15.0) -> bool:
+    """Attempt to add repository path to git safe.directory list."""
+    repo = str(repo_dir or "").strip()
+    if not repo:
+        return False
     try:
         proc = subprocess.run(
-            args,
+            ["git", "config", "--global", "--add", "safe.directory", repo],
             capture_output=True,
             text=True,
             timeout=timeout,
             env=env,
             check=False,
         )
-    except Exception:
-        return None
-    if proc.returncode != 0:
-        return None
-    out = (proc.stdout or "").strip()
-    return out or None
+    except Exception as exc:
+        _LOGGER.warning("Failed to add safe.directory for %s: %s", repo, exc)
+        return False
+    if proc.returncode == 0:
+        _LOGGER.info("Added git safe.directory: %s", repo)
+        return True
+    _LOGGER.warning(
+        "Unable to add safe.directory for %s: %s",
+        repo,
+        (proc.stderr or proc.stdout or "unknown error").strip(),
+    )
+    return False
 
 
 def _run_command(args: list[str], timeout: float = 120.0, disable_git_prompt: bool = False) -> dict[str, Any]:
@@ -742,11 +834,42 @@ def _run_command(args: list[str], timeout: float = 120.0, disable_git_prompt: bo
         )
     except Exception as exc:
         return {"ok": False, "returncode": -1, "stdout": "", "stderr": str(exc)}
-    return {
+    result = {
         "ok": proc.returncode == 0,
         "returncode": proc.returncode,
         "stdout": (proc.stdout or "").strip(),
         "stderr": (proc.stderr or "").strip(),
+    }
+    if result["ok"] or not args or str(args[0]).strip() != "git":
+        return result
+
+    repo_dir = _extract_git_repo_from_args(args)
+    if not repo_dir:
+        return result
+
+    error_text = f"{result.get('stderr', '')}\n{result.get('stdout', '')}"
+    if not _is_git_dubious_ownership_error(error_text):
+        return result
+
+    if not _try_mark_git_safe_directory(repo_dir, env):
+        return result
+
+    try:
+        proc_retry = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+            check=False,
+        )
+    except Exception as exc:
+        return {"ok": False, "returncode": -1, "stdout": "", "stderr": str(exc)}
+    return {
+        "ok": proc_retry.returncode == 0,
+        "returncode": proc_retry.returncode,
+        "stdout": (proc_retry.stdout or "").strip(),
+        "stderr": (proc_retry.stderr or "").strip(),
     }
 
 
@@ -1004,6 +1127,7 @@ def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
         result["message"] = "ComfyUI root not found"
         return result
     root_str = str(root)
+    _update_console_log(f"ComfyUI pull: repo={root_str}", level="verbose")
     is_git = _run_git(["git", "-C", root_str, "rev-parse", "--is-inside-work-tree"])
     if is_git != "true":
         result["status"] = "no_git"
@@ -1017,6 +1141,7 @@ def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
         result["message"] = "ComfyUI remote is not configured"
         return result
 
+    _update_console_log(f"ComfyUI pull: fetch {remote_name}...", level="verbose")
     _run_git(["git", "-C", root_str, "fetch", "--quiet", remote_name], timeout=20.0)
     remote_ref, remote_branch = _git_resolve_remote_ref(root, remote_name, branch, upstream)
     if not remote_ref:
@@ -1049,7 +1174,13 @@ def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
         pull_cmd = ["git", "-C", root_str, "pull", "--ff-only", remote_name]
         if remote_branch:
             pull_cmd.append(remote_branch)
+    _update_console_log(f"ComfyUI pull: running {' '.join(pull_cmd)}", level="verbose")
+    pull_started = time.perf_counter()
     pull = _run_command(pull_cmd, timeout=timeout, disable_git_prompt=True)
+    _update_console_log(
+        f"ComfyUI pull: command finished in {time.perf_counter() - pull_started:.2f}s",
+        level="verbose",
+    )
     if not pull.get("ok"):
         result["status"] = "error"
         result["message"] = str(pull.get("stderr") or pull.get("stdout") or "git pull failed")
@@ -1090,24 +1221,64 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
         result["message"] = "module directory not found"
         return result
 
+    _update_console_log(f"{module}: repo={module_dir}", level="verbose")
     is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
     if is_git != "true":
         result["status"] = "no_git"
         result["message"] = "not a git repository"
         return result
 
+    _update_console_log(f"{module}: resolving upstream...", level="verbose")
+    branch = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "HEAD"]) or ""
     upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-    if not upstream:
-        result["status"] = "no_upstream"
-        result["message"] = "upstream is not configured"
+    remote_name = _git_pick_remote(module_dir, upstream)
+    if not remote_name:
+        result["status"] = "no_remote"
+        result["message"] = "remote is not configured"
         return result
+
+    _run_git(["git", "-C", str(module_dir), "fetch", "--quiet", remote_name], timeout=20.0)
+    remote_ref, remote_branch = _git_resolve_remote_ref(module_dir, remote_name, branch, upstream)
+    if not remote_ref:
+        result["status"] = "no_upstream"
+        result["message"] = "upstream/default branch is not configured"
+        return result
+
+    if branch == "HEAD" and remote_branch:
+        checkout = _run_command(
+            ["git", "-C", str(module_dir), "checkout", remote_branch],
+            timeout=timeout,
+            disable_git_prompt=True,
+        )
+        if not checkout.get("ok"):
+            checkout = _run_command(
+                ["git", "-C", str(module_dir), "checkout", "-B", remote_branch, remote_ref],
+                timeout=timeout,
+                disable_git_prompt=True,
+            )
+        if not checkout.get("ok"):
+            result["status"] = "error"
+            result["message"] = str(checkout.get("stderr") or checkout.get("stdout") or "git checkout failed")
+            return result
 
     before_commit = _run_git(["git", "-C", str(module_dir), "rev-parse", "HEAD"]) or ""
     result["before_commit"] = before_commit
+    if upstream:
+        pull_cmd = ["git", "-C", str(module_dir), "pull", "--ff-only"]
+    else:
+        pull_cmd = ["git", "-C", str(module_dir), "pull", "--ff-only", remote_name]
+        if remote_branch:
+            pull_cmd.append(remote_branch)
+    _update_console_log(f"{module}: running {' '.join(pull_cmd)}", level="verbose")
+    pull_started = time.perf_counter()
     pull = _run_command(
-        ["git", "-C", str(module_dir), "pull", "--ff-only"],
+        pull_cmd,
         timeout=timeout,
         disable_git_prompt=True,
+    )
+    _update_console_log(
+        f"{module}: pull command finished in {time.perf_counter() - pull_started:.2f}s",
+        level="verbose",
     )
     if not pull.get("ok"):
         result["status"] = "error"
@@ -1223,8 +1394,19 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
         if is_git != "true":
             continue
 
-        upstream = _run_git(
-            ["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
+        branch = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "HEAD"]) or ""
+        upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+        remote_name = _git_pick_remote(module_dir, upstream)
+        remote_ref = ""
+        remote_branch = ""
+        if remote_name:
+            resolved_ref, resolved_branch = _git_resolve_remote_ref(module_dir, remote_name, branch, upstream)
+            remote_ref = resolved_ref or ""
+            remote_branch = resolved_branch or ""
+        remote_target = upstream or remote_ref
+        remote_head = _run_git(["git", "-C", str(module_dir), "rev-parse", remote_target]) if remote_target else None
+        remote_updated_at = (
+            _run_git(["git", "-C", str(module_dir), "log", "-1", "--format=%cI", remote_target]) if remote_target else None
         )
         state: dict[str, Any] = {
             "module_path": str(module_dir),
@@ -1233,16 +1415,24 @@ def _module_git_state(module_name: str) -> dict[str, Any]:
             ),
             "installed_commit": _run_git(["git", "-C", str(module_dir), "rev-parse", "HEAD"]),
             "installed_updated_at": _run_git(["git", "-C", str(module_dir), "log", "-1", "--format=%cI"]),
-            "remote_updated_at": _run_git(["git", "-C", str(module_dir), "log", "-1", "--format=%cI", "@{u}"]),
-            "branch": _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "HEAD"]),
+            "remote_updated_at": remote_updated_at,
+            "branch": branch,
+            "remote_name": remote_name or "",
+            "remote_ref": remote_target,
+            "remote_branch": remote_branch,
             "upstream": upstream,
-            "has_upstream": bool(upstream),
+            "has_upstream": bool(remote_target),
             "ahead": None,
             "behind": None,
-            "remote_head": _run_git(["git", "-C", str(module_dir), "rev-parse", "@{u}"]),
+            "remote_head": remote_head,
         }
 
-        counts = _run_git(["git", "-C", str(module_dir), "rev-list", "--left-right", "--count", "HEAD...@{u}"])
+        counts_target = f"HEAD...{remote_target}" if remote_target else ""
+        counts = (
+            _run_git(["git", "-C", str(module_dir), "rev-list", "--left-right", "--count", counts_target])
+            if counts_target
+            else None
+        )
         if counts:
             parts = counts.split()
             if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
@@ -1265,12 +1455,11 @@ def _sync_module_upstream(module_name: str, timeout: float = 15.0) -> bool:
         is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
         if is_git != "true":
             continue
-        upstream = _run_git(
-            ["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
-        )
-        if not upstream:
+        upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+        remote_name = _git_pick_remote(module_dir, upstream)
+        if not remote_name:
             return False
-        _run_git(["git", "-C", str(module_dir), "fetch", "--quiet"], timeout=timeout)
+        _run_git(["git", "-C", str(module_dir), "fetch", "--quiet", remote_name], timeout=timeout)
         return True
     return False
 
@@ -1799,7 +1988,7 @@ def _acknowledge_all_novelty() -> dict[str, Any]:
     return {"status": "ok", "changed": changed, "cleared_modules": cleared_modules}
 
 
-def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, int]:
+def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]:
     """Build per-module node-change info by comparing saved and current snapshots."""
     state = _load_module_state()
     if not isinstance(state, dict):
@@ -1808,6 +1997,10 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, int]
     now = _now_iso()
     changed = False
     modules_need_update = 0
+    modules_checked = 0
+    update_available_modules: list[str] = []
+    local_change_modules: list[str] = []
+    commit_change_modules: list[str] = []
 
     known_modules = set(_discover_custom_modules())
     for key in list(state.keys()):
@@ -1831,6 +2024,7 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, int]
                 changed = True
 
     for module_name in sorted(known_modules, key=str.lower):
+        modules_checked += 1
         entry = state.get(module_name, {})
         if not isinstance(entry, dict):
             entry = {}
@@ -1874,11 +2068,16 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, int]
                 entry["startup_prev_commit"] = prev_commit
                 entry["startup_new_commit"] = current_commit
                 entry["startup_update_at"] = now
+                commit_change_modules.append(module_name)
             else:
                 entry["installed_commit"] = current_commit
 
+        if bool(entry.get("pending_local_change")):
+            local_change_modules.append(module_name)
+
         if needs_update:
             modules_need_update += 1
+            update_available_modules.append(module_name)
 
         state[module_name] = entry
         if entry != before:
@@ -1983,7 +2182,25 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, int]
 
     if changed:
         _save_module_state(state)
-    return {"modules_need_update": modules_need_update}
+    node_changed_modules = sorted(
+        {
+            module_name
+            for modules in startup_changes.values()
+            if isinstance(modules, dict)
+            for module_name in modules.keys()
+            if isinstance(module_name, str)
+        },
+        key=str.lower,
+    )
+    return {
+        "modules_need_update": modules_need_update,
+        "modules_checked": modules_checked,
+        "update_available_modules": sorted(update_available_modules, key=str.lower),
+        "local_change_modules": sorted(set(local_change_modules), key=str.lower),
+        "commit_change_modules": sorted(set(commit_change_modules), key=str.lower),
+        "node_changed_modules": node_changed_modules,
+        "new_modules_between_runs": startup_new_modules,
+    }
 
 
 def _module_local_readme_summary(module_name: str) -> str | None:
@@ -2360,6 +2577,24 @@ def _refresh_progress(
     if line != _REFRESH_LOG_LAST:
         _REFRESH_LOG_LAST = line
         _LOGGER.info("Module refresh: %s", line)
+        if phase == "sync" and total > 0 and module:
+            _refresh_console_log(
+                "sync [{current}/{total}] {module}: {message}".format(
+                    current=int(current),
+                    total=int(total),
+                    module=module,
+                    message=message or "-",
+                ),
+                level="verbose",
+            )
+        elif phase in {"sync", "snapshots", "done"}:
+            _refresh_console_log(
+                "phase={phase} message={message} need_update={need}".format(
+                    phase=phase,
+                    message=message or "-",
+                    need=max(0, int(modules_need_update)),
+                )
+            )
 
 
 def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any | None = None) -> dict[str, Any]:
@@ -2370,11 +2605,18 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     _MODULE_INFO_CACHE.clear()
     _CUSTOM_MODULE_ALIAS_CACHE = None
     _clear_comfyui_status_cache()
+    _refresh_console_log(
+        "runtime refresh started (sync_upstreams={sync}, log_mode={mode})".format(
+            sync="on" if sync_upstreams else "off",
+            mode=_get_update_console_log_mode(),
+        )
+    )
     if progress_cb is None:
         progress_cb = _refresh_progress
     if sync_upstreams:
         module_names = _discover_custom_modules()
         total = len(module_names)
+        _refresh_console_log(f"upstream sync enabled for {total} custom module(s)")
         progress_cb(phase="sync", current=0, total=total, remaining=total, message="sync_upstreams")
         for idx, module_name in enumerate(module_names, start=1):
             synced = _sync_module_upstream(module_name)
@@ -2388,14 +2630,56 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
                 message=status,
             )
     else:
+        _refresh_console_log("upstream sync skipped (fast mode)")
         progress_cb(phase="sync", current=0, total=0, remaining=0, message="fast_mode")
 
+    _refresh_console_log("recomputing module snapshots...")
     progress_cb(phase="snapshots", current=0, total=0, remaining=0, message="recompute_snapshots")
     announce_summary = _announce_tracked_module_updates()
     modules_need_update = 0
     if isinstance(announce_summary, dict):
         modules_need_update = max(0, int(announce_summary.get("modules_need_update", 0)))
+    modules_checked = max(0, int((announce_summary or {}).get("modules_checked", 0)))
+    commit_changed = list((announce_summary or {}).get("commit_change_modules") or [])
+    local_changed = list((announce_summary or {}).get("local_change_modules") or [])
+    node_changed = list((announce_summary or {}).get("node_changed_modules") or [])
+    new_modules_map = (announce_summary or {}).get("new_modules_between_runs") or {}
+    new_modules_count = 0
+    if isinstance(new_modules_map, dict):
+        for value in new_modules_map.values():
+            if isinstance(value, list):
+                new_modules_count += len(value)
+    _refresh_console_log(
+        "module scan: checked={checked}, need_update={need}, commit_changed={commit}, local_changed={local}, "
+        "node_changed={node}, new_modules={new}".format(
+            checked=modules_checked,
+            need=modules_need_update,
+            commit=len(commit_changed),
+            local=len(local_changed),
+            node=len(node_changed),
+            new=new_modules_count,
+        )
+    )
+    if commit_changed:
+        _refresh_console_log(f"commit changed modules: {', '.join(commit_changed)}", level="verbose")
+    if local_changed:
+        _refresh_console_log(f"locally changed modules: {', '.join(local_changed)}", level="verbose")
+    if node_changed:
+        _refresh_console_log(f"node changed modules: {', '.join(node_changed)}", level="verbose")
+    update_available_modules = list((announce_summary or {}).get("update_available_modules") or [])
+    if update_available_modules:
+        _refresh_console_log(f"update available modules: {', '.join(update_available_modules)}", level="verbose")
+
     comfyui = _comfyui_git_status(force_refresh=True)
+    _refresh_console_log(
+        "ComfyUI status: update_status={status}, behind={behind}, ahead={ahead}, local={local}, remote={remote}".format(
+            status=str(comfyui.get("update_status") or "unknown"),
+            behind=str(comfyui.get("behind") if comfyui.get("behind") is not None else "-"),
+            ahead=str(comfyui.get("ahead") if comfyui.get("ahead") is not None else "-"),
+            local=_short_commit(str(comfyui.get("installed_commit") or "")),
+            remote=_short_commit(str(comfyui.get("remote_commit") or "")),
+        )
+    )
     progress_cb(
         phase="done",
         current=0,
@@ -2405,6 +2689,7 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
         message="done",
     )
     _LAZY_REFRESH_DONE = True
+    _refresh_console_log("runtime refresh finished")
     return {
         "status": "ok",
         "refreshed_at": _now_iso(),
@@ -2428,10 +2713,12 @@ def _ensure_runtime_state_ready() -> None:
 def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
     """Start background module refresh job if one is not already running."""
     global _REFRESH_THREAD
+    global _REFRESH_CONSOLE_LOG_LAST
     with _REFRESH_LOCK:
         thread = _REFRESH_THREAD
         if thread is not None and thread.is_alive():
             return {"status": "running", "refresh": dict(_REFRESH_STATUS)}
+        _REFRESH_CONSOLE_LOG_LAST = ""
         _REFRESH_STATUS.update(
             {
                 "running": True,
@@ -2454,6 +2741,12 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
         """Background job worker that runs long update/refresh operations."""
         global _REFRESH_THREAD
         try:
+            _refresh_console_log(
+                "job started (sync_upstreams={sync}, log_mode={mode})".format(
+                    sync="on" if sync_upstreams else "off",
+                    mode=_get_update_console_log_mode(),
+                )
+            )
             result = _refresh_module_runtime_state(sync_upstreams=sync_upstreams, progress_cb=_refresh_progress)
             _set_refresh_status(
                 running=False,
@@ -2463,7 +2756,13 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
                 refreshed_at=result.get("refreshed_at", ""),
                 modules_need_update=max(0, int(result.get("modules_need_update", 0))),
             )
+            _refresh_console_log(
+                "job finished: modules_need_update={need}".format(
+                    need=max(0, int(result.get("modules_need_update", 0)))
+                )
+            )
         except Exception as exc:
+            _refresh_console_log(f"job error: {exc}")
             _set_refresh_status(running=False, phase="error", message="error", error=str(exc), module="")
         finally:
             with _REFRESH_LOCK:
@@ -2520,19 +2819,62 @@ def _resolve_update_targets(scope: str, module_name: str) -> list[str]:
     if scope_norm != "all":
         return []
 
+    discovered = _discover_custom_modules()
+    total_scan = len(discovered)
+    _update_console_log(f"target scan started for {total_scan} custom module(s)")
+    if total_scan == 0:
+        return []
+
+    def _scan_one(idx: int, mod: str) -> tuple[int, str, bool, bool]:
+        sync_ok = _sync_module_upstream(mod)
+        needs_update = _module_needs_update_now(mod)
+        return (idx, mod, sync_ok, needs_update)
+
+    ordered_results: list[tuple[int, str, bool, bool]] = []
+    workers = max(1, min(_UPDATE_TARGET_SCAN_WORKERS, total_scan))
+    if workers == 1:
+        ordered_results = [_scan_one(idx, mod) for idx, mod in enumerate(discovered, start=1)]
+    else:
+        result_map: dict[int, tuple[int, str, bool, bool]] = {}
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="alexz-update-scan") as executor:
+            futures = {
+                executor.submit(_scan_one, idx, mod): idx
+                for idx, mod in enumerate(discovered, start=1)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                mod = discovered[idx - 1]
+                try:
+                    result_map[idx] = future.result()
+                except Exception as exc:  # pragma: no cover - defensive path
+                    _LOGGER.warning("Update target scan failed for module %s: %s", mod, exc)
+                    result_map[idx] = (idx, mod, False, False)
+        ordered_results = [result_map[i] for i in sorted(result_map)]
+
     targets: list[str] = []
-    for mod in _discover_custom_modules():
-        _sync_module_upstream(mod)
-        if _module_needs_update_now(mod):
+    for idx, mod, sync_ok, needs_update in ordered_results:
+        if needs_update:
             targets.append(_canonical_custom_module_name(mod))
+        _update_console_log(
+            "scan [{idx}/{total}] {mod}: {state} (sync={sync})".format(
+                idx=idx,
+                total=total_scan,
+                mod=mod,
+                state="needs update" if needs_update else "up to date",
+                sync="ok" if sync_ok else "skip",
+            ),
+            level="verbose",
+        )
     # Keep order stable and deduplicate.
+    _update_console_log(f"target scan finished: {len(targets)} module(s) need update")
     return list(dict.fromkeys(targets))
 
 
-def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
+def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summary") -> dict[str, Any]:
     """Start background module update job for selected custom modules."""
     global _UPDATE_THREAD
     scope_norm = (scope or "").strip().lower()
+    normalized_log_mode = _set_update_console_log_mode(log_mode)
     if scope_norm not in {"single", "all", "comfyui"}:
         return {"status": "error", "error": "scope must be 'single', 'all' or 'comfyui'"}
 
@@ -2569,6 +2911,7 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                 "requirements_changed": False,
                 "requirements_modules": [],
                 "results": [],
+                "log_mode": normalized_log_mode,
                 "started_at": _now_iso(),
                 "updated_at": _now_iso(),
                 "finished_at": "",
@@ -2579,10 +2922,15 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
         """Background job worker that runs long update/refresh operations."""
         global _UPDATE_THREAD
         try:
+            _update_console_log(
+                f"job started (scope={scope_norm}, module={module_name or '-'}, log_mode={normalized_log_mode})"
+            )
             if scope_norm == "comfyui":
+                _update_console_log("ComfyUI update: pull start")
                 _set_update_status(phase="update", current=0, total=1, remaining=1, module="ComfyUI", message="pull")
                 item = _pull_comfyui()
                 status = str(item.get("status") or "")
+                _update_console_log(f"ComfyUI update: pull done (status={status})")
                 updated_count = 1 if status == "updated" else 0
                 uptodate_count = 1 if status == "up_to_date" else 0
                 failed_count = 1 if status not in {"updated", "up_to_date"} else 0
@@ -2609,10 +2957,17 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                     module="",
                     finished_at=_now_iso(),
                 )
+                _update_console_log("job finished (scope=comfyui)")
                 return
 
             targets = _resolve_update_targets(scope_norm, module_name)
             total = len(targets)
+            _update_console_log(
+                "resolved targets: {total} ({mods})".format(
+                    total=total,
+                    mods=", ".join(targets) if targets else "-",
+                )
+            )
             _set_update_status(phase="update", total=total, remaining=total, message="running")
             if total == 0:
                 _refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kwargs: None)
@@ -2625,6 +2980,7 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                     requirements_modules=[],
                     finished_at=_now_iso(),
                 )
+                _update_console_log("job finished: nothing to update")
                 return
 
             updated_count = 0
@@ -2642,9 +2998,22 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                     module=target,
                     message="pull",
                 )
+                _update_console_log(f"[{idx}/{total}] {target}: pull start", level="verbose")
+                pull_started = time.perf_counter()
                 item = _pull_custom_module(target)
+                pull_elapsed = time.perf_counter() - pull_started
                 results.append(item)
                 status = str(item.get("status") or "")
+                _update_console_log(
+                    "[{idx}/{total}] {target}: pull done (status={status}, elapsed={elapsed:.2f}s)".format(
+                        idx=idx,
+                        total=total,
+                        target=target,
+                        status=status or "unknown",
+                        elapsed=pull_elapsed,
+                    ),
+                    level="verbose",
+                )
                 if status == "updated":
                     updated_count += 1
                 elif status == "up_to_date":
@@ -2668,6 +3037,7 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                     results=results,
                 )
 
+            _update_console_log("refreshing runtime state after update run...")
             _refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kwargs: None)
             _set_update_status(
                 running=False,
@@ -2676,7 +3046,15 @@ def _start_module_update_job(scope: str, module_name: str) -> dict[str, Any]:
                 module="",
                 finished_at=_now_iso(),
             )
+            _update_console_log(
+                "job finished: updated={updated}, up_to_date={uptodate}, failed={failed}".format(
+                    updated=updated_count,
+                    uptodate=uptodate_count,
+                    failed=failed_count,
+                )
+            )
         except Exception as exc:
+            _update_console_log(f"job error: {exc}")
             _set_update_status(running=False, phase="error", message="error", error=str(exc), module="", finished_at=_now_iso())
         finally:
             with _UPDATE_LOCK:
@@ -2725,8 +3103,19 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
     async def alexz_tools_module_refresh(request):
         """API route that starts asynchronous module status refresh."""
         try:
-            sync_raw = (request.query.get("sync_upstreams", "1") or "1").strip().lower()
+            sync_raw = (request.query.get("sync_upstreams", "") or "").strip().lower()
+            payload = {}
+            try:
+                payload = await request.json()
+            except Exception:
+                payload = {}
+            if not sync_raw and isinstance(payload, dict):
+                sync_raw = str(payload.get("sync_upstreams", "1") or "1").strip().lower()
+            if not sync_raw:
+                sync_raw = "1"
             do_sync = sync_raw not in {"0", "false", "no", "off"}
+            requested_log_mode = _normalize_log_mode(payload.get("log_mode") if isinstance(payload, dict) else None)
+            _set_update_console_log_mode(requested_log_mode)
             return web.json_response(_start_refresh_job(sync_upstreams=do_sync))
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module refresh API error: %s", exc, exc_info=True)
@@ -2762,7 +3151,8 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                 payload = {}
             scope = str(payload.get("scope") or request.query.get("scope") or "single").strip().lower()
             module_name = str(payload.get("module") or request.query.get("module") or "").strip()
-            started = _start_module_update_job(scope=scope, module_name=module_name)
+            requested_log_mode = _normalize_log_mode(payload.get("log_mode") or request.query.get("log_mode") or "summary")
+            started = _start_module_update_job(scope=scope, module_name=module_name, log_mode=requested_log_mode)
             if started.get("status") == "error":
                 return web.json_response(started, status=400)
             return web.json_response(started)

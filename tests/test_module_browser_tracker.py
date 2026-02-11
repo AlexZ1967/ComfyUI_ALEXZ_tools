@@ -1,7 +1,7 @@
 """
 Module: tests/test_module_browser_tracker.py
 Author: AlexZ1967
-Last updated: 2026-02-10
+Last updated: 2026-02-11
 
 Description:
     Regression tests for Module Node Picker backend tracking.
@@ -55,11 +55,15 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self._orig_comfy_root = self.api._comfyui_root
         self._orig_run_git = self.api._run_git
         self._orig_module_git_state = self.api._module_git_state
+        self._orig_module_dir = self.api._module_dir
         self._orig_module_worktree_signature = self.api._module_worktree_signature
         self._orig_sync_module_upstream = self.api._sync_module_upstream
         self._orig_announce_updates = self.api._announce_tracked_module_updates
         self._orig_comfy_status = self.api._comfyui_git_status
         self._orig_module_needs_update_now = self.api._module_needs_update_now
+        self._orig_run_command = self.api._run_command
+        self._orig_requirements_changed_between = self.api._requirements_changed_between
+        self._orig_subprocess_run = self.api.subprocess.run
         self._orig_install_module_requirements = self.api._install_module_requirements
         self._orig_pull_comfyui = self.api._pull_comfyui
         self._orig_install_comfyui_requirements = self.api._install_comfyui_requirements
@@ -86,11 +90,15 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.api._comfyui_root = self._orig_comfy_root
         self.api._run_git = self._orig_run_git
         self.api._module_git_state = self._orig_module_git_state
+        self.api._module_dir = self._orig_module_dir
         self.api._module_worktree_signature = self._orig_module_worktree_signature
         self.api._sync_module_upstream = self._orig_sync_module_upstream
         self.api._announce_tracked_module_updates = self._orig_announce_updates
         self.api._comfyui_git_status = self._orig_comfy_status
         self.api._module_needs_update_now = self._orig_module_needs_update_now
+        self.api._run_command = self._orig_run_command
+        self.api._requirements_changed_between = self._orig_requirements_changed_between
+        self.api.subprocess.run = self._orig_subprocess_run
         self.api._install_module_requirements = self._orig_install_module_requirements
         self.api._pull_comfyui = self._orig_pull_comfyui
         self.api._install_comfyui_requirements = self._orig_install_comfyui_requirements
@@ -199,6 +207,81 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(status.get("update_status"), "can_update")
         self.assertEqual(status.get("behind"), 2)
         self.assertEqual(status.get("remote_ref"), "origin/main")
+
+    def test_run_command_retries_after_safe_directory_fix(self):
+        """Ensure git command is retried after automatic safe.directory registration."""
+        fake_repo = "/tmp/fake_repo"
+        calls = []
+
+        class _Proc:
+            def __init__(self, returncode, stdout="", stderr=""):
+                self.returncode = returncode
+                self.stdout = stdout
+                self.stderr = stderr
+
+        def fake_subprocess_run(args, capture_output=True, text=True, timeout=120.0, env=None, check=False):
+            cmd = " ".join(args)
+            calls.append(cmd)
+            if cmd == f"git -C {fake_repo} status":
+                if calls.count(cmd) == 1:
+                    return _Proc(
+                        128,
+                        "",
+                        "detected dubious ownership in repository at "
+                        f"'{fake_repo}'\n"
+                        f"git config --global --add safe.directory {fake_repo}",
+                    )
+                return _Proc(0, "On branch main", "")
+            if cmd == f"git config --global --add safe.directory {fake_repo}":
+                return _Proc(0, "", "")
+            return _Proc(0, "", "")
+
+        self.api.subprocess.run = fake_subprocess_run
+        result = self.api._run_command(["git", "-C", fake_repo, "status"], disable_git_prompt=True)
+
+        self.assertTrue(bool(result.get("ok")))
+        self.assertIn(f"git config --global --add safe.directory {fake_repo}", calls)
+        self.assertGreaterEqual(calls.count(f"git -C {fake_repo} status"), 2)
+
+    def test_pull_custom_module_detached_without_upstream_uses_remote_default_branch(self):
+        """Ensure module pull works from detached HEAD even when @{u} is absent."""
+        fake_module = os.path.join(os.getcwd(), "fake_module_detached")
+        rev_parse_head_calls = {"count": 0}
+
+        self.api._module_dir = lambda module_name: fake_module if module_name == "modA" else None
+        self.api._requirements_changed_between = lambda module_dir, before, after: False
+
+        def fake_run_git(args, timeout=2.0):
+            cmd = " ".join(args)
+            table = {
+                f"git -C {fake_module} rev-parse --is-inside-work-tree": "true",
+                f"git -C {fake_module} rev-parse --abbrev-ref HEAD": "HEAD",
+                f"git -C {fake_module} rev-parse --abbrev-ref --symbolic-full-name @{{u}}": None,
+                f"git -C {fake_module} remote": "origin",
+                f"git -C {fake_module} fetch --quiet origin": "",
+                f"git -C {fake_module} symbolic-ref --quiet refs/remotes/origin/HEAD": "refs/remotes/origin/main",
+                f"git -C {fake_module} rev-parse --verify origin/main": "bbbb2222",
+            }
+            if cmd == f"git -C {fake_module} rev-parse HEAD":
+                rev_parse_head_calls["count"] += 1
+                return "aaaa1111" if rev_parse_head_calls["count"] == 1 else "bbbb2222"
+            return table.get(cmd)
+
+        def fake_run_command(args, timeout=120.0, disable_git_prompt=False):
+            cmd = " ".join(args)
+            if cmd in {
+                f"git -C {fake_module} checkout main",
+                f"git -C {fake_module} pull --ff-only origin main",
+            }:
+                return {"ok": True, "returncode": 0, "stdout": "", "stderr": ""}
+            return {"ok": False, "returncode": 1, "stdout": "", "stderr": f"unexpected command: {cmd}"}
+
+        self.api._run_git = fake_run_git
+        self.api._run_command = fake_run_command
+
+        result = self.api._pull_custom_module("modA")
+        self.assertEqual(result.get("status"), "updated")
+        self.assertTrue(bool(result.get("updated")))
 
     def test_unseen_module_update_detected_between_runs(self):
         """Validate `test_unseen_module_update_detected_between_runs` behavior."""
