@@ -124,6 +124,7 @@ Deliverables:
   - reduced relay event noise (single pointer/mouse path, no per-button listeners),
   - added relay runtime debounce and explicit dispose cleanup on unbind,
   - reduced passive tick pressure when picker tab is inactive.
+  - constrained relay click detection to sidebar-context tab controls only (fewer false positives from content area clicks).
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
