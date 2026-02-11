@@ -63,7 +63,7 @@ export function extractTabIdFromButton(buttonEl) {
  * Resolve sidebar tab-like button element from DOM event target/path.
  */
 export function resolveSidebarButtonFromEvent(event) {
-    const isSidebarContextElement = (el) => {
+    const isTabButtonCandidate = (el) => {
         if (!(el instanceof Element)) {
             return false;
         }
@@ -72,6 +72,17 @@ export function resolveSidebarButtonFromEvent(event) {
         }
         if (extractTabIdFromButton(el)) {
             return true;
+        }
+        const role = String(el.getAttribute("role") || "").toLowerCase();
+        if (role === "tab") {
+            return true;
+        }
+        return String(el.tagName || "").toLowerCase() === "button";
+    };
+
+    const isSidebarContextElement = (el) => {
+        if (!(el instanceof Element)) {
+            return false;
         }
         return Boolean(
             el.closest(
@@ -82,9 +93,9 @@ export function resolveSidebarButtonFromEvent(event) {
     const direct = event?.target;
     if (direct instanceof Element) {
         const closest = direct.closest(
-            ".side-bar-button, [class*='-tab-button'], [role='tab'], button[aria-label], button[title]"
+            ".side-bar-button, [class*='-tab-button'], [role='tab'], button"
         );
-        if (closest && isSidebarContextElement(closest)) {
+        if (closest && isTabButtonCandidate(closest) && isSidebarContextElement(closest)) {
             return closest;
         }
     }
@@ -93,9 +104,8 @@ export function resolveSidebarButtonFromEvent(event) {
             if (!(item instanceof Element)) {
                 continue;
             }
-            const role = String(item.getAttribute("role") || "").toLowerCase();
-            if (role === "tab" && isSidebarContextElement(item)) {
-                return item;
+            if (!isTabButtonCandidate(item)) {
+                continue;
             }
             if (isSidebarContextElement(item)) {
                 return item;

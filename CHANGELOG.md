@@ -8,7 +8,8 @@
   - simplified relay event sources (single pointer/mouse path, removed per-button listeners),
   - reduced passive relay tick pressure when picker tab is inactive,
   - added relay sync debounce and runtime `dispose()` cleanup on unbind,
-  - avoided redundant attach/detach DOM operations in relay runtime.
+  - avoided redundant attach/detach DOM operations in relay runtime,
+  - tightened relay tab-button detection to sidebar-context tab controls only (reduced false positives from content clicks).
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,
