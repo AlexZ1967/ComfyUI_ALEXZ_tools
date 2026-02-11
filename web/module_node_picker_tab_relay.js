@@ -13,12 +13,10 @@
 import {
     getActiveSidebarTabId,
     resolveSidebarButtonFromEvent,
-    isSidebarContextEvent,
     isOwnButtonSelected,
-    inferFallbackTabIdFromContext,
     inferTabIdFromButton,
-    getContainerState,
 } from "./orchestration/module_node_picker_tab_relay_helpers.js";
+import { createModuleNodePickerTabRelayRuntime } from "./orchestration/module_node_picker_tab_relay_runtime.js";
 
 const TAB_RELAY_STATE_KEY = "__alexz_module_picker_tab_relay_state_v2__";
 
@@ -74,125 +72,14 @@ export function unbindModuleNodesTabRelay() {
 export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     unbindModuleNodesTabRelay();
 
-    let lastClickedTabId = "";
-    let pendingForeignTabId = "";
-    let pendingForeignTabAt = 0;
-    let lastDiagSig = "";
     const boundButtons = [];
     let relayTimer = 0;
-    const homeContainer = root.parentElement instanceof Element ? root.parentElement : null;
-    const FOREIGN_TAB_HIDE_MS = 1600;
-
-    /**
-     * Emit deduplicated diagnostics payload to panel callback.
-     */
-    const emitDiag = (reason, clickedTabId = "") => {
-        const ownSelected = isOwnButtonSelected(sidebarTabId);
-        const containerState = getContainerState(root);
-        const diag = {
-            reason,
-            activeTabId: getActiveSidebarTabId(app) || "n/a",
-            lastClickedTabId: clickedTabId || lastClickedTabId || "n/a",
-            ownBtnFound: ownSelected !== null,
-            ownBtnSelected: ownSelected,
-            rootDisplay: root.style.display || "",
-            childNodesCount: containerState.childCount,
-            childNodesShort: containerState.childShort,
-        };
-        const sig = JSON.stringify(diag);
-        if (sig === lastDiagSig) {
-            return;
-        }
-        lastDiagSig = sig;
-        onDiag?.(diag);
-    };
-
-    /**
-     * Re-attach picker root into home container when needed.
-     */
-    const ensureRootAttached = () => {
-        if (root.isConnected) {
-            return true;
-        }
-        if (homeContainer && homeContainer.isConnected) {
-            homeContainer.appendChild(root);
-            return true;
-        }
-        return false;
-    };
-
-    /**
-     * Detach picker root from DOM when another sidebar tab should own panel area.
-     */
-    const ensureRootDetached = () => {
-        if (!root.isConnected) {
-            return true;
-        }
-        if (root.parentElement) {
-            root.parentElement.removeChild(root);
-        }
-        return true;
-    };
-
-    /**
-     * Start temporary foreign-tab protection window to avoid stale ownership flicker.
-     */
-    const markForeignTabIntent = (tabId) => {
-        const normalized = String(tabId || "").trim() || "(unknown-other-tab)";
-        pendingForeignTabId = normalized;
-        pendingForeignTabAt = Date.now();
-        lastClickedTabId = normalized;
-        ensureRootDetached();
-    };
-
-    /**
-     * Reset temporary foreign-tab protection window.
-     */
-    const clearForeignTabIntent = () => {
-        pendingForeignTabId = "";
-        pendingForeignTabAt = 0;
-    };
-
-    /**
-     * Return true while we intentionally keep root detached after foreign click.
-     */
-    const isForeignIntentActive = () => {
-        if (!pendingForeignTabId) {
-            return false;
-        }
-        if (Date.now() - pendingForeignTabAt > FOREIGN_TAB_HIDE_MS) {
-            clearForeignTabIntent();
-            return false;
-        }
-        return true;
-    };
-
-    /**
-     * Synchronize picker root visibility/attachment with current sidebar state.
-     */
-    const syncVisibility = (reason, clickedTabId = "") => {
-        const activeTabId = getActiveSidebarTabId(app);
-        const ownSelected = isOwnButtonSelected(sidebarTabId);
-        const switchedAway = (activeTabId && activeTabId !== sidebarTabId) || ownSelected === false;
-        if (switchedAway) {
-            clearForeignTabIntent();
-        }
-        const foreignIntentActive = isForeignIntentActive();
-        let shouldShow = ownSelected === true || activeTabId === sidebarTabId;
-        if (shouldShow && foreignIntentActive) {
-            shouldShow = false;
-        }
-        if (shouldShow) {
-            ensureRootAttached();
-            root.style.display = "";
-        } else {
-            ensureRootDetached();
-        }
-        const effectiveReason = foreignIntentActive && reason !== "relay_own_tab_click"
-            ? "relay_wait_foreign_tab"
-            : reason;
-        emitDiag(effectiveReason, clickedTabId || pendingForeignTabId);
-    };
+    const relayRuntime = createModuleNodePickerTabRelayRuntime({
+        app,
+        root,
+        sidebarTabId,
+        onDiag,
+    });
 
     /**
      * Process sidebar button interaction and schedule relay correction if needed.
@@ -203,13 +90,10 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
             return;
         }
         if (tabId === sidebarTabId) {
-            clearForeignTabIntent();
-            lastClickedTabId = sidebarTabId;
-            syncVisibility("relay_own_tab_click", sidebarTabId);
+            relayRuntime.onOwnTabClick(sidebarTabId);
             return;
         }
-        markForeignTabIntent(tabId);
-        syncVisibility("relay_foreign_tab_click", tabId);
+        relayRuntime.onForeignTabClick(tabId);
         if (isOwnButtonSelected(sidebarTabId) !== true) {
             return;
         }
@@ -225,12 +109,12 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
             const activeTabId = getActiveSidebarTabId(app);
             const ownSelected = isOwnButtonSelected(sidebarTabId);
             if (activeTabId === tabId || ownSelected === false) {
-                clearForeignTabIntent();
-                syncVisibility("relay_native_ok", tabId);
+                relayRuntime.clearForeignIntent();
+                relayRuntime.syncVisibility("relay_native_ok", tabId);
                 return;
             }
             // Do not force tab activation from relay. Only re-evaluate visibility.
-            syncVisibility("relay_pending_switch", tabId);
+            relayRuntime.syncVisibility("relay_pending_switch", tabId);
         }, 60);
         const liveState = window[TAB_RELAY_STATE_KEY];
         if (liveState) {
@@ -243,28 +127,20 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
      */
     const handleEvent = (event) => {
         const direct = event?.target;
-        if (direct instanceof Element && root.contains(direct)) {
+        // Ignore any interaction that originates inside picker root,
+        // including text-node targets emitted by some browser/event paths.
+        if (direct instanceof Node && root.contains(direct)) {
+            return;
+        }
+        if (typeof event?.composedPath === "function" && event.composedPath().includes(root)) {
             return;
         }
         const button = resolveSidebarButtonFromEvent(event);
         if (!button) {
-            if (isOwnButtonSelected(sidebarTabId) === true && isSidebarContextEvent(event)) {
-                const fallbackTabId = inferFallbackTabIdFromContext(app, event, sidebarTabId);
-                markForeignTabIntent(fallbackTabId || "(unknown-other-tab)");
-                syncVisibility("relay_unknown_tab_click", fallbackTabId || "(unknown-other-tab)");
-            }
             return;
         }
         const tabId = inferTabIdFromButton(app, button);
-        if (!tabId && isOwnButtonSelected(sidebarTabId) === true) {
-            const ownMarker = `${sidebarTabId}-tab-button`;
-            const isOwn = button.classList?.contains(ownMarker)
-                || String(button.getAttribute("id") || "") === ownMarker;
-            if (!isOwn) {
-                const fallbackTabId = inferFallbackTabIdFromContext(app, event, sidebarTabId);
-                markForeignTabIntent(fallbackTabId || "(unknown-other-tab)");
-                syncVisibility("relay_unknown_tab_click", fallbackTabId || "(unknown-other-tab)");
-            }
+        if (!tabId) {
             return;
         }
         processTabButton(button);
@@ -297,7 +173,7 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     const onPointerDown = (event) => handleEvent(event);
     const onMouseDown = (event) => handleEvent(event);
     const onClick = (event) => handleEvent(event);
-    const onKeyUp = () => syncVisibility("relay_keyup");
+    const onKeyUp = () => relayRuntime.syncVisibility("relay_keyup");
     const onFocusIn = (event) => handleEvent(event);
 
     document.addEventListener("pointerdown", onPointerDown, true);
@@ -309,10 +185,10 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     bindDirectButtonListeners();
     const bindButtonsInterval = window.setInterval(bindDirectButtonListeners, 1000);
     const tickInterval = window.setInterval(() => {
-        syncVisibility("relay_tick");
+        relayRuntime.syncVisibility("relay_tick");
     }, 220);
 
-    syncVisibility("relay_init");
+    relayRuntime.syncVisibility("relay_init");
     window[TAB_RELAY_STATE_KEY] = {
         relayTimer,
         tickInterval,

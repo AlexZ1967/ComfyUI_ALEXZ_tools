@@ -125,6 +125,38 @@ export function isSidebarContextEvent(event) {
 }
 
 /**
+ * Return true only when event comes from the sidebar tab-strip controls area.
+ */
+export function isSidebarTabStripEvent(event) {
+    const tabSelectors = [
+        ".side-bar-button",
+        "[class*='-tab-button']",
+        "[role='tab']",
+        "[role='tablist']",
+        "[data-tab-id]",
+        "[data-sidebar-tab]",
+        "[data-tab]",
+        ".sidebar-tabs",
+        ".side-bar-buttons",
+    ].join(", ");
+    const direct = event?.target;
+    if (direct instanceof Element && direct.closest(tabSelectors)) {
+        return true;
+    }
+    if (typeof event?.composedPath === "function") {
+        for (const item of event.composedPath()) {
+            if (!(item instanceof Element)) {
+                continue;
+            }
+            if (item.matches?.(tabSelectors) || item.closest?.(tabSelectors)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
  * Return selected state for this extension sidebar button.
  */
 export function isOwnButtonSelected(sidebarTabId) {
