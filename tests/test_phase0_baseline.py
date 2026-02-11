@@ -351,6 +351,12 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("relay_init", relay_text)
         self.assertIn("relay_tick", relay_text)
         self.assertIn("relay_unknown_tab_click", relay_runtime_text)
+        self.assertIn("MIN_SYNC_INTERVAL_MS", relay_runtime_text)
+        self.assertIn("dispose()", relay_runtime_text)
+        self.assertIn("hasPendingForeignIntent()", relay_runtime_text)
+        self.assertIn("passiveTickBudget", relay_text)
+        self.assertIn("relay_visibility", relay_text)
+        self.assertIn("relay_pageshow", relay_text)
 
         self.assertIn("diag.active_tab=", picker_text)
         self.assertIn("diag.last_clicked_tab=", picker_text)
