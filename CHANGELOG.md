@@ -30,6 +30,8 @@
 - Relay helper cleanup:
   - removed unused `hasSidebarTabId` helper,
   - centralized sidebar/tab candidate selectors as module constants for cleaner and safer maintenance.
+- Baseline tests hardening:
+  - added regression check to ensure legacy relay interval path (`setInterval`) and removed helper export are not reintroduced.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

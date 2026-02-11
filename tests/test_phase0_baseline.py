@@ -368,6 +368,20 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("PICKER_CLEANUP_KEY", picker_text)
         self.assertIn("isRequestActive", (repo_root / "web" / "orchestration" / "module_node_picker_data_flow.js").read_text(encoding="utf-8"))
 
+    def test_frontend_tab_relay_legacy_paths_are_not_reintroduced(self):
+        """Keep removed relay legacy paths from silently returning in future edits."""
+        repo_root = Path(__file__).resolve().parents[1]
+        relay_text = (repo_root / "web" / "module_node_picker_tab_relay.js").read_text(
+            encoding="utf-8"
+        )
+        helpers_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_helpers.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("setInterval(", relay_text)
+        self.assertIn("setTimeout(runTick", relay_text)
+        self.assertNotIn("export function hasSidebarTabId", helpers_text)
+
     def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):
         """Ensure non-forced ComfyUI status request returns cached/unknown data without git calls."""
         orig_run_git = self.api._run_git
