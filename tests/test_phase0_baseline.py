@@ -447,6 +447,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         resume_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_resume_flow.js"
         ).read_text(encoding="utf-8")
+        runtime_state_text = (
+            repo_root / "web" / "state" / "module_node_picker_runtime_state.js"
+        ).read_text(encoding="utf-8")
         error_utils_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_error_utils.js"
         ).read_text(encoding="utf-8")
@@ -496,6 +499,11 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export async function resumePendingCustomRefreshFlow", resume_flow_text)
         self.assertIn("export async function resumePendingModuleUpdateFlow", resume_flow_text)
         self.assertIn("export async function resumePendingComfyInfoRefreshFlow", resume_flow_text)
+        self.assertIn("export function getRuntimePickerState", runtime_state_text)
+        self.assertIn("export function clearLegacyPersistentFlags", runtime_state_text)
+        self.assertIn("export function createRuntimeStatusAccessors", runtime_state_text)
+        self.assertIn("export function loadComfyCheckMode", runtime_state_text)
+        self.assertIn("export function saveComfyCheckMode", runtime_state_text)
         self.assertIn("import { isCanceledRequestError }", picker_text)
         self.assertIn("import { isCanceledRequestError }", actions_text)
         self.assertIn("import { isCanceledRequestError }", update_flow_text)

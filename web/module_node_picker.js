@@ -88,6 +88,13 @@ import {
 } from "./orchestration/module_node_picker_resume_flow.js";
 import { runStartupCoordinator } from "./orchestration/module_node_picker_startup_flow.js";
 import { createModuleNodePickerStore } from "./state/store.js";
+import {
+    getRuntimePickerState,
+    clearLegacyPersistentFlags,
+    createRuntimeStatusAccessors,
+    loadComfyCheckMode,
+    saveComfyCheckMode as persistComfyCheckMode,
+} from "./state/module_node_picker_runtime_state.js";
 import { createModuleDiagnosticsLogger } from "./diagnostics/logger.js";
 
 const EXT_NAME = "ALEXZ.Tools.ModuleNodePicker";
@@ -514,30 +521,6 @@ function createNodeByInfo(nodeInfo) {
 }
 
 /**
- * Get per-page runtime state shared across picker re-renders.
- *
- * This state intentionally lives only in browser memory (window object):
- * - survives widget/tab switches inside current page session,
- * - resets after full page reload / ComfyUI restart.
- */
-function getRuntimePickerState() {
-    const existing = window[MODULE_PICKER_RUNTIME_STATE_KEY];
-    if (existing && typeof existing === "object") {
-        return existing;
-    }
-    const created = {
-        customStatusChecked: false,
-        pendingCustomRefresh: false,
-        pendingUpdate: false,
-        pendingComfyInfoRefresh: false,
-        comfyStatusChecked: false,
-        comfyLastInfo: null,
-    };
-    window[MODULE_PICKER_RUNTIME_STATE_KEY] = created;
-    return created;
-}
-
-/**
  * Render Module Node Picker UI and bind all panel event handlers.
  */
 function renderPicker(container) {
@@ -738,79 +721,35 @@ function renderPicker(container) {
         maxEntries: 200,
         debugEnabled: Boolean(pickerStore.get("debugEnabled")),
     });
-    const runtimePickerState = getRuntimePickerState();
+    const runtimePickerState = getRuntimePickerState(window, MODULE_PICKER_RUNTIME_STATE_KEY);
+    clearLegacyPersistentFlags(window, {
+        customStatusCheckedKey: LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY,
+        pendingCustomRefreshKey: LEGACY_PENDING_CUSTOM_REFRESH_STORAGE_KEY,
+        pendingUpdateKey: LEGACY_PENDING_UPDATE_STORAGE_KEY,
+    });
 
-    const clearLegacyPersistentFlags = () => {
-        try {
-            window.localStorage?.removeItem(LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY);
-            window.localStorage?.removeItem(LEGACY_PENDING_CUSTOM_REFRESH_STORAGE_KEY);
-            window.localStorage?.removeItem(LEGACY_PENDING_UPDATE_STORAGE_KEY);
-        } catch (_err) {
-            // Ignore storage failures; legacy flags are best-effort cleanup.
-        }
-    };
-    clearLegacyPersistentFlags();
+    const {
+        loadCustomStatusChecked,
+        saveCustomStatusChecked,
+        loadComfyStatusChecked,
+        saveComfyStatusChecked,
+        loadComfyInfoSnapshot,
+        saveComfyInfoSnapshot,
+        hasPendingCustomRefresh,
+        setPendingCustomRefresh,
+        clearPendingCustomRefresh,
+        hasPendingUpdate,
+        setPendingUpdate,
+        clearPendingUpdate,
+        hasPendingComfyInfoRefresh,
+        setPendingComfyInfoRefresh,
+        clearPendingComfyInfoRefresh,
+    } = createRuntimeStatusAccessors(runtimePickerState);
 
-    const loadComfyCheckMode = () => {
-        try {
-            const raw = window.localStorage?.getItem(COMFYUI_CHECK_MODE_STORAGE_KEY);
-            return String(raw || "releases").trim().toLowerCase() === "commits" ? "commits" : "releases";
-        } catch (_err) {
-            return "releases";
-        }
-    };
+    comfyModeSelect.value = loadComfyCheckMode(window, COMFYUI_CHECK_MODE_STORAGE_KEY);
     const saveComfyCheckMode = (mode) => {
-        const normalized = String(mode || "releases").trim().toLowerCase() === "commits" ? "commits" : "releases";
-        try {
-            window.localStorage?.setItem(COMFYUI_CHECK_MODE_STORAGE_KEY, normalized);
-        } catch (_err) {
-            // Ignore storage failures and keep runtime value only.
-        }
+        persistComfyCheckMode(window, COMFYUI_CHECK_MODE_STORAGE_KEY, mode);
     };
-    const loadCustomStatusChecked = () => {
-        return Boolean(runtimePickerState.customStatusChecked);
-    };
-    const saveCustomStatusChecked = (checked) => {
-        runtimePickerState.customStatusChecked = Boolean(checked);
-    };
-    const loadComfyStatusChecked = () => {
-        return Boolean(runtimePickerState.comfyStatusChecked);
-    };
-    const saveComfyStatusChecked = (checked) => {
-        runtimePickerState.comfyStatusChecked = Boolean(checked);
-    };
-    const loadComfyInfoSnapshot = () => {
-        const info = runtimePickerState.comfyLastInfo;
-        if (!info || typeof info !== "object") {
-            return null;
-        }
-        return { ...info };
-    };
-    const saveComfyInfoSnapshot = (info) => {
-        runtimePickerState.comfyLastInfo = (info && typeof info === "object") ? { ...info } : null;
-    };
-    const hasPendingCustomRefresh = () => {
-        return Boolean(runtimePickerState.pendingCustomRefresh);
-    };
-    const setPendingCustomRefresh = (pending) => {
-        runtimePickerState.pendingCustomRefresh = Boolean(pending);
-    };
-    const clearPendingCustomRefresh = () => setPendingCustomRefresh(false);
-    const hasPendingUpdate = () => {
-        return Boolean(runtimePickerState.pendingUpdate);
-    };
-    const setPendingUpdate = (pending) => {
-        runtimePickerState.pendingUpdate = Boolean(pending);
-    };
-    const clearPendingUpdate = () => setPendingUpdate(false);
-    const hasPendingComfyInfoRefresh = () => {
-        return Boolean(runtimePickerState.pendingComfyInfoRefresh);
-    };
-    const setPendingComfyInfoRefresh = (pending) => {
-        runtimePickerState.pendingComfyInfoRefresh = Boolean(pending);
-    };
-    const clearPendingComfyInfoRefresh = () => setPendingComfyInfoRefresh(false);
-    comfyModeSelect.value = loadComfyCheckMode();
 
     let debugEnabled = Boolean(pickerStore.get("debugEnabled"));
     const unsubscribeDebug = pickerStore.subscribe("debugEnabled", (value) => {
