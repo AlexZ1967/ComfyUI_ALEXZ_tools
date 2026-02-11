@@ -59,12 +59,6 @@ import {
     runModuleUpdateFlow,
 } from "./orchestration/module_node_picker_update_flow.js";
 import {
-    updateModuleOptionText,
-    cacheModuleNodeDiffs,
-    loadModuleInfoFlow,
-    loadCatalogFlow,
-} from "./orchestration/module_node_picker_data_flow.js";
-import {
     runRefreshModuleInfoAction,
     runInstallSingleModuleRequirementsAction,
     runRefreshComfyUIInfoAction,
@@ -75,6 +69,7 @@ import {
     runModuleNodePickerStartupLoad,
 } from "./orchestration/module_node_picker_bindings.js";
 import { createModuleNodePickerApiClient } from "./orchestration/module_node_picker_api_client.js";
+import { createModuleNodePickerCatalogController } from "./orchestration/module_node_picker_catalog_controller.js";
 import { createModuleNodePickerViewHelpers } from "./orchestration/module_node_picker_view_helpers.js";
 import { isCanceledRequestError } from "./orchestration/module_node_picker_error_utils.js";
 import { createModuleNodePickerDebugUi } from "./orchestration/module_node_picker_debug_ui.js";
@@ -614,15 +609,13 @@ function renderPicker(container) {
     const moduleNodeDiffs = new Map();
     const moduleInlineStatus = new Map();
     const updatedModulesSession = new Set();
-    let catalogLoadToken = 0;
-    let catalogLoadBusyCount = 0;
-    let moduleInfoLoadToken = 0;
     let refreshPollToken = 0;
     let updatePollToken = 0;
     let customModulesNeedUpdate = 0;
     let customStatusChecked = loadCustomStatusChecked();
     let comfyStatusChecked = loadComfyStatusChecked();
     let expandedModule = "";
+    let catalogController = null;
     let unbindPickerEvents = () => {};
     let processUi = null;
     let cancelStartupLoad = () => {};
@@ -671,8 +664,7 @@ function renderPicker(container) {
             return;
         }
         pickerDisposed = true;
-        catalogLoadToken += 1;
-        moduleInfoLoadToken += 1;
+        catalogController?.bumpRequestTokens?.();
         refreshPollToken += 1;
         updatePollToken += 1;
         try {
@@ -989,107 +981,51 @@ function renderPicker(container) {
         });
     };
 
-    /**
-     * Refresh module select option text for one module after badge updates.
-     */
-    const setModuleOptionText = (moduleName) => {
-        updateModuleOptionText(
-            {
-                moduleOptions,
-                moduleCounts,
-                moduleBadges,
-                formatModuleOption,
-                marks: {
-                    updatedMark: MODULE_MARK_UPDATED,
-                    remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
-                },
-            },
-            moduleName
-        );
-    };
-
-    /**
-     * Cache node-level diff markers (new/updated) for selected module.
-     */
-    const setModuleNodeDiffs = (moduleName, info) => {
-        cacheModuleNodeDiffs(
-            {
-                moduleNodeDiffs,
-            },
-            moduleName,
-            info
-        );
-    };
-
-    /**
-     * Load and render module info for currently selected group/module.
-     */
-    const loadModuleInfo = async (options = {}) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        const token = ++moduleInfoLoadToken;
-        return loadModuleInfoFlow(options, {
-            isRequestActive: () => token === moduleInfoLoadToken && isPickerAlive(),
-            getSelectedModule: () => String(nodeSelect.value || ""),
-            getSelectedGroup,
-            fetchModuleInfo: fetchModuleInfoApi,
-            clearModuleInfo: () => {
-                moduleInfo.innerHTML = "";
-            },
-            renderModuleInfo,
-            moduleBadgesFromInfo,
-            moduleBadges,
-            setModuleNodeDiffs,
-            setModuleOptionText,
-            renderNodeList,
-        });
-    };
-
-    /**
-     * Load full node catalog from backend and refresh picker UI state.
-     */
-    const loadCatalog = async (options = {}) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        const token = ++catalogLoadToken;
-        catalogLoadBusyCount += 1;
-        if (catalogLoadBusyCount === 1) {
-            setCatalogControlsLoading(true);
-        }
-        try {
-            return await loadCatalogFlow(options, {
-                isRequestActive: () => token === catalogLoadToken && isPickerAlive(),
-                fetchNodeCatalog: fetchNodeCatalogApi,
-                getComfyMode: () => comfyModeSelect.value,
-                catalogByGroup,
-                setCustomModulesNeedUpdate: (value) => {
-                    customModulesNeedUpdate = Number(value || 0);
-                },
-                renderComfyAlert,
-                fillGroupSelect,
-                groupLabels: GROUP_LABELS,
-                setHelpText,
-                syncUpdateAllButton,
-                comfyAlert,
-                comfyAlertText,
-                comfyUpdateBtn,
-                comfyInstallReqBtn,
-                groupSelect,
-                nodeSelect,
-                clearModuleInfo: () => {
-                    moduleInfo.innerHTML = "";
-                },
-                nodeList,
-            });
-        } finally {
-            catalogLoadBusyCount = Math.max(0, catalogLoadBusyCount - 1);
-            if (catalogLoadBusyCount === 0) {
-                setCatalogControlsLoading(false);
-            }
-        }
-    };
+    catalogController = createModuleNodePickerCatalogController({
+        shouldContinue: isPickerAlive,
+        getSelectedGroup,
+        getSelectedModule: () => String(nodeSelect.value || ""),
+        fetchModuleInfo: fetchModuleInfoApi,
+        fetchNodeCatalog: fetchNodeCatalogApi,
+        getComfyMode: () => comfyModeSelect.value,
+        catalogByGroup,
+        moduleCounts,
+        moduleOptions,
+        moduleBadges,
+        moduleNodeDiffs,
+        formatModuleOption,
+        marks: {
+            updatedMark: MODULE_MARK_UPDATED,
+            remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+        },
+        renderNodeList: () => renderNodeList(),
+        renderModuleInfo,
+        moduleBadgesFromInfo,
+        setCatalogControlsLoading,
+        setCustomModulesNeedUpdate: (value) => {
+            customModulesNeedUpdate = Number(value || 0);
+        },
+        renderComfyAlert,
+        fillGroupSelect: (...args) => fillGroupSelect(...args),
+        groupLabels: GROUP_LABELS,
+        setHelpText,
+        syncUpdateAllButton,
+        comfyAlert,
+        comfyAlertText,
+        comfyUpdateBtn,
+        comfyInstallReqBtn,
+        groupSelect,
+        nodeSelect,
+        clearModuleInfo: () => {
+            moduleInfo.innerHTML = "";
+        },
+        nodeList,
+    });
+    const getNodesForSelectedGroup = () => catalogController.getNodesForSelectedGroup();
+    const setModuleOptionText = (moduleName) => catalogController.setModuleOptionText(moduleName);
+    const setModuleNodeDiffs = (moduleName, info) => catalogController.setModuleNodeDiffs(moduleName, info);
+    const loadModuleInfo = async (options = {}) => catalogController.loadModuleInfo(options);
+    const loadCatalog = async (options = {}) => catalogController.loadCatalog(options);
 
     /**
      * Populate module selector for current group with filtering and badge placeholders.

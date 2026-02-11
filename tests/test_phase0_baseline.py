@@ -347,6 +347,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         debug_ui_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_debug_ui.js"
         ).read_text(encoding="utf-8")
+        catalog_controller_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_catalog_controller.js"
+        ).read_text(encoding="utf-8")
         layout_text = (
             repo_root / "web" / "ui" / "module_node_picker_layout.js"
         ).read_text(encoding="utf-8")
@@ -372,9 +375,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("diag.active_tab=", debug_ui_text)
         self.assertIn("diag.last_clicked_tab=", debug_ui_text)
         self.assertIn("diag.child_nodes_short=", debug_ui_text)
-        self.assertIn("catalogLoadToken", picker_text)
-        self.assertIn("moduleInfoLoadToken", picker_text)
-        self.assertIn("catalogLoadBusyCount", picker_text)
+        self.assertIn("catalogLoadToken", catalog_controller_text)
+        self.assertIn("moduleInfoLoadToken", catalog_controller_text)
+        self.assertIn("catalogLoadBusyCount", catalog_controller_text)
         self.assertIn("setCatalogControlsLoading", picker_text)
         self.assertIn("Loading groups...", busy_ui_text)
         self.assertIn("Loading modules...", busy_ui_text)
@@ -459,6 +462,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         api_client_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_api_client.js"
         ).read_text(encoding="utf-8")
+        catalog_controller_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_catalog_controller.js"
+        ).read_text(encoding="utf-8")
         view_helpers_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_view_helpers.js"
         ).read_text(encoding="utf-8")
@@ -533,6 +539,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export function createModuleNodePickerApiClient", api_client_text)
         self.assertIn("AbortController", api_client_text)
         self.assertIn("dispose: () =>", api_client_text)
+        self.assertIn("export function createModuleNodePickerCatalogController", catalog_controller_text)
+        self.assertIn("loadCatalog", catalog_controller_text)
+        self.assertIn("loadModuleInfo", catalog_controller_text)
+        self.assertIn("bumpRequestTokens", catalog_controller_text)
         self.assertIn("export function createModuleNodePickerViewHelpers", view_helpers_text)
         self.assertIn("setProcessAction", view_helpers_text)
         self.assertIn("setRefreshLine", view_helpers_text)

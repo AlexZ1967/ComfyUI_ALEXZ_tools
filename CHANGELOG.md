@@ -92,6 +92,7 @@
   - extracted debug/diagnostics panel orchestration into dedicated module `web/orchestration/module_node_picker_debug_ui.js` (toggle state, diag rendering, copy, cleanup), with picker behavior preserved.
   - extracted lifecycle-bound API wrapper creation into `web/orchestration/module_node_picker_api_client.js` (shared `AbortController` scope + dispose), keeping request-cancellation behavior unchanged.
   - extracted process/help/status text callbacks into dedicated module `web/orchestration/module_node_picker_view_helpers.js` to reduce picker composition complexity without UX changes.
+  - extracted catalog/module loading controller into `web/orchestration/module_node_picker_catalog_controller.js` (request tokens, busy counters, option/diff caches), preserving existing loader behavior.
 - Canceled-request handling hardening:
   - added shared error-classifier `web/orchestration/module_node_picker_error_utils.js`,
   - resume/action/poll flows now suppress non-actionable warnings for intentionally canceled/aborted requests.
