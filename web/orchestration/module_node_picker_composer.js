@@ -61,13 +61,13 @@ import {
     centerNodeInCanvas,
     createNodeFromCatalogInfo,
 } from "../ui/module_node_picker_node_factory.js";
-import { runModuleNodePickerStartupLoad } from "./module_node_picker_bindings.js";
 import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
 import { initializeModuleNodePickerRuntime } from "./module_node_picker_runtime_bootstrap.js";
 import { createModuleNodePickerRuntimeSetup } from "./module_node_picker_runtime_setup.js";
 import { createModuleNodePickerUiStage } from "./module_node_picker_ui_stage.js";
 import { createModuleNodePickerFlowStage } from "./module_node_picker_flow_stage.js";
 import { createModuleNodePickerStageBridge } from "./module_node_picker_stage_bridge.js";
+import { createModuleNodePickerRuntimeBootstrapBindings } from "./module_node_picker_runtime_bootstrap_bindings.js";
 import {
     buildFlowStageContext,
     buildRuntimeSetupContext,
@@ -409,6 +409,13 @@ export function renderModuleNodePicker(container) {
     catalogController = flowStage.catalogController;
     modulePanelController = flowStage.modulePanelController;
     stageBridge.wireFlowStage(flowStage);
+    const runtimeBootstrapBindings = createModuleNodePickerRuntimeBootstrapBindings({
+        flowStage,
+        stageAdapters,
+        isPickerAlive,
+        pickerStore,
+        defaultModule: DEFAULT_MODULE,
+    });
 
     const runtimeBootstrap = initializeModuleNodePickerRuntime(buildRuntimeBootstrapContext({
         groupSelect,
@@ -428,37 +435,29 @@ export function renderModuleNodePicker(container) {
         fillModuleSelect,
         syncUpdateAllButton,
         syncPickerSelectionState,
-        loadModuleInfo: (options = {}) => stageAdapters.loadModuleInfo(options),
+        loadModuleInfo: runtimeBootstrapBindings.loadModuleInfo,
         busyUi,
         setCustomStatusChecked,
         setProcessTarget,
-        runModuleUpdate: (...args) => flowStage.runModuleUpdate(...args),
-        installComfyUIRequirementsFlow: (...args) => flowStage.installComfyUIRequirementsFlow(...args),
-        refreshComfyUIInfoFlow: (...args) => flowStage.refreshComfyUIInfoFlow(...args),
+        runModuleUpdate: runtimeBootstrapBindings.runModuleUpdate,
+        installComfyUIRequirementsFlow: runtimeBootstrapBindings.installComfyUIRequirementsFlow,
+        refreshComfyUIInfoFlow: runtimeBootstrapBindings.refreshComfyUIInfoFlow,
         saveComfyCheckMode,
-        loadCatalog: (options = {}) => stageAdapters.loadCatalog(options),
-        refreshCustomNodesInfoFlow: (...args) => flowStage.refreshCustomNodesInfoFlow(...args),
-        setExpandedModule: (value) => stageAdapters.setExpandedModule(value),
+        loadCatalog: runtimeBootstrapBindings.loadCatalog,
+        refreshCustomNodesInfoFlow: runtimeBootstrapBindings.refreshCustomNodesInfoFlow,
+        setExpandedModule: runtimeBootstrapBindings.setExpandedModule,
         statusCards,
         hasPendingComfyInfoRefresh,
         loadComfyInfoSnapshot,
         renderComfyAlert,
         isPickerAlive,
         setStartupBusy,
-        startCatalogStartupLoad: (options = {}) => runModuleNodePickerStartupLoad({
-            pickerStore,
-            defaultModule: DEFAULT_MODULE,
-            loadCatalog: (opts = {}) => stageAdapters.loadCatalog(opts),
-            shouldContinue: isPickerAlive,
-            startupRetries: 2,
-            startupRetryDelayMs: 250,
-            onSettled: options?.onSettled,
-        }),
+        startCatalogStartupLoad: runtimeBootstrapBindings.startCatalogStartupLoad,
         hasPendingCustomRefresh,
         hasPendingUpdate,
-        resumePendingCustomRefreshFlow: (...args) => flowStage.resumePendingCustomRefreshFlow(...args),
-        resumePendingModuleUpdateFlow: (...args) => flowStage.resumePendingModuleUpdateFlow(...args),
-        resumePendingComfyInfoRefreshFlow: (...args) => flowStage.resumePendingComfyInfoRefreshFlow(...args),
+        resumePendingCustomRefreshFlow: runtimeBootstrapBindings.resumePendingCustomRefreshFlow,
+        resumePendingModuleUpdateFlow: runtimeBootstrapBindings.resumePendingModuleUpdateFlow,
+        resumePendingComfyInfoRefreshFlow: runtimeBootstrapBindings.resumePendingComfyInfoRefreshFlow,
     }));
     unbindPickerEvents = runtimeBootstrap.unbindPickerEvents;
     cancelStartupLoad = runtimeBootstrap.cancelStartupLoad;

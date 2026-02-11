@@ -1,5 +1,18 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.20 — 2026-02-11
+- Phase 2 frontend decomposition continued:
+  - extracted runtime-bootstrap callback adapters from composer into `web/orchestration/module_node_picker_runtime_bootstrap_bindings.js`,
+  - `web/orchestration/module_node_picker_composer.js` now wires runtime bootstrap through prebuilt binding adapters (`createModuleNodePickerRuntimeBootstrapBindings`) to reduce inline lambda density and improve maintainability.
+- Warmup UX reliability fix:
+  - fixed stuck `warming up...` indicator by wiring warmup poller to catalog reload path in `web/orchestration/module_node_picker_catalog_controller.js` (`warmupController.setPoller(...)`),
+  - added fail-safe warmup indicator reset paths in `web/orchestration/module_node_picker_warmup_controller.js` for retry budget exhaustion and poll errors.
+- Baseline guardrail update:
+  - extended `tests/test_phase0_baseline.py` marker checks for runtime-bootstrap binding module and warmup poller wiring.
+- Validation:
+  - `conda run -n p313 node --check web/orchestration/module_node_picker_runtime_bootstrap_bindings.js web/orchestration/module_node_picker_catalog_controller.js web/orchestration/module_node_picker_warmup_controller.js web/orchestration/module_node_picker_composer.js`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (all passed, 40 tests).
+
 ## 0.16.19 — 2026-02-11
 - Phase 2 frontend decomposition continued:
   - extracted deferred-stage bridge from composer into `web/orchestration/module_node_picker_stage_bridge.js`,

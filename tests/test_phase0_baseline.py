@@ -417,8 +417,11 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         flow_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
+        runtime_bootstrap_bindings_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap_bindings.js"
+        ).read_text(encoding="utf-8")
         picker_runtime_text = (
-            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}"
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}"
         )
 
         self.assertIn("export function bindModuleNodesTabRelay", relay_text)
@@ -508,8 +511,11 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         flow_stage_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
+        runtime_bootstrap_bindings_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap_bindings.js"
+        ).read_text(encoding="utf-8")
         picker_runtime_text = (
-            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}"
+            f"{picker_text}\n{composer_text}\n{context_builders_text}\n{ui_stage_text}\n{flow_stage_text}\n{runtime_bootstrap_bindings_text}"
         )
 
         self.assertNotIn("setInterval(", relay_text)
@@ -663,6 +669,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         stage_bridge_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_stage_bridge.js"
         ).read_text(encoding="utf-8")
+        runtime_bootstrap_bindings_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_runtime_bootstrap_bindings.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_runtime_text)
         self.assertIn("getRuntimePickerState", runtime_state_text)
@@ -762,6 +771,8 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export function createModuleNodePickerStageBridge", stage_bridge_text)
         self.assertIn("wireFlowStage", stage_bridge_text)
         self.assertIn("adapters", stage_bridge_text)
+        self.assertIn("export function createModuleNodePickerRuntimeBootstrapBindings", runtime_bootstrap_bindings_text)
+        self.assertIn("startCatalogStartupLoad", runtime_bootstrap_bindings_text)
         self.assertIn("export function createModuleNodePickerLifecycle", lifecycle_text)
         self.assertIn("getCatalogController", lifecycle_text)
         self.assertIn("getPollingController", lifecycle_text)
