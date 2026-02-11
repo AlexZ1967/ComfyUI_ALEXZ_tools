@@ -438,6 +438,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         update_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_update_flow.js"
         ).read_text(encoding="utf-8")
+        bindings_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_bindings.js"
+        ).read_text(encoding="utf-8")
 
         self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_text)
         self.assertIn("getRuntimePickerState", picker_text)
@@ -467,10 +470,15 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("hasPendingWork", picker_text)
         self.assertIn("runCatalogStartupLoad", picker_text)
         self.assertIn("shouldContinueStartup", picker_text)
+        self.assertIn("setStartupBusy(true)", picker_text)
+        self.assertIn("setStartupBusy(false)", picker_text)
+        self.assertIn("isActionBusy: () => actionBusy || startupBusy", picker_text)
         self.assertIn("await resumePendingCustomRefreshFlow()", picker_text)
         self.assertIn("await resumePendingModuleUpdateFlow()", picker_text)
         self.assertIn("await resumePendingComfyInfoRefreshFlow()", picker_text)
         self.assertIn("cancelStartupLoad = runStartupSequence()", picker_text)
+        self.assertIn("onSettled", bindings_text)
+        self.assertIn("settle()", bindings_text)
         self.assertIn("setPendingComfyInfoRefresh?.(true)", actions_text)
         self.assertIn("setComfyStatusChecked?.(true)", actions_text)
         self.assertIn("clearPendingComfyInfoRefresh?.()", actions_text)

@@ -861,6 +861,7 @@ function renderPicker(container) {
     let customStatusChecked = loadCustomStatusChecked();
     let comfyStatusChecked = loadComfyStatusChecked();
     let actionBusy = false;
+    let startupBusy = false;
     let expandedModule = "";
     let unbindPickerEvents = () => {};
     let processUi = null;
@@ -1224,6 +1225,26 @@ function renderPicker(container) {
     };
 
     /**
+     * Sync top/module action controls disabled-state from startup/action busy flags.
+     */
+    const syncBusyUiState = () => {
+        if (!isPickerAlive()) {
+            return;
+        }
+        const busy = Boolean(actionBusy || startupBusy);
+        refreshBtn.disabled = busy;
+        comfyInfoBtn.disabled = busy;
+        comfyModeSelect.disabled = busy;
+        updateAllBtn.disabled = busy;
+        comfyUpdateBtn.disabled = busy || comfyUpdateBtn.style.display === "none";
+        comfyInstallReqBtn.disabled = busy || comfyInstallReqBtn.style.display === "none";
+        for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
+            btn.disabled = busy;
+        }
+        processUi.setButtonsDisabled(busy);
+    };
+
+    /**
      * Enable/disable actionable UI controls during long-running operations.
      */
     const setActionBusy = (busy) => {
@@ -1231,16 +1252,18 @@ function renderPicker(container) {
             return;
         }
         actionBusy = Boolean(busy);
-        refreshBtn.disabled = actionBusy;
-        comfyInfoBtn.disabled = actionBusy;
-        comfyModeSelect.disabled = actionBusy;
-        updateAllBtn.disabled = actionBusy;
-        comfyUpdateBtn.disabled = actionBusy || comfyUpdateBtn.style.display === "none";
-        comfyInstallReqBtn.disabled = actionBusy || comfyInstallReqBtn.style.display === "none";
-        for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
-            btn.disabled = actionBusy;
+        syncBusyUiState();
+    };
+
+    /**
+     * Mark startup bootstrap state and apply unified disabled-state to controls.
+     */
+    const setStartupBusy = (busy) => {
+        if (!isPickerAlive()) {
+            return;
         }
-        processUi.setButtonsDisabled(actionBusy);
+        startupBusy = Boolean(busy);
+        syncBusyUiState();
     };
 
     /**
@@ -1888,7 +1911,7 @@ function renderPicker(container) {
         syncUpdateAllButton,
         syncPickerSelectionState,
         loadModuleInfo,
-        isActionBusy: () => actionBusy,
+        isActionBusy: () => actionBusy || startupBusy,
         setCustomStatusChecked,
         setProcessTarget,
         runModuleUpdate,
@@ -1926,28 +1949,43 @@ function renderPicker(container) {
                 shouldContinue: shouldContinueStartup,
                 startupRetries: 2,
                 startupRetryDelayMs: 250,
+                onSettled: () => {
+                    if (!shouldContinueStartup()) {
+                        return;
+                    }
+                    setStartupBusy(false);
+                },
             }) || (() => {});
         };
 
         const run = async () => {
-            const hasPendingWork = hasPendingCustomRefresh()
-                || hasPendingUpdate()
-                || hasPendingComfyInfoRefresh();
-            if (hasPendingWork) {
-                await resumePendingCustomRefreshFlow();
-                if (!shouldContinueStartup()) {
-                    return;
+            let catalogStarted = false;
+            setStartupBusy(true);
+            try {
+                const hasPendingWork = hasPendingCustomRefresh()
+                    || hasPendingUpdate()
+                    || hasPendingComfyInfoRefresh();
+                if (hasPendingWork) {
+                    await resumePendingCustomRefreshFlow();
+                    if (!shouldContinueStartup()) {
+                        return;
+                    }
+                    await resumePendingModuleUpdateFlow();
+                    if (!shouldContinueStartup()) {
+                        return;
+                    }
+                    await resumePendingComfyInfoRefreshFlow();
+                    if (!shouldContinueStartup()) {
+                        return;
+                    }
                 }
-                await resumePendingModuleUpdateFlow();
-                if (!shouldContinueStartup()) {
-                    return;
-                }
-                await resumePendingComfyInfoRefreshFlow();
-                if (!shouldContinueStartup()) {
-                    return;
+                runCatalogStartupLoad();
+                catalogStarted = true;
+            } finally {
+                if (!catalogStarted && shouldContinueStartup()) {
+                    setStartupBusy(false);
                 }
             }
-            runCatalogStartupLoad();
         };
 
         void run();

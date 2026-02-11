@@ -187,17 +187,33 @@ export function runModuleNodePickerStartupLoad(context) {
     const shouldContinue = typeof context?.shouldContinue === "function"
         ? context.shouldContinue
         : () => true;
+    const onSettled = typeof context?.onSettled === "function"
+        ? context.onSettled
+        : null;
     const maxRetries = Math.max(0, Number(context?.startupRetries ?? 2));
     const retryDelayMs = Math.max(50, Number(context?.startupRetryDelayMs ?? 250));
     const startupGroup = String(pickerStore?.get?.("selectedGroup") || "custom").trim();
     const startupModule = String(pickerStore?.get?.("selectedModule") || defaultModule).trim();
     let cancelled = false;
     let retryTimer = 0;
+    let settled = false;
 
     const clearRetryTimer = () => {
         if (retryTimer) {
             window.clearTimeout(retryTimer);
             retryTimer = 0;
+        }
+    };
+
+    const settle = () => {
+        if (settled) {
+            return;
+        }
+        settled = true;
+        try {
+            onSettled?.();
+        } catch (_err) {
+            // Ignore settled-callback errors during startup orchestration.
         }
     };
 
@@ -212,6 +228,7 @@ export function runModuleNodePickerStartupLoad(context) {
 
     const runAttempt = async (attempt) => {
         if (cancelled || !shouldContinue()) {
+            settle();
             return;
         }
         const result = await loadCatalog?.({
@@ -219,12 +236,15 @@ export function runModuleNodePickerStartupLoad(context) {
             preferredModule: startupModule || defaultModule,
         });
         if (cancelled || !shouldContinue()) {
+            settle();
             return;
         }
         if (attempt >= maxRetries) {
+            settle();
             return;
         }
         if (!shouldRetryResult(result)) {
+            settle();
             return;
         }
         retryTimer = window.setTimeout(() => {
@@ -236,5 +256,6 @@ export function runModuleNodePickerStartupLoad(context) {
     return () => {
         cancelled = true;
         clearRetryTimer();
+        settle();
     };
 }

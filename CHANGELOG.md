@@ -81,6 +81,7 @@
   - pending restore flows (custom refresh, update jobs, ComfyUI info refresh) now run sequentially on widget startup,
   - avoids cross-flow UI races on `actionBusy`/process target and reduces startup flicker,
   - startup now uses a single coordinator: pending resumes first (if any), then catalog startup load, preventing parallel startup race between restore and catalog bootstrap.
+  - added startup-settled callback contract in startup loader and unified `startupBusy` lock in UI controls, so action buttons stay disabled until startup bootstrap truly completes.
 - Regression guardrails:
   - added frontend contract checks for pending/resume markers and session-runtime status in `tests/test_phase0_baseline.py`.
 - ComfyUI mode-switch UX fix:
