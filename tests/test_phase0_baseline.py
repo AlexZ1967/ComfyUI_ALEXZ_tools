@@ -459,6 +459,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         api_client_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_api_client.js"
         ).read_text(encoding="utf-8")
+        view_helpers_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_view_helpers.js"
+        ).read_text(encoding="utf-8")
         resume_flow_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_resume_flow.js"
         ).read_text(encoding="utf-8")
@@ -530,6 +533,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export function createModuleNodePickerApiClient", api_client_text)
         self.assertIn("AbortController", api_client_text)
         self.assertIn("dispose: () =>", api_client_text)
+        self.assertIn("export function createModuleNodePickerViewHelpers", view_helpers_text)
+        self.assertIn("setProcessAction", view_helpers_text)
+        self.assertIn("setRefreshLine", view_helpers_text)
+        self.assertIn("setHelpModuleSummary", view_helpers_text)
         self.assertIn("export function getRuntimePickerState", runtime_state_text)
         self.assertIn("export function clearLegacyPersistentFlags", runtime_state_text)
         self.assertIn("export function createRuntimeStatusAccessors", runtime_state_text)

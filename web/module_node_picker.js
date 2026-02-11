@@ -38,13 +38,6 @@ import {
     formatUpdateLine,
 } from "./ui/module_node_picker_status.js";
 import {
-    renderHelpText,
-    renderHelpHintText,
-    renderHelpHintTextWithTone,
-    renderHelpModuleSummary,
-    renderHelpModuleCardHint,
-} from "./ui/module_node_picker_help.js";
-import {
     renderNodeListPanel,
     renderModuleInfoCard,
 } from "./ui/module_node_picker_renderers.js";
@@ -82,6 +75,7 @@ import {
     runModuleNodePickerStartupLoad,
 } from "./orchestration/module_node_picker_bindings.js";
 import { createModuleNodePickerApiClient } from "./orchestration/module_node_picker_api_client.js";
+import { createModuleNodePickerViewHelpers } from "./orchestration/module_node_picker_view_helpers.js";
 import { isCanceledRequestError } from "./orchestration/module_node_picker_error_utils.js";
 import { createModuleNodePickerDebugUi } from "./orchestration/module_node_picker_debug_ui.js";
 import {
@@ -801,6 +795,27 @@ function renderPicker(container) {
     const setCatalogControlsLoading = (loading) => busyUi.setCatalogControlsLoading(loading);
     const setActionBusy = (busy) => busyUi.setActionBusy(busy);
     const setStartupBusy = (busy) => busyUi.setStartupBusy(busy);
+    const {
+        setProcessAction,
+        setRefreshLine,
+        setCustomRefreshCardLine,
+        setHelpText,
+        setHelpHintText,
+        setHelpModuleSummary,
+        setHelpModuleCardHint,
+    } = createModuleNodePickerViewHelpers({
+        shouldContinue: isPickerAlive,
+        processUi,
+        getActionBusy: () => busyUi.getActionBusy(),
+        customAlert,
+        customAlertText,
+        help,
+        marks: {
+            updatedMark: MODULE_MARK_UPDATED,
+            remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
+        },
+    });
+    showHelpStatus = setHelpText;
 
     /**
      * Render ComfyUI status card based on selected update-check mode.
@@ -851,105 +866,12 @@ function renderPicker(container) {
         return catalogByGroup.get(group) || [];
     };
 
-    /**
-     * Show a process action row with optional button (e.g., install requirements).
-     */
-    const setProcessAction = (label, btnText, onClick) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        processUi.setAction(label, btnText, onClick, busyUi.getActionBusy());
-    };
-
-    /**
-     * Update inline process text with optional color tone.
-     */
-    const setRefreshLine = (text, tone = "neutral") => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        processUi.setLine(text, tone);
-    };
-
-    /**
-     * Mirror refresh-line tone/text into Custom Nodes status card.
-     */
-    const setCustomRefreshCardLine = (text, tone = "neutral") => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        if (!customAlert || !customAlertText) {
-            return;
-        }
-        customAlert.style.display = "block";
-        customAlert.classList.remove(
-            "alexz-mod-picker-status-card--warn",
-            "alexz-mod-picker-status-card--ok",
-            "alexz-mod-picker-status-card--neutral"
-        );
-        if (tone === "warn") {
-            customAlert.classList.add("alexz-mod-picker-status-card--warn");
-        } else if (tone === "ok") {
-            customAlert.classList.add("alexz-mod-picker-status-card--ok");
-        } else {
-            customAlert.classList.add("alexz-mod-picker-status-card--neutral");
-        }
-        customAlertText.textContent = String(text || "");
-    };
     bindModuleNodesTabRelay({
         app,
         root,
         sidebarTabId: SIDEBAR_TAB_ID,
         onDiag: (diag) => debugUi?.setDiagnosticText?.(diag),
     });
-
-    /**
-     * Replace help area with plain status/help text.
-     */
-    const setHelpText = (text) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        renderHelpText(help, text);
-    };
-    showHelpStatus = setHelpText;
-
-    /**
-     * Replace help area with compact hint-like message.
-     */
-    const setHelpHintText = (text, tone = "neutral") => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        if (String(tone || "").toLowerCase() === "warn") {
-            renderHelpHintTextWithTone(help, text, "warn");
-            return;
-        }
-        renderHelpHintText(help, text);
-    };
-
-    /**
-     * Render expanded-module help summary with insertion hints and legend.
-     */
-    const setHelpModuleSummary = (moduleName, nodeCount) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        renderHelpModuleSummary(help, moduleName, nodeCount, {
-            updatedMark: MODULE_MARK_UPDATED,
-            remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
-        });
-    };
-
-    /**
-     * Render collapsed-module hint shown before node list expansion.
-     */
-    const setHelpModuleCardHint = (moduleName, nodeCount) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        renderHelpModuleCardHint(help, moduleName, nodeCount);
-    };
 
     /**
      * Poll refresh status endpoint until job completes or fails.
