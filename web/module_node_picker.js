@@ -863,6 +863,7 @@ function renderPicker(container) {
     let comfyStatusChecked = loadComfyStatusChecked();
     let actionBusy = false;
     let startupBusy = false;
+    let catalogControlsLoading = false;
     let expandedModule = "";
     let unbindPickerEvents = () => {};
     let processUi = null;
@@ -1016,27 +1017,20 @@ function renderPicker(container) {
             return;
         }
         const busy = Boolean(loading);
-        if (groupSelect) {
-            groupSelect.disabled = busy;
-            if (busy && groupSelect.options.length === 0) {
-                const opt = document.createElement("option");
-                opt.value = "";
-                opt.textContent = "Loading groups...";
-                groupSelect.appendChild(opt);
-            }
+        catalogControlsLoading = busy;
+        if (busy && groupSelect && groupSelect.options.length === 0) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "Loading groups...";
+            groupSelect.appendChild(opt);
         }
-        if (nodeSelect) {
-            nodeSelect.disabled = busy;
-            if (busy && nodeSelect.options.length === 0) {
-                const opt = document.createElement("option");
-                opt.value = "";
-                opt.textContent = "Loading modules...";
-                nodeSelect.appendChild(opt);
-            }
+        if (busy && nodeSelect && nodeSelect.options.length === 0) {
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "Loading modules...";
+            nodeSelect.appendChild(opt);
         }
-        if (moduleFilter) {
-            moduleFilter.disabled = busy;
-        }
+        syncBusyUiState();
     };
 
     /**
@@ -1228,22 +1222,31 @@ function renderPicker(container) {
     /**
      * Sync top/module action controls disabled-state from startup/action busy flags.
      */
-    const syncBusyUiState = () => {
+    function syncBusyUiState() {
         if (!isPickerAlive()) {
             return;
         }
         const busy = Boolean(actionBusy || startupBusy);
+        const controlsBusy = Boolean(busy || catalogControlsLoading);
         refreshBtn.disabled = busy;
         comfyInfoBtn.disabled = busy;
         comfyModeSelect.disabled = busy;
+        categorySelect.disabled = controlsBusy;
+        groupSelect.disabled = controlsBusy;
+        nodeSelect.disabled = controlsBusy;
+        moduleFilter.disabled = controlsBusy;
         updateAllBtn.disabled = busy;
         comfyUpdateBtn.disabled = busy || comfyUpdateBtn.style.display === "none";
         comfyInstallReqBtn.disabled = busy || comfyInstallReqBtn.style.display === "none";
+        moduleInfo.style.pointerEvents = controlsBusy ? "none" : "";
+        nodeList.style.pointerEvents = controlsBusy ? "none" : "";
+        moduleInfo.style.opacity = controlsBusy ? "0.85" : "";
+        nodeList.style.opacity = controlsBusy ? "0.92" : "";
         for (const btn of moduleInfo.querySelectorAll(".alexz-mod-picker-action-row .alexz-mod-picker-btn-small")) {
             btn.disabled = busy;
         }
         processUi.setButtonsDisabled(busy);
-    };
+    }
 
     /**
      * Enable/disable actionable UI controls during long-running operations.
@@ -1938,9 +1941,14 @@ function renderPicker(container) {
         let sequenceCanceled = false;
         let cancelCatalogStartupLoad = () => {};
         const shouldContinueStartup = () => !sequenceCanceled && isPickerAlive();
+        let resolveCatalogSettled = () => {};
+        const catalogSettledPromise = new Promise((resolve) => {
+            resolveCatalogSettled = resolve;
+        });
 
         const runCatalogStartupLoad = () => {
             if (!shouldContinueStartup()) {
+                resolveCatalogSettled();
                 return;
             }
             cancelCatalogStartupLoad = runModuleNodePickerStartupLoad({
@@ -1952,17 +1960,18 @@ function renderPicker(container) {
                 startupRetryDelayMs: 250,
                 onSettled: () => {
                     if (!shouldContinueStartup()) {
+                        resolveCatalogSettled();
                         return;
                     }
-                    setStartupBusy(false);
+                    resolveCatalogSettled();
                 },
             }) || (() => {});
         };
 
         const run = async () => {
-            let catalogStarted = false;
             setStartupBusy(true);
             try {
+                runCatalogStartupLoad();
                 const hasPendingWork = hasPendingCustomRefresh()
                     || hasPendingUpdate()
                     || hasPendingComfyInfoRefresh();
@@ -1980,10 +1989,9 @@ function renderPicker(container) {
                         return;
                     }
                 }
-                runCatalogStartupLoad();
-                catalogStarted = true;
+                await catalogSettledPromise;
             } finally {
-                if (!catalogStarted && shouldContinueStartup()) {
+                if (shouldContinueStartup()) {
                     setStartupBusy(false);
                 }
             }
@@ -1997,6 +2005,7 @@ function renderPicker(container) {
             } catch (_err) {
                 // Ignore stale startup-load cleanup errors.
             }
+            resolveCatalogSettled();
         };
     };
 
