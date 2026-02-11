@@ -59,6 +59,9 @@
 - API timeout hardening:
   - introduced shared frontend API fetch wrapper with `AbortController` timeout handling,
   - applied bounded timeouts to catalog/module/status/update/install API calls to avoid indefinite UI hangs.
+- ComfyUI mode-switch UX fix:
+  - switching `ComfyUI check` now refreshes only ComfyUI status card (no full catalog reload),
+  - prevents flicker/reset of group/module dropdowns during fast mode toggles.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

@@ -38,6 +38,7 @@ export function bindModuleNodePickerEvents(context) {
     const runModuleUpdate = context?.runModuleUpdate;
     const installComfyUIRequirementsFlow = context?.installComfyUIRequirementsFlow;
     const refreshComfyUIInfoFlow = context?.refreshComfyUIInfoFlow;
+    const refreshComfyUIModeInfoFlow = context?.refreshComfyUIModeInfoFlow;
     const saveComfyCheckMode = context?.saveComfyCheckMode;
     const loadCatalog = context?.loadCatalog;
     const refreshCustomNodesInfoFlow = context?.refreshCustomNodesInfoFlow;
@@ -139,6 +140,10 @@ export function bindModuleNodePickerEvents(context) {
             }
             comfyModeReloadTimer = window.setTimeout(async () => {
                 if (token !== comfyModeReloadToken) {
+                    return;
+                }
+                if (typeof refreshComfyUIModeInfoFlow === "function") {
+                    await refreshComfyUIModeInfoFlow();
                     return;
                 }
                 await loadCatalog?.();

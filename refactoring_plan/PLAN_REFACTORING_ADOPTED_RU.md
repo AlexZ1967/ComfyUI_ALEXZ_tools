@@ -142,6 +142,7 @@
   - добавлен bounded startup-retry загрузки каталога с явной отменой таймера при dispose (для transient пустого backend-состояния при старте).
   - добавлены loading placeholders + disable/enable lifecycle для селектов во время загрузки каталога (без визуально пустых dropdown на старте).
   - добавлены frontend API timeout-границы (AbortController), чтобы зависшие запросы не блокировали UX виджета бесконечно.
+  - смена `ComfyUI check` режима отвязана от полной reload каталога (стабильные dropdown без фликера при быстрых переключениях).
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.
