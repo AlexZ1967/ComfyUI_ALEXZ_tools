@@ -439,9 +439,10 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "module_node_picker_update_flow.js"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("CUSTOM_STATUS_CHECKED_STORAGE_KEY", picker_text)
-        self.assertIn("PENDING_CUSTOM_REFRESH_STORAGE_KEY", picker_text)
-        self.assertIn("PENDING_UPDATE_STORAGE_KEY", picker_text)
+        self.assertIn("MODULE_PICKER_RUNTIME_STATE_KEY", picker_text)
+        self.assertIn("getRuntimePickerState", picker_text)
+        self.assertIn("LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY", picker_text)
+        self.assertIn("clearLegacyPersistentFlags", picker_text)
         self.assertIn("loadCustomStatusChecked", picker_text)
         self.assertIn("saveCustomStatusChecked", picker_text)
         self.assertIn("setCustomStatusChecked", picker_text)

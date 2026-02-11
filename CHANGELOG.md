@@ -64,16 +64,17 @@
   - all picker API calls now use lifecycle-bound `signal`, so in-flight requests are canceled immediately after dispose,
   - removed stale timer artifact from frontend API wrapper timeout path.
 - Pending refresh resume:
-  - Custom Nodes refresh now persists a pending marker while operation is running,
+  - Custom Nodes refresh now keeps a pending marker while operation is running,
   - when widget re-opens, it restores refresh progress/result in the Custom Nodes card,
   - completed pending refresh is finalized on return (catalog reload + novelty acknowledge path),
-  - `Custom Nodes` status-checked flag is now persisted, so refresh result card does not disappear after widget switching/re-render.
+  - `Custom Nodes` status-checked state is now session-only (runtime memory), so refresh result survives widget switching but resets after full page/ComfyUI reload.
 - Pending update resume:
-  - module/comfy update jobs now persist pending marker while running,
+  - module/comfy update jobs now keep pending markers while running,
   - when widget re-opens, update progress/result is restored from `/module_update_status`,
-  - restore flow handles all scopes (`single`, `all`, `comfyui`) and keeps post-update actions (requirements prompt + catalog refresh).
+  - restore flow handles all scopes (`single`, `all`, `comfyui`) and keeps post-update actions (requirements prompt + catalog refresh),
+  - pending markers are session-only (not kept after full page/ComfyUI reload).
 - Regression guardrails:
-  - added frontend contract checks for pending/resume markers and persisted custom refresh status in `tests/test_phase0_baseline.py`.
+  - added frontend contract checks for pending/resume markers and session-runtime status in `tests/test_phase0_baseline.py`.
 - ComfyUI mode-switch UX fix:
   - switching `ComfyUI check` now refreshes only ComfyUI status card (no full catalog reload),
   - prevents flicker/reset of group/module dropdowns during fast mode toggles.

@@ -93,9 +93,10 @@ const NODE_PICKER_DEBUG_STORAGE_KEY = "alexz_module_picker_debug";
 const NODE_PICKER_SELECTED_GROUP_STORAGE_KEY = "alexz_module_picker_selected_group";
 const NODE_PICKER_SELECTED_MODULE_STORAGE_KEY = "alexz_module_picker_selected_module";
 const COMFYUI_CHECK_MODE_STORAGE_KEY = "alexz_comfyui_check_mode";
-const CUSTOM_STATUS_CHECKED_STORAGE_KEY = "alexz_module_picker_custom_status_checked";
-const PENDING_CUSTOM_REFRESH_STORAGE_KEY = "alexz_module_picker_pending_custom_refresh";
-const PENDING_UPDATE_STORAGE_KEY = "alexz_module_picker_pending_update";
+const MODULE_PICKER_RUNTIME_STATE_KEY = "__alexz_module_picker_runtime_state__";
+const LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY = "alexz_module_picker_custom_status_checked";
+const LEGACY_PENDING_CUSTOM_REFRESH_STORAGE_KEY = "alexz_module_picker_pending_custom_refresh";
+const LEGACY_PENDING_UPDATE_STORAGE_KEY = "alexz_module_picker_pending_update";
 const PICKER_CLEANUP_KEY = "__alexz_module_node_picker_cleanup__";
 const GROUP_LABELS = {
     core: "Core_Nodes",
@@ -506,6 +507,27 @@ function createNodeByInfo(nodeInfo) {
 }
 
 /**
+ * Get per-page runtime state shared across picker re-renders.
+ *
+ * This state intentionally lives only in browser memory (window object):
+ * - survives widget/tab switches inside current page session,
+ * - resets after full page reload / ComfyUI restart.
+ */
+function getRuntimePickerState() {
+    const existing = window[MODULE_PICKER_RUNTIME_STATE_KEY];
+    if (existing && typeof existing === "object") {
+        return existing;
+    }
+    const created = {
+        customStatusChecked: false,
+        pendingCustomRefresh: false,
+        pendingUpdate: false,
+    };
+    window[MODULE_PICKER_RUNTIME_STATE_KEY] = created;
+    return created;
+}
+
+/**
  * Render Module Node Picker UI and bind all panel event handlers.
  */
 function renderPicker(container) {
@@ -706,6 +728,18 @@ function renderPicker(container) {
         maxEntries: 200,
         debugEnabled: Boolean(pickerStore.get("debugEnabled")),
     });
+    const runtimePickerState = getRuntimePickerState();
+
+    const clearLegacyPersistentFlags = () => {
+        try {
+            window.localStorage?.removeItem(LEGACY_CUSTOM_STATUS_CHECKED_STORAGE_KEY);
+            window.localStorage?.removeItem(LEGACY_PENDING_CUSTOM_REFRESH_STORAGE_KEY);
+            window.localStorage?.removeItem(LEGACY_PENDING_UPDATE_STORAGE_KEY);
+        } catch (_err) {
+            // Ignore storage failures; legacy flags are best-effort cleanup.
+        }
+    };
+    clearLegacyPersistentFlags();
 
     const loadComfyCheckMode = () => {
         try {
@@ -724,61 +758,23 @@ function renderPicker(container) {
         }
     };
     const loadCustomStatusChecked = () => {
-        try {
-            const raw = window.localStorage?.getItem(CUSTOM_STATUS_CHECKED_STORAGE_KEY);
-            const normalized = String(raw || "").trim().toLowerCase();
-            return normalized === "1" || normalized === "true" || normalized === "yes";
-        } catch (_err) {
-            return false;
-        }
+        return Boolean(runtimePickerState.customStatusChecked);
     };
     const saveCustomStatusChecked = (checked) => {
-        try {
-            if (checked) {
-                window.localStorage?.setItem(CUSTOM_STATUS_CHECKED_STORAGE_KEY, "1");
-            } else {
-                window.localStorage?.removeItem(CUSTOM_STATUS_CHECKED_STORAGE_KEY);
-            }
-        } catch (_err) {
-            // Ignore storage failures and keep runtime value only.
-        }
+        runtimePickerState.customStatusChecked = Boolean(checked);
     };
     const hasPendingCustomRefresh = () => {
-        try {
-            return window.localStorage?.getItem(PENDING_CUSTOM_REFRESH_STORAGE_KEY) === "1";
-        } catch (_err) {
-            return false;
-        }
+        return Boolean(runtimePickerState.pendingCustomRefresh);
     };
     const setPendingCustomRefresh = (pending) => {
-        try {
-            if (pending) {
-                window.localStorage?.setItem(PENDING_CUSTOM_REFRESH_STORAGE_KEY, "1");
-            } else {
-                window.localStorage?.removeItem(PENDING_CUSTOM_REFRESH_STORAGE_KEY);
-            }
-        } catch (_err) {
-            // Ignore storage failures and keep runtime behavior.
-        }
+        runtimePickerState.pendingCustomRefresh = Boolean(pending);
     };
     const clearPendingCustomRefresh = () => setPendingCustomRefresh(false);
     const hasPendingUpdate = () => {
-        try {
-            return window.localStorage?.getItem(PENDING_UPDATE_STORAGE_KEY) === "1";
-        } catch (_err) {
-            return false;
-        }
+        return Boolean(runtimePickerState.pendingUpdate);
     };
     const setPendingUpdate = (pending) => {
-        try {
-            if (pending) {
-                window.localStorage?.setItem(PENDING_UPDATE_STORAGE_KEY, "1");
-            } else {
-                window.localStorage?.removeItem(PENDING_UPDATE_STORAGE_KEY);
-            }
-        } catch (_err) {
-            // Ignore storage failures and keep runtime behavior.
-        }
+        runtimePickerState.pendingUpdate = Boolean(pending);
     };
     const clearPendingUpdate = () => setPendingUpdate(false);
     comfyModeSelect.value = loadComfyCheckMode();
