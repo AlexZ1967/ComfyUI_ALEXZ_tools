@@ -86,6 +86,18 @@ class Slice0RegistryTests(unittest.TestCase):
         self.assertGreater(summary["widget_count"], 0)
         self.assertGreater(summary["api_count"], 0)
 
+    def test_widget_manifest_contains_module_node_picker(self):
+        """Widget manifest keeps Module Node Picker entrypoint in one canonical place."""
+        module = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_browser.widget_manifest")
+        widget_ids = {item.widget_id for item in module.iter_widget_specs()}
+        self.assertIn("module_node_picker", widget_ids)
+
+    def test_api_manifest_exposes_component_registry_route(self):
+        """API manifest keeps component-registry endpoint in published route list."""
+        module = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_browser.api_manifest")
+        routes = set(module.iter_component_api_routes())
+        self.assertIn("/alexz_tools/component_registry", routes)
+
     def test_module_state_schema_is_added_on_load(self):
         """Module state loader normalizes persisted cache to versioned schema."""
         api = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_node_browser_api")
@@ -107,7 +119,78 @@ class Slice0RegistryTests(unittest.TestCase):
                 api._MODULE_STATE_PATH = orig_path
                 api._MODULE_STATE_CACHE = orig_cache
 
+    def test_component_registry_payload_contains_changes_block(self):
+        """Component registry payload exposes deterministic change-tracking fields."""
+        api = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_node_browser_api")
+        payload = api._component_registry_payload(force_refresh=True)
+        self.assertIn("summary", payload)
+        self.assertIn("changes", payload)
+        self.assertIn("has_changes", payload)
+        self.assertIn("node", payload["changes"])
+        self.assertIn("widget", payload["changes"])
+        self.assertIn("api", payload["changes"])
+
+    def test_component_registry_payload_detects_added_and_removed_components(self):
+        """Change tracker reports added/removed component ids against previous snapshot."""
+        api = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_node_browser_api")
+        component_registry = importlib.import_module("ComfyUI_ALEXZ_tools.utils.module_browser.component_registry")
+
+        original_builder = api.build_default_component_registry
+        original_state = api._MODULE_STATE_CACHE
+        original_payload_cache = api._COMPONENT_REGISTRY_PAYLOAD_CACHE
+        try:
+            registry = component_registry.ComponentRegistry()
+            registry.register(
+                component_registry.ComponentEntry(
+                    component_id="node:NewNode",
+                    kind="node",
+                    name="New Node",
+                    module="nodes.new_node",
+                    source="/tmp/new_node.py",
+                )
+            )
+            registry.register(
+                component_registry.ComponentEntry(
+                    component_id="widget:module_node_picker",
+                    kind="widget",
+                    name="Module Node Picker",
+                    module="web/module_node_picker.js",
+                    source="/tmp/module_node_picker.js",
+                )
+            )
+            registry.register(
+                component_registry.ComponentEntry(
+                    component_id="api:/alexz_tools/node_catalog",
+                    kind="api",
+                    name="/alexz_tools/node_catalog",
+                    module="utils/module_node_browser_api.py",
+                    source="/tmp/module_node_browser_api.py",
+                )
+            )
+            api.build_default_component_registry = lambda: registry
+            api._COMPONENT_REGISTRY_PAYLOAD_CACHE = None
+            api._MODULE_STATE_CACHE = {
+                "__component_registry__": {
+                    "snapshot": {
+                        "node": ["node:OldNode"],
+                        "widget": ["widget:module_node_picker"],
+                        "api": ["api:/alexz_tools/old_route"],
+                    },
+                    "updated_at": "2026-02-12T00:00:00+00:00",
+                }
+            }
+            payload = api._component_registry_payload(force_refresh=True)
+            node_changes = payload.get("changes", {}).get("node", {})
+            api_changes = payload.get("changes", {}).get("api", {})
+            self.assertIn("node:NewNode", node_changes.get("added", []))
+            self.assertIn("node:OldNode", node_changes.get("removed", []))
+            self.assertIn("api:/alexz_tools/old_route", api_changes.get("removed", []))
+            self.assertTrue(bool(payload.get("has_changes")))
+        finally:
+            api.build_default_component_registry = original_builder
+            api._MODULE_STATE_CACHE = original_state
+            api._COMPONENT_REGISTRY_PAYLOAD_CACHE = original_payload_cache
+
 
 if __name__ == "__main__":
     unittest.main()
-

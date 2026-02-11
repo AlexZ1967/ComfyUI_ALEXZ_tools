@@ -17,6 +17,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from .api_manifest import iter_component_api_routes
+from .widget_manifest import iter_widget_specs
+
 
 @dataclass(frozen=True)
 class ComponentEntry:
@@ -72,17 +75,6 @@ class ComponentRegistry:
         }
 
 
-_DEFAULT_API_ROUTES: tuple[str, ...] = (
-    "/alexz_tools/node_catalog",
-    "/alexz_tools/module_info",
-    "/alexz_tools/module_list",
-    "/alexz_tools/module_nodes",
-    "/alexz_tools/module_refresh",
-    "/alexz_tools/module_refresh_status",
-    "/alexz_tools/comfyui_info",
-)
-
-
 def _iter_node_specs() -> list[tuple[str, str, str, str]]:
     """Load node specs from central node registry with import-safe fallback."""
     try:
@@ -112,18 +104,19 @@ def build_default_component_registry() -> ComponentRegistry:
             )
         )
 
-    registry.register(
-        ComponentEntry(
-            component_id="widget:module_node_picker",
-            kind="widget",
-            name="Module Node Picker",
-            module="web/module_node_picker.js",
-            source=f"{root / 'web' / 'module_node_picker.js'}",
-            enabled=True,
+    for widget in iter_widget_specs():
+        registry.register(
+            ComponentEntry(
+                component_id=f"widget:{widget.widget_id}",
+                kind="widget",
+                name=widget.name,
+                module=widget.entrypoint,
+                source=f"{root / widget.entrypoint}",
+                enabled=bool(widget.enabled),
+            )
         )
-    )
 
-    for route in _DEFAULT_API_ROUTES:
+    for route in iter_component_api_routes():
         registry.register(
             ComponentEntry(
                 component_id=f"api:{route}",
@@ -136,4 +129,3 @@ def build_default_component_registry() -> ComponentRegistry:
         )
 
     return registry
-

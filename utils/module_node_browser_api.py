@@ -38,6 +38,21 @@ from .module_browser import (
     build_default_component_registry,
     ensure_module_state_schema,
 )
+from .module_browser.api_manifest import (
+    ROUTE_COMFYUI_INFO,
+    ROUTE_COMFYUI_INSTALL_REQUIREMENTS,
+    ROUTE_COMPONENT_REGISTRY,
+    ROUTE_MODULE_ACKNOWLEDGE_ALL,
+    ROUTE_MODULE_INFO,
+    ROUTE_MODULE_INSTALL_REQUIREMENTS,
+    ROUTE_MODULE_LIST,
+    ROUTE_MODULE_NODES,
+    ROUTE_MODULE_REFRESH,
+    ROUTE_MODULE_REFRESH_STATUS,
+    ROUTE_MODULE_UPDATE,
+    ROUTE_MODULE_UPDATE_STATUS,
+    ROUTE_NODE_CATALOG,
+)
 
 try:
     import folder_paths
@@ -248,13 +263,51 @@ def _component_registry_payload(force_refresh: bool = False) -> dict[str, Any]:
         return dict(_COMPONENT_REGISTRY_PAYLOAD_CACHE[1])
 
     registry = build_default_component_registry()
+    state = _load_module_state()
+    tracker_raw = state.get("__component_registry__") if isinstance(state, dict) else None
+    tracker = dict(tracker_raw) if isinstance(tracker_raw, dict) else {}
+    prev_snapshot_raw = tracker.get("snapshot")
+    prev_snapshot = dict(prev_snapshot_raw) if isinstance(prev_snapshot_raw, dict) else {}
+
+    node_entries = [entry.to_dict() for entry in registry.list("node")]
+    widget_entries = [entry.to_dict() for entry in registry.list("widget")]
+    api_entries = [entry.to_dict() for entry in registry.list("api")]
+    current_snapshot = {
+        "node": sorted(str(item.get("component_id") or "") for item in node_entries if item.get("component_id")),
+        "widget": sorted(str(item.get("component_id") or "") for item in widget_entries if item.get("component_id")),
+        "api": sorted(str(item.get("component_id") or "") for item in api_entries if item.get("component_id")),
+    }
+
+    changes: dict[str, dict[str, list[str]]] = {}
+    has_changes = False
+    for kind in ("node", "widget", "api"):
+        prev_ids = {str(x) for x in (prev_snapshot.get(kind) or []) if str(x)}
+        curr_ids = {str(x) for x in (current_snapshot.get(kind) or []) if str(x)}
+        added = sorted(curr_ids - prev_ids, key=str.lower)
+        removed = sorted(prev_ids - curr_ids, key=str.lower)
+        if added or removed:
+            has_changes = True
+        changes[kind] = {"added": added, "removed": removed}
+
     payload = {
         "summary": registry.summary(),
-        "nodes": [entry.to_dict() for entry in registry.list("node")],
-        "widgets": [entry.to_dict() for entry in registry.list("widget")],
-        "apis": [entry.to_dict() for entry in registry.list("api")],
+        "nodes": node_entries,
+        "widgets": widget_entries,
+        "apis": api_entries,
+        "changes": changes,
+        "has_changes": has_changes,
+        "previous_snapshot_at": str(tracker.get("updated_at") or ""),
         "refreshed_at": _now_iso(),
     }
+
+    if not isinstance(tracker_raw, dict) or tracker.get("snapshot") != current_snapshot:
+        state["__component_registry__"] = {
+            "snapshot": current_snapshot,
+            "summary": dict(payload["summary"]),
+            "updated_at": payload["refreshed_at"],
+        }
+        _save_module_state(state)
+
     _COMPONENT_REGISTRY_PAYLOAD_CACHE = (now_ts, dict(payload))
     return payload
 
@@ -3522,7 +3575,7 @@ def _install_requirements_for_modules(modules: list[str]) -> dict[str, Any]:
 if PromptServer is not None and web is not None and getattr(PromptServer, "instance", None):
     _LOGGER.info("✅ Module Nodes widget backend loaded")
 
-    @PromptServer.instance.routes.post("/alexz_tools/module_refresh")
+    @PromptServer.instance.routes.post(ROUTE_MODULE_REFRESH)
     async def alexz_tools_module_refresh(request):
         """API route that starts asynchronous module status refresh."""
         try:
@@ -3544,7 +3597,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module refresh API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.get("/alexz_tools/module_refresh_status")
+    @PromptServer.instance.routes.get(ROUTE_MODULE_REFRESH_STATUS)
     async def alexz_tools_module_refresh_status(request):
         """API route that returns current module-refresh job status."""
         try:
@@ -3553,7 +3606,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module refresh status API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.post("/alexz_tools/module_acknowledge_all")
+    @PromptServer.instance.routes.post(ROUTE_MODULE_ACKNOWLEDGE_ALL)
     async def alexz_tools_module_acknowledge_all(request):
         """API route that clears novelty markers for all modules."""
         try:
@@ -3563,7 +3616,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module acknowledge-all API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.post("/alexz_tools/module_update")
+    @PromptServer.instance.routes.post(ROUTE_MODULE_UPDATE)
     async def alexz_tools_module_update(request):
         """API route that starts asynchronous module update jobs."""
         try:
@@ -3583,7 +3636,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module update API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.get("/alexz_tools/module_update_status")
+    @PromptServer.instance.routes.get(ROUTE_MODULE_UPDATE_STATUS)
     async def alexz_tools_module_update_status(request):
         """API route that returns current module-update job status."""
         try:
@@ -3592,7 +3645,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module update status API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.post("/alexz_tools/module_install_requirements")
+    @PromptServer.instance.routes.post(ROUTE_MODULE_INSTALL_REQUIREMENTS)
     async def alexz_tools_module_install_requirements(request):
         """API route that installs Python requirements for selected modules."""
         try:
@@ -3609,7 +3662,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module requirements install API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.post("/alexz_tools/comfyui_install_requirements")
+    @PromptServer.instance.routes.post(ROUTE_COMFYUI_INSTALL_REQUIREMENTS)
     async def alexz_tools_comfyui_install_requirements(request):
         """API route that installs ComfyUI requirements in the active environment."""
         try:
@@ -3620,7 +3673,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("ComfyUI requirements install API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.get("/alexz_tools/component_registry")
+    @PromptServer.instance.routes.get(ROUTE_COMPONENT_REGISTRY)
     async def alexz_tools_component_registry(request):
         """API route that returns extensibility registry snapshot (nodes/widgets/api)."""
         try:
@@ -3632,7 +3685,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Component registry API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.get("/alexz_tools/node_catalog")
+    @PromptServer.instance.routes.get(ROUTE_NODE_CATALOG)
     async def alexz_tools_node_catalog(request):
         """API route that returns grouped module and node catalog data."""
         try:
@@ -3672,7 +3725,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Node catalog API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.get("/alexz_tools/module_info")
+    @PromptServer.instance.routes.get(ROUTE_MODULE_INFO)
     async def alexz_tools_module_info(request):
         """API route that returns detailed information for one module."""
         group = (request.query.get("group", "") or "").strip().lower()
@@ -3710,7 +3763,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module info API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.get("/alexz_tools/comfyui_info")
+    @PromptServer.instance.routes.get(ROUTE_COMFYUI_INFO)
     async def alexz_tools_comfyui_info(request):
         """API route that returns ComfyUI update and version status."""
         try:
@@ -3774,7 +3827,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("ComfyUI info API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.get("/alexz_tools/module_list")
+    @PromptServer.instance.routes.get(ROUTE_MODULE_LIST)
     async def alexz_tools_module_list(request):
         """API route that returns module list for the selected group."""
         query = (request.query.get("q", "") or "").strip().lower()
@@ -3790,7 +3843,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             _LOGGER.error("Module list API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
-    @PromptServer.instance.routes.get("/alexz_tools/module_nodes")
+    @PromptServer.instance.routes.get(ROUTE_MODULE_NODES)
     async def alexz_tools_module_nodes(request):
         """API route that returns node list for the selected module."""
         query = (request.query.get("module", "") or request.query.get("q", "")).strip()

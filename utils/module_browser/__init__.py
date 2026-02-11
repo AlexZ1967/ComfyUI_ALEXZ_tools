@@ -16,6 +16,8 @@ from .component_registry import (
     ComponentRegistry,
     build_default_component_registry,
 )
+from .api_manifest import iter_component_api_routes
+from .widget_manifest import WidgetSpec, iter_widget_specs
 from .contracts import (
     MODULE_STATE_SCHEMA_VERSION,
     ensure_module_state_schema,
@@ -27,5 +29,7 @@ __all__ = [
     "MODULE_STATE_SCHEMA_VERSION",
     "build_default_component_registry",
     "ensure_module_state_schema",
+    "WidgetSpec",
+    "iter_component_api_routes",
+    "iter_widget_specs",
 ]
-
