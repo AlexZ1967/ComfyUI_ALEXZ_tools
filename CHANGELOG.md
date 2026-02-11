@@ -16,6 +16,9 @@
 - Module Node Picker UX cleanup:
   - fixed help-hint flicker when switching `ComfyUI check` mode by removing transient catalog-loading help overrides,
   - changed "no loaded nodes" message to compact hint style, removed module-name prefix, and highlighted it in red.
+- Tab relay runtime tuning:
+  - replaced fixed `setInterval` tick loop with adaptive `setTimeout` scheduling to reduce background relay pressure,
+  - kept backward-compat cleanup for legacy `tickInterval` relay state shape during unbind.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

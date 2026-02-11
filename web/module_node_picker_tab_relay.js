@@ -31,6 +31,10 @@ export function unbindModuleNodesTabRelay() {
     if (state.relayTimer) {
         window.clearTimeout(state.relayTimer);
     }
+    if (state.tickTimer) {
+        window.clearTimeout(state.tickTimer);
+    }
+    // Backward-compat cleanup for previous relay state shape.
     if (state.tickInterval) {
         window.clearInterval(state.tickInterval);
     }
@@ -200,7 +204,7 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     const relayState = {
         bindToken,
         relayTimer,
-        tickInterval: 0,
+        tickTimer: 0,
         onPointerDown,
         onMouseDown,
         onKeyUp,
@@ -220,11 +224,17 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     document.addEventListener("visibilitychange", onVisibilityChange, true);
     window.addEventListener("pageshow", onPageShow, true);
 
-    const tickInterval = window.setInterval(() => {
+    const runTick = () => {
         if (!isCurrentBinding()) {
             return;
         }
+        let nextDelayMs = 500;
         if (document.visibilityState === "hidden") {
+            nextDelayMs = 900;
+            const liveState = window[TAB_RELAY_STATE_KEY];
+            if (liveState) {
+                liveState.tickTimer = window.setTimeout(runTick, nextDelayMs);
+            }
             return;
         }
         const ownTabSelected = isOwnButtonSelected(sidebarTabId) === true;
@@ -234,15 +244,25 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
             // When picker tab is inactive, run a sparse maintenance tick
             // instead of syncing on every timer pulse.
             if (passiveTickBudget < 6) {
+                nextDelayMs = 900;
+                const liveState = window[TAB_RELAY_STATE_KEY];
+                if (liveState) {
+                    liveState.tickTimer = window.setTimeout(runTick, nextDelayMs);
+                }
                 return;
             }
             passiveTickBudget = 0;
+            nextDelayMs = 900;
         } else {
             passiveTickBudget = 0;
         }
         relayRuntime.syncVisibility("relay_tick");
-    }, 500);
+        const liveState = window[TAB_RELAY_STATE_KEY];
+        if (liveState) {
+            liveState.tickTimer = window.setTimeout(runTick, nextDelayMs);
+        }
+    };
 
-    relayState.tickInterval = tickInterval;
+    relayState.tickTimer = window.setTimeout(runTick, 500);
     relayRuntime.syncVisibility("relay_init");
 }

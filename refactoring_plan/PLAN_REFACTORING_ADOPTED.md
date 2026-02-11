@@ -128,6 +128,7 @@ Deliverables:
   - constrained keyup-driven relay sync to tab/navigation keys and non-input targets.
   - introduced bind-token guards so stale relay callbacks from prior binds cannot mutate current tab visibility.
   - removed unused relay fallback tab-id heuristic helper to simplify sync surface.
+  - replaced fixed relay interval loop with adaptive timeout scheduling to lower background sync pressure.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.
