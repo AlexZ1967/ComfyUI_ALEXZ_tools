@@ -65,7 +65,7 @@ import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
 import { initializeModuleNodePickerRuntime } from "../runtime/bootstrap/module_node_picker_runtime_bootstrap.js";
 import { createModuleNodePickerRuntimeSetup } from "../runtime/bootstrap/module_node_picker_runtime_setup.js";
 import { createModuleNodePickerUiStage } from "../ui/module_node_picker_ui_stage.js";
-import { createModuleNodePickerFlowStage } from "../flow/module_node_picker_flow_stage.js";
+import { createModuleNodePickerFlowStage } from "../flow/stage/module_node_picker_flow_stage.js";
 import { createModuleNodePickerStageBridge } from "./module_node_picker_stage_bridge.js";
 import { createModuleNodePickerRuntimeBootstrapBindings } from "../runtime/bootstrap/module_node_picker_runtime_bootstrap_bindings.js";
 import { projectModuleNodePickerRuntimeSetup } from "../runtime/bootstrap/module_node_picker_runtime_projection.js";

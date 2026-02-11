@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/flow/module_node_picker_module_panel_controller.js
+ * Module: web/orchestration/flow/panel/module_node_picker_module_panel_controller.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -14,7 +14,7 @@
 import {
     renderNodeListPanel,
     renderModuleInfoCard,
-} from "../../ui/module_node_picker_renderers.js";
+} from "../../../ui/module_node_picker_renderers.js";
 
 /**
  * Create controller for module card and node list panel rendering.

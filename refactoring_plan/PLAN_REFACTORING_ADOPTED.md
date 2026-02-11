@@ -194,6 +194,10 @@ Deliverables:
     - `web/orchestration/flow/actions/` for action handlers and composed action flows,
     - `web/orchestration/flow/catalog/` for catalog/module-info data controllers and loaders.
   - moved `module_node_picker_actions.js` + `module_node_picker_action_flows.js` into `flow/actions/`, moved `module_node_picker_catalog_controller.js` + `module_node_picker_data_flow.js` into `flow/catalog/`, then updated dependent imports, module headers, and baseline test path markers.
+  - split remaining flat flow files by concern:
+    - `web/orchestration/flow/stage/` for stage adapters (`flow_stage`, `flow_wiring`),
+    - `web/orchestration/flow/panel/` for module panel rendering controller.
+  - moved `module_node_picker_flow_stage.js` + `module_node_picker_flow_wiring.js` into `flow/stage/`, moved `module_node_picker_module_panel_controller.js` into `flow/panel/`, then updated dependent imports, module headers, and baseline test path markers.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

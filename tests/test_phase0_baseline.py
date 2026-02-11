@@ -415,7 +415,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_stage.js"
+            repo_root / "web" / "orchestration" / "flow" / "stage" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap_bindings.js"
@@ -512,7 +512,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_stage.js"
+            repo_root / "web" / "orchestration" / "flow" / "stage" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap_bindings.js"
@@ -589,7 +589,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_ui_stage.js"
         ).read_text(encoding="utf-8")
         flow_stage_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_stage.js"
+            repo_root / "web" / "orchestration" / "flow" / "stage" / "module_node_picker_flow_stage.js"
         ).read_text(encoding="utf-8")
         runtime_bootstrap_bindings_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_runtime_bootstrap_bindings.js"
@@ -631,7 +631,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "flow" / "actions" / "module_node_picker_action_flows.js"
         ).read_text(encoding="utf-8")
         flow_wiring_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_flow_wiring.js"
+            repo_root / "web" / "orchestration" / "flow" / "stage" / "module_node_picker_flow_wiring.js"
         ).read_text(encoding="utf-8")
         ui_controllers_text = (
             repo_root / "web" / "orchestration" / "ui" / "module_node_picker_ui_controllers.js"
@@ -643,7 +643,7 @@ class Phase0BaselineContractsTests(unittest.TestCase):
             repo_root / "web" / "orchestration" / "flow" / "progress" / "module_node_picker_polling_controller.js"
         ).read_text(encoding="utf-8")
         module_panel_controller_text = (
-            repo_root / "web" / "orchestration" / "flow" / "module_node_picker_module_panel_controller.js"
+            repo_root / "web" / "orchestration" / "flow" / "panel" / "module_node_picker_module_panel_controller.js"
         ).read_text(encoding="utf-8")
         warmup_controller_text = (
             repo_root / "web" / "orchestration" / "runtime" / "bootstrap" / "module_node_picker_warmup_controller.js"

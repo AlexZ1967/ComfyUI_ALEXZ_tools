@@ -194,6 +194,10 @@
     - `web/orchestration/flow/actions/` для action-handlers и composed action flows,
     - `web/orchestration/flow/catalog/` для catalog/module-info data controllers и loaders.
   - `module_node_picker_actions.js` + `module_node_picker_action_flows.js` перенесены в `flow/actions/`, `module_node_picker_catalog_controller.js` + `module_node_picker_data_flow.js` перенесены в `flow/catalog/`, затем обновлены зависимые импорты, шапки `Module:` и пути в baseline frontend-тестах.
+  - оставшиеся плоские flow-файлы разделены по назначению:
+    - `web/orchestration/flow/stage/` для stage-адаптеров (`flow_stage`, `flow_wiring`),
+    - `web/orchestration/flow/panel/` для контроллера рендера панели модуля.
+  - `module_node_picker_flow_stage.js` + `module_node_picker_flow_wiring.js` перенесены в `flow/stage/`, `module_node_picker_module_panel_controller.js` перенесен в `flow/panel/`, затем обновлены зависимые импорты, шапки `Module:` и пути в baseline frontend-тестах.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.
