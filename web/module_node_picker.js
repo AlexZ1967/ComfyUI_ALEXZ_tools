@@ -81,6 +81,7 @@ import {
     bindModuleNodePickerEvents,
     runModuleNodePickerStartupLoad,
 } from "./orchestration/module_node_picker_bindings.js";
+import { createModuleNodePickerApiClient } from "./orchestration/module_node_picker_api_client.js";
 import { isCanceledRequestError } from "./orchestration/module_node_picker_error_utils.js";
 import { createModuleNodePickerDebugUi } from "./orchestration/module_node_picker_debug_ui.js";
 import {
@@ -633,34 +634,32 @@ function renderPicker(container) {
     let cancelStartupLoad = () => {};
 
     let pickerDisposed = false;
-    const apiAbortController = typeof AbortController === "function"
-        ? new AbortController()
-        : null;
     // Keep async/UI flows active for this picker instance even if the root is
     // temporarily detached during sidebar transitions; lifecycle is governed by
     // explicit dispose, not transient DOM attachment state.
     const isPickerAlive = () => !pickerDisposed;
-    const apiSignal = () => apiAbortController?.signal;
-    const fetchNodeCatalogApi = (comfyMode) =>
-        fetchNodeCatalog(comfyMode, { signal: apiSignal() });
-    const fetchModuleInfoApi = (group, moduleName, options = {}) =>
-        fetchModuleInfo(group, moduleName, { ...(options || {}), signal: apiSignal() });
-    const fetchComfyUIInfoApi = (forceRefresh = true, acknowledge = true, comfyMode = "releases", options = {}) =>
-        fetchComfyUIInfo(forceRefresh, acknowledge, comfyMode, { ...(options || {}), signal: apiSignal() });
-    const refreshModuleRuntimeStateApi = (options = {}) =>
-        refreshModuleRuntimeState({ ...(options || {}), signal: apiSignal() });
-    const fetchModuleRefreshStatusApi = (options = {}) =>
-        fetchModuleRefreshStatus({ ...(options || {}), signal: apiSignal() });
-    const acknowledgeAllModuleNoveltyApi = (options = {}) =>
-        acknowledgeAllModuleNovelty({ ...(options || {}), signal: apiSignal() });
-    const startModuleUpdateApi = (scope, moduleName, options = {}) =>
-        startModuleUpdate(scope, moduleName, { ...(options || {}), signal: apiSignal() });
-    const fetchModuleUpdateStatusApi = (options = {}) =>
-        fetchModuleUpdateStatus({ ...(options || {}), signal: apiSignal() });
-    const installModuleRequirementsApi = (modules, options = {}) =>
-        installModuleRequirements(modules, { ...(options || {}), signal: apiSignal() });
-    const installComfyUIRequirementsApi = (options = {}) =>
-        installComfyUIRequirements({ ...(options || {}), signal: apiSignal() });
+    const apiClient = createModuleNodePickerApiClient({
+        fetchNodeCatalog,
+        fetchModuleInfo,
+        fetchComfyUIInfo,
+        refreshModuleRuntimeState,
+        fetchModuleRefreshStatus,
+        acknowledgeAllModuleNovelty,
+        startModuleUpdate,
+        fetchModuleUpdateStatus,
+        installModuleRequirements,
+        installComfyUIRequirements,
+    });
+    const fetchNodeCatalogApi = apiClient.fetchNodeCatalogApi;
+    const fetchModuleInfoApi = apiClient.fetchModuleInfoApi;
+    const fetchComfyUIInfoApi = apiClient.fetchComfyUIInfoApi;
+    const refreshModuleRuntimeStateApi = apiClient.refreshModuleRuntimeStateApi;
+    const fetchModuleRefreshStatusApi = apiClient.fetchModuleRefreshStatusApi;
+    const acknowledgeAllModuleNoveltyApi = apiClient.acknowledgeAllModuleNoveltyApi;
+    const startModuleUpdateApi = apiClient.startModuleUpdateApi;
+    const fetchModuleUpdateStatusApi = apiClient.fetchModuleUpdateStatusApi;
+    const installModuleRequirementsApi = apiClient.installModuleRequirementsApi;
+    const installComfyUIRequirementsApi = apiClient.installComfyUIRequirementsApi;
     debugUi = createModuleNodePickerDebugUi({
         shouldContinue: isPickerAlive,
         windowObj: window,
@@ -702,11 +701,7 @@ function renderPicker(container) {
         } catch (_err) {
             // Ignore stale process-ui dispose errors.
         }
-        try {
-            apiAbortController?.abort?.();
-        } catch (_err) {
-            // Ignore stale abort-controller errors.
-        }
+        apiClient.dispose?.();
         unbindModuleNodesTabRelay();
         if (container?.[PICKER_CLEANUP_KEY] === disposePickerInstance) {
             container[PICKER_CLEANUP_KEY] = null;
