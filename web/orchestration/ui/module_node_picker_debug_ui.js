@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_debug_ui.js
+ * Module: web/orchestration/ui/module_node_picker_debug_ui.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

@@ -11,11 +11,11 @@
  *   process controller so composer code can focus on wiring higher-level flows.
  */
 
-import { createProcessUiController } from "../ui/module_node_picker_process.js";
-import { createModuleNodePickerApiClient } from "../module_node_picker_api_client.js";
-import { createModuleNodePickerDebugUi } from "../module_node_picker_debug_ui.js";
+import { createProcessUiController } from "../../ui/module_node_picker_process.js";
+import { createModuleNodePickerApiClient } from "../api/module_node_picker_api_client.js";
+import { createModuleNodePickerDebugUi } from "../ui/module_node_picker_debug_ui.js";
 import { createModuleNodePickerLifecycle } from "./module_node_picker_lifecycle.js";
-import { createModuleNodePickerRuntimeContext } from "../state/module_node_picker_runtime_context.js";
+import { createModuleNodePickerRuntimeContext } from "../../state/module_node_picker_runtime_context.js";
 
 /**
  * Build per-render runtime services and state holders for the picker.

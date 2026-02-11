@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_composer.js
+ * Module: web/orchestration/core/module_node_picker_composer.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -11,7 +11,7 @@
  *   catalog rendering and update operations.
  */
 
-import { app } from "../../../scripts/app.js";
+import { app } from "../../../../scripts/app.js";
 import {
     SIDEBAR_TAB_ID,
     DEFAULT_MODULE,
@@ -29,11 +29,11 @@ import {
     COMFY_GROUP_ORDER,
     MODULE_MARK_UPDATED,
     MODULE_MARK_REMOTE_UPDATE,
-} from "../constants/module_node_picker_constants.js";
+} from "../../constants/module_node_picker_constants.js";
 import {
     bindModuleNodesTabRelay,
     unbindModuleNodesTabRelay,
-} from "../module_node_picker_tab_relay.js";
+} from "../../module_node_picker_tab_relay.js";
 import {
     fetchNodeCatalog,
     fetchModuleInfo,
@@ -45,30 +45,30 @@ import {
     fetchModuleUpdateStatus,
     installModuleRequirements,
     installComfyUIRequirements,
-} from "../api/module_node_picker_api.js";
+} from "../../api/module_node_picker_api.js";
 import {
     fmtDate,
     moduleBadgesFromInfo,
     moduleBadgesFromModuleEntry,
     formatModuleOption,
-} from "../ui/module_node_picker_formatters.js";
+} from "../../ui/module_node_picker_formatters.js";
 import {
     formatRefreshLine,
     formatUpdateLine,
-} from "../ui/module_node_picker_status.js";
-import { createModuleNodePickerLayout } from "../ui/module_node_picker_layout.js";
+} from "../../ui/module_node_picker_status.js";
+import { createModuleNodePickerLayout } from "../../ui/module_node_picker_layout.js";
 import {
     centerNodeInCanvas,
     createNodeFromCatalogInfo,
-} from "../ui/module_node_picker_node_factory.js";
+} from "../../ui/module_node_picker_node_factory.js";
 import { isCanceledRequestError } from "./module_node_picker_error_utils.js";
-import { initializeModuleNodePickerRuntime } from "./runtime/module_node_picker_runtime_bootstrap.js";
-import { createModuleNodePickerRuntimeSetup } from "./runtime/module_node_picker_runtime_setup.js";
-import { createModuleNodePickerUiStage } from "./module_node_picker_ui_stage.js";
-import { createModuleNodePickerFlowStage } from "./flow/module_node_picker_flow_stage.js";
+import { initializeModuleNodePickerRuntime } from "../runtime/module_node_picker_runtime_bootstrap.js";
+import { createModuleNodePickerRuntimeSetup } from "../runtime/module_node_picker_runtime_setup.js";
+import { createModuleNodePickerUiStage } from "../ui/module_node_picker_ui_stage.js";
+import { createModuleNodePickerFlowStage } from "../flow/module_node_picker_flow_stage.js";
 import { createModuleNodePickerStageBridge } from "./module_node_picker_stage_bridge.js";
-import { createModuleNodePickerRuntimeBootstrapBindings } from "./runtime/module_node_picker_runtime_bootstrap_bindings.js";
-import { projectModuleNodePickerRuntimeSetup } from "./runtime/module_node_picker_runtime_projection.js";
+import { createModuleNodePickerRuntimeBootstrapBindings } from "../runtime/module_node_picker_runtime_bootstrap_bindings.js";
+import { projectModuleNodePickerRuntimeSetup } from "../runtime/module_node_picker_runtime_projection.js";
 import {
     buildFlowStageContext,
     buildRuntimeSetupContext,

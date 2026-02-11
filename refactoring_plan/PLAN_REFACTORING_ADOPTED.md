@@ -100,7 +100,7 @@ Deliverables:
   - orchestration: `web/orchestration/module_node_picker_update_flow.js`,
     `web/orchestration/module_node_picker_data_flow.js`,
     `web/orchestration/module_node_picker_actions.js`,
-    `web/orchestration/module_node_picker_bindings.js`
+    `web/orchestration/core/module_node_picker_bindings.js`
 
 Exit criteria:
 - No UX regressions.
@@ -145,29 +145,29 @@ Deliverables:
   - bound all picker API calls to per-render lifecycle `AbortController` and cancel in-flight requests on picker dispose/re-render.
   - decoupled ComfyUI-check mode switch from full catalog reload to stabilize selector UI during rapid mode toggles.
   - finalized ComfyUI-check selector semantics: mode switch is config-only; network refresh occurs only by explicit user action.
-  - extracted category/group/module dropdown orchestration into `web/orchestration/module_node_picker_selection_controller.js` (population/filtering/store sync), preserving existing UI behavior.
+  - extracted category/group/module dropdown orchestration into `web/orchestration/ui/module_node_picker_selection_controller.js` (population/filtering/store sync), preserving existing UI behavior.
   - extracted long-running action orchestration (refresh/update/resume/requirements follow-up + per-module refresh/install) into `web/orchestration/module_node_picker_action_flows.js`, leaving `web/module_node_picker.js` with thin dependency wiring.
   - extracted token-based polling lifecycle (refresh/update progress loops) into `web/orchestration/module_node_picker_polling_controller.js`; picker dispose now invalidates polling via a dedicated controller API.
   - extracted module-card/node-list rendering orchestration (including expand/collapse UI state) into `web/orchestration/module_node_picker_module_panel_controller.js`.
   - extracted picker instance lifecycle/dispose controller into `web/orchestration/module_node_picker_lifecycle.js` for centralized token/polling/event/startup/debug/process/API cleanup.
-  - extracted extension registration/fallback mount flow into `web/orchestration/module_node_picker_registration.js`.
+  - extracted extension registration/fallback mount flow into `web/orchestration/core/module_node_picker_registration.js`.
   - centralized picker constants (IDs/storage keys/group labels/marks/defaults) in `web/constants/module_node_picker_constants.js`.
   - extracted LiteGraph node create/place helpers into `web/ui/module_node_picker_node_factory.js`.
-  - moved full picker composition from `web/module_node_picker.js` to `web/orchestration/module_node_picker_composer.js`; main entry file now only handles extension registration/fallback wiring.
-  - extracted selector/busy/view/status-card wiring into `web/orchestration/module_node_picker_ui_controllers.js` to further thin composition code.
+  - moved full picker composition from `web/module_node_picker.js` to `web/orchestration/core/module_node_picker_composer.js`; main entry file now only handles extension registration/fallback wiring.
+  - extracted selector/busy/view/status-card wiring into `web/orchestration/ui/module_node_picker_ui_controllers.js` to further thin composition code.
   - extracted polling/catalog/actions/module-panel composition into `web/orchestration/module_node_picker_flow_wiring.js` to keep runtime orchestration modular.
   - extracted runtime bootstrap (event binding, ComfyUI-card restore, startup coordinator wiring) into `web/orchestration/module_node_picker_runtime_bootstrap.js`.
   - extracted base runtime setup (runtime context, lifecycle, API client, debug/process controllers) into `web/orchestration/module_node_picker_runtime_setup.js`.
-  - extracted UI-stage assembly into `web/orchestration/module_node_picker_ui_stage.js` (selector/busy/view/status controller composition adapter).
+  - extracted UI-stage assembly into `web/orchestration/ui/module_node_picker_ui_stage.js` (selector/busy/view/status controller composition adapter).
   - extracted flow-stage assembly into `web/orchestration/module_node_picker_flow_stage.js` (polling/catalog/action/module-panel composition adapter).
-  - extracted large composer dependency maps into `web/orchestration/module_node_picker_context_builders.js` (runtime-setup/ui-stage/flow-stage/runtime-bootstrap context builders), reducing `module_node_picker_composer.js` size while preserving behavior.
+  - extracted large composer dependency maps into `web/orchestration/core/module_node_picker_context_builders.js` (runtime-setup/ui-stage/flow-stage/runtime-bootstrap context builders), reducing `module_node_picker_composer.js` size while preserving behavior.
   - split pending resume internals into focused modules (`module_node_picker_resume_custom_refresh.js`, `module_node_picker_resume_module_update.js`, `module_node_picker_resume_comfy_refresh.js`) while preserving stable facade exports in `module_node_picker_resume_flow.js`.
   - extracted runtime warmup polling orchestration into `web/orchestration/module_node_picker_warmup_controller.js` and kept first-open marker auto-hydration behavior in background.
   - extracted relay adaptive tick-loop into `web/orchestration/module_node_picker_tab_relay_tick.js` and kept binding/runtime behavior unchanged.
   - extracted relay tab-intent/event orchestration into `web/orchestration/module_node_picker_tab_relay_intent.js` and simplified `module_node_picker_tab_relay.js` listener wiring.
   - extracted Module Node Picker CSS into `web/orchestration/styles/module_node_picker_styles.js` with grouped, documented style sections to separate presentation tuning from orchestration logic.
   - moved Module Node Picker CSS module into UI layer (`web/ui/styles/module_node_picker_styles.js`) to align folder ownership with visual responsibilities.
-  - extracted deferred-stage bridge wiring from composer into `web/orchestration/module_node_picker_stage_bridge.js` so flow-stage handoff and adapter callbacks remain centralized and easier to evolve.
+  - extracted deferred-stage bridge wiring from composer into `web/orchestration/core/module_node_picker_stage_bridge.js` so flow-stage handoff and adapter callbacks remain centralized and easier to evolve.
   - extracted runtime-bootstrap callback bindings from composer into `web/orchestration/module_node_picker_runtime_bootstrap_bindings.js` to reduce inline callback density in composition code.
   - extracted runtime-setup projection/unpacking into `web/orchestration/module_node_picker_runtime_projection.js`, reducing flat-field mapping noise in composer.
   - fixed warmup indicator stalling by wiring warmup poller to catalog reload path and adding fail-safe indicator reset on retry-budget exhaustion/poll errors.
@@ -176,6 +176,12 @@ Deliverables:
     - `web/orchestration/runtime/` for runtime/bootstrap/lifecycle/warmup internals,
     and updated imports/tests accordingly.
   - introduced `web/orchestration/flow/` subfolder for pipeline/data/update/resume orchestration modules and moved related files out of flat root folder with updated imports/test markers.
+  - introduced additional semantic orchestration subfolders:
+    - `web/orchestration/core/` for composition/bootstrap adapters and shared orchestration helpers,
+    - `web/orchestration/ui/` for picker UI controllers/views/status-card orchestration,
+    - `web/orchestration/api/` for lifecycle-bound API client wrapper.
+  - moved remaining flat `module_node_picker_*` orchestration modules into `core/ui/api` groups, updated all dependent imports, updated module headers, and updated frontend baseline contract test paths.
+  - fixed post-move runtime import paths in `module_node_picker_runtime_setup.js` (`process` UI + runtime context imports) to preserve runtime behavior.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

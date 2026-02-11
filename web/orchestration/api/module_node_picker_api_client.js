@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_api_client.js
+ * Module: web/orchestration/api/module_node_picker_api_client.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

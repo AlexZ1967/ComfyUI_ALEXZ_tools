@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_view_helpers.js
+ * Module: web/orchestration/ui/module_node_picker_view_helpers.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -17,7 +17,7 @@ import {
     renderHelpHintTextWithTone,
     renderHelpModuleSummary,
     renderHelpModuleCardHint,
-} from "../ui/module_node_picker_help.js";
+} from "../../ui/module_node_picker_help.js";
 
 /**
  * Create view helper callbacks for picker orchestration flows.

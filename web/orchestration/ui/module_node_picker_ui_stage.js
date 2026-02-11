@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_ui_stage.js
+ * Module: web/orchestration/ui/module_node_picker_ui_stage.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

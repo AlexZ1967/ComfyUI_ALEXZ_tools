@@ -1,5 +1,40 @@
 # Changelog — ALEXZ_tools
 
+## 0.16.23 — 2026-02-11
+- Phase 2 orchestration structure cleanup continued:
+  - introduced semantic subfolders for remaining flat orchestration modules:
+    - `web/orchestration/core/`,
+    - `web/orchestration/ui/`,
+    - `web/orchestration/api/`.
+  - moved modules:
+    - to `core/`:
+      - `module_node_picker_bindings.js`,
+      - `module_node_picker_composer.js`,
+      - `module_node_picker_context_builders.js`,
+      - `module_node_picker_error_utils.js`,
+      - `module_node_picker_registration.js`,
+      - `module_node_picker_stage_bridge.js`;
+    - to `ui/`:
+      - `module_node_picker_busy_ui.js`,
+      - `module_node_picker_debug_ui.js`,
+      - `module_node_picker_selection_controller.js`,
+      - `module_node_picker_status_cards.js`,
+      - `module_node_picker_ui_controllers.js`,
+      - `module_node_picker_ui_stage.js`,
+      - `module_node_picker_view_helpers.js`;
+    - to `api/`:
+      - `module_node_picker_api_client.js`.
+  - updated all dependent imports in frontend entrypoint and orchestration runtime/flow/ui layers.
+  - fixed post-move runtime imports in `web/orchestration/runtime/module_node_picker_runtime_setup.js`:
+    - `createProcessUiController` import path,
+    - `createModuleNodePickerRuntimeContext` import path.
+  - updated module header paths (`Module:`) for moved files.
+  - updated baseline contract test file-path markers in `tests/test_phase0_baseline.py` for new `core/ui/api` structure.
+- Validation:
+  - `conda run -n p313 node --check web/module_node_picker.js web/module_node_picker_tab_relay.js`,
+  - `find web/orchestration -type f -name '*.js' | xargs conda run -n p313 node --check`,
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_tracker.py` (40 passed).
+
 ## 0.16.22 — 2026-02-11
 - Phase 2 orchestration structure cleanup continued:
   - introduced `web/orchestration/flow/` subfolder for pipeline-oriented modules,

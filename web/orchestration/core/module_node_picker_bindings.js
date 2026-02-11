@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_bindings.js
+ * Module: web/orchestration/core/module_node_picker_bindings.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *

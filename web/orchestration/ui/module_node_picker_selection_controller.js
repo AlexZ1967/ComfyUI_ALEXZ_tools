@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_selection_controller.js
+ * Module: web/orchestration/ui/module_node_picker_selection_controller.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -14,7 +14,7 @@
 import {
     fillModuleSelectUi,
     fillGroupSelectUi,
-} from "../ui/module_node_picker_catalog.js";
+} from "../../ui/module_node_picker_catalog.js";
 
 /**
  * Create selection controller for picker category/group/module dropdowns.

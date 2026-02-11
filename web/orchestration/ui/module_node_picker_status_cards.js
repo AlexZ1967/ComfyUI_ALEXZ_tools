@@ -1,5 +1,5 @@
 /**
- * Module: web/orchestration/module_node_picker_status_cards.js
+ * Module: web/orchestration/ui/module_node_picker_status_cards.js
  * Author: AlexZ1967
  * Last updated: 2026-02-11
  *
@@ -14,7 +14,7 @@
 import {
     renderComfyAlertCard,
     renderCustomAlertCard,
-} from "../ui/module_node_picker_alerts.js";
+} from "../../ui/module_node_picker_alerts.js";
 
 /**
  * Create status-card controller for picker top cards.
