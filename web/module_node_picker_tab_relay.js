@@ -72,7 +72,6 @@ export function unbindModuleNodesTabRelay() {
 export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
     unbindModuleNodesTabRelay();
 
-    const boundButtons = [];
     let relayTimer = 0;
     const relayRuntime = createModuleNodePickerTabRelayRuntime({
         app,
@@ -146,44 +145,23 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         processTabButton(button);
     };
 
-    /**
-     * Bind direct handlers to discovered tab buttons (supports dynamic sidebars).
-     */
-    const bindDirectButtonListeners = () => {
-        const buttons = Array.from(document.querySelectorAll(".side-bar-button, [class*='-tab-button']"));
-        for (const button of buttons) {
-            if (!(button instanceof Element)) {
-                continue;
-            }
-            const tabId = inferTabIdFromButton(app, button);
-            if (!tabId || tabId === sidebarTabId) {
-                continue;
-            }
-            if (boundButtons.some((x) => x.el === button)) {
-                continue;
-            }
-            const handler = () => processTabButton(button);
-            button.addEventListener("pointerdown", handler, true);
-            button.addEventListener("mousedown", handler, true);
-            button.addEventListener("click", handler, true);
-            boundButtons.push({ el: button, handler });
-        }
-    };
-
-    const onPointerDown = (event) => handleEvent(event);
-    const onMouseDown = (event) => handleEvent(event);
-    const onClick = (event) => handleEvent(event);
+    const supportsPointer = typeof window !== "undefined" && "PointerEvent" in window;
+    const onPointerDown = supportsPointer ? ((event) => handleEvent(event)) : null;
+    const onMouseDown = supportsPointer ? null : ((event) => handleEvent(event));
+    const onClick = null;
     const onKeyUp = () => relayRuntime.syncVisibility("relay_keyup");
     const onFocusIn = (event) => handleEvent(event);
 
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("mousedown", onMouseDown, true);
-    document.addEventListener("click", onClick, true);
+    if (onPointerDown) {
+        document.addEventListener("pointerdown", onPointerDown, true);
+    }
+    if (onMouseDown) {
+        document.addEventListener("mousedown", onMouseDown, true);
+    }
     document.addEventListener("keyup", onKeyUp, true);
     document.addEventListener("focusin", onFocusIn, true);
 
-    bindDirectButtonListeners();
-    const bindButtonsInterval = window.setInterval(bindDirectButtonListeners, 1000);
+    const bindButtonsInterval = 0;
     const tickInterval = window.setInterval(() => {
         relayRuntime.syncVisibility("relay_tick");
     }, 220);
@@ -198,6 +176,6 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         onClick,
         onKeyUp,
         onFocusIn,
-        boundButtons,
+        boundButtons: [],
     };
 }
