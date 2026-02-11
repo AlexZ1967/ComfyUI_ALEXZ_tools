@@ -27,6 +27,11 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
     let lastDiagSig = "";
     const homeContainer = root.parentElement instanceof Element ? root.parentElement : null;
     const FOREIGN_TAB_HIDE_MS = 1600;
+    const MIN_SYNC_INTERVAL_MS = 48;
+    let lastSyncAt = 0;
+    let pendingSyncReason = "";
+    let pendingSyncClickedTabId = "";
+    let pendingSyncTimer = 0;
 
     /**
      * Emit deduplicated diagnostics payload to panel callback.
@@ -115,7 +120,7 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
     /**
      * Synchronize picker root visibility/attachment with current sidebar state.
      */
-    const syncVisibility = (reason, clickedTabId = "") => {
+    const syncVisibilityNow = (reason, clickedTabId = "") => {
         const activeTabId = getActiveSidebarTabId(app);
         const ownSelected = isOwnButtonSelected(sidebarTabId);
         const switchedAway = (activeTabId && activeTabId !== sidebarTabId) || ownSelected === false;
@@ -137,6 +142,48 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
             ? "relay_wait_foreign_tab"
             : reason;
         emitDiag(effectiveReason, clickedTabId || pendingForeignTabId);
+        lastSyncAt = Date.now();
+    };
+
+    /**
+     * Schedule visibility sync with short debounce to reduce event storms.
+     */
+    const syncVisibility = (reason, clickedTabId = "") => {
+        const now = Date.now();
+        const elapsed = now - lastSyncAt;
+        const normalizedReason = String(reason || "relay_tick");
+        const normalizedTabId = String(clickedTabId || "");
+        const isImmediateReason =
+            normalizedReason === "relay_own_tab_click"
+            || normalizedReason === "relay_foreign_tab_click"
+            || normalizedReason === "relay_unknown_tab_click"
+            || normalizedReason === "relay_native_ok"
+            || normalizedReason === "relay_pending_switch"
+            || normalizedReason === "relay_init";
+        if (isImmediateReason || elapsed >= MIN_SYNC_INTERVAL_MS) {
+            if (pendingSyncTimer) {
+                window.clearTimeout(pendingSyncTimer);
+                pendingSyncTimer = 0;
+            }
+            pendingSyncReason = "";
+            pendingSyncClickedTabId = "";
+            syncVisibilityNow(normalizedReason, normalizedTabId);
+            return;
+        }
+        pendingSyncReason = normalizedReason;
+        pendingSyncClickedTabId = normalizedTabId;
+        if (pendingSyncTimer) {
+            return;
+        }
+        const delay = Math.max(0, MIN_SYNC_INTERVAL_MS - elapsed);
+        pendingSyncTimer = window.setTimeout(() => {
+            pendingSyncTimer = 0;
+            const queuedReason = pendingSyncReason || "relay_tick";
+            const queuedTabId = pendingSyncClickedTabId || "";
+            pendingSyncReason = "";
+            pendingSyncClickedTabId = "";
+            syncVisibilityNow(queuedReason, queuedTabId);
+        }, delay);
     };
 
     return {
@@ -184,6 +231,16 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
          */
         clearForeignIntent() {
             clearForeignTabIntent();
+        },
+
+        /**
+         * Stop internal debounce timer when relay is unbound.
+         */
+        dispose() {
+            if (pendingSyncTimer) {
+                window.clearTimeout(pendingSyncTimer);
+                pendingSyncTimer = 0;
+            }
         },
 
         /**

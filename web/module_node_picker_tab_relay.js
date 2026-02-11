@@ -49,6 +49,9 @@ export function unbindModuleNodesTabRelay() {
     if (state.onPageShow) {
         window.removeEventListener("pageshow", state.onPageShow, true);
     }
+    if (typeof state.dispose === "function") {
+        state.dispose();
+    }
     window[TAB_RELAY_STATE_KEY] = null;
 }
 
@@ -179,5 +182,6 @@ export function bindModuleNodesTabRelay({ app, root, sidebarTabId, onDiag }) {
         onKeyUp,
         onVisibilityChange,
         onPageShow,
+        dispose: () => relayRuntime.dispose?.(),
     };
 }
