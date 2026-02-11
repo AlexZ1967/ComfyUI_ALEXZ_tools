@@ -522,6 +522,7 @@ function getRuntimePickerState() {
         customStatusChecked: false,
         pendingCustomRefresh: false,
         pendingUpdate: false,
+        pendingComfyInfoRefresh: false,
     };
     window[MODULE_PICKER_RUNTIME_STATE_KEY] = created;
     return created;
@@ -777,6 +778,13 @@ function renderPicker(container) {
         runtimePickerState.pendingUpdate = Boolean(pending);
     };
     const clearPendingUpdate = () => setPendingUpdate(false);
+    const hasPendingComfyInfoRefresh = () => {
+        return Boolean(runtimePickerState.pendingComfyInfoRefresh);
+    };
+    const setPendingComfyInfoRefresh = (pending) => {
+        runtimePickerState.pendingComfyInfoRefresh = Boolean(pending);
+    };
+    const clearPendingComfyInfoRefresh = () => setPendingComfyInfoRefresh(false);
     comfyModeSelect.value = loadComfyCheckMode();
 
     let debugEnabled = Boolean(pickerStore.get("debugEnabled"));
@@ -1571,6 +1579,8 @@ function renderPicker(container) {
             getComfyMode: () => comfyModeSelect.value,
             renderComfyAlert,
             syncUpdateAllButton,
+            setPendingComfyInfoRefresh,
+            clearPendingComfyInfoRefresh,
         });
     };
 
@@ -1767,6 +1777,65 @@ function renderPicker(container) {
         }
     };
 
+    /**
+     * Restore interrupted ComfyUI info refresh after picker re-open/re-render.
+     */
+    const resumePendingComfyInfoRefreshFlow = async () => {
+        if (!hasPendingComfyInfoRefresh()) {
+            return;
+        }
+        if (!isPickerAlive()) {
+            return;
+        }
+        setActionBusy(true);
+        setProcessTarget("comfy");
+        setProcessAction("", "", null);
+        setRefreshLine("Resuming ComfyUI info refresh...", "neutral");
+        if (comfyAlert && comfyAlertText) {
+            comfyAlert.style.display = "block";
+            comfyAlert.classList.remove(
+                "alexz-mod-picker-status-card--warn",
+                "alexz-mod-picker-status-card--ok",
+                "alexz-mod-picker-status-card--neutral"
+            );
+            comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
+            comfyAlertText.textContent = "Resuming ComfyUI info refresh...";
+        }
+        try {
+            const payload = await fetchComfyUIInfoApi(true, true, comfyModeSelect.value);
+            if (!isPickerAlive()) {
+                return;
+            }
+            renderComfyAlert(payload?.comfyui || null);
+            clearPendingComfyInfoRefresh();
+        } catch (err) {
+            if (!isPickerAlive()) {
+                return;
+            }
+            const message = String(err || "");
+            if (message.includes("canceled")) {
+                return;
+            }
+            if (comfyAlert && comfyAlertText) {
+                comfyAlert.style.display = "block";
+                comfyAlert.classList.remove(
+                    "alexz-mod-picker-status-card--warn",
+                    "alexz-mod-picker-status-card--ok",
+                    "alexz-mod-picker-status-card--neutral"
+                );
+                comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
+                comfyAlertText.textContent = `Failed to restore ComfyUI info refresh: ${message}`;
+            }
+            clearPendingComfyInfoRefresh();
+        } finally {
+            if (!isPickerAlive()) {
+                return;
+            }
+            setActionBusy(false);
+            syncUpdateAllButton();
+        }
+    };
+
     unbindPickerEvents = bindModuleNodePickerEvents({
         groupSelect,
         categorySelect,
@@ -1810,6 +1879,7 @@ function renderPicker(container) {
     }) || (() => {});
     void resumePendingCustomRefreshFlow();
     void resumePendingModuleUpdateFlow();
+    void resumePendingComfyInfoRefreshFlow();
 }
 
 /**

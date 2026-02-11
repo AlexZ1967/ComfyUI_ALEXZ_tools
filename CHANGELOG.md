@@ -73,6 +73,9 @@
   - when widget re-opens, update progress/result is restored from `/module_update_status`,
   - restore flow handles all scopes (`single`, `all`, `comfyui`) and keeps post-update actions (requirements prompt + catalog refresh),
   - pending markers are session-only (not kept after full page/ComfyUI reload).
+- Pending ComfyUI info refresh resume:
+  - interrupted `Refresh ComfyUI Info` now sets a session pending marker,
+  - when widget re-opens, ComfyUI info refresh is resumed automatically and result is rendered back into ComfyUI card.
 - Regression guardrails:
   - added frontend contract checks for pending/resume markers and session-runtime status in `tests/test_phase0_baseline.py`.
 - ComfyUI mode-switch UX fix:

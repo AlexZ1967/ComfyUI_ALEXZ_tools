@@ -103,6 +103,7 @@ export async function runRefreshComfyUIInfoAction(context) {
     if (!shouldContinueContext(context)) {
         return;
     }
+    context?.setPendingComfyInfoRefresh?.(true);
     context?.setActionBusy?.(true);
     context?.setProcessTarget?.("comfy");
     context?.setProcessAction?.("", "", null);
@@ -127,6 +128,7 @@ export async function runRefreshComfyUIInfoAction(context) {
             return;
         }
         context?.renderComfyAlert?.(payload?.comfyui || null);
+        context?.clearPendingComfyInfoRefresh?.();
     } catch (err) {
         if (!shouldContinueContext(context)) {
             return;
@@ -147,6 +149,7 @@ export async function runRefreshComfyUIInfoAction(context) {
         if (comfyInstallReqBtn) {
             comfyInstallReqBtn.style.display = "none";
         }
+        context?.clearPendingComfyInfoRefresh?.();
     } finally {
         if (!shouldContinueContext(context)) {
             return;
