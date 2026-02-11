@@ -344,6 +344,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         busy_ui_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
         ).read_text(encoding="utf-8")
+        debug_ui_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_debug_ui.js"
+        ).read_text(encoding="utf-8")
         layout_text = (
             repo_root / "web" / "ui" / "module_node_picker_layout.js"
         ).read_text(encoding="utf-8")
@@ -366,9 +369,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("isCurrentBinding()", relay_text)
         self.assertIn("[contenteditable]", relay_text)
 
-        self.assertIn("diag.active_tab=", picker_text)
-        self.assertIn("diag.last_clicked_tab=", picker_text)
-        self.assertIn("diag.child_nodes_short=", picker_text)
+        self.assertIn("diag.active_tab=", debug_ui_text)
+        self.assertIn("diag.last_clicked_tab=", debug_ui_text)
+        self.assertIn("diag.child_nodes_short=", debug_ui_text)
         self.assertIn("catalogLoadToken", picker_text)
         self.assertIn("moduleInfoLoadToken", picker_text)
         self.assertIn("catalogLoadBusyCount", picker_text)
@@ -459,6 +462,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         busy_ui_text = (
             repo_root / "web" / "orchestration" / "module_node_picker_busy_ui.js"
         ).read_text(encoding="utf-8")
+        debug_ui_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_debug_ui.js"
+        ).read_text(encoding="utf-8")
         runtime_state_text = (
             repo_root / "web" / "state" / "module_node_picker_runtime_state.js"
         ).read_text(encoding="utf-8")
@@ -515,6 +521,9 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("setCatalogControlsLoading", busy_ui_text)
         self.assertIn("setActionBusy", busy_ui_text)
         self.assertIn("setStartupBusy", busy_ui_text)
+        self.assertIn("export function createModuleNodePickerDebugUi", debug_ui_text)
+        self.assertIn("onCopyStatus", debug_ui_text)
+        self.assertIn("setDiagnosticText", debug_ui_text)
         self.assertIn("export function getRuntimePickerState", runtime_state_text)
         self.assertIn("export function clearLegacyPersistentFlags", runtime_state_text)
         self.assertIn("export function createRuntimeStatusAccessors", runtime_state_text)

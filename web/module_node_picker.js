@@ -82,6 +82,7 @@ import {
     runModuleNodePickerStartupLoad,
 } from "./orchestration/module_node_picker_bindings.js";
 import { isCanceledRequestError } from "./orchestration/module_node_picker_error_utils.js";
+import { createModuleNodePickerDebugUi } from "./orchestration/module_node_picker_debug_ui.js";
 import {
     resumePendingCustomRefreshFlow as resumePendingCustomRefreshFlowImpl,
     resumePendingModuleUpdateFlow as resumePendingModuleUpdateFlowImpl,
@@ -607,30 +608,8 @@ function renderPicker(container) {
         persistComfyCheckMode(window, COMFYUI_CHECK_MODE_STORAGE_KEY, mode);
     };
 
-    let debugEnabled = Boolean(pickerStore.get("debugEnabled"));
-    const unsubscribeDebug = pickerStore.subscribe("debugEnabled", (value) => {
-        debugEnabled = Boolean(value);
-        applyDebugUiState();
-    });
-    const applyDebugUiState = () => {
-        window[NODE_PICKER_DEBUG_KEY] = Boolean(debugEnabled);
-        diagnosticsLogger.setDebugEnabled(Boolean(debugEnabled));
-        debugCard.hidden = !debugEnabled;
-        debugCard.style.display = debugEnabled ? "block" : "none";
-        debugToggle.textContent = debugEnabled ? "Debug: ON" : "Debug";
-    };
-    applyDebugUiState();
-    debugToggle.addEventListener("click", () => {
-        pickerStore.set({ debugEnabled: !Boolean(pickerStore.get("debugEnabled")) });
-    });
-    debugCopyBtn.addEventListener("click", async () => {
-        try {
-            await navigator.clipboard.writeText(diagnostics.textContent || "");
-            setHelpText("Debug diagnostics copied to clipboard.");
-        } catch (_err) {
-            setHelpText("Failed to copy debug diagnostics.");
-        }
-    });
+    let showHelpStatus = () => {};
+    let debugUi = null;
 
     const catalogByGroup = new Map();
     const moduleCatalogByGroup = new Map();
@@ -682,6 +661,18 @@ function renderPicker(container) {
         installModuleRequirements(modules, { ...(options || {}), signal: apiSignal() });
     const installComfyUIRequirementsApi = (options = {}) =>
         installComfyUIRequirements({ ...(options || {}), signal: apiSignal() });
+    debugUi = createModuleNodePickerDebugUi({
+        shouldContinue: isPickerAlive,
+        windowObj: window,
+        debugStateKey: NODE_PICKER_DEBUG_KEY,
+        pickerStore,
+        diagnosticsLogger,
+        debugToggle,
+        debugCard,
+        debugCopyBtn,
+        diagnostics,
+        onCopyStatus: (message) => showHelpStatus(message),
+    });
     const disposePickerInstance = () => {
         if (pickerDisposed) {
             return;
@@ -702,9 +693,9 @@ function renderPicker(container) {
             // Ignore stale startup-load cancellation errors.
         }
         try {
-            unsubscribeDebug?.();
+            debugUi?.dispose?.();
         } catch (_err) {
-            // Ignore stale store-unsubscribe errors.
+            // Ignore stale debug-ui dispose errors.
         }
         try {
             processUi?.dispose?.();
@@ -910,31 +901,11 @@ function renderPicker(container) {
         }
         customAlertText.textContent = String(text || "");
     };
-    /**
-     * Render compact diagnostics block for tab-sync troubleshooting.
-     */
-    const setDiagnosticText = (diag) => {
-        if (!isPickerAlive()) {
-            return;
-        }
-        const lines = [
-            `diag.ts=${new Date().toLocaleTimeString()}`,
-            `diag.reason=${diag?.reason || "unknown"}`,
-            `diag.active_tab=${diag?.activeTabId || "n/a"}`,
-            `diag.last_clicked_tab=${diag?.lastClickedTabId || "n/a"}`,
-            `diag.own_btn_found=${diag?.ownBtnFound ? "yes" : "no"}`,
-            `diag.own_btn_selected=${diag?.ownBtnSelected === null ? "n/a" : (diag?.ownBtnSelected ? "yes" : "no")}`,
-            `diag.root_display=${diag?.rootDisplay || "n/a"}`,
-            `diag.child_nodes=${Number(diag?.childNodesCount || 0)}`,
-            `diag.child_nodes_short=${diag?.childNodesShort || "n/a"}`,
-        ];
-        diagnostics.textContent = lines.join("\n");
-    };
     bindModuleNodesTabRelay({
         app,
         root,
         sidebarTabId: SIDEBAR_TAB_ID,
-        onDiag: setDiagnosticText,
+        onDiag: (diag) => debugUi?.setDiagnosticText?.(diag),
     });
 
     /**
@@ -946,6 +917,7 @@ function renderPicker(container) {
         }
         renderHelpText(help, text);
     };
+    showHelpStatus = setHelpText;
 
     /**
      * Replace help area with compact hint-like message.
