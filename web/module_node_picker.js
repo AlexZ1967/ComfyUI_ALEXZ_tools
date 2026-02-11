@@ -1877,9 +1877,18 @@ function renderPicker(container) {
         startupRetries: 2,
         startupRetryDelayMs: 250,
     }) || (() => {});
-    void resumePendingCustomRefreshFlow();
-    void resumePendingModuleUpdateFlow();
-    void resumePendingComfyInfoRefreshFlow();
+    const resumePendingFlows = async () => {
+        await resumePendingCustomRefreshFlow();
+        if (!isPickerAlive()) {
+            return;
+        }
+        await resumePendingModuleUpdateFlow();
+        if (!isPickerAlive()) {
+            return;
+        }
+        await resumePendingComfyInfoRefreshFlow();
+    };
+    void resumePendingFlows();
 }
 
 /**

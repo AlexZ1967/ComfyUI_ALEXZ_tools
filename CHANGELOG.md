@@ -76,6 +76,9 @@
 - Pending ComfyUI info refresh resume:
   - interrupted `Refresh ComfyUI Info` now sets a session pending marker,
   - when widget re-opens, ComfyUI info refresh is resumed automatically and result is rendered back into ComfyUI card.
+- Resume orchestration hardening:
+  - pending restore flows (custom refresh, update jobs, ComfyUI info refresh) now run sequentially on widget startup,
+  - avoids cross-flow UI races on `actionBusy`/process target and reduces startup flicker.
 - Regression guardrails:
   - added frontend contract checks for pending/resume markers and session-runtime status in `tests/test_phase0_baseline.py`.
 - ComfyUI mode-switch UX fix:
