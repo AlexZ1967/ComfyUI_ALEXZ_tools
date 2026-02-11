@@ -182,7 +182,7 @@ function injectStyles() {
     .alexz-mod-picker-module-info-wrap {
         display: flex;
         flex-direction: column;
-        gap: 0;
+        gap: 4px;
     }
     .alexz-mod-picker-help-main {
         font-size: 13px;
