@@ -32,6 +32,7 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
     let pendingSyncReason = "";
     let pendingSyncClickedTabId = "";
     let pendingSyncTimer = 0;
+    let lastAppliedVisibilityState = "unknown";
 
     /**
      * Emit deduplicated diagnostics payload to panel callback.
@@ -133,10 +134,18 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, sidebarTabId,
             shouldShow = false;
         }
         if (shouldShow) {
-            ensureRootAttached();
+            const needAttach = !root.isConnected || lastAppliedVisibilityState !== "shown";
+            if (needAttach) {
+                ensureRootAttached();
+            }
             root.style.display = "";
+            lastAppliedVisibilityState = "shown";
         } else {
-            ensureRootDetached();
+            const needDetach = root.isConnected || lastAppliedVisibilityState !== "hidden";
+            if (needDetach) {
+                ensureRootDetached();
+            }
+            lastAppliedVisibilityState = "hidden";
         }
         const effectiveReason = foreignIntentActive && reason !== "relay_own_tab_click"
             ? "relay_wait_foreign_tab"
