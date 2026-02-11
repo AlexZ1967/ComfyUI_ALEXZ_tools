@@ -42,6 +42,8 @@ export function bindModuleNodePickerEvents(context) {
     const loadCatalog = context?.loadCatalog;
     const refreshCustomNodesInfoFlow = context?.refreshCustomNodesInfoFlow;
     const setExpandedModule = context?.setExpandedModule;
+    let comfyModeReloadTimer = 0;
+    let comfyModeReloadToken = 0;
 
     if (!groupSelect || !categorySelect || !moduleFilter || !nodeSelect) {
         return;
@@ -118,7 +120,16 @@ export function bindModuleNodePickerEvents(context) {
     if (comfyModeSelect) {
         comfyModeSelect.onchange = async () => {
             saveComfyCheckMode?.(comfyModeSelect.value);
-            await loadCatalog?.();
+            const token = ++comfyModeReloadToken;
+            if (comfyModeReloadTimer) {
+                window.clearTimeout(comfyModeReloadTimer);
+            }
+            comfyModeReloadTimer = window.setTimeout(async () => {
+                if (token !== comfyModeReloadToken) {
+                    return;
+                }
+                await loadCatalog?.();
+            }, 120);
         };
     }
 

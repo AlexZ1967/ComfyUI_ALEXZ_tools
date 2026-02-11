@@ -133,6 +133,7 @@ Deliverables:
   - added catalog-load request token guard to prevent stale async catalog responses from overwriting active UI state.
   - added picker render-lifecycle cleanup hook and module-info request token guard to prevent stale async UI writes between re-renders.
   - cleaned relay helpers by removing unused API and centralizing tab/sidebar selector constants.
+  - added disposed-instance early-exit guards for catalog/module-info loads plus debounced ComfyUI-check mode reload.
 
 Exit criteria:
 - Repeated transitions `Module Nodes -> NodesMap -> Module Nodes` stay stable across multiple cycles.

@@ -133,6 +133,7 @@
   - добавлен request-token guard загрузки каталога, чтобы устаревшие async-ответы не перезаписывали актуальный UI-стейт.
   - добавлен render-lifecycle cleanup hook picker и request-token guard для `loadModuleInfo` (устаревшие async-ответы не перезаписывают карточку модуля между рендерами).
   - очищены relay helpers: удален неиспользуемый helper и вынесены selector-константы для tab/sidebar матчей.
+  - добавлены early-exit guards для загрузки каталога/инфо модуля на disposed-instance и debounce смены `ComfyUI check` режима.
 
 Критерии выхода:
 - Многократные переходы `Module Nodes -> NodesMap -> Module Nodes` стабильны.

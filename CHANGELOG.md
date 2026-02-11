@@ -32,6 +32,9 @@
   - centralized sidebar/tab candidate selectors as module constants for cleaner and safer maintenance.
 - Baseline tests hardening:
   - added regression check to ensure legacy relay interval path (`setInterval`) and removed helper export are not reintroduced.
+- Picker request/load flow hardening:
+  - added early exit for `loadCatalog`/`loadModuleInfo` when picker instance is disposed (prevents unnecessary stale fetches),
+  - added small debounce for `ComfyUI check` mode switch to avoid burst catalog reloads during fast toggles.
 - Module UI/UX refinements:
   - module-card click now toggles node list (expand/collapse),
   - help/legend layout adjusted: hint near module card, legend shown between module card and node list,

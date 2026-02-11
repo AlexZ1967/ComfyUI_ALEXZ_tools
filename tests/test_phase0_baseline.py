@@ -381,6 +381,11 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertNotIn("setInterval(", relay_text)
         self.assertIn("setTimeout(runTick", relay_text)
         self.assertNotIn("export function hasSidebarTabId", helpers_text)
+        bindings_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_bindings.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("comfyModeReloadTimer", bindings_text)
+        self.assertIn("window.setTimeout", bindings_text)
 
     def test_comfyui_status_cache_only_skips_git_without_force_refresh(self):
         """Ensure non-forced ComfyUI status request returns cached/unknown data without git calls."""

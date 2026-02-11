@@ -1147,6 +1147,9 @@ function renderPicker(container) {
      * Load and render module info for currently selected group/module.
      */
     const loadModuleInfo = async (options = {}) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         const token = ++moduleInfoLoadToken;
         return loadModuleInfoFlow(options, {
             isRequestActive: () => token === moduleInfoLoadToken && isPickerAlive(),
@@ -1169,6 +1172,9 @@ function renderPicker(container) {
      * Load full node catalog from backend and refresh picker UI state.
      */
     const loadCatalog = async (options = {}) => {
+        if (!isPickerAlive()) {
+            return;
+        }
         const token = ++catalogLoadToken;
         return loadCatalogFlow(options, {
             isRequestActive: () => token === catalogLoadToken && isPickerAlive(),
