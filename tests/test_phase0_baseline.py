@@ -335,13 +335,16 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         relay_text = (repo_root / "web" / "module_node_picker_tab_relay.js").read_text(
             encoding="utf-8"
         )
+        relay_helpers_text = (
+            repo_root / "web" / "orchestration" / "module_node_picker_tab_relay_helpers.js"
+        ).read_text(encoding="utf-8")
         picker_text = (repo_root / "web" / "module_node_picker.js").read_text(
             encoding="utf-8"
         )
 
         self.assertIn("export function bindModuleNodesTabRelay", relay_text)
         self.assertIn("export function unbindModuleNodesTabRelay", relay_text)
-        self.assertIn("easyuse_nodes_map", relay_text)
+        self.assertIn("easyuse_nodes_map", relay_helpers_text)
         self.assertIn("relay_init", relay_text)
         self.assertIn("relay_tick", relay_text)
         self.assertIn("relay_unknown_tab_click", relay_text)
