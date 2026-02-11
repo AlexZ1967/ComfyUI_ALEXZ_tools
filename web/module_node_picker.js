@@ -783,10 +783,34 @@ function renderPicker(container) {
     let cancelStartupLoad = () => {};
 
     let pickerDisposed = false;
+    const apiAbortController = typeof AbortController === "function"
+        ? new AbortController()
+        : null;
     // Keep async/UI flows active for this picker instance even if the root is
     // temporarily detached during sidebar transitions; lifecycle is governed by
     // explicit dispose, not transient DOM attachment state.
     const isPickerAlive = () => !pickerDisposed;
+    const apiSignal = () => apiAbortController?.signal;
+    const fetchNodeCatalogApi = (comfyMode) =>
+        fetchNodeCatalog(comfyMode, { signal: apiSignal() });
+    const fetchModuleInfoApi = (group, moduleName, options = {}) =>
+        fetchModuleInfo(group, moduleName, { ...(options || {}), signal: apiSignal() });
+    const fetchComfyUIInfoApi = (forceRefresh = true, acknowledge = true, comfyMode = "releases", options = {}) =>
+        fetchComfyUIInfo(forceRefresh, acknowledge, comfyMode, { ...(options || {}), signal: apiSignal() });
+    const refreshModuleRuntimeStateApi = (options = {}) =>
+        refreshModuleRuntimeState({ ...(options || {}), signal: apiSignal() });
+    const fetchModuleRefreshStatusApi = (options = {}) =>
+        fetchModuleRefreshStatus({ ...(options || {}), signal: apiSignal() });
+    const acknowledgeAllModuleNoveltyApi = (options = {}) =>
+        acknowledgeAllModuleNovelty({ ...(options || {}), signal: apiSignal() });
+    const startModuleUpdateApi = (scope, moduleName, options = {}) =>
+        startModuleUpdate(scope, moduleName, { ...(options || {}), signal: apiSignal() });
+    const fetchModuleUpdateStatusApi = (options = {}) =>
+        fetchModuleUpdateStatus({ ...(options || {}), signal: apiSignal() });
+    const installModuleRequirementsApi = (modules, options = {}) =>
+        installModuleRequirements(modules, { ...(options || {}), signal: apiSignal() });
+    const installComfyUIRequirementsApi = (options = {}) =>
+        installComfyUIRequirements({ ...(options || {}), signal: apiSignal() });
     const disposePickerInstance = () => {
         if (pickerDisposed) {
             return;
@@ -815,6 +839,11 @@ function renderPicker(container) {
             processUi?.dispose?.();
         } catch (_err) {
             // Ignore stale process-ui dispose errors.
+        }
+        try {
+            apiAbortController?.abort?.();
+        } catch (_err) {
+            // Ignore stale abort-controller errors.
         }
         unbindModuleNodesTabRelay();
         if (container?.[PICKER_CLEANUP_KEY] === disposePickerInstance) {
@@ -1069,7 +1098,7 @@ function renderPicker(container) {
         return pollRefreshProgressLoop({
             shouldContinue: isPickerAlive,
             isTokenActive: () => token === refreshPollToken,
-            fetchModuleRefreshStatus,
+            fetchModuleRefreshStatus: fetchModuleRefreshStatusApi,
             formatRefreshLine,
             setRefreshLine,
             getProcessTarget: () => processUi.getTarget(),
@@ -1115,7 +1144,7 @@ function renderPicker(container) {
         return pollUpdateProgressLoop({
             shouldContinue: isPickerAlive,
             isTokenActive: () => token === updatePollToken,
-            fetchModuleUpdateStatus,
+            fetchModuleUpdateStatus: fetchModuleUpdateStatusApi,
             formatUpdateLine,
             setRefreshLine,
             sleepMs: 450,
@@ -1131,8 +1160,8 @@ function renderPicker(container) {
             setActionBusy,
             setProcessTarget,
             setRefreshLine,
-            installComfyUIRequirements,
-            fetchComfyUIInfo,
+            installComfyUIRequirements: installComfyUIRequirementsApi,
+            fetchComfyUIInfo: fetchComfyUIInfoApi,
             getComfyMode: () => comfyModeSelect.value,
             renderComfyAlert,
             setProcessAction,
@@ -1149,7 +1178,7 @@ function renderPicker(container) {
             setRefreshLine,
             setProcessAction,
             installComfyUIRequirementsFlow,
-            installModuleRequirements,
+            installModuleRequirements: installModuleRequirementsApi,
             setActionBusy,
         });
     };
@@ -1165,7 +1194,7 @@ function renderPicker(container) {
             setProcessTarget,
             setProcessAction,
             setRefreshLine,
-            startModuleUpdate,
+            startModuleUpdate: startModuleUpdateApi,
             pollUpdateProgress,
             getSelectedGroup,
             getSelectedModule: () => String(nodeSelect.value || "").trim(),
@@ -1222,7 +1251,7 @@ function renderPicker(container) {
             isRequestActive: () => token === moduleInfoLoadToken && isPickerAlive(),
             getSelectedModule: () => String(nodeSelect.value || ""),
             getSelectedGroup,
-            fetchModuleInfo,
+            fetchModuleInfo: fetchModuleInfoApi,
             clearModuleInfo: () => {
                 moduleInfo.innerHTML = "";
             },
@@ -1250,7 +1279,7 @@ function renderPicker(container) {
         try {
             return await loadCatalogFlow(options, {
                 isRequestActive: () => token === catalogLoadToken && isPickerAlive(),
-                fetchNodeCatalog,
+                fetchNodeCatalog: fetchNodeCatalogApi,
                 getComfyMode: () => comfyModeSelect.value,
                 catalogByGroup,
                 setCustomModulesNeedUpdate: (value) => {
@@ -1368,7 +1397,7 @@ function renderPicker(container) {
             setProcessAction,
             setModuleInlineStatus,
             setActionBusy,
-            installModuleRequirements,
+            installModuleRequirements: installModuleRequirementsApi,
             loadModuleInfo,
             syncUpdateAllButton,
         });
@@ -1444,7 +1473,7 @@ function renderPicker(container) {
             comfyAlertText,
             comfyUpdateBtn,
             comfyInstallReqBtn,
-            fetchComfyUIInfo,
+            fetchComfyUIInfo: fetchComfyUIInfoApi,
             getComfyMode: () => comfyModeSelect.value,
             renderComfyAlert,
             syncUpdateAllButton,
@@ -1460,9 +1489,9 @@ function renderPicker(container) {
             setRefreshLine,
             customAlert,
             customAlertText,
-            refreshModuleRuntimeState,
+            refreshModuleRuntimeState: refreshModuleRuntimeStateApi,
             pollRefreshProgress,
-            acknowledgeAllModuleNovelty,
+            acknowledgeAllModuleNovelty: acknowledgeAllModuleNoveltyApi,
             loadCatalog,
         });
     };

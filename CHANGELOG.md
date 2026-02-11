@@ -59,6 +59,10 @@
 - API timeout hardening:
   - introduced shared frontend API fetch wrapper with `AbortController` timeout handling,
   - applied bounded timeouts to catalog/module/status/update/install API calls to avoid indefinite UI hangs.
+- API lifecycle-cancellation hardening:
+  - picker render now owns a per-instance `AbortController` that is aborted on dispose/re-render,
+  - all picker API calls now use lifecycle-bound `signal`, so in-flight requests are canceled immediately after dispose,
+  - removed stale timer artifact from frontend API wrapper timeout path.
 - ComfyUI mode-switch UX fix:
   - switching `ComfyUI check` now refreshes only ComfyUI status card (no full catalog reload),
   - prevents flicker/reset of group/module dropdowns during fast mode toggles.

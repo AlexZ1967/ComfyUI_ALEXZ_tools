@@ -142,6 +142,7 @@ Deliverables:
   - added bounded startup catalog retry with explicit dispose cancellation to handle transient initial empty backend state.
   - added selector loading-state placeholders with disable/enable lifecycle during catalog load to avoid transient empty dropdown UX.
   - added frontend API timeout boundaries (AbortController) to prevent indefinite pending requests from blocking picker UX.
+  - bound all picker API calls to per-render lifecycle `AbortController` and cancel in-flight requests on picker dispose/re-render.
   - decoupled ComfyUI-check mode switch from full catalog reload to stabilize selector UI during rapid mode toggles.
   - finalized ComfyUI-check selector semantics: mode switch is config-only; network refresh occurs only by explicit user action.
 
