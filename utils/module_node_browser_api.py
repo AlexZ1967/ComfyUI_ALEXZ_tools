@@ -1,13 +1,14 @@
 """
 Module: utils/module_node_browser_api.py
 Author: AlexZ1967
-Last updated: 2026-02-11
+Last updated: 2026-02-12
 
 Description:
     Backend API for Module Node Picker widget.
 
 Purpose:
-    Implements catalog, module info, refresh/update jobs, git status tracking, and requirements installation routes.
+    Implements catalog, module info, refresh/update jobs, git status tracking,
+    requirements installation routes, and Slice 0 component-registry endpoints.
 """
 
 from __future__ import annotations
@@ -32,6 +33,11 @@ from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
 from typing import Any
+
+from .module_browser import (
+    build_default_component_registry,
+    ensure_module_state_schema,
+)
 
 try:
     import folder_paths
@@ -109,6 +115,8 @@ _GROUP_ORDER = (
     ("custom", "Custom_Nodes"),
 )
 _UPDATE_TARGET_SCAN_WORKERS = 4
+_COMPONENT_REGISTRY_PAYLOAD_CACHE: tuple[float, dict[str, Any]] | None = None
+_COMPONENT_REGISTRY_TTL_SEC = 15.0
 
 
 def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
@@ -122,6 +130,7 @@ def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
 
 def _set_custom_update_checked(checked: bool) -> None:
     """Persist custom-module update-check visibility gate for initial widget state."""
+    global _MODULE_INFO_CACHE
     state = _load_module_state()
     if not isinstance(state, dict):
         return
@@ -134,6 +143,7 @@ def _set_custom_update_checked(checked: bool) -> None:
     meta["custom_update_checked_at"] = _now_iso()
     state["__meta__"] = meta
     _save_module_state(state)
+    _MODULE_INFO_CACHE.clear()
 
 
 def _normalize_log_mode(value: str | None) -> str:
@@ -223,6 +233,30 @@ def _clear_comfyui_status_cache() -> None:
     """Clear ComfyUI status cache safely even if it was replaced with None."""
     cache = _ensure_comfyui_status_cache()
     cache.clear()
+
+
+def _component_registry_payload(force_refresh: bool = False) -> dict[str, Any]:
+    """Return cached component-registry snapshot used for Slice 0 diagnostics."""
+    global _COMPONENT_REGISTRY_PAYLOAD_CACHE
+    now_ts = time.time()
+    if (
+        not force_refresh
+        and isinstance(_COMPONENT_REGISTRY_PAYLOAD_CACHE, tuple)
+        and len(_COMPONENT_REGISTRY_PAYLOAD_CACHE) == 2
+        and (now_ts - float(_COMPONENT_REGISTRY_PAYLOAD_CACHE[0])) < _COMPONENT_REGISTRY_TTL_SEC
+    ):
+        return dict(_COMPONENT_REGISTRY_PAYLOAD_CACHE[1])
+
+    registry = build_default_component_registry()
+    payload = {
+        "summary": registry.summary(),
+        "nodes": [entry.to_dict() for entry in registry.list("node")],
+        "widgets": [entry.to_dict() for entry in registry.list("widget")],
+        "apis": [entry.to_dict() for entry in registry.list("api")],
+        "refreshed_at": _now_iso(),
+    }
+    _COMPONENT_REGISTRY_PAYLOAD_CACHE = (now_ts, dict(payload))
+    return payload
 
 
 def _node_mappings() -> tuple[dict[str, Any], dict[str, str]]:
@@ -2071,22 +2105,25 @@ def _load_module_state() -> dict[str, dict[str, Any]]:
     if _MODULE_STATE_CACHE is not None:
         return _MODULE_STATE_CACHE
     if not _MODULE_STATE_PATH.exists():
-        _MODULE_STATE_CACHE = {}
+        _MODULE_STATE_CACHE = ensure_module_state_schema({})
         return _MODULE_STATE_CACHE
     try:
         with _MODULE_STATE_PATH.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
-        _MODULE_STATE_CACHE = data if isinstance(data, dict) else {}
+        _MODULE_STATE_CACHE = ensure_module_state_schema(data if isinstance(data, dict) else {})
     except Exception:
-        _MODULE_STATE_CACHE = {}
+        _MODULE_STATE_CACHE = ensure_module_state_schema({})
     return _MODULE_STATE_CACHE
 
 
 def _save_module_state(state: dict[str, dict[str, Any]]) -> None:
     """Persist module snapshot state to extension cache file."""
+    normalized = ensure_module_state_schema(state)
     try:
         with _MODULE_STATE_PATH.open("w", encoding="utf-8") as handle:
-            json.dump(state, handle, ensure_ascii=True, indent=2, sort_keys=True)
+            json.dump(normalized, handle, ensure_ascii=True, indent=2, sort_keys=True)
+        global _MODULE_STATE_CACHE
+        _MODULE_STATE_CACHE = normalized
     except Exception as exc:
         _LOGGER.debug("Failed to save module state cache: %s", exc)
 
@@ -2676,6 +2713,9 @@ def _resolve_module_info(
     if result["repository"]:
         result["owner_url"] = result["repository"]
     if cache_only and isinstance(cache_entry, dict):
+        custom_update_checked = _custom_update_checked_flag(state_cache)
+        meta_entry = state_cache.get("__meta__") if isinstance(state_cache, dict) else None
+        has_custom_update_gate = isinstance(meta_entry, dict) and ("custom_update_checked" in meta_entry)
         result["module_path"] = cache_entry.get("module_path") or ""
         result["installed_commit"] = cache_entry.get("installed_commit") or ""
         result["installed_commit_short"] = (result["installed_commit"] or "")[:8]
@@ -2692,7 +2732,11 @@ def _resolve_module_info(
         result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
         result["startup_update_at"] = cache_entry.get("pending_update_at") or cache_entry.get("startup_update_at") or ""
         update_available = cache_entry.get("update_available")
-        if isinstance(update_available, bool):
+        if has_custom_update_gate and not custom_update_checked:
+            # Do not expose unknown/remote update states before explicit custom refresh.
+            result["update_available"] = False
+            result["update_status"] = "up_to_date"
+        elif isinstance(update_available, bool):
             result["update_available"] = update_available
             result["update_status"] = "can_update" if update_available else "up_to_date"
         elif isinstance(cache_entry.get("update_status"), str):
@@ -3574,6 +3618,18 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             return web.json_response(result, status=status_code)
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("ComfyUI requirements install API error: %s", exc, exc_info=True)
+            return web.json_response({"error": str(exc)}, status=500)
+
+    @PromptServer.instance.routes.get("/alexz_tools/component_registry")
+    async def alexz_tools_component_registry(request):
+        """API route that returns extensibility registry snapshot (nodes/widgets/api)."""
+        try:
+            refresh_raw = (request.query.get("refresh", "0") or "0").strip().lower()
+            force_refresh = refresh_raw not in {"0", "false", "no", "off"}
+            payload = _component_registry_payload(force_refresh=force_refresh)
+            return web.json_response({"status": "ok", "registry": payload})
+        except Exception as exc:  # pragma: no cover - diagnostic
+            _LOGGER.error("Component registry API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
     @PromptServer.instance.routes.get("/alexz_tools/node_catalog")

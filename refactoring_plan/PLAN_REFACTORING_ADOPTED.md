@@ -223,6 +223,24 @@ Exit criteria:
 - No duplicate roots and no empty panel regressions inside `Module Node Picker` itself.
 - External direct-switch `NodesMap` issue is documented with workaround in `guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md`.
 
+## Slice 0 — Extensibility Foundation (nodes/widgets lifecycle)
+
+Status: 🚧 in progress (started 2026-02-12)
+
+Deliverables:
+- Introduce a registry-first layer for module components (`nodes`, `widgets`, `api`) with auto-discovery.
+- Introduce stable backend contracts (schema/versioned payload) and versioned runtime cache.
+- Define single registration/unregistration points so adding/removing nodes/widgets does not require multi-file manual edits.
+- Add minimal contract tests for:
+  - new component added,
+  - component removed,
+  - route payload keys unchanged.
+
+Exit criteria:
+- Adding/removing a node or widget is done via registry with no cross-file manual wiring.
+- API/UX behavior remains unchanged.
+- Baseline tests pass.
+
 ## Phase 3 — Backend Modular Split (No API Changes)
 
 Deliverables:
@@ -282,4 +300,4 @@ Quality:
 
 ## 8) Immediate Next Step
 
-Start Phase 1 implementation from this plan, but with corrected runtime-safe code (plain JS, no TS syntax), and with strict parity to current user-visible behavior.
+Start with **Slice 0** implementation, then proceed to Phase 3 while preserving API and UI behavior parity.

@@ -1,5 +1,19 @@
 # Changelog — ALEXZ_tools
 
+## 0.17.2 — 2026-02-12
+- Slice 0 extensibility foundation (phase-3 prep, no breaking API changes):
+  - added central node registry manifest `nodes/node_registry.py` (`NodeSpec`, `NODE_SPECS`, `NODE_UI_METADATA`), and switched node loader to use this manifest.
+  - added internal module-browser helper package `utils/module_browser/`:
+    - `contracts.py` with versioned state-cache schema normalization (`schema_name`, `schema_version`),
+    - `component_registry.py` with reusable node/widget/api registry primitives.
+  - backend now normalizes persisted `module_state_cache.json` schema metadata on load/save.
+  - added diagnostic endpoint `GET /alexz_tools/component_registry` returning current registry snapshot (`nodes`, `widgets`, `apis`).
+- Tests:
+  - added `tests/test_slice0_registry.py` to validate registry add/remove lifecycle and schema normalization.
+  - regression suite passes: `53 passed` for `test_slice0_registry + phase0_baseline + module_browser_tracker`.
+- Metadata sync:
+  - version updated to `0.17.2` in `pyproject.toml` and `README.md`.
+
 ## 0.17.1 — 2026-02-12
 - Module Node Picker UI consistency:
   - aligned selection-legend hint placement/spacing with module-card hint behavior for uniform UX near controls.
