@@ -60,11 +60,11 @@ class ModuleBrowserModuleInfoTests(unittest.TestCase):
         self.assertEqual(flags.get("update_status"), "")
         self.assertFalse(bool(flags.get("update_available")))
 
-    def test_cached_flags_dirty_worktree_marks_updated(self):
-        """Dirty worktree signature keeps module marked as locally updated."""
+    def test_cached_flags_pending_local_change_marks_updated(self):
+        """Pending local-change marker keeps module marked as locally updated."""
         state = {
             "__meta__": {"custom_update_checked": False},
-            "modA": {"worktree_signature": "abcd1234"},
+            "modA": {"pending_local_change": True},
         }
         flags = self.cached_module_flags(
             group_name="custom",

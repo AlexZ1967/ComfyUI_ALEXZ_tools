@@ -52,7 +52,6 @@ def cached_module_flags(
             bool(startup_prev and startup_new)
             or bool(entry.get("pending_commit_change"))
             or bool(entry.get("pending_local_change"))
-            or bool(entry.get("worktree_signature"))
         )
         if group_norm == "custom":
             update_available = bool(entry.get("update_available"))
@@ -215,7 +214,6 @@ def resolve_module_info_uncached(
             bool(startup_prev and startup_new)
             or bool(cache_entry.get("pending_commit_change"))
             or bool(cache_entry.get("pending_local_change"))
-            or bool(cache_entry.get("worktree_signature"))
         )
         result["startup_prev_commit_short"] = short_commit(startup_prev) if startup_prev else ""
         result["startup_new_commit_short"] = short_commit(startup_new) if startup_new else ""
@@ -277,4 +275,3 @@ def resolve_module_info_uncached(
 
     apply_node_change_info(result, group_norm, module)
     return result
-

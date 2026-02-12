@@ -748,12 +748,12 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(info.get("update_status"), "up_to_date")
         self.assertEqual(info.get("update_available"), False)
 
-    def test_cached_module_flags_marks_dirty_worktree_as_updated(self):
-        """Dirty worktree signature should keep module marked as locally updated."""
+    def test_cached_module_flags_marks_pending_local_change_as_updated(self):
+        """Pending local-change marker should keep module marked as locally updated."""
         self.api._MODULE_STATE_CACHE = {
             "__meta__": {"custom_update_checked": False},
             "modA": {
-                "worktree_signature": "abc123deadbe",
+                "pending_local_change": True,
                 "update_status": "up_to_date",
                 "update_available": False,
             },
@@ -761,12 +761,12 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         flags = self.api._cached_module_flags("custom", "modA")
         self.assertTrue(bool(flags.get("updated_between_runs")))
 
-    def test_module_info_cache_only_marks_dirty_worktree_as_updated(self):
-        """Module info card should show updated-between-runs when worktree is dirty."""
+    def test_module_info_cache_only_marks_pending_local_change_as_updated(self):
+        """Module info card should show updated-between-runs for pending local changes."""
         self.api._MODULE_STATE_CACHE = {
             "__meta__": {"custom_update_checked": False},
             "modA": {
-                "worktree_signature": "abc123deadbe",
+                "pending_local_change": True,
                 "update_status": "up_to_date",
                 "update_available": False,
                 "installed_commit": "1234567890abcdef",
