@@ -178,6 +178,7 @@ _GROUP_ORDER = (
 _UPDATE_TARGET_SCAN_WORKERS = 4
 _COMPONENT_REGISTRY_PAYLOAD_CACHE: tuple[float, dict[str, Any]] | None = None
 _COMPONENT_REGISTRY_TTL_SEC = 15.0
+_INFO_ONLY_WIDGET_MODE = True
 
 
 def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
@@ -187,6 +188,15 @@ def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
     if not isinstance(meta, dict):
         return False
     return bool(meta.get("custom_update_checked"))
+
+
+def _info_only_rejection_payload(feature: str) -> dict[str, Any]:
+    """Build a consistent rejection payload for disabled mutate operations."""
+    return {
+        "status": "disabled",
+        "feature": feature,
+        "message": "This widget runs in info-only mode. Use ComfyUI-Manager for install/update actions.",
+    }
 
 
 def _set_custom_update_checked(checked: bool) -> None:
@@ -3132,6 +3142,11 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
     async def alexz_tools_module_update(request):
         """API route that starts asynchronous module update jobs."""
         try:
+            if _INFO_ONLY_WIDGET_MODE:
+                return web.json_response(
+                    _info_only_rejection_payload("module_update"),
+                    status=403,
+                )
             payload = {}
             try:
                 payload = await request.json()
@@ -3161,6 +3176,11 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
     async def alexz_tools_module_install_requirements(request):
         """API route that installs Python requirements for selected modules."""
         try:
+            if _INFO_ONLY_WIDGET_MODE:
+                return web.json_response(
+                    _info_only_rejection_payload("module_install_requirements"),
+                    status=403,
+                )
             payload = {}
             try:
                 payload = await request.json()
@@ -3178,6 +3198,11 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
     async def alexz_tools_comfyui_install_requirements(request):
         """API route that installs ComfyUI requirements in the active environment."""
         try:
+            if _INFO_ONLY_WIDGET_MODE:
+                return web.json_response(
+                    _info_only_rejection_payload("comfyui_install_requirements"),
+                    status=403,
+                )
             result = _install_comfyui_requirements()
             status_code = 200 if result.get("status") == "installed" else 400
             return web.json_response(result, status=status_code)
