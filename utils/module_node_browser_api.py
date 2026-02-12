@@ -94,6 +94,11 @@ from .module_browser.git_helpers import (
     resolve_release_ref as mb_resolve_release_ref,
     sync_module_upstream as mb_sync_module_upstream,
 )
+from .module_browser.update_ops import (
+    install_comfyui_requirements as mb_install_comfyui_requirements,
+    install_module_requirements as mb_install_module_requirements,
+    requirements_changed_between as mb_requirements_changed_between,
+)
 
 try:
     import folder_paths
@@ -1143,19 +1148,16 @@ def _module_dir(module_name: str) -> Path | None:
 
 def _requirements_changed_between(module_dir: Path, before_commit: str, after_commit: str) -> bool:
     """Check whether requirements.txt changed between two git revisions."""
-    before = (before_commit or "").strip()
-    after = (after_commit or "").strip()
-    if not before or not after or before == after:
-        return False
-    diff = _run_command(
-        ["git", "-C", str(module_dir), "diff", "--name-only", f"{before}..{after}", "--", "requirements.txt"],
-        timeout=20.0,
-        disable_git_prompt=True,
+    return mb_requirements_changed_between(
+        module_dir,
+        before_commit,
+        after_commit,
+        run_command=lambda args, timeout, disable_git_prompt: _run_command(
+            args,
+            timeout=timeout,
+            disable_git_prompt=disable_git_prompt,
+        ),
     )
-    if not diff.get("ok"):
-        return False
-    changed_files = [line.strip().lower() for line in str(diff.get("stdout") or "").splitlines() if line.strip()]
-    return "requirements.txt" in changed_files
 
 
 def _module_needs_update_now(module_name: str) -> bool:
@@ -1555,87 +1557,38 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
 
 def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> dict[str, Any]:
     """Install Python dependencies from module requirements.txt in active runtime environment."""
-    module = _canonical_custom_module_name(module_name)
-    module_dir = _module_dir(module)
-    result: dict[str, Any] = {
-        "module": module,
-        "status": "error",
-        "message": "",
-        "requirements_path": "",
-    }
-    if module_dir is None:
-        result["status"] = "not_found"
-        result["message"] = "module directory not found"
-        return result
-
-    requirements_path = module_dir / "requirements.txt"
-    result["requirements_path"] = str(requirements_path)
-    if not requirements_path.exists():
-        result["status"] = "missing_requirements"
-        result["message"] = "requirements.txt not found"
-        return result
-
-    cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)]
-    _LOGGER.info("Installing requirements for module %s via %s", module, result["requirements_path"])
-    run = _run_command(cmd, timeout=timeout)
-    run_stdout = _tail_lines(run.get("stdout"))
-    run_stderr = _tail_lines(run.get("stderr"))
-    if not run.get("ok"):
-        result["status"] = "error"
-        result["message"] = str(run.get("stderr") or run.get("stdout") or "pip install failed")
-        if run_stdout:
-            _LOGGER.warning("Requirements pip stdout for module %s:\n%s", module, run_stdout)
-        if run_stderr:
-            _LOGGER.warning("Requirements pip stderr for module %s:\n%s", module, run_stderr)
-        _LOGGER.error("Requirements install failed for module %s: %s", module, result["message"])
-        return result
-    if run_stdout:
-        _LOGGER.info("Requirements pip output for module %s:\n%s", module, run_stdout)
-    if run_stderr:
-        _LOGGER.info("Requirements pip warnings for module %s:\n%s", module, run_stderr)
-    result["status"] = "installed"
-    result["message"] = "requirements installed"
-    _set_module_requirements_pending(module, False)
-    _LOGGER.info("Requirements install completed for module %s", module)
-    return result
+    return mb_install_module_requirements(
+        module_name,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        module_dir_resolver=_module_dir,
+        run_command=lambda args, run_timeout, disable_git_prompt: _run_command(
+            args,
+            timeout=run_timeout,
+            disable_git_prompt=disable_git_prompt,
+        ),
+        python_executable=sys.executable,
+        tail_lines=_tail_lines,
+        set_module_requirements_pending=lambda module, pending: _set_module_requirements_pending(module, pending),
+        logger=_LOGGER,
+        timeout=timeout,
+    )
 
 
 def _install_comfyui_requirements(timeout: float = 1800.0) -> dict[str, Any]:
     """Install Python dependencies from ComfyUI requirements.txt in active runtime environment."""
-    result: dict[str, Any] = {
-        "module": "ComfyUI",
-        "status": "error",
-        "message": "",
-        "requirements_path": "",
-    }
-    req = _comfyui_requirements_path()
-    if req is None:
-        result["status"] = "missing_requirements"
-        result["message"] = "ComfyUI requirements.txt not found"
-        return result
-    result["requirements_path"] = str(req)
-    _LOGGER.info("Installing ComfyUI requirements via %s", result["requirements_path"])
-    run = _run_command([sys.executable, "-m", "pip", "install", "-r", str(req)], timeout=timeout)
-    run_stdout = _tail_lines(run.get("stdout"))
-    run_stderr = _tail_lines(run.get("stderr"))
-    if not run.get("ok"):
-        result["status"] = "error"
-        result["message"] = str(run.get("stderr") or run.get("stdout") or "pip install failed")
-        if run_stdout:
-            _LOGGER.warning("ComfyUI requirements pip stdout:\n%s", run_stdout)
-        if run_stderr:
-            _LOGGER.warning("ComfyUI requirements pip stderr:\n%s", run_stderr)
-        _LOGGER.error("ComfyUI requirements install failed: %s", result["message"])
-        return result
-    if run_stdout:
-        _LOGGER.info("ComfyUI requirements pip output:\n%s", run_stdout)
-    if run_stderr:
-        _LOGGER.info("ComfyUI requirements pip warnings:\n%s", run_stderr)
-    result["status"] = "installed"
-    result["message"] = "ComfyUI requirements installed"
-    _set_comfyui_requirements_pending(False)
-    _LOGGER.info("ComfyUI requirements install completed")
-    return result
+    return mb_install_comfyui_requirements(
+        comfyui_requirements_path=_comfyui_requirements_path,
+        run_command=lambda args, run_timeout, disable_git_prompt: _run_command(
+            args,
+            timeout=run_timeout,
+            disable_git_prompt=disable_git_prompt,
+        ),
+        python_executable=sys.executable,
+        tail_lines=_tail_lines,
+        set_comfyui_requirements_pending=lambda pending: _set_comfyui_requirements_pending(pending),
+        logger=_LOGGER,
+        timeout=timeout,
+    )
 
 def _module_repo_url(module_name: str) -> str | None:
     """Resolve module repository URL using manager metadata and git remotes."""

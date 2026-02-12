@@ -54,6 +54,11 @@ from .git_helpers import (
     resolve_release_ref,
     sync_module_upstream,
 )
+from .update_ops import (
+    install_comfyui_requirements,
+    install_module_requirements,
+    requirements_changed_between,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -82,6 +87,9 @@ __all__ = [
     "module_git_state",
     "module_worktree_signature",
     "sync_module_upstream",
+    "requirements_changed_between",
+    "install_module_requirements",
+    "install_comfyui_requirements",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

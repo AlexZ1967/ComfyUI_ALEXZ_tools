@@ -265,6 +265,9 @@ Deliverables:
 - Step 5 completed: git state/sync helper layer (`remote pick/resolve`, release-tag
   ref resolve, custom module git-state/sync, worktree signature) moved to
   `utils/module_browser/git_helpers.py` with API facade wrappers preserved.
+- Step 6 completed: requirements-diff/install operations moved to
+  `utils/module_browser/update_ops.py` (`requirements_changed_between`,
+  module/comfy requirements install) with facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

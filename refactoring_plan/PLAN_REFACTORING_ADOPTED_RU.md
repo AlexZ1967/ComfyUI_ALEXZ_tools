@@ -265,6 +265,9 @@
 - Выполнен шаг 5: вынесен слой git state/sync helper-ов (выбор/разрешение remote,
   release-tag ref resolve, git-state/sync custom модулей, worktree signature) в
   `utils/module_browser/git_helpers.py` с сохранением facade-wrapper-ов в API-файле.
+- Выполнен шаг 6: операции diff/install для requirements вынесены в
+  `utils/module_browser/update_ops.py` (`requirements_changed_between`,
+  install requirements для module/comfyui) с сохранением facade-wrapper-ов.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.
