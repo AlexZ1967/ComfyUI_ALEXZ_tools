@@ -1267,6 +1267,7 @@ def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
             bool(startup_prev and startup_new)
             or bool(entry.get("pending_commit_change"))
             or bool(entry.get("pending_local_change"))
+            or bool(entry.get("worktree_signature"))
         )
         if group_name == "custom":
             update_available = bool(entry.get("update_available"))
@@ -2770,6 +2771,7 @@ def _resolve_module_info(
             bool(startup_prev and startup_new)
             or bool(cache_entry.get("pending_commit_change"))
             or bool(cache_entry.get("pending_local_change"))
+            or bool(cache_entry.get("worktree_signature"))
         )
         result["startup_prev_commit_short"] = _short_commit(startup_prev) if startup_prev else ""
         result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""

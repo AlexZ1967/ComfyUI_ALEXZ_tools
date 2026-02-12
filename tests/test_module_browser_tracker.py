@@ -748,6 +748,37 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         self.assertEqual(info.get("update_status"), "up_to_date")
         self.assertEqual(info.get("update_available"), False)
 
+    def test_cached_module_flags_marks_dirty_worktree_as_updated(self):
+        """Dirty worktree signature should keep module marked as locally updated."""
+        self.api._MODULE_STATE_CACHE = {
+            "__meta__": {"custom_update_checked": False},
+            "modA": {
+                "worktree_signature": "abc123deadbe",
+                "update_status": "up_to_date",
+                "update_available": False,
+            },
+        }
+        flags = self.api._cached_module_flags("custom", "modA")
+        self.assertTrue(bool(flags.get("updated_between_runs")))
+
+    def test_module_info_cache_only_marks_dirty_worktree_as_updated(self):
+        """Module info card should show updated-between-runs when worktree is dirty."""
+        self.api._MODULE_STATE_CACHE = {
+            "__meta__": {"custom_update_checked": False},
+            "modA": {
+                "worktree_signature": "abc123deadbe",
+                "update_status": "up_to_date",
+                "update_available": False,
+                "installed_commit": "1234567890abcdef",
+            },
+        }
+        self.api._manager_meta_for_module = lambda _module_name, _repo_url: None
+        self.api._module_local_readme_summary = lambda _module_name: ""
+        self.api._apply_node_change_info = lambda result, group, module_name: None
+
+        info = self.api._resolve_module_info("custom", "modA", force_refresh=True, cache_only=True)
+        self.assertTrue(bool(info.get("updated_between_runs")))
+
     def test_refresh_syncs_custom_module_upstreams(self):
         """Validate `test_refresh_syncs_custom_module_upstreams` behavior."""
         called = []
