@@ -262,6 +262,9 @@ Deliverables:
 - Step 4 completed: module-info payload assembly and cached module-badge flags
   moved to `utils/module_browser/module_info.py` with facade-compatible wrappers
   preserved in `utils/module_node_browser_api.py`.
+- Step 5 completed: git state/sync helper layer (`remote pick/resolve`, release-tag
+  ref resolve, custom module git-state/sync, worktree signature) moved to
+  `utils/module_browser/git_helpers.py` with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

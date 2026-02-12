@@ -83,6 +83,17 @@ from .module_browser.module_info import (
     cached_module_flags as mb_cached_module_flags,
     resolve_module_info_uncached as mb_resolve_module_info_uncached,
 )
+from .module_browser.git_helpers import (
+    git_pick_remote as mb_git_pick_remote,
+    git_ref_exists as mb_git_ref_exists,
+    git_remote_names as mb_git_remote_names,
+    git_resolve_remote_ref as mb_git_resolve_remote_ref,
+    module_git_state as mb_module_git_state,
+    module_repo_url as mb_module_repo_url,
+    module_worktree_signature as mb_module_worktree_signature,
+    resolve_release_ref as mb_resolve_release_ref,
+    sync_module_upstream as mb_sync_module_upstream,
+)
 
 try:
     import folder_paths
@@ -1198,19 +1209,11 @@ def _module_needs_update_now(module_name: str) -> bool:
 
 def _module_worktree_signature(module_name: str) -> str:
     """Return short signature of local uncommitted changes for module worktree."""
-    module_dir = _module_dir(module_name)
-    if module_dir is None:
-        return ""
-    is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
-    if is_git != "true":
-        return ""
-    status = _run_git(["git", "-C", str(module_dir), "status", "--porcelain"])
-    if not status:
-        return ""
-    lines = sorted(line.strip() for line in status.splitlines() if line.strip())
-    if not lines:
-        return ""
-    return sha1("\n".join(lines).encode("utf-8")).hexdigest()[:12]
+    return mb_module_worktree_signature(
+        module_name,
+        module_dir_resolver=_module_dir,
+        run_git=_run_git,
+    )
 
 
 def _count_custom_modules_need_update() -> int:
@@ -1273,31 +1276,21 @@ def _comfyui_needs_update_now() -> bool:
 
 def _git_remote_names(repo_root: Path) -> list[str]:
     """Return list of configured git remote names for repository."""
-    out = _run_git(["git", "-C", str(repo_root), "remote"])
-    if not out:
-        return []
-    return [line.strip() for line in out.splitlines() if line.strip()]
+    return mb_git_remote_names(repo_root, run_git=_run_git)
 
 
 def _git_pick_remote(repo_root: Path, upstream: str | None) -> str | None:
     """Choose preferred git remote (upstream, origin, or first available)."""
-    upstream_text = (upstream or "").strip()
-    if upstream_text and "/" in upstream_text:
-        return upstream_text.split("/", 1)[0].strip() or None
-    remotes = _git_remote_names(repo_root)
-    if "origin" in remotes:
-        return "origin"
-    if "upstream" in remotes:
-        return "upstream"
-    return remotes[0] if remotes else None
+    return mb_git_pick_remote(
+        repo_root,
+        upstream,
+        git_remote_names_fn=_git_remote_names,
+    )
 
 
 def _git_ref_exists(repo_root: Path, ref_name: str) -> bool:
     """Check whether a local or remote git reference exists."""
-    ref = (ref_name or "").strip()
-    if not ref:
-        return False
-    return bool(_run_git(["git", "-C", str(repo_root), "rev-parse", "--verify", ref]))
+    return mb_git_ref_exists(repo_root, ref_name, run_git=_run_git)
 
 
 def _git_resolve_remote_ref(
@@ -1307,63 +1300,25 @@ def _git_resolve_remote_ref(
     upstream: str | None,
 ) -> tuple[str | None, str | None]:
     """Resolve remote tracking reference to compare local and upstream revisions."""
-    upstream_text = (upstream or "").strip()
-    if upstream_text and "/" in upstream_text:
-        remote_branch = upstream_text.split("/", 1)[1].strip()
-        return (upstream_text, remote_branch or None)
-
-    branch = (branch_name or "").strip()
-    if branch and branch != "HEAD":
-        by_branch = f"{remote_name}/{branch}"
-        if _git_ref_exists(repo_root, by_branch):
-            return (by_branch, branch)
-
-    head_ref = _run_git(
-        ["git", "-C", str(repo_root), "symbolic-ref", "--quiet", f"refs/remotes/{remote_name}/HEAD"]
+    return mb_git_resolve_remote_ref(
+        repo_root,
+        remote_name,
+        branch_name,
+        upstream,
+        run_git=_run_git,
+        git_ref_exists_fn=_git_ref_exists,
     )
-    remote_branch = ""
-    if head_ref:
-        prefix = f"refs/remotes/{remote_name}/"
-        if head_ref.startswith(prefix):
-            remote_branch = head_ref[len(prefix) :].strip()
-
-    if not remote_branch:
-        remote_info = _run_git(["git", "-C", str(repo_root), "remote", "show", remote_name], timeout=8.0) or ""
-        for line in remote_info.splitlines():
-            text = line.strip()
-            if text.lower().startswith("head branch:"):
-                remote_branch = text.split(":", 1)[1].strip()
-                break
-
-    if not remote_branch:
-        for candidate in ("main", "master"):
-            ref = f"{remote_name}/{candidate}"
-            if _git_ref_exists(repo_root, ref):
-                remote_branch = candidate
-                break
-
-    if not remote_branch:
-        return (None, None)
-    return (f"{remote_name}/{remote_branch}", remote_branch)
 
 
 def _resolve_release_ref(repo_root: Path, remote_name: str, tag_name: str) -> tuple[str | None, str]:
     """Resolve git reference for a release tag and ensure tag exists locally."""
-    tag_text = (tag_name or "").strip()
-    if not tag_text:
-        return (None, "")
-    tag_ref = f"refs/tags/{tag_text}"
-    if _git_ref_exists(repo_root, tag_ref):
-        commit = _run_git(["git", "-C", str(repo_root), "rev-list", "-n", "1", tag_ref]) or ""
-        return (tag_ref, commit)
-    # Fetch only the requested tag first; fallback to all tags.
-    _run_git(["git", "-C", str(repo_root), "fetch", "--quiet", remote_name, "tag", tag_text], timeout=20.0)
-    if not _git_ref_exists(repo_root, tag_ref):
-        _run_git(["git", "-C", str(repo_root), "fetch", "--quiet", remote_name, "--tags"], timeout=25.0)
-    if not _git_ref_exists(repo_root, tag_ref):
-        return (None, "")
-    commit = _run_git(["git", "-C", str(repo_root), "rev-list", "-n", "1", tag_ref]) or ""
-    return (tag_ref, commit)
+    return mb_resolve_release_ref(
+        repo_root,
+        remote_name,
+        tag_name,
+        run_git=_run_git,
+        git_ref_exists_fn=_git_ref_exists,
+    )
 
 
 def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
@@ -1684,17 +1639,13 @@ def _install_comfyui_requirements(timeout: float = 1800.0) -> dict[str, Any]:
 
 def _module_repo_url(module_name: str) -> str | None:
     """Resolve module repository URL using manager metadata and git remotes."""
-    module_name = _canonical_custom_module_name((module_name or "").strip())
-    if not module_name:
-        return None
-    for root in _custom_nodes_roots():
-        module_dir = root / module_name
-        if not module_dir.exists():
-            continue
-        out = _run_git(["git", "-C", str(module_dir), "config", "--get", "remote.origin.url"])
-        if out:
-            return _normalize_repo_url(out)
-    return None
+    return mb_module_repo_url(
+        module_name,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        custom_nodes_roots=_custom_nodes_roots,
+        run_git=_run_git,
+        normalize_repo_url=_normalize_repo_url,
+    )
 
 
 def _bootstrap_module_remote_from_manager(module_name: str, module_dir: Path) -> bool:
@@ -1719,95 +1670,28 @@ def _bootstrap_module_remote_from_manager(module_name: str, module_dir: Path) ->
 
 def _module_git_state(module_name: str) -> dict[str, Any]:
     """Collect local/remote git commit and timestamp state for one module."""
-    module_name = _canonical_custom_module_name((module_name or "").strip())
-    if not module_name:
-        return {}
-    for root in _custom_nodes_roots():
-        module_dir = root / module_name
-        if not module_dir.exists():
-            continue
-        is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
-        if is_git != "true":
-            continue
-
-        branch = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "HEAD"]) or ""
-        upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-        remote_name = _git_pick_remote(module_dir, upstream)
-        remote_ref = ""
-        remote_branch = ""
-        if remote_name:
-            resolved_ref, resolved_branch = _git_resolve_remote_ref(module_dir, remote_name, branch, upstream)
-            remote_ref = resolved_ref or ""
-            remote_branch = resolved_branch or ""
-        remote_repo_url = ""
-        if remote_name:
-            remote_repo_url = (
-                _run_git(["git", "-C", str(module_dir), "config", "--get", f"remote.{remote_name}.url"]) or ""
-            )
-        if not remote_repo_url:
-            remote_repo_url = _run_git(["git", "-C", str(module_dir), "config", "--get", "remote.origin.url"]) or ""
-        remote_target = upstream or remote_ref
-        remote_head = _run_git(["git", "-C", str(module_dir), "rev-parse", remote_target]) if remote_target else None
-        remote_updated_at = (
-            _run_git(["git", "-C", str(module_dir), "log", "-1", "--format=%cI", remote_target]) if remote_target else None
-        )
-        state: dict[str, Any] = {
-            "module_path": str(module_dir),
-            "repository": _normalize_repo_url(remote_repo_url),
-            "installed_commit": _run_git(["git", "-C", str(module_dir), "rev-parse", "HEAD"]),
-            "installed_updated_at": _run_git(["git", "-C", str(module_dir), "log", "-1", "--format=%cI"]),
-            "remote_updated_at": remote_updated_at,
-            "branch": branch,
-            "remote_name": remote_name or "",
-            "remote_ref": remote_target,
-            "remote_branch": remote_branch,
-            "upstream": upstream,
-            "has_upstream": bool(remote_target),
-            "ahead": None,
-            "behind": None,
-            "remote_head": remote_head,
-        }
-
-        counts_target = f"HEAD...{remote_target}" if remote_target else ""
-        counts = (
-            _run_git(["git", "-C", str(module_dir), "rev-list", "--left-right", "--count", counts_target])
-            if counts_target
-            else None
-        )
-        if counts:
-            parts = counts.split()
-            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                state["ahead"] = int(parts[0])
-                state["behind"] = int(parts[1])
-
-        return state
-    return {}
+    return mb_module_git_state(
+        module_name,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        custom_nodes_roots=_custom_nodes_roots,
+        run_git=_run_git,
+        normalize_repo_url=_normalize_repo_url,
+        git_pick_remote_fn=_git_pick_remote,
+        git_resolve_remote_ref_fn=_git_resolve_remote_ref,
+    )
 
 
 def _sync_module_upstream(module_name: str, timeout: float = 15.0) -> bool:
     """Fetch module remotes and refresh local view of upstream references."""
-    module_name = _canonical_custom_module_name((module_name or "").strip())
-    if not module_name:
-        return False
-    for root in _custom_nodes_roots():
-        module_dir = root / module_name
-        if not module_dir.exists():
-            continue
-        is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
-        if is_git != "true":
-            continue
-        upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-        remote_name = _git_pick_remote(module_dir, upstream)
-        if not remote_name and _bootstrap_module_remote_from_manager(module_name, module_dir):
-            upstream = _run_git(
-                ["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
-            )
-            remote_name = _git_pick_remote(module_dir, upstream)
-        if not remote_name:
-            return False
-        _run_git(["git", "-C", str(module_dir), "fetch", "--quiet", remote_name], timeout=timeout)
-        return True
-    return False
+    return mb_sync_module_upstream(
+        module_name,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        custom_nodes_roots=_custom_nodes_roots,
+        run_git=_run_git,
+        git_pick_remote_fn=_git_pick_remote,
+        bootstrap_module_remote_fn=_bootstrap_module_remote_from_manager,
+        timeout=timeout,
+    )
 
 
 def _comfyui_root() -> Path | None:

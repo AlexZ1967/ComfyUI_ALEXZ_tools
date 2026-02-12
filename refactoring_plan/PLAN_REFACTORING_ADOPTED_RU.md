@@ -262,6 +262,9 @@
 - Выполнен шаг 4: вынесена сборка payload module-info и cached-флаги бейджей модулей
   в `utils/module_browser/module_info.py`, при этом совместимые facade-wrapper-ы
   в `utils/module_node_browser_api.py` сохранены.
+- Выполнен шаг 5: вынесен слой git state/sync helper-ов (выбор/разрешение remote,
+  release-tag ref resolve, git-state/sync custom модулей, worktree signature) в
+  `utils/module_browser/git_helpers.py` с сохранением facade-wrapper-ов в API-файле.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

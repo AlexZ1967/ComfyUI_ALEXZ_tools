@@ -43,6 +43,17 @@ from .module_info import (
     cached_module_flags,
     resolve_module_info_uncached,
 )
+from .git_helpers import (
+    git_pick_remote,
+    git_ref_exists,
+    git_remote_names,
+    git_resolve_remote_ref,
+    module_git_state,
+    module_repo_url,
+    module_worktree_signature,
+    resolve_release_ref,
+    sync_module_upstream,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -62,6 +73,15 @@ __all__ = [
     "sanitize_module_description",
     "cached_module_flags",
     "resolve_module_info_uncached",
+    "git_remote_names",
+    "git_pick_remote",
+    "git_ref_exists",
+    "git_resolve_remote_ref",
+    "resolve_release_ref",
+    "module_repo_url",
+    "module_git_state",
+    "module_worktree_signature",
+    "sync_module_upstream",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",
