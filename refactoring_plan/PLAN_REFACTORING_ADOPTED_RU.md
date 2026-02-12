@@ -268,6 +268,15 @@
 - Выполнен шаг 6: операции diff/install для requirements вынесены в
   `utils/module_browser/update_ops.py` (`requirements_changed_between`,
   install requirements для module/comfyui) с сохранением facade-wrapper-ов.
+- Выполнен шаг 7: helper-ы pull/update вынесены в
+  `utils/module_browser/pull_ops.py` (`is_git_local_changes_block`,
+  `pull_comfyui`, `pull_custom_module`) с сохранением facade-wrapper-ов.
+- Выполнен шаг 8: агрегатор batch-установки requirements вынесен в
+  `utils/module_browser/update_ops.py` (`install_requirements_for_modules`)
+  с сохранением facade-wrapper-а в API-файле.
+- Выполнен шаг 9: операции чтения/записи state-cache вынесены в
+  `utils/module_browser/state_store.py` (`load_state_file`,
+  `save_state_file`) с сохранением API-cache facade.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

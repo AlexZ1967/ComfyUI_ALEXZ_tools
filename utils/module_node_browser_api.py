@@ -96,8 +96,18 @@ from .module_browser.git_helpers import (
 )
 from .module_browser.update_ops import (
     install_comfyui_requirements as mb_install_comfyui_requirements,
+    install_requirements_for_modules as mb_install_requirements_for_modules,
     install_module_requirements as mb_install_module_requirements,
     requirements_changed_between as mb_requirements_changed_between,
+)
+from .module_browser.state_store import (
+    load_state_file as mb_load_state_file,
+    save_state_file as mb_save_state_file,
+)
+from .module_browser.pull_ops import (
+    is_git_local_changes_block as mb_is_git_local_changes_block,
+    pull_comfyui as mb_pull_comfyui,
+    pull_custom_module as mb_pull_custom_module,
 )
 
 try:
@@ -1122,26 +1132,8 @@ def _tail_lines(text: str | None, max_lines: int = 80) -> str:
 
 
 def _is_git_local_changes_block(text: str | None) -> bool:
-    """Check whether git pull failed because local changes must be stashed/committed first."""
-    lower = str(text or "").strip().lower()
-    if not lower:
-        return False
-    markers = (
-        # English git messages.
-        "please commit your changes or stash them before you merge",
-        "your local changes to the following files would be overwritten by merge",
-        "local changes would be overwritten by merge",
-        "the following untracked working tree files would be overwritten by merge",
-        "please move or remove them before you merge",
-        "cannot pull with rebase: you have unstaged changes",
-        "cannot pull with rebase: your index contains uncommitted changes",
-        # Russian git messages (localized output).
-        "сделайте коммит или спрячьте ваши изменения перед слиянием веток",
-        "ваши локальные изменения в указанных файлах будут перезаписаны при слиянии",
-        "указанные неотслеживаемые файлы в рабочем каталоге будут перезаписаны при слиянии",
-        "переместите эти файлы или удалите их перед переключением веток",
-    )
-    return any(marker in lower for marker in markers)
+    """Detect pull errors caused by local-changes merge conflicts."""
+    return mb_is_git_local_changes_block(text)
 
 
 def _module_dir(module_name: str) -> Path | None:
@@ -1335,234 +1327,55 @@ def _resolve_release_ref(repo_root: Path, remote_name: str, tag_name: str) -> tu
 
 def _pull_comfyui(timeout: float = 240.0) -> dict[str, Any]:
     """Pull latest ComfyUI changes from selected remote with fast-forward strategy."""
-    root = _comfyui_root()
-    result: dict[str, Any] = {
-        "module": "ComfyUI",
-        "status": "error",
-        "message": "",
-        "updated": False,
-        "requirements_changed": False,
-        "before_commit": "",
-        "after_commit": "",
-    }
-    if root is None:
-        result["status"] = "not_found"
-        result["message"] = "ComfyUI root not found"
-        return result
-    root_str = str(root)
-    _update_console_log(f"ComfyUI pull: repo={root_str}", level="verbose")
-    is_git = _run_git(["git", "-C", root_str, "rev-parse", "--is-inside-work-tree"])
-    if is_git != "true":
-        result["status"] = "no_git"
-        result["message"] = "ComfyUI is not a git repository"
-        return result
-    branch = _run_git(["git", "-C", root_str, "rev-parse", "--abbrev-ref", "HEAD"]) or ""
-    upstream = _run_git(["git", "-C", root_str, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-    remote_name = _git_pick_remote(root, upstream)
-    if not remote_name:
-        result["status"] = "no_remote"
-        result["message"] = "ComfyUI remote is not configured"
-        return result
-
-    _update_console_log(f"ComfyUI pull: fetch {remote_name}...", level="verbose")
-    _run_git(["git", "-C", root_str, "fetch", "--quiet", remote_name], timeout=20.0)
-    remote_ref, remote_branch = _git_resolve_remote_ref(root, remote_name, branch, upstream)
-    if not remote_ref:
-        result["status"] = "no_upstream"
-        result["message"] = "ComfyUI upstream/default branch is not configured"
-        return result
-
-    if branch == "HEAD" and remote_branch:
-        checkout = _run_command(
-            ["git", "-C", root_str, "checkout", remote_branch],
-            timeout=timeout,
-            disable_git_prompt=True,
-        )
-        if not checkout.get("ok"):
-            checkout = _run_command(
-                ["git", "-C", root_str, "checkout", "-B", remote_branch, remote_ref],
-                timeout=timeout,
-                disable_git_prompt=True,
-            )
-        if not checkout.get("ok"):
-            result["status"] = "error"
-            result["message"] = str(checkout.get("stderr") or checkout.get("stdout") or "git checkout failed")
-            return result
-
-    before_commit = _run_git(["git", "-C", root_str, "rev-parse", "HEAD"]) or ""
-    result["before_commit"] = before_commit
-    if upstream:
-        pull_cmd = ["git", "-C", root_str, "pull", "--ff-only"]
-    else:
-        pull_cmd = ["git", "-C", root_str, "pull", "--ff-only", remote_name]
-        if remote_branch:
-            pull_cmd.append(remote_branch)
-    _update_console_log(f"ComfyUI pull: running {' '.join(pull_cmd)}", level="verbose")
-    pull_started = time.perf_counter()
-    pull = _run_command(pull_cmd, timeout=timeout, disable_git_prompt=True)
-    _update_console_log(
-        f"ComfyUI pull: command finished in {time.perf_counter() - pull_started:.2f}s",
-        level="verbose",
+    return mb_pull_comfyui(
+        comfyui_root=_comfyui_root,
+        update_console_log=lambda message, level: _update_console_log(message, level=level),
+        run_git=_run_git,
+        git_pick_remote=_git_pick_remote,
+        git_resolve_remote_ref=_git_resolve_remote_ref,
+        run_command=lambda args, run_timeout, disable_git_prompt: _run_command(
+            args,
+            timeout=run_timeout,
+            disable_git_prompt=disable_git_prompt,
+        ),
+        requirements_changed_between=_requirements_changed_between,
+        set_comfyui_requirements_pending=lambda pending, before, after: _set_comfyui_requirements_pending(
+            pending,
+            before,
+            after,
+        ),
+        perf_counter=time.perf_counter,
+        timeout=timeout,
     )
-    if not pull.get("ok"):
-        result["status"] = "error"
-        result["message"] = str(pull.get("stderr") or pull.get("stdout") or "git pull failed")
-        return result
-
-    after_commit = _run_git(["git", "-C", root_str, "rev-parse", "HEAD"]) or ""
-    result["after_commit"] = after_commit
-    updated = bool(before_commit and after_commit and before_commit != after_commit)
-    result["updated"] = updated
-    if updated:
-        result["status"] = "updated"
-        result["message"] = "ComfyUI updated"
-        requirements_changed = _requirements_changed_between(root, before_commit, after_commit)
-        result["requirements_changed"] = requirements_changed
-        if requirements_changed:
-            _set_comfyui_requirements_pending(True, before_commit, after_commit)
-    else:
-        result["status"] = "up_to_date"
-        result["message"] = "already up to date"
-    return result
 
 
 def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, Any]:
     """Pull latest changes for one custom module from its git remote."""
-    module = _canonical_custom_module_name(module_name)
-    module_dir = _module_dir(module)
-    result: dict[str, Any] = {
-        "module": module,
-        "status": "error",
-        "message": "",
-        "updated": False,
-        "requirements_changed": False,
-        "stashed_local_changes": False,
-        "stash_ref": "",
-        "before_commit": "",
-        "after_commit": "",
-    }
-    if module_dir is None:
-        result["status"] = "not_found"
-        result["message"] = "module directory not found"
-        return result
-
-    _update_console_log(f"{module}: repo={module_dir}", level="verbose")
-    is_git = _run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"])
-    if is_git != "true":
-        result["status"] = "no_git"
-        result["message"] = "not a git repository"
-        return result
-
-    _update_console_log(f"{module}: resolving upstream...", level="verbose")
-    branch = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "HEAD"]) or ""
-    upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-    remote_name = _git_pick_remote(module_dir, upstream)
-    if not remote_name and _bootstrap_module_remote_from_manager(module, module_dir):
-        upstream = _run_git(["git", "-C", str(module_dir), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
-        remote_name = _git_pick_remote(module_dir, upstream)
-    if not remote_name:
-        result["status"] = "no_remote"
-        result["message"] = "remote is not configured and manager metadata did not provide repository URL"
-        return result
-
-    _run_git(["git", "-C", str(module_dir), "fetch", "--quiet", remote_name], timeout=20.0)
-    remote_ref, remote_branch = _git_resolve_remote_ref(module_dir, remote_name, branch, upstream)
-    if not remote_ref:
-        result["status"] = "no_upstream"
-        result["message"] = "upstream/default branch is not configured"
-        return result
-
-    if branch == "HEAD" and remote_branch:
-        checkout = _run_command(
-            ["git", "-C", str(module_dir), "checkout", remote_branch],
-            timeout=timeout,
-            disable_git_prompt=True,
-        )
-        if not checkout.get("ok"):
-            checkout = _run_command(
-                ["git", "-C", str(module_dir), "checkout", "-B", remote_branch, remote_ref],
-                timeout=timeout,
-                disable_git_prompt=True,
-            )
-        if not checkout.get("ok"):
-            result["status"] = "error"
-            result["message"] = str(checkout.get("stderr") or checkout.get("stdout") or "git checkout failed")
-            return result
-
-    before_commit = _run_git(["git", "-C", str(module_dir), "rev-parse", "HEAD"]) or ""
-    result["before_commit"] = before_commit
-    if upstream:
-        pull_cmd = ["git", "-C", str(module_dir), "pull", "--ff-only"]
-    else:
-        pull_cmd = ["git", "-C", str(module_dir), "pull", "--ff-only", remote_name]
-        if remote_branch:
-            pull_cmd.append(remote_branch)
-    _update_console_log(f"{module}: running {' '.join(pull_cmd)}", level="verbose")
-    pull_started = time.perf_counter()
-    pull = _run_command(pull_cmd, timeout=timeout, disable_git_prompt=True)
-    pull_elapsed = time.perf_counter() - pull_started
-    _update_console_log(f"{module}: pull command finished in {pull_elapsed:.2f}s", level="verbose")
-
-    if not pull.get("ok"):
-        error_text = "{stderr}\n{stdout}".format(
-            stderr=str(pull.get("stderr") or ""),
-            stdout=str(pull.get("stdout") or ""),
-        )
-        if _is_git_local_changes_block(error_text):
-            _update_console_log(f"{module}: local changes detected, trying auto-stash before update")
-            stash = _run_command(
-                [
-                    "git",
-                    "-C",
-                    str(module_dir),
-                    "stash",
-                    "push",
-                    "-u",
-                    "-m",
-                    "ALEXZ_tools auto-stash before module update",
-                ],
-                timeout=60.0,
-                disable_git_prompt=True,
-            )
-            if not stash.get("ok"):
-                result["status"] = "error"
-                result["message"] = str(stash.get("stderr") or stash.get("stdout") or "git stash failed")
-                return result
-            stash_out = str(stash.get("stdout") or stash.get("stderr") or "").strip()
-            result["stashed_local_changes"] = True
-            result["stash_ref"] = stash_out
-            _update_console_log(f"{module}: auto-stash created; retrying pull", level="verbose")
-            pull_started = time.perf_counter()
-            pull = _run_command(pull_cmd, timeout=timeout, disable_git_prompt=True)
-            pull_elapsed = time.perf_counter() - pull_started
-            _update_console_log(f"{module}: retry pull finished in {pull_elapsed:.2f}s", level="verbose")
-
-    if not pull.get("ok"):
-        result["status"] = "error"
-        result["message"] = str(pull.get("stderr") or pull.get("stdout") or "git pull failed")
-        return result
-
-    after_commit = _run_git(["git", "-C", str(module_dir), "rev-parse", "HEAD"]) or ""
-    result["after_commit"] = after_commit
-    updated = bool(before_commit and after_commit and before_commit != after_commit)
-    result["updated"] = updated
-    if updated:
-        result["status"] = "updated"
-        if result.get("stashed_local_changes"):
-            result["message"] = "module updated (local changes were stashed)"
-        else:
-            result["message"] = "module updated"
-        requirements_changed = _requirements_changed_between(module_dir, before_commit, after_commit)
-        result["requirements_changed"] = requirements_changed
-        if requirements_changed:
-            _set_module_requirements_pending(module, True, before_commit, after_commit)
-    else:
-        result["status"] = "up_to_date"
-        if result.get("stashed_local_changes"):
-            result["message"] = "already up to date (local changes were stashed)"
-        else:
-            result["message"] = "already up to date"
-    return result
+    return mb_pull_custom_module(
+        module_name,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        module_dir_resolver=_module_dir,
+        update_console_log=lambda message, level: _update_console_log(message, level=level),
+        run_git=_run_git,
+        git_pick_remote=_git_pick_remote,
+        git_resolve_remote_ref=_git_resolve_remote_ref,
+        bootstrap_module_remote_from_manager=_bootstrap_module_remote_from_manager,
+        run_command=lambda args, run_timeout, disable_git_prompt: _run_command(
+            args,
+            timeout=run_timeout,
+            disable_git_prompt=disable_git_prompt,
+        ),
+        is_git_local_changes_block_fn=_is_git_local_changes_block,
+        requirements_changed_between=_requirements_changed_between,
+        set_module_requirements_pending=lambda module, pending, before, after: _set_module_requirements_pending(
+            module,
+            pending,
+            before,
+            after,
+        ),
+        perf_counter=time.perf_counter,
+        timeout=timeout,
+    )
 
 
 def _install_module_requirements(module_name: str, timeout: float = 1200.0) -> dict[str, Any]:
@@ -1995,28 +1808,23 @@ def _load_module_state() -> dict[str, dict[str, Any]]:
     global _MODULE_STATE_CACHE
     if _MODULE_STATE_CACHE is not None:
         return _MODULE_STATE_CACHE
-    if not _MODULE_STATE_PATH.exists():
-        _MODULE_STATE_CACHE = ensure_module_state_schema({})
-        return _MODULE_STATE_CACHE
-    try:
-        with _MODULE_STATE_PATH.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-        _MODULE_STATE_CACHE = ensure_module_state_schema(data if isinstance(data, dict) else {})
-    except Exception:
-        _MODULE_STATE_CACHE = ensure_module_state_schema({})
+    _MODULE_STATE_CACHE = mb_load_state_file(
+        _MODULE_STATE_PATH,
+        ensure_schema=ensure_module_state_schema,
+    )
     return _MODULE_STATE_CACHE
 
 
 def _save_module_state(state: dict[str, dict[str, Any]]) -> None:
     """Persist module snapshot state to extension cache file."""
-    normalized = ensure_module_state_schema(state)
-    try:
-        with _MODULE_STATE_PATH.open("w", encoding="utf-8") as handle:
-            json.dump(normalized, handle, ensure_ascii=True, indent=2, sort_keys=True)
-        global _MODULE_STATE_CACHE
-        _MODULE_STATE_CACHE = normalized
-    except Exception as exc:
-        _LOGGER.debug("Failed to save module state cache: %s", exc)
+    normalized = mb_save_state_file(
+        _MODULE_STATE_PATH,
+        state,
+        ensure_schema=ensure_module_state_schema,
+        logger=_LOGGER,
+    )
+    global _MODULE_STATE_CACHE
+    _MODULE_STATE_CACHE = normalized
 
 
 def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
@@ -3067,31 +2875,12 @@ def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summ
 
 def _install_requirements_for_modules(modules: list[str]) -> dict[str, Any]:
     """Install requirements.txt for a list of modules after update confirmation."""
-    if not isinstance(modules, list):
-        return {"status": "error", "error": "modules must be a list"}
-    canonical = [_canonical_custom_module_name(str(x)) for x in modules if str(x).strip()]
-    canonical = [x for x in dict.fromkeys(canonical) if x and x != "unknown"]
-    if not canonical:
-        return {"status": "ok", "count": 0, "results": []}
-    _LOGGER.info("Installing requirements for %d module(s): %s", len(canonical), ", ".join(canonical))
-
-    results: list[dict[str, Any]] = []
-    installed = 0
-    failed = 0
-    for module_name in canonical:
-        item = _install_module_requirements(module_name)
-        results.append(item)
-        if str(item.get("status")) == "installed":
-            installed += 1
-        else:
-            failed += 1
-    _LOGGER.info(
-        "Requirements install summary: total=%d installed=%d failed=%d",
-        len(canonical),
-        installed,
-        failed,
+    return mb_install_requirements_for_modules(
+        modules,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        install_module_requirements_fn=_install_module_requirements,
+        logger=_LOGGER,
     )
-    return {"status": "ok", "count": len(canonical), "installed": installed, "failed": failed, "results": results}
 
 
 if PromptServer is not None and web is not None and getattr(PromptServer, "instance", None):

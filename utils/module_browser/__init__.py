@@ -56,8 +56,18 @@ from .git_helpers import (
 )
 from .update_ops import (
     install_comfyui_requirements,
+    install_requirements_for_modules,
     install_module_requirements,
     requirements_changed_between,
+)
+from .pull_ops import (
+    is_git_local_changes_block,
+    pull_comfyui,
+    pull_custom_module,
+)
+from .state_store import (
+    load_state_file,
+    save_state_file,
 )
 
 __all__ = [
@@ -90,6 +100,12 @@ __all__ = [
     "requirements_changed_between",
     "install_module_requirements",
     "install_comfyui_requirements",
+    "install_requirements_for_modules",
+    "is_git_local_changes_block",
+    "pull_comfyui",
+    "pull_custom_module",
+    "load_state_file",
+    "save_state_file",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

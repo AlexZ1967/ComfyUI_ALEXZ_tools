@@ -268,6 +268,15 @@ Deliverables:
 - Step 6 completed: requirements-diff/install operations moved to
   `utils/module_browser/update_ops.py` (`requirements_changed_between`,
   module/comfy requirements install) with facade wrappers preserved.
+- Step 7 completed: git pull/update orchestration helpers moved to
+  `utils/module_browser/pull_ops.py` (`is_git_local_changes_block`,
+  `pull_comfyui`, `pull_custom_module`) with facade wrappers preserved.
+- Step 8 completed: batch requirements install aggregation moved to
+  `utils/module_browser/update_ops.py` (`install_requirements_for_modules`)
+  with API facade wrapper preserved.
+- Step 9 completed: module-state file IO helpers moved to
+  `utils/module_browser/state_store.py` (`load_state_file`,
+  `save_state_file`) with API cache facade preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

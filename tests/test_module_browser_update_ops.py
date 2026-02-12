@@ -124,6 +124,37 @@ class ModuleBrowserUpdateOpsTests(unittest.TestCase):
             self.assertEqual(result.get("status"), "installed")
             self.assertIn(False, calls)
 
+    def test_install_requirements_for_modules_rejects_non_list(self):
+        """Batch installer should validate incoming modules payload type."""
+        result = self.ops.install_requirements_for_modules(
+            "modA",
+            canonical_custom_module_name=lambda name: name,
+            install_module_requirements_fn=lambda _name: {"status": "installed"},
+            logger=_NoopLogger(),
+        )
+        self.assertEqual(result.get("status"), "error")
+
+    def test_install_requirements_for_modules_dedupes_and_summarizes(self):
+        """Batch installer should dedupe names and return installed/failed totals."""
+        calls = []
+
+        def _install(module_name):
+            calls.append(module_name)
+            if module_name == "ok_mod":
+                return {"status": "installed"}
+            return {"status": "error"}
+
+        result = self.ops.install_requirements_for_modules(
+            ["ok_mod", "bad_mod", "ok_mod", "   "],
+            canonical_custom_module_name=lambda name: name.strip(),
+            install_module_requirements_fn=_install,
+            logger=_NoopLogger(),
+        )
+        self.assertEqual(calls, ["ok_mod", "bad_mod"])
+        self.assertEqual(result.get("count"), 2)
+        self.assertEqual(result.get("installed"), 1)
+        self.assertEqual(result.get("failed"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

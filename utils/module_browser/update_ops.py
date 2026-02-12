@@ -144,3 +144,45 @@ def install_comfyui_requirements(
     logger.info("ComfyUI requirements install completed")
     return result
 
+
+def install_requirements_for_modules(
+    modules: list[str],
+    *,
+    canonical_custom_module_name: Callable[[str], str],
+    install_module_requirements_fn: Callable[[str], dict[str, Any]],
+    logger: Any,
+) -> dict[str, Any]:
+    """Install requirements for multiple modules and return aggregate summary."""
+    if not isinstance(modules, list):
+        return {"status": "error", "error": "modules must be a list"}
+
+    canonical = [canonical_custom_module_name(str(x)) for x in modules if str(x).strip()]
+    canonical = [x for x in dict.fromkeys(canonical) if x and x != "unknown"]
+    if not canonical:
+        return {"status": "ok", "count": 0, "installed": 0, "failed": 0, "results": []}
+
+    logger.info("Installing requirements for %d module(s): %s", len(canonical), ", ".join(canonical))
+    results: list[dict[str, Any]] = []
+    installed = 0
+    failed = 0
+    for module_name in canonical:
+        item = install_module_requirements_fn(module_name)
+        results.append(item)
+        if str(item.get("status")) == "installed":
+            installed += 1
+        else:
+            failed += 1
+
+    logger.info(
+        "Requirements install summary: total=%d installed=%d failed=%d",
+        len(canonical),
+        installed,
+        failed,
+    )
+    return {
+        "status": "ok",
+        "count": len(canonical),
+        "installed": installed,
+        "failed": failed,
+        "results": results,
+    }
