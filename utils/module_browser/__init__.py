@@ -28,6 +28,17 @@ from .contracts import (
 )
 from .health import build_component_health_report
 from .manifest_check import run_manifest_check
+from .catalog import (
+    build_catalog,
+    build_group_catalog,
+    build_group_modules,
+    collect_nodes,
+    filter_modules,
+)
+from .module_info_text import (
+    module_local_readme_summary,
+    sanitize_module_description,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -38,6 +49,13 @@ __all__ = [
     "build_default_component_registry",
     "build_component_health_report",
     "run_manifest_check",
+    "build_catalog",
+    "build_group_catalog",
+    "build_group_modules",
+    "collect_nodes",
+    "filter_modules",
+    "module_local_readme_summary",
+    "sanitize_module_description",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

@@ -718,6 +718,36 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         info = self.api._resolve_module_info("custom", "modA", force_refresh=True, cache_only=True)
         self.assertEqual(info.get("update_status"), "unknown")
 
+    def test_module_info_cache_only_hides_unknown_when_meta_gate_missing(self):
+        """Cache-only custom info must hide unknown state even if __meta__ gate is absent."""
+        self.api._MODULE_STATE_CACHE = {
+            "modA": {
+                "update_status": "unknown",
+                "update_available": None,
+                "installed_commit": "1234567890abcdef",
+            },
+        }
+        self.api._manager_meta_for_module = lambda _module_name, _repo_url: None
+        self.api._module_local_readme_summary = lambda _module_name: ""
+        self.api._apply_node_change_info = lambda result, group, module_name: None
+
+        info = self.api._resolve_module_info("custom", "modA", force_refresh=True, cache_only=True)
+        self.assertEqual(info.get("update_status"), "up_to_date")
+        self.assertEqual(info.get("update_available"), False)
+
+    def test_module_info_cache_only_without_entry_hides_unknown_before_custom_refresh(self):
+        """First-open cache-only info must not show unknown when module state entry is missing."""
+        self.api._MODULE_STATE_CACHE = {
+            "__meta__": {"custom_update_checked": False},
+        }
+        self.api._manager_meta_for_module = lambda _module_name, _repo_url: None
+        self.api._module_local_readme_summary = lambda _module_name: ""
+        self.api._apply_node_change_info = lambda result, group, module_name: None
+
+        info = self.api._resolve_module_info("custom", "modMissing", force_refresh=True, cache_only=True)
+        self.assertEqual(info.get("update_status"), "up_to_date")
+        self.assertEqual(info.get("update_available"), False)
+
     def test_refresh_syncs_custom_module_upstreams(self):
         """Validate `test_refresh_syncs_custom_module_upstreams` behavior."""
         called = []

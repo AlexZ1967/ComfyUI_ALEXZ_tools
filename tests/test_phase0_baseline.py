@@ -194,7 +194,8 @@ class Phase0BaselineContractsTests(unittest.TestCase):
 
         self.assertEqual(info.get("group"), "core")
         self.assertEqual(info.get("source"), "builtin")
-        self.assertEqual(info.get("update_status"), "unknown")
+        self.assertEqual(info.get("update_status"), "")
+        self.assertEqual(info.get("update_available"), False)
         self.assertIn("new_nodes_between_runs", info)
         self.assertIn("updated_nodes_between_runs", info)
 

@@ -255,6 +255,10 @@ Deliverables:
 - Keep route signatures and payload keys backward-compatible.
 - Step 1 completed: refresh/update job helpers (status handling + update target
   resolution) moved to `utils/module_browser/jobs.py` with facade-compatible wrappers.
+- Step 2 completed: catalog assembly (`collect/build/filter`) moved to
+  `utils/module_browser/catalog.py` with compatibility wrappers preserved in API file.
+- Step 3 completed: module-info text helpers (README summary + description sanitize)
+  moved to `utils/module_browser/module_info_text.py`.
 
 Exit criteria:
 - Existing frontend works without API changes.

@@ -68,6 +68,17 @@ from .module_browser.jobs import (
     set_update_status,
     update_status_snapshot,
 )
+from .module_browser.catalog import (
+    build_catalog as catalog_build_catalog,
+    build_group_catalog as catalog_build_group_catalog,
+    build_group_modules as catalog_build_group_modules,
+    collect_nodes as catalog_collect_nodes,
+    filter_modules as catalog_filter_modules,
+)
+from .module_browser.module_info_text import (
+    module_local_readme_summary as mb_module_local_readme_summary,
+    sanitize_module_description as mb_sanitize_module_description,
+)
 
 try:
     import folder_paths
@@ -2617,66 +2628,15 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
 
 def _module_local_readme_summary(module_name: str) -> str | None:
     """Read and extract short description snippet from module README file."""
-    module_name = (module_name or "").strip()
-    if not module_name:
-        return None
-    readme_names = ("README.md", "readme.md", "README.MD")
-    for root in _custom_nodes_roots():
-        module_dir = root / module_name
-        if not module_dir.exists():
-            continue
-        for name in readme_names:
-            path = module_dir / name
-            if not path.exists():
-                continue
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-            except Exception:
-                continue
-            for line in text.splitlines():
-                stripped = line.strip()
-                if (
-                    not stripped
-                    or stripped.startswith("#")
-                    or stripped.startswith("!")
-                    or stripped.startswith("<")
-                ):
-                    continue
-                if len(stripped) > 800:
-                    stripped = stripped[:800] + "..."
-                return stripped
-    return None
+    return mb_module_local_readme_summary(
+        module_name=module_name,
+        custom_nodes_roots=_custom_nodes_roots,
+    )
 
 
 def _sanitize_module_description(text: str) -> str:
     """Normalize module description text for UI card rendering."""
-    value = str(text or "")
-    if not value:
-        return ""
-    out_lines: list[str] = []
-    for line in value.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        # Drop pure HTML marker lines such as `<div align="center">`.
-        if stripped.startswith("<"):
-            plain = _HTML_TAG_RE.sub("", stripped).strip()
-            if not plain:
-                continue
-            stripped = plain
-        else:
-            stripped = _HTML_TAG_RE.sub("", stripped).strip()
-            if not stripped:
-                continue
-        if stripped.startswith("!"):
-            continue
-        out_lines.append(stripped)
-    if not out_lines:
-        return ""
-    summary = out_lines[0]
-    if len(summary) > 800:
-        summary = summary[:800] + "..."
-    return summary
+    return mb_sanitize_module_description(text, _HTML_TAG_RE)
 
 
 def _resolve_module_info(
@@ -2747,6 +2707,9 @@ def _resolve_module_info(
                 "api": "Built-in ComfyUI API nodes module.",
             }.get(group, "")
             result["source"] = "builtin"
+            # Built-in groups do not participate in remote update checks in this widget.
+            result["update_status"] = ""
+            result["update_available"] = False
         _apply_node_change_info(result, group, module_name)
         _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
         return result
@@ -2790,10 +2753,12 @@ def _resolve_module_info(
         result["description"] = "No description found."
     if result["repository"]:
         result["owner_url"] = result["repository"]
-    if cache_only and isinstance(cache_entry, dict):
+    if cache_only:
         custom_update_checked = _custom_update_checked_flag(state_cache)
-        meta_entry = state_cache.get("__meta__") if isinstance(state_cache, dict) else None
-        has_custom_update_gate = isinstance(meta_entry, dict) and ("custom_update_checked" in meta_entry)
+    else:
+        custom_update_checked = False
+
+    if cache_only and isinstance(cache_entry, dict):
         result["module_path"] = cache_entry.get("module_path") or ""
         result["installed_commit"] = cache_entry.get("installed_commit") or ""
         result["installed_commit_short"] = (result["installed_commit"] or "")[:8]
@@ -2810,17 +2775,22 @@ def _resolve_module_info(
         result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
         result["startup_update_at"] = cache_entry.get("pending_update_at") or cache_entry.get("startup_update_at") or ""
         update_available = cache_entry.get("update_available")
-        if has_custom_update_gate and not custom_update_checked:
-            # Do not expose unknown/remote update states before explicit custom refresh.
-            result["update_available"] = False
-            result["update_status"] = "up_to_date"
-        elif isinstance(update_available, bool):
+        if isinstance(update_available, bool):
             result["update_available"] = update_available
             result["update_status"] = "can_update" if update_available else "up_to_date"
+        elif not custom_update_checked:
+            # Before explicit custom refresh, suppress only ambiguous remote status.
+            result["update_available"] = False
+            result["update_status"] = "up_to_date"
         elif isinstance(cache_entry.get("update_status"), str):
             result["update_status"] = str(cache_entry.get("update_status") or "unknown")
         result["last_checked_at"] = cache_entry.get("last_checked_at") or ""
         result["last_local_change_at"] = cache_entry.get("last_local_change_at") or ""
+    elif cache_only and not custom_update_checked:
+        # Before explicit custom refresh, suppress unknown status even if the
+        # module has no cached entry yet (first startup/open path).
+        result["update_available"] = False
+        result["update_status"] = "up_to_date"
     elif git_state:
         result["module_path"] = git_state.get("module_path") or ""
         result["installed_commit"] = git_state.get("installed_commit") or ""
@@ -2869,81 +2839,36 @@ def _resolve_module_info(
 def _collect_nodes() -> list[dict[str, Any]]:
     """Collect node definitions from registered ComfyUI mappings."""
     class_map, display_map = _node_mappings()
-
-    items: list[dict[str, Any]] = []
-    for node_name, node_cls in class_map.items():
-        display_name = display_map.get(node_name, node_name)
-        annotation = _ALEXZ_ANNOTATIONS.get(node_name) or _fallback_annotation(node_cls)
-        group, module_bucket = _classify_by_relative_module(node_cls)
-        items.append(
-            {
-                "node_name": node_name,
-                "display_name": display_name,
-                "module": module_bucket,
-                "group": group,
-                "category": getattr(node_cls, "CATEGORY", "") or "",
-                "annotation": annotation,
-            }
-        )
-    return items
+    return catalog_collect_nodes(
+        class_map=class_map,
+        display_map=display_map,
+        annotation_resolver=lambda node_name, node_cls: _ALEXZ_ANNOTATIONS.get(node_name) or _fallback_annotation(node_cls),
+        classifier=_classify_by_relative_module,
+    )
 
 
 def _build_catalog() -> dict[str, list[dict[str, Any]]]:
     """Build cached module-to-node catalog from discovered nodes."""
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for item in _collect_nodes():
-        module_name = item["module"]
-        grouped[module_name].append(item)
-
-    for module_name in grouped:
-        grouped[module_name].sort(key=lambda item: item["display_name"].lower())
-    return dict(sorted(grouped.items(), key=lambda kv: kv[0].lower()))
+    return catalog_build_catalog(_collect_nodes())
 
 
 def _build_group_catalog() -> dict[str, list[dict[str, Any]]]:
     """Build grouped node catalog for one category."""
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for item in _collect_nodes():
-        grouped[item["group"]].append(item)
-
-    for group_name in grouped:
-        grouped[group_name].sort(key=lambda item: item["display_name"].lower())
-    return grouped
+    return catalog_build_group_catalog(_collect_nodes())
 
 
 def _build_group_modules(grouped_nodes: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
     """Build grouped module summaries for one category."""
-    module_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-    for group_name, nodes in grouped_nodes.items():
-        for node in nodes:
-            module_name = str(node.get("module") or "unknown")
-            module_counts[group_name][module_name] += 1
-
-    for module_name in _discover_custom_modules():
-        module_counts["custom"].setdefault(module_name, 0)
-
-    out: dict[str, list[dict[str, Any]]] = {}
-    for group_name, counts in module_counts.items():
-        out[group_name] = [
-            {
-                "module": mod,
-                "count": int(cnt),
-                **_cached_module_flags(group_name, mod),
-            }
-            for mod, cnt in sorted(counts.items(), key=lambda kv: kv[0].lower())
-        ]
-    return out
+    return catalog_build_group_modules(
+        grouped_nodes=grouped_nodes,
+        discover_custom_modules=_discover_custom_modules,
+        cached_module_flags=_cached_module_flags,
+    )
 
 
 def _filter_modules(query: str, module_names: list[str]) -> list[str]:
     """Filter module list by case-insensitive text query over module names."""
-    if not query:
-        return module_names
-    q = query.lower()
-    exact = [name for name in module_names if name.lower() == q]
-    if exact:
-        return exact
-    return [name for name in module_names if q in name.lower()]
+    return catalog_filter_modules(query, module_names)
 
 
 def _set_refresh_status(**kwargs: Any) -> None:

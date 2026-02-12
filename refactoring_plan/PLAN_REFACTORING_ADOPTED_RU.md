@@ -255,6 +255,10 @@
 - Сохраняем совместимость сигнатур роутов и ключей payload.
 - Выполнен шаг 1: вынесены job-helpers (`refresh/update` status + target resolution)
   в `utils/module_browser/jobs.py`, основной backend оставлен как совместимый facade.
+- Выполнен шаг 2: вынесена catalog-сборка (`collect/build/filter`) в
+  `utils/module_browser/catalog.py` c сохранением совместимых wrapper-функций в API-файле.
+- Выполнен шаг 3: вынесена text-часть module-info (README summary + description sanitize)
+  в `utils/module_browser/module_info_text.py`.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

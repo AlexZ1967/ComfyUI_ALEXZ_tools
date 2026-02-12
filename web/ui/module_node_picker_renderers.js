@@ -156,7 +156,10 @@ export function renderModuleInfoCard(context) {
 
     const card = document.createElement("div");
     card.className = "alexz-mod-picker-module-card";
-    const updateStatus = String(info.update_status || "unknown");
+    const rawUpdateStatus = info?.update_status;
+    const updateStatus = typeof rawUpdateStatus === "string"
+        ? rawUpdateStatus
+        : "unknown";
     if (isModuleUpdated) {
         card.classList.add("alexz-mod-picker-module-card--updated");
     }
