@@ -259,6 +259,9 @@
   `utils/module_browser/catalog.py` c сохранением совместимых wrapper-функций в API-файле.
 - Выполнен шаг 3: вынесена text-часть module-info (README summary + description sanitize)
   в `utils/module_browser/module_info_text.py`.
+- Выполнен шаг 4: вынесена сборка payload module-info и cached-флаги бейджей модулей
+  в `utils/module_browser/module_info.py`, при этом совместимые facade-wrapper-ы
+  в `utils/module_node_browser_api.py` сохранены.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

@@ -79,6 +79,10 @@ from .module_browser.module_info_text import (
     module_local_readme_summary as mb_module_local_readme_summary,
     sanitize_module_description as mb_sanitize_module_description,
 )
+from .module_browser.module_info import (
+    cached_module_flags as mb_cached_module_flags,
+    resolve_module_info_uncached as mb_resolve_module_info_uncached,
+)
 
 try:
     import folder_paths
@@ -1240,63 +1244,13 @@ def _count_custom_modules_unknown_update() -> int:
 
 def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
     """Return lightweight cached update flags for module dropdown badges."""
-    group_name = (group or "").strip().lower()
-    module = (module_name or "").strip()
-    if not module:
-        return {
-            "updated_between_runs": False,
-            "new_module_between_runs": False,
-            "update_available": False,
-            "update_status": "",
-        }
-
-    state = _load_module_state()
-    canonical = _canonical_custom_module_name(module) if group_name == "custom" else module
-    entry = state.get(canonical) if isinstance(state, dict) else None
-
-    updated_between_runs = False
-    new_module_between_runs = False
-    update_available = False
-    update_status = ""
-    custom_update_checked = _custom_update_checked_flag(state) if group_name == "custom" else False
-
-    if isinstance(entry, dict):
-        startup_prev = (entry.get("pending_prev_commit") or entry.get("startup_prev_commit") or "").strip()
-        startup_new = (entry.get("pending_new_commit") or entry.get("startup_new_commit") or "").strip()
-        updated_between_runs = (
-            bool(startup_prev and startup_new)
-            or bool(entry.get("pending_commit_change"))
-            or bool(entry.get("pending_local_change"))
-            or bool(entry.get("worktree_signature"))
-        )
-        if group_name == "custom":
-            update_available = bool(entry.get("update_available"))
-            if custom_update_checked:
-                cached_status = str(entry.get("update_status") or "").strip().lower()
-                if cached_status in {"can_update", "up_to_date", "unknown"}:
-                    update_status = cached_status
-
-    tracker = state.get("__node_tracker__") if isinstance(state, dict) else None
-    if isinstance(tracker, dict):
-        startup_changes = tracker.get("pending_changes") or tracker.get("startup_changes")
-        if isinstance(startup_changes, dict):
-            group_changes = startup_changes.get(group_name)
-            if isinstance(group_changes, dict) and canonical in group_changes:
-                updated_between_runs = True
-
-        startup_new_modules = tracker.get("pending_new_modules") or tracker.get("startup_new_modules")
-        if isinstance(startup_new_modules, dict):
-            group_new = startup_new_modules.get(group_name)
-            if isinstance(group_new, list) and canonical in group_new:
-                new_module_between_runs = True
-                updated_between_runs = True
-
-    return {
-        "updated_between_runs": updated_between_runs,
-        "new_module_between_runs": new_module_between_runs,
-        "update_available": update_available,
-        "update_status": update_status,
-    }
+    return mb_cached_module_flags(
+        group_name=group,
+        module_name=module_name,
+        state=_load_module_state(),
+        canonical_custom_module_name=_canonical_custom_module_name,
+        custom_update_checked_flag=_custom_update_checked_flag,
+    )
 
 
 def _comfyui_requirements_path() -> Path | None:
@@ -2661,179 +2615,26 @@ def _resolve_module_info(
     cached = _MODULE_INFO_CACHE.get(key)
     if cached is not None and (now_ts - cached[0]) < _MODULE_INFO_TTL_SEC:
         return dict(cached[1])
-
-    result: dict[str, Any] = {
-        "module": module_name,
-        "group": group,
-        "title": module_name,
-        "author": "",
-        "description": "",
-        "repository": "",
-        "owner_url": "",
-        "module_path": "",
-        "installed_commit": "",
-        "installed_commit_short": "",
-        "installed_updated_at": "",
-        "remote_updated_at": "",
-        "update_available": None,
-        "update_status": "unknown",
-        "git_has_upstream": False,
-        "git_ahead": None,
-        "git_behind": None,
-        "last_checked_at": "",
-        "last_local_change_at": "",
-        "updated_between_runs": False,
-        "startup_prev_commit_short": "",
-        "startup_new_commit_short": "",
-        "startup_update_at": "",
-        "new_nodes_between_runs": [],
-        "updated_nodes_between_runs": [],
-        "startup_node_update_at": "",
-        "new_module_between_runs": False,
-        "requirements_update_pending": False,
-        "requirements_pending_before_commit": "",
-        "requirements_pending_after_commit": "",
-        "requirements_pending_updated_at": "",
-        "source": "none",
-    }
-
-    if group != "custom":
-        if group in {"core", "core_extras", "api"}:
-            result["author"] = "ComfyUI"
-            result["repository"] = "https://github.com/comfyanonymous/ComfyUI"
-            result["owner_url"] = result["repository"]
-            result["description"] = {
-                "core": "Built-in ComfyUI nodes.",
-                "core_extras": "Built-in ComfyUI extras module.",
-                "api": "Built-in ComfyUI API nodes module.",
-            }.get(group, "")
-            result["source"] = "builtin"
-            # Built-in groups do not participate in remote update checks in this widget.
-            result["update_status"] = ""
-            result["update_available"] = False
-        _apply_node_change_info(result, group, module_name)
-        _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
-        return result
-
-    if sync_upstream and not cache_only:
-        _sync_module_upstream(module_name)
-
-    state_cache = _load_module_state()
-    cache_entry = state_cache.get(module_name) if isinstance(state_cache, dict) else None
-
-    git_state: dict[str, Any] = {}
-    if not cache_only:
-        git_state = _module_git_state(module_name)
-
-    repo_url = None
-    if isinstance(cache_entry, dict):
-        repo_url = cache_entry.get("repository")
-    if not repo_url:
-        repo_url = git_state.get("repository") if git_state else None
-    if not repo_url and not cache_only:
-        repo_url = _module_repo_url(module_name)
-    meta = _manager_meta_for_module(module_name, repo_url)
-    if isinstance(meta, dict) and not repo_url:
-        repo_url = meta.get("repository")
-    repo_gid = _github_id(repo_url)
-
-    if meta is not None:
-        result["title"] = meta.get("title") or module_name
-        result["author"] = meta.get("author") or ""
-        result["description"] = _sanitize_module_description(meta.get("description") or "")
-        result["repository"] = meta.get("repository") or repo_url or ""
-        result["source"] = "comfyui-manager"
-    else:
-        result["repository"] = repo_url or ""
-        result["description"] = _sanitize_module_description(_module_local_readme_summary(module_name) or "")
-        result["source"] = "local"
-
-    if not result["author"] and repo_gid:
-        result["author"] = repo_gid.split("/", 1)[0]
-    if not result["description"]:
-        result["description"] = "No description found."
-    if result["repository"]:
-        result["owner_url"] = result["repository"]
-    if cache_only:
-        custom_update_checked = _custom_update_checked_flag(state_cache)
-    else:
-        custom_update_checked = False
-
-    if cache_only and isinstance(cache_entry, dict):
-        result["module_path"] = cache_entry.get("module_path") or ""
-        result["installed_commit"] = cache_entry.get("installed_commit") or ""
-        result["installed_commit_short"] = (result["installed_commit"] or "")[:8]
-        result["installed_updated_at"] = cache_entry.get("installed_updated_at") or ""
-        result["remote_updated_at"] = cache_entry.get("remote_updated_at") or ""
-        startup_prev = (cache_entry.get("pending_prev_commit") or cache_entry.get("startup_prev_commit") or "").strip()
-        startup_new = (cache_entry.get("pending_new_commit") or cache_entry.get("startup_new_commit") or "").strip()
-        result["updated_between_runs"] = (
-            bool(startup_prev and startup_new)
-            or bool(cache_entry.get("pending_commit_change"))
-            or bool(cache_entry.get("pending_local_change"))
-            or bool(cache_entry.get("worktree_signature"))
-        )
-        result["startup_prev_commit_short"] = _short_commit(startup_prev) if startup_prev else ""
-        result["startup_new_commit_short"] = _short_commit(startup_new) if startup_new else ""
-        result["startup_update_at"] = cache_entry.get("pending_update_at") or cache_entry.get("startup_update_at") or ""
-        update_available = cache_entry.get("update_available")
-        if isinstance(update_available, bool):
-            result["update_available"] = update_available
-            result["update_status"] = "can_update" if update_available else "up_to_date"
-        elif not custom_update_checked:
-            # Before explicit custom refresh, suppress only ambiguous remote status.
-            result["update_available"] = False
-            result["update_status"] = "up_to_date"
-        elif isinstance(cache_entry.get("update_status"), str):
-            result["update_status"] = str(cache_entry.get("update_status") or "unknown")
-        result["last_checked_at"] = cache_entry.get("last_checked_at") or ""
-        result["last_local_change_at"] = cache_entry.get("last_local_change_at") or ""
-    elif cache_only and not custom_update_checked:
-        # Before explicit custom refresh, suppress unknown status even if the
-        # module has no cached entry yet (first startup/open path).
-        result["update_available"] = False
-        result["update_status"] = "up_to_date"
-    elif git_state:
-        result["module_path"] = git_state.get("module_path") or ""
-        result["installed_commit"] = git_state.get("installed_commit") or ""
-        result["installed_commit_short"] = (result["installed_commit"] or "")[:8]
-        result["installed_updated_at"] = git_state.get("installed_updated_at") or ""
-        result["remote_updated_at"] = git_state.get("remote_updated_at") or ""
-        result["git_has_upstream"] = bool(git_state.get("has_upstream"))
-        result["git_ahead"] = git_state.get("ahead")
-        result["git_behind"] = git_state.get("behind")
-        behind = git_state.get("behind")
-        remote_head = git_state.get("remote_head")
-        if isinstance(behind, int):
-            result["update_available"] = behind > 0
-            result["update_status"] = "can_update" if behind > 0 else "up_to_date"
-        elif result["git_has_upstream"] and remote_head and result["installed_commit"]:
-            if remote_head == result["installed_commit"]:
-                result["update_available"] = False
-                result["update_status"] = "up_to_date"
-            else:
-                result["update_available"] = True
-                result["update_status"] = "can_update"
-    inferred_update, inferred_remote_updated_at = _infer_update_from_manager_stats(
-        result.get("repository"),
-        result.get("installed_updated_at"),
+    result = mb_resolve_module_info_uncached(
+        group=group,
+        module_name=module_name,
+        sync_upstream=sync_upstream,
+        cache_only=cache_only,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        apply_node_change_info=_apply_node_change_info,
+        sync_module_upstream=_sync_module_upstream,
+        load_module_state=_load_module_state,
+        custom_update_checked_flag=_custom_update_checked_flag,
+        module_git_state=_module_git_state,
+        module_repo_url=_module_repo_url,
+        manager_meta_for_module=_manager_meta_for_module,
+        module_local_readme_summary=_module_local_readme_summary,
+        sanitize_module_description=_sanitize_module_description,
+        github_id=_github_id,
+        infer_update_from_manager_stats=_infer_update_from_manager_stats,
+        short_commit=_short_commit,
+        remember_module_state=_remember_module_state,
     )
-    if inferred_remote_updated_at and not result.get("remote_updated_at"):
-        result["remote_updated_at"] = inferred_remote_updated_at
-    if not isinstance(result.get("update_available"), bool) and isinstance(inferred_update, bool):
-        result["update_available"] = inferred_update
-        result["update_status"] = "can_update" if inferred_update else "up_to_date"
-
-    if not cache_only:
-        _remember_module_state(module_name, result)
-
-    if isinstance(cache_entry, dict):
-        result["requirements_update_pending"] = bool(cache_entry.get("pending_requirements_update"))
-        result["requirements_pending_before_commit"] = str(cache_entry.get("pending_requirements_before_commit") or "")
-        result["requirements_pending_after_commit"] = str(cache_entry.get("pending_requirements_after_commit") or "")
-        result["requirements_pending_updated_at"] = str(cache_entry.get("pending_requirements_updated_at") or "")
-
-    _apply_node_change_info(result, group, module_name)
     _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
     return result
 

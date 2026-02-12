@@ -39,6 +39,10 @@ from .module_info_text import (
     module_local_readme_summary,
     sanitize_module_description,
 )
+from .module_info import (
+    cached_module_flags,
+    resolve_module_info_uncached,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -56,6 +60,8 @@ __all__ = [
     "filter_modules",
     "module_local_readme_summary",
     "sanitize_module_description",
+    "cached_module_flags",
+    "resolve_module_info_uncached",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

@@ -259,6 +259,9 @@ Deliverables:
   `utils/module_browser/catalog.py` with compatibility wrappers preserved in API file.
 - Step 3 completed: module-info text helpers (README summary + description sanitize)
   moved to `utils/module_browser/module_info_text.py`.
+- Step 4 completed: module-info payload assembly and cached module-badge flags
+  moved to `utils/module_browser/module_info.py` with facade-compatible wrappers
+  preserved in `utils/module_node_browser_api.py`.
 
 Exit criteria:
 - Existing frontend works without API changes.
