@@ -276,13 +276,31 @@ def announce_tracked_module_updates(
 
         entry["last_checked_at"] = now
         needs_update: bool | None = None
+        had_worktree_signature = "worktree_signature" in entry
         prev_worktree_sig = str(entry.get("worktree_signature") or "")
         curr_worktree_sig = module_worktree_signature(module_name)
         if curr_worktree_sig != prev_worktree_sig:
-            if prev_worktree_sig:
+            if curr_worktree_sig and had_worktree_signature:
                 entry["pending_local_change"] = True
                 entry["pending_update_at"] = now
+            elif not curr_worktree_sig and had_worktree_signature:
+                entry.pop("pending_local_change", None)
+                if not (
+                    entry.get("pending_commit_change")
+                    or entry.get("pending_prev_commit")
+                    or entry.get("pending_new_commit")
+                ):
+                    entry.pop("pending_update_at", None)
             entry["worktree_signature"] = curr_worktree_sig
+        elif not curr_worktree_sig and had_worktree_signature and entry.get("pending_local_change"):
+            # If worktree returned to clean state, drop stale local-change marker.
+            entry.pop("pending_local_change", None)
+            if not (
+                entry.get("pending_commit_change")
+                or entry.get("pending_prev_commit")
+                or entry.get("pending_new_commit")
+            ):
+                entry.pop("pending_update_at", None)
         if git_state:
             entry["module_path"] = git_state.get("module_path") or entry.get("module_path")
             entry["repository"] = git_state.get("repository") or entry.get("repository")
@@ -464,4 +482,3 @@ def announce_tracked_module_updates(
         "node_changed_modules": node_changed_modules,
         "new_modules_between_runs": startup_new_modules,
     }
-

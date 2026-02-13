@@ -83,7 +83,7 @@ class ModuleBrowserGitHelpersTests(unittest.TestCase):
         """Signature should be deterministic digest of sorted git status lines."""
         responses = {
             ("rev-parse", "--is-inside-work-tree"): "true",
-            ("status", "--porcelain"): " M b.py\n M a.py\n",
+            ("--porcelain", "--untracked-files=no"): " M b.py\n M a.py\n",
         }
 
         def _run_git(args, _timeout):
@@ -101,4 +101,3 @@ class ModuleBrowserGitHelpersTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

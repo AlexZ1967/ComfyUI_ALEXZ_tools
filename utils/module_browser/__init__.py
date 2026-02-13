@@ -1,7 +1,7 @@
 """
 Module: utils/module_browser/__init__.py
 Author: AlexZ1967
-Last updated: 2026-02-12
+Last updated: 2026-02-13
 
 Description:
     Internal helpers package for Module Node Picker backend decomposition.
@@ -107,6 +107,19 @@ from .comfyui_state_ops import (
     persist_comfyui_status,
     resolve_cached_status,
 )
+from .comfyui_git_status_ops import (
+    collect_comfyui_git_status,
+)
+from .component_registry_payload_ops import (
+    collect_component_registry_payload,
+)
+from .manager_data_ops import (
+    infer_update_from_manager_stats,
+    load_manager_github_stats,
+    load_manager_index,
+    manager_stats_last_update,
+    resolve_manager_meta_for_module,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -166,6 +179,13 @@ __all__ = [
     "resolve_cached_status",
     "apply_cached_pending_fields",
     "persist_comfyui_status",
+    "collect_comfyui_git_status",
+    "collect_component_registry_payload",
+    "load_manager_github_stats",
+    "load_manager_index",
+    "resolve_manager_meta_for_module",
+    "manager_stats_last_update",
+    "infer_update_from_manager_stats",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

@@ -1,7 +1,7 @@
 """
 Module: utils/module_node_browser_api.py
 Author: AlexZ1967
-Last updated: 2026-02-12
+Last updated: 2026-02-13
 
 Description:
     Backend API for Module Node Picker widget.
@@ -138,6 +138,19 @@ from .module_browser.comfyui_state_ops import (
     comfyui_status_template as mb_comfyui_status_template,
     persist_comfyui_status as mb_persist_comfyui_status,
     resolve_cached_status as mb_resolve_cached_comfyui_status,
+)
+from .module_browser.comfyui_git_status_ops import (
+    collect_comfyui_git_status as mb_collect_comfyui_git_status,
+)
+from .module_browser.component_registry_payload_ops import (
+    collect_component_registry_payload as mb_collect_component_registry_payload,
+)
+from .module_browser.manager_data_ops import (
+    infer_update_from_manager_stats as mb_infer_update_from_manager_stats,
+    load_manager_github_stats as mb_load_manager_github_stats,
+    load_manager_index as mb_load_manager_index,
+    manager_stats_last_update as mb_manager_stats_last_update,
+    resolve_manager_meta_for_module as mb_resolve_manager_meta_for_module,
 )
 from .module_browser.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
@@ -355,71 +368,21 @@ def _component_registry_payload(force_refresh: bool = False) -> dict[str, Any]:
     """Return cached component-registry snapshot used for Slice 0 diagnostics."""
     global _COMPONENT_REGISTRY_PAYLOAD_CACHE
     now_ts = time.time()
-    if (
-        not force_refresh
-        and isinstance(_COMPONENT_REGISTRY_PAYLOAD_CACHE, tuple)
-        and len(_COMPONENT_REGISTRY_PAYLOAD_CACHE) == 2
-        and (now_ts - float(_COMPONENT_REGISTRY_PAYLOAD_CACHE[0])) < _COMPONENT_REGISTRY_TTL_SEC
-    ):
-        return dict(_COMPONENT_REGISTRY_PAYLOAD_CACHE[1])
-
-    registry = build_default_component_registry()
-    state = _load_module_state()
-    tracker_raw = state.get("__component_registry__") if isinstance(state, dict) else None
-    tracker = dict(tracker_raw) if isinstance(tracker_raw, dict) else {}
-    prev_snapshot_raw = tracker.get("snapshot")
-    prev_snapshot = dict(prev_snapshot_raw) if isinstance(prev_snapshot_raw, dict) else {}
-
-    node_entries = [entry.to_dict() for entry in registry.list("node")]
-    widget_entries = [entry.to_dict() for entry in registry.list("widget")]
-    api_entries = [entry.to_dict() for entry in registry.list("api")]
-    current_snapshot = build_registry_snapshot(registry)
-    current_signature = compute_snapshot_signature(current_snapshot)
-    previous_signature = str(tracker.get("manifest_signature") or "")
-
-    changes: dict[str, dict[str, list[str]]] = {}
-    has_changes = False
-    for kind in ("node", "widget", "api"):
-        prev_ids = {str(x) for x in (prev_snapshot.get(kind) or []) if str(x)}
-        curr_ids = {str(x) for x in (current_snapshot.get(kind) or []) if str(x)}
-        added = sorted(curr_ids - prev_ids, key=str.lower)
-        removed = sorted(prev_ids - curr_ids, key=str.lower)
-        if added or removed:
-            has_changes = True
-        changes[kind] = {"added": added, "removed": removed}
-
-    payload = {
-        "schema_name": COMPONENT_REGISTRY_SCHEMA_NAME,
-        "schema_version": COMPONENT_REGISTRY_SCHEMA_VERSION,
-        "summary": registry.summary(),
-        "health": build_component_health_report(),
-        "nodes": node_entries,
-        "widgets": widget_entries,
-        "apis": api_entries,
-        "changes": changes,
-        "has_changes": has_changes,
-        "manifest_signature": current_signature,
-        "manifest_changed": bool(previous_signature and previous_signature != current_signature),
-        "previous_snapshot_at": str(tracker.get("updated_at") or ""),
-        "refreshed_at": _now_iso(),
-    }
-
-    if (
-        not isinstance(tracker_raw, dict)
-        or tracker.get("snapshot") != current_snapshot
-        or str(tracker.get("manifest_signature") or "") != current_signature
-    ):
-        state["__component_registry__"] = {
-            "schema_name": COMPONENT_REGISTRY_SCHEMA_NAME,
-            "schema_version": COMPONENT_REGISTRY_SCHEMA_VERSION,
-            "snapshot": current_snapshot,
-            "manifest_signature": current_signature,
-            "summary": dict(payload["summary"]),
-            "updated_at": payload["refreshed_at"],
-        }
-        _save_module_state(state)
-
-    _COMPONENT_REGISTRY_PAYLOAD_CACHE = (now_ts, dict(payload))
+    payload, _COMPONENT_REGISTRY_PAYLOAD_CACHE = mb_collect_component_registry_payload(
+        force_refresh=force_refresh,
+        now_ts=now_ts,
+        cache_payload=_COMPONENT_REGISTRY_PAYLOAD_CACHE,
+        ttl_sec=_COMPONENT_REGISTRY_TTL_SEC,
+        build_default_component_registry=build_default_component_registry,
+        load_module_state=_load_module_state,
+        save_module_state=_save_module_state,
+        build_registry_snapshot=build_registry_snapshot,
+        compute_snapshot_signature=compute_snapshot_signature,
+        build_component_health_report=build_component_health_report,
+        schema_name=COMPONENT_REGISTRY_SCHEMA_NAME,
+        schema_version=COMPONENT_REGISTRY_SCHEMA_VERSION,
+        now_iso=_now_iso,
+    )
     return payload
 
 
@@ -811,131 +774,53 @@ def _github_latest_release(owner: str, repo: str, timeout: float = 8.0) -> dict[
 def _manager_github_stats() -> dict[str, dict[str, dict[str, Any]]]:
     """Load and cache module update timestamps from manager stats file."""
     global _MANAGER_GITHUB_STATS_CACHE
-    if _MANAGER_GITHUB_STATS_CACHE is not None:
-        return _MANAGER_GITHUB_STATS_CACHE
-
-    stats = {"by_url": {}, "by_github": {}}
-    db_path = _manager_github_stats_path()
-    if db_path is None:
-        _MANAGER_GITHUB_STATS_CACHE = stats
-        return stats
-    try:
-        with db_path.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except Exception as exc:
-        _LOGGER.warning("Failed to load ComfyUI-Manager github stats: %s", exc)
-        _MANAGER_GITHUB_STATS_CACHE = stats
-        return stats
-
-    if not isinstance(payload, dict):
-        _MANAGER_GITHUB_STATS_CACHE = stats
-        return stats
-    for raw_url, raw_meta in payload.items():
-        if not isinstance(raw_meta, dict):
-            continue
-        url_text = str(raw_url).strip().replace("htps://", "https://")
-        norm_url = _normalize_repo_url(url_text)
-        if not norm_url:
-            continue
-        stats["by_url"][norm_url] = raw_meta
-        gid = _github_id(norm_url)
-        if gid:
-            stats["by_github"][gid] = raw_meta
-    _MANAGER_GITHUB_STATS_CACHE = stats
-    return stats
+    _MANAGER_GITHUB_STATS_CACHE = mb_load_manager_github_stats(
+        cache=_MANAGER_GITHUB_STATS_CACHE,
+        manager_github_stats_path=_manager_github_stats_path,
+        normalize_repo_url=_normalize_repo_url,
+        github_id=_github_id,
+        logger_warning=_LOGGER.warning,
+    )
+    return _MANAGER_GITHUB_STATS_CACHE
 
 
 def _manager_index() -> dict[str, dict[str, dict[str, Any]]]:
     """Load and cache manager metadata index for custom modules."""
     global _MANAGER_INDEX_CACHE
-    if _MANAGER_INDEX_CACHE is not None:
-        return _MANAGER_INDEX_CACHE
-
-    index = {
-        "by_id": {},
-        "by_github": {},
-        "by_repo_name": {},
-    }
-    db_path = _manager_custom_db_path()
-    if db_path is None:
-        _MANAGER_INDEX_CACHE = index
-        return index
-
-    try:
-        with db_path.open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except Exception as exc:
-        _LOGGER.warning("Failed to load ComfyUI-Manager DB: %s", exc)
-        _MANAGER_INDEX_CACHE = index
-        return index
-
-    entries = payload.get("custom_nodes", []) if isinstance(payload, dict) else []
-    for raw in entries:
-        if not isinstance(raw, dict):
-            continue
-        title = (raw.get("title") or "").strip()
-        author = (raw.get("author") or "").strip()
-        description = (raw.get("description") or "").strip()
-        node_id = (raw.get("id") or "").strip().lower()
-        repo_url = _pick_repo_url(raw)
-
-        meta = {
-            "title": title,
-            "author": author,
-            "description": description,
-            "repository": repo_url,
-        }
-        if node_id:
-            index["by_id"][node_id] = meta
-        gid = _github_id(repo_url)
-        if gid:
-            index["by_github"][gid] = meta
-        repo = _repo_name(repo_url)
-        if repo:
-            index["by_repo_name"][repo.lower()] = meta
-
-    _MANAGER_INDEX_CACHE = index
-    return index
+    _MANAGER_INDEX_CACHE = mb_load_manager_index(
+        cache=_MANAGER_INDEX_CACHE,
+        manager_custom_db_path=_manager_custom_db_path,
+        pick_repo_url=_pick_repo_url,
+        github_id=_github_id,
+        repo_name=_repo_name,
+        logger_warning=_LOGGER.warning,
+    )
+    return _MANAGER_INDEX_CACHE
 
 
 def _manager_meta_for_module(module_name: str, repository_url: str | None = None) -> dict[str, Any] | None:
     """Resolve ComfyUI-Manager metadata record for module by id/repository aliases."""
-    module_l = _canonical_custom_module_name(module_name).lower()
-    repo_norm = _normalize_repo_url(repository_url)
-    repo_gid = _github_id(repo_norm)
-    repo_name = _repo_name(repo_norm)
-    manager_data = _manager_index()
-    if repo_gid:
-        meta = manager_data["by_github"].get(repo_gid)
-        if isinstance(meta, dict):
-            return meta
-    if module_l:
-        meta = manager_data["by_id"].get(module_l)
-        if isinstance(meta, dict):
-            return meta
-    if repo_name:
-        meta = manager_data["by_repo_name"].get(repo_name.lower())
-        if isinstance(meta, dict):
-            return meta
-    return None
+    return mb_resolve_manager_meta_for_module(
+        module_name=module_name,
+        repository_url=repository_url,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        normalize_repo_url=_normalize_repo_url,
+        github_id=_github_id,
+        repo_name=_repo_name,
+        manager_index=_manager_index,
+    )
 
 
 def _manager_stats_last_update(repository_url: str | None) -> str:
     """Return normalized last-update timestamp from Manager GitHub stats for repository URL."""
-    norm_repo = _normalize_repo_url(repository_url)
-    if not norm_repo:
-        return ""
-    stats = _manager_github_stats()
-    stats_meta = stats["by_url"].get(norm_repo)
-    if stats_meta is None:
-        repo_gid = _github_id(norm_repo)
-        if repo_gid:
-            stats_meta = stats["by_github"].get(repo_gid)
-    if not isinstance(stats_meta, dict):
-        return ""
-    remote_raw = stats_meta.get("last_update")
-    remote_dt = _parse_datetime(remote_raw)
-    return _to_iso(remote_dt) or ""
+    return mb_manager_stats_last_update(
+        repository_url=repository_url,
+        manager_github_stats=_manager_github_stats,
+        normalize_repo_url=_normalize_repo_url,
+        github_id=_github_id,
+        parse_datetime=_parse_datetime,
+        to_iso=_to_iso,
+    )
 
 
 def _infer_update_from_manager_stats(
@@ -943,16 +828,12 @@ def _infer_update_from_manager_stats(
     installed_updated_at: str | None,
 ) -> tuple[bool | None, str]:
     """Infer update availability from Manager GitHub stats when git upstream is unavailable."""
-    remote_updated_at = _manager_stats_last_update(repository_url)
-    if not remote_updated_at:
-        return (None, "")
-    local_dt = _parse_datetime(installed_updated_at)
-    remote_dt = _parse_datetime(remote_updated_at)
-    if local_dt is None or remote_dt is None:
-        return (None, remote_updated_at)
-    # Keep a small tolerance for second-level timestamp differences.
-    needs_update = (remote_dt - local_dt).total_seconds() > 60.0
-    return (needs_update, remote_updated_at)
+    return mb_infer_update_from_manager_stats(
+        repository_url=repository_url,
+        installed_updated_at=installed_updated_at,
+        manager_stats_last_update_fn=_manager_stats_last_update,
+        parse_datetime=_parse_datetime,
+    )
 
 
 def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
@@ -1434,127 +1315,32 @@ def _comfyui_root() -> Path | None:
 def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> dict[str, Any]:
     """Collect local/remote git status summary for ComfyUI repository."""
     global _COMFYUI_STATUS_CACHE
-    mode_norm = _normalize_comfyui_mode(mode)
     now_ts = time.time()
     cache = _ensure_comfyui_status_cache()
-    cached_mode = cache.get(mode_norm)
-    if (
-        not force_refresh
-        and cached_mode is not None
-        and (now_ts - cached_mode[0]) < _COMFYUI_STATUS_TTL_SEC
-    ):
-        return dict(cached_mode[1])
-
-    result: dict[str, Any] = mb_comfyui_status_template(mode_norm)
-
-    if not force_refresh:
-        state = _load_module_state()
-        cached_entry, cached_status = mb_resolve_cached_comfyui_status(state, mode_norm)
-        if isinstance(cached_status, dict) and cached_status:
-            merged = dict(cached_status)
-            merged["check_mode"] = str(merged.get("check_mode") or mode_norm)
-            merged = mb_apply_cached_pending_fields(merged, cached_entry, short_commit=_short_commit)
-            cache[mode_norm] = (now_ts, dict(merged))
-            return merged
-        cache[mode_norm] = (now_ts, dict(result))
-        return result
-
-    root = _comfyui_root()
-    if root is None:
-        cache[mode_norm] = (now_ts, dict(result))
-        state = _load_module_state()
-        if isinstance(state, dict):
-            state = mb_persist_comfyui_status(state, mode_norm=mode_norm, result=result, now_iso=_now_iso)
-            _save_module_state(state)
-        return result
-
-    result["path"] = str(root)
-    is_git = _run_git(["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"])
-    if is_git != "true":
-        cache[mode_norm] = (now_ts, dict(result))
-        state = _load_module_state()
-        if isinstance(state, dict):
-            state = mb_persist_comfyui_status(state, mode_norm=mode_norm, result=result, now_iso=_now_iso)
-            _save_module_state(state)
-        return result
-
-    result["branch"] = _run_git(["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"]) or ""
-    result["installed_commit"] = _run_git(["git", "-C", str(root), "rev-parse", "HEAD"]) or ""
-    result["installed_commit_short"] = _short_commit(result["installed_commit"]) if result["installed_commit"] else ""
-    result["installed_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI"]) or ""
-
-    upstream = _run_git(
-        ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]
+    return mb_collect_comfyui_git_status(
+        force_refresh=force_refresh,
+        mode=mode,
+        now_ts=now_ts,
+        cache=cache,
+        ttl_sec=_COMFYUI_STATUS_TTL_SEC,
+        normalize_comfyui_mode=_normalize_comfyui_mode,
+        comfyui_status_template=mb_comfyui_status_template,
+        load_module_state=_load_module_state,
+        resolve_cached_status=mb_resolve_cached_comfyui_status,
+        apply_cached_pending_fields=mb_apply_cached_pending_fields,
+        short_commit=_short_commit,
+        comfyui_root=_comfyui_root,
+        run_git=_run_git,
+        git_pick_remote=_git_pick_remote,
+        github_latest_release=_github_latest_release,
+        resolve_release_ref=_resolve_release_ref,
+        parse_datetime=_parse_datetime,
+        to_iso=_to_iso,
+        git_resolve_remote_ref=_git_resolve_remote_ref,
+        persist_comfyui_status=mb_persist_comfyui_status,
+        save_module_state=_save_module_state,
+        now_iso=_now_iso,
     )
-    result["upstream"] = upstream or ""
-    remote_name = _git_pick_remote(root, upstream)
-    result["remote_name"] = remote_name or ""
-    if not remote_name:
-        cache[mode_norm] = (now_ts, dict(result))
-        return result
-
-    # Keep remote refs fresh to reflect actual GitHub state.
-    _run_git(["git", "-C", str(root), "fetch", "--quiet", remote_name], timeout=20.0)
-
-    remote_ref = ""
-    if mode_norm == "releases":
-        release = _github_latest_release("comfyanonymous", "ComfyUI")
-        tag_name = str(release.get("tag_name") or "").strip()
-        tag_ref, release_commit = _resolve_release_ref(root, remote_name, tag_name)
-        if tag_ref and release_commit:
-            remote_ref = tag_ref
-            result["remote_ref"] = tag_ref
-            result["release_tag"] = tag_name
-            result["release_name"] = str(release.get("name") or "").strip()
-            result["release_url"] = str(release.get("html_url") or "").strip()
-            result["remote_commit"] = release_commit
-            result["remote_commit_short"] = _short_commit(release_commit)
-            published = _parse_datetime(str(release.get("published_at") or release.get("created_at") or ""))
-            if published is not None:
-                result["remote_updated_at"] = _to_iso(published) or ""
-            if not result["remote_updated_at"]:
-                result["remote_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI", tag_ref]) or ""
-        else:
-            mode_norm = "commits"
-            result["check_mode"] = "commits"
-
-    if mode_norm == "commits":
-        remote_ref, _remote_branch = _git_resolve_remote_ref(root, remote_name, result["branch"], upstream)
-        result["remote_ref"] = remote_ref or ""
-        if remote_ref:
-            result["remote_commit"] = _run_git(["git", "-C", str(root), "rev-parse", remote_ref]) or ""
-            result["remote_commit_short"] = _short_commit(result["remote_commit"]) if result["remote_commit"] else ""
-            result["remote_updated_at"] = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI", remote_ref]) or ""
-
-    if result["remote_ref"] and result["remote_commit"]:
-        counts = _run_git(["git", "-C", str(root), "rev-list", "--left-right", "--count", f"HEAD...{result['remote_ref']}"])
-        if counts:
-            parts = counts.split()
-            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                result["ahead"] = int(parts[0])
-                result["behind"] = int(parts[1])
-                result["update_available"] = result["behind"] > 0
-                result["update_status"] = "can_update" if result["behind"] > 0 else "up_to_date"
-        elif result["installed_commit"] and result["remote_commit"]:
-            if result["installed_commit"] == result["remote_commit"]:
-                result["update_available"] = False
-                result["update_status"] = "up_to_date"
-            else:
-                # If exact counters are unavailable, assume remote difference requires update.
-                result["update_available"] = True
-                result["update_status"] = "can_update"
-                result["behind"] = 1
-
-    state = _load_module_state()
-    cached_entry, _cached_status = mb_resolve_cached_comfyui_status(state, mode_norm)
-    result = mb_apply_cached_pending_fields(result, cached_entry, short_commit=_short_commit)
-
-    cache[result["check_mode"]] = (now_ts, dict(result))
-    state = _load_module_state()
-    if isinstance(state, dict):
-        state = mb_persist_comfyui_status(state, mode_norm=result["check_mode"], result=result, now_iso=_now_iso)
-        _save_module_state(state)
-    return result
 
 
 def _track_comfyui_local_update() -> None:

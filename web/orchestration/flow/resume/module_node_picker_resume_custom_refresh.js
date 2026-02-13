@@ -45,9 +45,6 @@ export async function resumePendingCustomRefreshFlowImpl(context) {
     const pollRefreshProgress = typeof context?.pollRefreshProgress === "function"
         ? context.pollRefreshProgress
         : async () => false;
-    const acknowledgeAllModuleNovelty = typeof context?.acknowledgeAllModuleNovelty === "function"
-        ? context.acknowledgeAllModuleNovelty
-        : async () => {};
     const loadCatalog = typeof context?.loadCatalog === "function"
         ? context.loadCatalog
         : async () => {};
@@ -90,16 +87,6 @@ export async function resumePendingCustomRefreshFlowImpl(context) {
             if (!ok) {
                 setRefreshLine("Custom Nodes refresh finished with errors.", "warn");
                 setCustomRefreshCardLine("Custom Nodes refresh finished with errors.", "warn");
-            } else {
-                try {
-                    await acknowledgeAllModuleNovelty();
-                } catch (err) {
-                    if (shouldContinue()) {
-                        const message = `Refresh completed, but novelty reset failed: ${String(err)}`;
-                        setRefreshLine(message, "warn");
-                        setCustomRefreshCardLine(message, "warn");
-                    }
-                }
             }
             if (!shouldContinue()) {
                 return;
@@ -111,17 +98,8 @@ export async function resumePendingCustomRefreshFlowImpl(context) {
             clearPendingCustomRefresh();
             return;
         }
-        if (String(refresh?.phase || "") === "done") {
-            try {
-                await acknowledgeAllModuleNovelty();
-            } catch (err) {
-                if (shouldContinue()) {
-                    const message = `Refresh completed, but novelty reset failed: ${String(err)}`;
-                    setRefreshLine(message, "warn");
-                    setCustomRefreshCardLine(message, "warn");
-                }
-            }
-        }
+        // Do not auto-acknowledge novelty for stale "done" status on resume.
+        // Novelty reset must stay tied to explicit refresh action path.
         if (String(refresh?.phase || "") === "done" || String(refresh?.phase || "") === "error") {
             await loadCatalog();
         }

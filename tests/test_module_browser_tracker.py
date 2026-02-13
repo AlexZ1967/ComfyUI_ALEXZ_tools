@@ -779,6 +779,60 @@ class ModuleBrowserTrackerTests(unittest.TestCase):
         info = self.api._resolve_module_info("custom", "modA", force_refresh=True, cache_only=True)
         self.assertTrue(bool(info.get("updated_between_runs")))
 
+    def test_local_dirty_worktree_marks_module_updated_without_prev_signature(self):
+        """Dirty worktree should mark module as locally updated when baseline signature exists."""
+        self.api._now_iso = lambda: "2026-02-13T02:00:00+00:00"
+        self.api._discover_custom_modules = lambda: ["ComfyUI_ALEXZ_tools"]
+        self.api._build_node_snapshots = lambda: {"custom": {"ComfyUI_ALEXZ_tools": {}}}
+        self.api._module_worktree_signature = lambda _name: "dirtysig123"
+        self.api._module_git_state = lambda _name: {
+            "installed_commit": "abc12345",
+            "installed_updated_at": "2026-02-13T01:59:00+00:00",
+        }
+        self.api._MODULE_STATE_CACHE = {
+            "ComfyUI_ALEXZ_tools": {
+                "installed_commit": "abc12345",
+                "worktree_signature": "",
+            },
+            "__node_tracker__": {
+                "snapshots": {"custom": {"ComfyUI_ALEXZ_tools": {}}},
+                "module_sets": {"custom": ["ComfyUI_ALEXZ_tools"]},
+            },
+        }
+
+        self.api._announce_tracked_module_updates(local_only=True)
+        entry = self.api._MODULE_STATE_CACHE.get("ComfyUI_ALEXZ_tools", {})
+        self.assertTrue(bool(entry.get("pending_local_change")))
+        flags = self.api._cached_module_flags("custom", "ComfyUI_ALEXZ_tools")
+        self.assertTrue(bool(flags.get("updated_between_runs")))
+
+    def test_local_dirty_marker_clears_when_worktree_returns_clean(self):
+        """Stale local-change marker should clear automatically once worktree is clean."""
+        self.api._now_iso = lambda: "2026-02-13T02:10:00+00:00"
+        self.api._discover_custom_modules = lambda: ["ComfyUI_ALEXZ_tools"]
+        self.api._build_node_snapshots = lambda: {"custom": {"ComfyUI_ALEXZ_tools": {}}}
+        self.api._module_worktree_signature = lambda _name: ""
+        self.api._module_git_state = lambda _name: {
+            "installed_commit": "abc12345",
+            "installed_updated_at": "2026-02-13T02:00:00+00:00",
+        }
+        self.api._MODULE_STATE_CACHE = {
+            "ComfyUI_ALEXZ_tools": {
+                "installed_commit": "abc12345",
+                "pending_local_change": True,
+                "pending_update_at": "2026-02-13T02:00:00+00:00",
+                "worktree_signature": "dirtysig123",
+            },
+            "__node_tracker__": {
+                "snapshots": {"custom": {"ComfyUI_ALEXZ_tools": {}}},
+                "module_sets": {"custom": ["ComfyUI_ALEXZ_tools"]},
+            },
+        }
+
+        self.api._announce_tracked_module_updates(local_only=True)
+        entry = self.api._MODULE_STATE_CACHE.get("ComfyUI_ALEXZ_tools", {})
+        self.assertFalse(bool(entry.get("pending_local_change")))
+
     def test_refresh_syncs_custom_module_upstreams(self):
         """Validate `test_refresh_syncs_custom_module_upstreams` behavior."""
         called = []

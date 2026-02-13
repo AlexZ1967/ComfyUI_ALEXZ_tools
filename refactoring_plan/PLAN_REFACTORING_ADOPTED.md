@@ -244,7 +244,7 @@ Exit criteria:
 
 ## Phase 3 — Backend Modular Split (No API Changes)
 
-Status: 🔄 in progress (2026-02-12)
+Status: 🔄 in progress (2026-02-13)
 
 Deliverables:
 - Internally split `utils/module_node_browser_api.py` into focused modules:
@@ -303,6 +303,16 @@ Deliverables:
 - Step 17 completed: ComfyUI status/state merge helpers moved to
   `utils/module_browser/comfyui_state_ops.py`
   (template/cache resolve/pending merge/state persist) with API facade wrappers preserved.
+- Step 18 completed: ComfyUI git-status orchestration moved to
+  `utils/module_browser/comfyui_git_status_ops.py`
+  (`collect_comfyui_git_status`) with API facade wrapper preserved.
+- Step 19 completed: component-registry payload orchestration moved to
+  `utils/module_browser/component_registry_payload_ops.py`
+  (`collect_component_registry_payload`) with API facade wrapper preserved.
+- Step 20 completed: ComfyUI-Manager metadata/statistics helpers moved to
+  `utils/module_browser/manager_data_ops.py`
+  (`load_manager_index`, `load_manager_github_stats`, `resolve/infer` helpers)
+  with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

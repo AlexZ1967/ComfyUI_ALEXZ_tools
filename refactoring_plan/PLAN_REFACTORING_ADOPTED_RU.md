@@ -244,7 +244,7 @@
 
 ## Phase 3 — Модульная декомпозиция backend (без API-изменений)
 
-Статус: 🔄 в процессе (2026-02-12)
+Статус: 🔄 в процессе (2026-02-13)
 
 Результат:
 - Внутренне делим `utils/module_node_browser_api.py` на блоки:
@@ -303,6 +303,16 @@
 - Выполнен шаг 17: helper-ы ComfyUI status/state merge вынесены в
   `utils/module_browser/comfyui_state_ops.py`
   (template/cache resolve/pending merge/state persist) с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 18: orchestration ComfyUI git-status вынесен в
+  `utils/module_browser/comfyui_git_status_ops.py`
+  (`collect_comfyui_git_status`) с сохранением facade-wrapper-а в API.
+- Выполнен шаг 19: orchestration payload component-registry вынесен в
+  `utils/module_browser/component_registry_payload_ops.py`
+  (`collect_component_registry_payload`) с сохранением facade-wrapper-а в API.
+- Выполнен шаг 20: helper-ы metadata/statistics ComfyUI-Manager вынесены в
+  `utils/module_browser/manager_data_ops.py`
+  (`load_manager_index`, `load_manager_github_stats`, `resolve/infer` helper-ы)
+  с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.
