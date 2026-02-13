@@ -1,5 +1,32 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.7 — 2026-02-13
+- Phase 3 backend split continued (no API changes):
+  - extracted GitHub latest-release helper into
+    `utils/module_browser/release_ops.py` (`github_latest_release`);
+  - extracted module/comfy update-state decision helpers into
+    `utils/module_browser/module_update_state_ops.py`:
+    `module_needs_update_now`, `count_custom_modules_need_update`,
+    `count_custom_modules_unknown_update`, `comfyui_needs_update_now`;
+  - extracted repository bootstrap helpers into
+    `utils/module_browser/repo_bootstrap_ops.py`:
+    `comfyui_requirements_path`, `bootstrap_module_remote_from_manager`;
+  - extracted node classification/annotation helpers into
+    `utils/module_browser/node_classification_ops.py`:
+    `module_root`, `classify_by_source_path`, `classify_by_relative_module`,
+    `fallback_annotation`;
+  - switched API facade wrappers in `utils/module_node_browser_api.py`
+    to use extracted helpers.
+- Tests:
+  - added `tests/test_module_browser_release_ops.py`;
+  - added `tests/test_module_browser_module_update_state_ops.py`;
+  - added `tests/test_module_browser_repo_bootstrap_ops.py`;
+  - added `tests/test_module_browser_node_classification_ops.py`;
+  - regression check: `78 passed`
+    (`node_classification_ops + repo_bootstrap_ops + release_ops + module_update_state_ops + path_ops + requirements_pending_ops + module_browser_tracker + comfyui_git_status_ops + phase0_baseline`).
+- Plan/docs sync:
+  - marked Phase 3 Steps 27, 28, 29 and 30 completed in both adopted plans.
+
 ## 0.18.6 — 2026-02-13
 - Phase 3 backend split continued (no API changes):
   - extracted requirements pending-state helpers into

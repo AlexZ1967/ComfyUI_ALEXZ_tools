@@ -340,6 +340,22 @@ Deliverables:
   (`custom_nodes_roots`, `manager_custom_db_path`,
   `manager_github_stats_path`, `module_dir`, `comfyui_root`)
   with API facade wrappers preserved.
+- Step 27 completed: GitHub latest-release network helper moved to
+  `utils/module_browser/release_ops.py`
+  (`github_latest_release`) with API facade wrapper preserved.
+- Step 28 completed: update-state decision helpers moved to
+  `utils/module_browser/module_update_state_ops.py`
+  (`module_needs_update_now`, `count_custom_modules_need_update`,
+  `count_custom_modules_unknown_update`, `comfyui_needs_update_now`)
+  with API facade wrappers preserved.
+- Step 29 completed: repository bootstrap helpers moved to
+  `utils/module_browser/repo_bootstrap_ops.py`
+  (`comfyui_requirements_path`, `bootstrap_module_remote_from_manager`)
+  with API facade wrappers preserved.
+- Step 30 completed: node classification/annotation helpers moved to
+  `utils/module_browser/node_classification_ops.py`
+  (`module_root`, `classify_by_source_path`, `classify_by_relative_module`,
+  `fallback_annotation`) with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

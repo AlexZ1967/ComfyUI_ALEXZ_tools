@@ -15,17 +15,13 @@ from __future__ import annotations
 
 
 import importlib
-import json
 import logging
 import re
 import subprocess
 import sys
 import threading
 import time
-import urllib.error
-import urllib.request
-from datetime import datetime, timezone
-from itertools import islice
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -196,6 +192,25 @@ from .module_browser.path_ops import (
     manager_custom_db_path as mb_manager_custom_db_path,
     manager_github_stats_path as mb_manager_github_stats_path,
     module_dir as mb_module_dir,
+)
+from .module_browser.release_ops import (
+    github_latest_release as mb_github_latest_release,
+)
+from .module_browser.module_update_state_ops import (
+    comfyui_needs_update_now as mb_comfyui_needs_update_now,
+    count_custom_modules_need_update as mb_count_custom_modules_need_update,
+    count_custom_modules_unknown_update as mb_count_custom_modules_unknown_update,
+    module_needs_update_now as mb_module_needs_update_now,
+)
+from .module_browser.repo_bootstrap_ops import (
+    bootstrap_module_remote_from_manager as mb_bootstrap_module_remote_from_manager,
+    comfyui_requirements_path as mb_comfyui_requirements_path,
+)
+from .module_browser.node_classification_ops import (
+    classify_by_relative_module as mb_classify_by_relative_module,
+    classify_by_source_path as mb_classify_by_source_path,
+    fallback_annotation as mb_fallback_annotation,
+    module_root as mb_module_root,
 )
 
 try:
@@ -443,66 +458,22 @@ def _build_node_snapshots() -> dict[str, dict[str, dict[str, dict[str, str]]]]:
 
 def _module_root(node_cls: Any) -> str:
     """Resolve module root directory for a file path inside the extension."""
-    module_name = getattr(node_cls, "__module__", "") or ""
-    if not module_name:
-        return "unknown"
-    return module_name.split(".", 1)[0]
+    return mb_module_root(node_cls)
 
 
 def _classify_by_relative_module(node_cls: Any) -> tuple[str, str]:
     """Classify node group and module name using path relative to ComfyUI roots."""
-    rel = getattr(node_cls, "RELATIVE_PYTHON_MODULE", None)
-    if isinstance(rel, str) and rel:
-        parts = [p for p in rel.split(".") if p]
-        if len(parts) >= 2:
-            root, module_name = parts[0], parts[1]
-        elif len(parts) == 1:
-            root, module_name = parts[0], parts[0]
-        else:
-            root, module_name = "", ""
-
-        if root == "custom_nodes":
-            return ("custom", _canonical_custom_module_name(module_name))
-        if root == "comfy_extras":
-            return ("core_extras", module_name)
-        if root == "comfy_api_nodes":
-            return ("api", module_name)
-
-    source_hit = _classify_by_source_path(node_cls)
-    if source_hit is not None:
-        return source_hit
-
-    module_name = getattr(node_cls, "__module__", "") or ""
-    module_l = module_name.lower()
-    if module_l.startswith("comfy_extras."):
-        parts = module_name.split(".")
-        return ("core_extras", parts[1] if len(parts) > 1 else module_name)
-    if module_l.startswith("comfy_api_nodes."):
-        parts = module_name.split(".")
-        return ("api", parts[1] if len(parts) > 1 else module_name)
-    return ("core", _module_root(node_cls))
+    return mb_classify_by_relative_module(
+        node_cls,
+        canonical_custom_module_name_fn=_canonical_custom_module_name,
+        classify_by_source_path_fn=_classify_by_source_path,
+        module_root_fn=_module_root,
+    )
 
 
 def _fallback_annotation(node_cls: Any) -> str:
     """Build fallback node annotation from class metadata when no static annotation exists."""
-    category = getattr(node_cls, "CATEGORY", "") or "unknown"
-    return_names = getattr(node_cls, "RETURN_NAMES", None)
-    if not return_names:
-        return_types = getattr(node_cls, "RETURN_TYPES", ())
-        return_names = return_types
-
-    if return_names is None:
-        output_items = []
-    elif isinstance(return_names, (str, bytes)):
-        output_items = [str(return_names)]
-    else:
-        try:
-            output_items = [str(x) for x in islice(iter(return_names), 3)]
-        except Exception:
-            output_items = [str(return_names)]
-
-    outputs = ", ".join(output_items) or "unknown"
-    return f"Категория: {category}. Выходы: {outputs}."
+    return mb_fallback_annotation(node_cls)
 
 
 def _custom_nodes_roots() -> list[Path]:
@@ -548,33 +519,13 @@ def _canonical_custom_module_name(module_name: str) -> str:
 
 def _classify_by_source_path(node_cls: Any) -> tuple[str, str] | None:
     """Classify node into core/extras/api/custom groups from source path."""
-    source = _node_source_file(node_cls)
-    if not source:
-        return None
-
-    try:
-        src_path = Path(source).resolve()
-    except Exception:
-        return None
-
-    for root in _custom_nodes_roots():
-        try:
-            rel = src_path.relative_to(root.resolve())
-        except Exception:
-            continue
-        if rel.parts:
-            return ("custom", _canonical_custom_module_name(rel.parts[0]))
-
-    parts_l = [p.lower() for p in src_path.parts]
-    if "comfy_extras" in parts_l:
-        idx = parts_l.index("comfy_extras")
-        module_name = src_path.parts[idx + 1] if (idx + 1) < len(src_path.parts) else _module_root(node_cls)
-        return ("core_extras", module_name)
-    if "comfy_api_nodes" in parts_l:
-        idx = parts_l.index("comfy_api_nodes")
-        module_name = src_path.parts[idx + 1] if (idx + 1) < len(src_path.parts) else _module_root(node_cls)
-        return ("api", module_name)
-    return None
+    return mb_classify_by_source_path(
+        node_cls,
+        node_source_file_fn=_node_source_file,
+        custom_nodes_roots_fn=_custom_nodes_roots,
+        canonical_custom_module_name_fn=_canonical_custom_module_name,
+        module_root_fn=_module_root,
+    )
 
 
 def _normalize_repo_url(url: str | None) -> str | None:
@@ -663,40 +614,7 @@ def _normalize_comfyui_mode(value: str | None) -> str:
 
 def _github_latest_release(owner: str, repo: str, timeout: float = 8.0) -> dict[str, Any]:
     """Fetch latest GitHub release metadata for a repository."""
-    owner_text = (owner or "").strip()
-    repo_text = (repo or "").strip()
-    if not owner_text or not repo_text:
-        return {}
-    url = f"https://api.github.com/repos/{owner_text}/{repo_text}/releases/latest"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "ALEXZ_tools-module-picker",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            payload = json.loads(body)
-    except urllib.error.HTTPError as exc:
-        if exc.code in {403, 404, 429}:
-            return {}
-        return {}
-    except Exception:
-        return {}
-    if not isinstance(payload, dict):
-        return {}
-    tag = str(payload.get("tag_name") or "").strip()
-    if not tag:
-        return {}
-    return {
-        "tag_name": tag,
-        "published_at": str(payload.get("published_at") or "").strip(),
-        "created_at": str(payload.get("created_at") or "").strip(),
-        "name": str(payload.get("name") or "").strip(),
-        "html_url": str(payload.get("html_url") or "").strip(),
-    }
+    return mb_github_latest_release(owner, repo, timeout=timeout)
 
 
 def _manager_github_stats() -> dict[str, dict[str, dict[str, Any]]]:
@@ -836,51 +754,14 @@ def _requirements_changed_between(module_dir: Path, before_commit: str, after_co
 
 def _module_needs_update_now(module_name: str) -> bool:
     """Check whether local module commit differs from tracked remote commit."""
-    module = _canonical_custom_module_name(module_name)
-    state = _load_module_state()
-    entry = state.get(module) if isinstance(state, dict) else None
-    cached_update: bool | None = None
-    if isinstance(entry, dict):
-        value = entry.get("update_available")
-        if isinstance(value, bool):
-            cached_update = value
-
-    git_state = _module_git_state(module)
-    if not git_state:
-        repository = ""
-        installed_updated_at = ""
-        if isinstance(entry, dict):
-            repository = str(entry.get("repository") or "")
-            installed_updated_at = str(entry.get("installed_updated_at") or "")
-        if not repository:
-            meta = _manager_meta_for_module(module, repository)
-            if isinstance(meta, dict):
-                repository = str(meta.get("repository") or "")
-        inferred, _ = _infer_update_from_manager_stats(repository, installed_updated_at)
-        if isinstance(inferred, bool):
-            return inferred
-        return bool(cached_update)
-    behind = git_state.get("behind")
-    if isinstance(behind, int):
-        return behind > 0
-    remote_head = (git_state.get("remote_head") or "").strip()
-    installed = (git_state.get("installed_commit") or "").strip()
-    if bool(git_state.get("has_upstream") and remote_head and installed):
-        return remote_head != installed
-    repository = str(git_state.get("repository") or "")
-    installed_updated_at = str(git_state.get("installed_updated_at") or "")
-    if not repository and isinstance(entry, dict):
-        repository = str(entry.get("repository") or "")
-    if not installed_updated_at and isinstance(entry, dict):
-        installed_updated_at = str(entry.get("installed_updated_at") or "")
-    if not repository:
-        meta = _manager_meta_for_module(module, repository)
-        if isinstance(meta, dict):
-            repository = str(meta.get("repository") or "")
-    inferred, _ = _infer_update_from_manager_stats(repository, installed_updated_at)
-    if isinstance(inferred, bool):
-        return inferred
-    return bool(cached_update)
+    return mb_module_needs_update_now(
+        module_name,
+        canonical_custom_module_name=_canonical_custom_module_name,
+        load_module_state=_load_module_state,
+        module_git_state_fn=_module_git_state,
+        manager_meta_for_module_fn=_manager_meta_for_module,
+        infer_update_from_manager_stats_fn=_infer_update_from_manager_stats,
+    )
 
 
 def _module_worktree_signature(module_name: str) -> str:
@@ -894,31 +775,20 @@ def _module_worktree_signature(module_name: str) -> str:
 
 def _count_custom_modules_need_update() -> int:
     """Count custom modules that currently report available updates."""
-    state = _load_module_state()
-    if not isinstance(state, dict):
-        return 0
-    count = 0
-    for module_name in _discover_custom_modules():
-        entry = state.get(_canonical_custom_module_name(module_name))
-        if isinstance(entry, dict) and bool(entry.get("update_available")):
-            count += 1
-    return count
+    return mb_count_custom_modules_need_update(
+        load_module_state=_load_module_state,
+        discover_custom_modules=_discover_custom_modules,
+        canonical_custom_module_name=_canonical_custom_module_name,
+    )
 
 
 def _count_custom_modules_unknown_update() -> int:
     """Count custom modules whose remote update status is unknown/uncheckable."""
-    state = _load_module_state()
-    if not isinstance(state, dict):
-        return 0
-    count = 0
-    for module_name in _discover_custom_modules():
-        entry = state.get(_canonical_custom_module_name(module_name))
-        if not isinstance(entry, dict):
-            count += 1
-            continue
-        if not isinstance(entry.get("update_available"), bool):
-            count += 1
-    return count
+    return mb_count_custom_modules_unknown_update(
+        load_module_state=_load_module_state,
+        discover_custom_modules=_discover_custom_modules,
+        canonical_custom_module_name=_canonical_custom_module_name,
+    )
 
 
 def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
@@ -934,20 +804,12 @@ def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
 
 def _comfyui_requirements_path() -> Path | None:
     """Resolve requirements.txt path for the main ComfyUI repository."""
-    root = _comfyui_root()
-    if root is None:
-        return None
-    req = root / "requirements.txt"
-    return req if req.exists() else None
+    return mb_comfyui_requirements_path(comfyui_root_fn=_comfyui_root)
 
 
 def _comfyui_needs_update_now() -> bool:
     """Check whether local ComfyUI commit is behind remote tracking commit."""
-    status = _comfyui_git_status(force_refresh=True, mode="releases")
-    behind = status.get("behind")
-    if isinstance(behind, int):
-        return behind > 0
-    return bool(status.get("update_status") == "can_update")
+    return mb_comfyui_needs_update_now(comfyui_git_status_fn=_comfyui_git_status)
 
 
 def _git_remote_names(repo_root: Path) -> list[str]:
@@ -1098,22 +960,20 @@ def _module_repo_url(module_name: str) -> str | None:
 
 def _bootstrap_module_remote_from_manager(module_name: str, module_dir: Path) -> bool:
     """Configure `origin` remote from ComfyUI-Manager metadata for repos without remotes."""
-    remotes = _git_remote_names(module_dir)
-    if remotes:
-        return True
-    meta = _manager_meta_for_module(module_name, None)
-    repo_url = _normalize_repo_url(meta.get("repository")) if isinstance(meta, dict) else None
-    if not repo_url:
-        return False
-    add = _run_command(
-        ["git", "-C", str(module_dir), "remote", "add", "origin", repo_url],
+    return mb_bootstrap_module_remote_from_manager(
+        module_name,
+        module_dir,
+        git_remote_names_fn=_git_remote_names,
+        manager_meta_for_module_fn=_manager_meta_for_module,
+        normalize_repo_url_fn=_normalize_repo_url,
+        run_command_fn=lambda args, timeout, disable_git_prompt: _run_command(
+            args,
+            timeout=timeout,
+            disable_git_prompt=disable_git_prompt,
+        ),
+        logger_info=_LOGGER.info,
         timeout=20.0,
-        disable_git_prompt=True,
     )
-    if not add.get("ok"):
-        return False
-    _LOGGER.info("Configured origin remote from manager metadata for module %s: %s", module_name, repo_url)
-    return True
 
 
 def _module_git_state(module_name: str) -> dict[str, Any]:

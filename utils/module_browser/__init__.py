@@ -161,6 +161,25 @@ from .path_ops import (
     manager_github_stats_path,
     module_dir,
 )
+from .release_ops import (
+    github_latest_release,
+)
+from .module_update_state_ops import (
+    comfyui_needs_update_now,
+    count_custom_modules_need_update,
+    count_custom_modules_unknown_update,
+    module_needs_update_now,
+)
+from .repo_bootstrap_ops import (
+    bootstrap_module_remote_from_manager,
+    comfyui_requirements_path,
+)
+from .node_classification_ops import (
+    classify_by_relative_module,
+    classify_by_source_path,
+    fallback_annotation,
+    module_root,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -256,6 +275,17 @@ __all__ = [
     "manager_github_stats_path",
     "module_dir",
     "comfyui_root",
+    "github_latest_release",
+    "module_needs_update_now",
+    "count_custom_modules_need_update",
+    "count_custom_modules_unknown_update",
+    "comfyui_needs_update_now",
+    "comfyui_requirements_path",
+    "bootstrap_module_remote_from_manager",
+    "module_root",
+    "classify_by_source_path",
+    "classify_by_relative_module",
+    "fallback_annotation",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

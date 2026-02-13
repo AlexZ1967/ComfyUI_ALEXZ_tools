@@ -340,6 +340,22 @@
   (`custom_nodes_roots`, `manager_custom_db_path`,
   `manager_github_stats_path`, `module_dir`, `comfyui_root`)
   с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 27: сетевой helper latest-release GitHub вынесен в
+  `utils/module_browser/release_ops.py`
+  (`github_latest_release`) с сохранением facade-wrapper-а в API.
+- Выполнен шаг 28: helper-ы решений update-state вынесены в
+  `utils/module_browser/module_update_state_ops.py`
+  (`module_needs_update_now`, `count_custom_modules_need_update`,
+  `count_custom_modules_unknown_update`, `comfyui_needs_update_now`)
+  с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 29: helper-ы bootstrap репозитория вынесены в
+  `utils/module_browser/repo_bootstrap_ops.py`
+  (`comfyui_requirements_path`, `bootstrap_module_remote_from_manager`)
+  с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 30: helper-ы классификации/аннотации нод вынесены в
+  `utils/module_browser/node_classification_ops.py`
+  (`module_root`, `classify_by_source_path`, `classify_by_relative_module`,
+  `fallback_annotation`) с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.
