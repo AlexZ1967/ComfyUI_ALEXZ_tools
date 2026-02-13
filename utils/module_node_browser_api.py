@@ -133,6 +133,12 @@ from .module_browser.module_identity import (
     discover_custom_modules as mb_discover_custom_modules,
     normalize_module_token as mb_normalize_module_token,
 )
+from .module_browser.comfyui_state_ops import (
+    apply_cached_pending_fields as mb_apply_cached_pending_fields,
+    comfyui_status_template as mb_comfyui_status_template,
+    persist_comfyui_status as mb_persist_comfyui_status,
+    resolve_cached_status as mb_resolve_cached_comfyui_status,
+)
 from .module_browser.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
     pull_comfyui as mb_pull_comfyui,
@@ -1439,72 +1445,15 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
     ):
         return dict(cached_mode[1])
 
-    result: dict[str, Any] = {
-        "path": "",
-        "repository": "https://github.com/comfyanonymous/ComfyUI",
-        "check_mode": mode_norm,
-        "remote_name": "",
-        "remote_ref": "",
-        "branch": "",
-        "upstream": "",
-        "installed_commit": "",
-        "installed_commit_short": "",
-        "installed_updated_at": "",
-        "remote_commit": "",
-        "remote_commit_short": "",
-        "remote_updated_at": "",
-        "release_tag": "",
-        "release_name": "",
-        "release_url": "",
-        "ahead": None,
-        "behind": None,
-        "update_available": None,
-        "update_status": "unknown",
-        "requirements_update_pending": False,
-        "requirements_pending_before_commit": "",
-        "requirements_pending_after_commit": "",
-        "requirements_pending_updated_at": "",
-    }
+    result: dict[str, Any] = mb_comfyui_status_template(mode_norm)
 
     if not force_refresh:
         state = _load_module_state()
-        cached_entry = state.get("__comfyui__") if isinstance(state, dict) else None
-        status_by_mode = cached_entry.get("status_by_mode") if isinstance(cached_entry, dict) else None
-        cached_status: dict[str, Any] | None = None
-        if isinstance(status_by_mode, dict):
-            candidate = status_by_mode.get(mode_norm)
-            if isinstance(candidate, dict):
-                cached_status = candidate
-        if cached_status is None and isinstance(cached_entry, dict):
-            candidate = cached_entry.get("status")
-            if isinstance(candidate, dict):
-                cached_status = candidate
+        cached_entry, cached_status = mb_resolve_cached_comfyui_status(state, mode_norm)
         if isinstance(cached_status, dict) and cached_status:
             merged = dict(cached_status)
             merged["check_mode"] = str(merged.get("check_mode") or mode_norm)
-            pending_prev = (
-                (cached_entry.get("pending_prev_commit") or cached_entry.get("startup_prev_commit") or "").strip()
-                if isinstance(cached_entry, dict)
-                else ""
-            )
-            pending_new = (
-                (cached_entry.get("pending_new_commit") or cached_entry.get("startup_new_commit") or "").strip()
-                if isinstance(cached_entry, dict)
-                else ""
-            )
-            pending_at = (
-                (cached_entry.get("pending_update_at") or cached_entry.get("startup_update_at") or "").strip()
-                if isinstance(cached_entry, dict)
-                else ""
-            )
-            merged["updated_between_runs"] = bool(pending_prev and pending_new)
-            merged["startup_prev_commit_short"] = _short_commit(pending_prev) if pending_prev else ""
-            merged["startup_new_commit_short"] = _short_commit(pending_new) if pending_new else ""
-            merged["startup_update_at"] = pending_at
-            merged["requirements_update_pending"] = bool(cached_entry.get("pending_requirements_update"))
-            merged["requirements_pending_before_commit"] = str(cached_entry.get("pending_requirements_before_commit") or "")
-            merged["requirements_pending_after_commit"] = str(cached_entry.get("pending_requirements_after_commit") or "")
-            merged["requirements_pending_updated_at"] = str(cached_entry.get("pending_requirements_updated_at") or "")
+            merged = mb_apply_cached_pending_fields(merged, cached_entry, short_commit=_short_commit)
             cache[mode_norm] = (now_ts, dict(merged))
             return merged
         cache[mode_norm] = (now_ts, dict(result))
@@ -1515,14 +1464,7 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
         cache[mode_norm] = (now_ts, dict(result))
         state = _load_module_state()
         if isinstance(state, dict):
-            entry_raw = state.get("__comfyui__")
-            entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
-            by_mode = dict(entry.get("status_by_mode")) if isinstance(entry.get("status_by_mode"), dict) else {}
-            by_mode[mode_norm] = dict(result)
-            entry["status_by_mode"] = by_mode
-            entry["status"] = dict(result)
-            entry["updated_at"] = _now_iso()
-            state["__comfyui__"] = entry
+            state = mb_persist_comfyui_status(state, mode_norm=mode_norm, result=result, now_iso=_now_iso)
             _save_module_state(state)
         return result
 
@@ -1532,14 +1474,7 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
         cache[mode_norm] = (now_ts, dict(result))
         state = _load_module_state()
         if isinstance(state, dict):
-            entry_raw = state.get("__comfyui__")
-            entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
-            by_mode = dict(entry.get("status_by_mode")) if isinstance(entry.get("status_by_mode"), dict) else {}
-            by_mode[mode_norm] = dict(result)
-            entry["status_by_mode"] = by_mode
-            entry["status"] = dict(result)
-            entry["updated_at"] = _now_iso()
-            state["__comfyui__"] = entry
+            state = mb_persist_comfyui_status(state, mode_norm=mode_norm, result=result, now_iso=_now_iso)
             _save_module_state(state)
         return result
 
@@ -1611,33 +1546,13 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
                 result["behind"] = 1
 
     state = _load_module_state()
-    cached_entry = state.get("__comfyui__") if isinstance(state, dict) else None
-    if isinstance(cached_entry, dict):
-        pending_prev = (cached_entry.get("pending_prev_commit") or cached_entry.get("startup_prev_commit") or "").strip()
-        pending_new = (cached_entry.get("pending_new_commit") or cached_entry.get("startup_new_commit") or "").strip()
-        pending_at = (cached_entry.get("pending_update_at") or cached_entry.get("startup_update_at") or "").strip()
-        result["updated_between_runs"] = bool(pending_prev and pending_new)
-        result["startup_prev_commit_short"] = _short_commit(pending_prev) if pending_prev else ""
-        result["startup_new_commit_short"] = _short_commit(pending_new) if pending_new else ""
-        result["startup_update_at"] = pending_at
-        result["requirements_update_pending"] = bool(cached_entry.get("pending_requirements_update"))
-        result["requirements_pending_before_commit"] = str(cached_entry.get("pending_requirements_before_commit") or "")
-        result["requirements_pending_after_commit"] = str(cached_entry.get("pending_requirements_after_commit") or "")
-        result["requirements_pending_updated_at"] = str(cached_entry.get("pending_requirements_updated_at") or "")
+    cached_entry, _cached_status = mb_resolve_cached_comfyui_status(state, mode_norm)
+    result = mb_apply_cached_pending_fields(result, cached_entry, short_commit=_short_commit)
 
     cache[result["check_mode"]] = (now_ts, dict(result))
     state = _load_module_state()
     if isinstance(state, dict):
-        prev_entry = state.get("__comfyui__")
-        entry = dict(prev_entry) if isinstance(prev_entry, dict) else {}
-        by_mode = dict(entry.get("status_by_mode")) if isinstance(entry.get("status_by_mode"), dict) else {}
-        by_mode[result["check_mode"]] = dict(result)
-        entry["status_by_mode"] = by_mode
-        entry["status"] = dict(result)
-        entry["updated_at"] = _now_iso()
-        entry["installed_commit"] = result.get("installed_commit") or entry.get("installed_commit")
-        entry["installed_updated_at"] = result.get("installed_updated_at") or entry.get("installed_updated_at")
-        state["__comfyui__"] = entry
+        state = mb_persist_comfyui_status(state, mode_norm=result["check_mode"], result=result, now_iso=_now_iso)
         _save_module_state(state)
     return result
 

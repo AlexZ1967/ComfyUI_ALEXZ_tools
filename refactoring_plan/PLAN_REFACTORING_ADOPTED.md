@@ -300,6 +300,9 @@ Deliverables:
 - Step 16 completed: custom module identity helpers moved to
   `utils/module_browser/module_identity.py`
   (`discover/normalize/alias/canonical`) with API facade wrappers preserved.
+- Step 17 completed: ComfyUI status/state merge helpers moved to
+  `utils/module_browser/comfyui_state_ops.py`
+  (template/cache resolve/pending merge/state persist) with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

@@ -300,6 +300,9 @@
 - Выполнен шаг 16: helper-ы идентификации custom-модулей вынесены в
   `utils/module_browser/module_identity.py`
   (`discover/normalize/alias/canonical`) с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 17: helper-ы ComfyUI status/state merge вынесены в
+  `utils/module_browser/comfyui_state_ops.py`
+  (template/cache resolve/pending merge/state persist) с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

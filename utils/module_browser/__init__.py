@@ -101,6 +101,12 @@ from .module_identity import (
     discover_custom_modules,
     normalize_module_token,
 )
+from .comfyui_state_ops import (
+    apply_cached_pending_fields,
+    comfyui_status_template,
+    persist_comfyui_status,
+    resolve_cached_status,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -156,6 +162,10 @@ __all__ = [
     "normalize_module_token",
     "build_custom_module_aliases",
     "canonical_custom_module_name",
+    "comfyui_status_template",
+    "resolve_cached_status",
+    "apply_cached_pending_fields",
+    "persist_comfyui_status",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",
