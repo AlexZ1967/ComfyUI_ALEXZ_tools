@@ -139,6 +139,17 @@ from .widget_mode_ops import (
     normalize_log_mode,
     set_custom_update_checked,
 )
+from .value_ops import (
+    github_id,
+    normalize_comfyui_mode,
+    normalize_repo_url,
+    now_iso,
+    parse_datetime,
+    pick_repo_url,
+    repo_name,
+    short_commit,
+    to_iso,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -218,6 +229,15 @@ __all__ = [
     "info_only_rejection_payload",
     "set_custom_update_checked",
     "normalize_log_mode",
+    "short_commit",
+    "normalize_repo_url",
+    "github_id",
+    "repo_name",
+    "pick_repo_url",
+    "parse_datetime",
+    "to_iso",
+    "now_iso",
+    "normalize_comfyui_mode",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

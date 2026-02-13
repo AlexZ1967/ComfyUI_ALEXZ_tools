@@ -326,6 +326,11 @@
   `utils/module_browser/widget_mode_ops.py`
   (`custom_update_checked_flag`, `info_only_rejection_payload`,
   `set_custom_update_checked`, `normalize_log_mode`) с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 24: чистые helper-ы значений/дат/репозиториев вынесены в
+  `utils/module_browser/value_ops.py`
+  (`short_commit`, `normalize_repo_url`, `github_id`, `repo_name`,
+  `pick_repo_url`, `parse_datetime`, `to_iso`, `now_iso`,
+  `normalize_comfyui_mode`) с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

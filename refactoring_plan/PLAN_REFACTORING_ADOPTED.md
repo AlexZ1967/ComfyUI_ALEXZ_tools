@@ -326,6 +326,11 @@ Deliverables:
   `utils/module_browser/widget_mode_ops.py`
   (`custom_update_checked_flag`, `info_only_rejection_payload`,
   `set_custom_update_checked`, `normalize_log_mode`) with API facade wrappers preserved.
+- Step 24 completed: pure value/date/repository helpers moved to
+  `utils/module_browser/value_ops.py`
+  (`short_commit`, `normalize_repo_url`, `github_id`, `repo_name`,
+  `pick_repo_url`, `parse_datetime`, `to_iso`, `now_iso`,
+  `normalize_comfyui_mode`) with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

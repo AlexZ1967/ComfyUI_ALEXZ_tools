@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.5 — 2026-02-13
+- Phase 3 backend split continued (no API changes):
+  - extracted pure value/date/repository helpers into
+    `utils/module_browser/value_ops.py`:
+    `short_commit`, `normalize_repo_url`, `github_id`, `repo_name`,
+    `pick_repo_url`, `parse_datetime`, `to_iso`, `now_iso`,
+    `normalize_comfyui_mode`;
+  - switched API facade wrappers in `utils/module_node_browser_api.py`
+    to use new helper module.
+- Tests:
+  - added `tests/test_module_browser_value_ops.py`;
+  - regression check: `69 passed`
+    (`value_ops + catalog_payload_ops + widget_mode_ops + module_browser_tracker + phase0_baseline`).
+- Plan/docs sync:
+  - marked Phase 3 Step 24 completed in both adopted plans.
+
 ## 0.18.4 — 2026-02-13
 - Phase 3 backend split continued (no API changes):
   - extracted catalog-route payload builders to `utils/module_browser/catalog_payload_ops.py`:

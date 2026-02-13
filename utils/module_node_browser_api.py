@@ -175,6 +175,17 @@ from .module_browser.widget_mode_ops import (
     normalize_log_mode as mb_normalize_log_mode,
     set_custom_update_checked as mb_set_custom_update_checked,
 )
+from .module_browser.value_ops import (
+    github_id as mb_github_id,
+    normalize_comfyui_mode as mb_normalize_comfyui_mode,
+    normalize_repo_url as mb_normalize_repo_url,
+    now_iso as mb_now_iso,
+    parse_datetime as mb_parse_datetime,
+    pick_repo_url as mb_pick_repo_url,
+    repo_name as mb_repo_name,
+    short_commit as mb_short_commit,
+    to_iso as mb_to_iso,
+)
 
 try:
     import folder_paths
@@ -347,10 +358,7 @@ _ALEXZ_ANNOTATIONS = {
 
 def _short_commit(commit: str | None) -> str:
     """Return short 8-character representation of a git commit hash."""
-    value = (commit or "").strip()
-    if not value:
-        return "unknown"
-    return value[:8]
+    return mb_short_commit(commit)
 
 
 def _ensure_comfyui_status_cache() -> dict[str, tuple[float, dict[str, Any]]]:
@@ -564,54 +572,26 @@ def _classify_by_source_path(node_cls: Any) -> tuple[str, str] | None:
 
 def _normalize_repo_url(url: str | None) -> str | None:
     """Normalize repository URL to canonical HTTPS GitHub form."""
-    if not isinstance(url, str):
-        return None
-    value = url.strip()
-    if not value:
-        return None
-    if value.startswith("git@github.com:"):
-        value = "https://github.com/" + value[len("git@github.com:") :]
-    elif value.startswith("git://github.com/"):
-        value = "https://github.com/" + value[len("git://github.com/") :]
-    if value.endswith(".git"):
-        value = value[:-4]
-    return value.rstrip("/")
+    return mb_normalize_repo_url(url)
 
 
 def _github_id(url: str | None) -> str | None:
     """Extract owner/repository identifier from normalized GitHub URL."""
-    norm = _normalize_repo_url(url)
-    if not norm:
-        return None
-    match = _GITHUB_RE.search(norm)
-    if not match:
-        return None
-    return f"{match.group(1)}/{match.group(2)}".lower()
+    value = mb_github_id(url, github_re=_GITHUB_RE)
+    return value.lower() if value else None
 
 
 def _repo_name(url: str | None) -> str | None:
     """Return repository name parsed from module URL."""
-    gid = _github_id(url)
-    if not gid:
-        return None
-    return gid.split("/", 1)[1]
+    return mb_repo_name(url, github_id_fn=_github_id)
 
 
 def _pick_repo_url(entry: dict[str, Any]) -> str | None:
     """Choose best repository URL from module metadata candidates."""
-    candidates: list[str] = []
-    for key in ("repository", "reference"):
-        value = entry.get(key)
-        if isinstance(value, str) and value:
-            candidates.append(value)
-    files = entry.get("files")
-    if isinstance(files, list):
-        candidates.extend(x for x in files if isinstance(x, str))
-    for candidate in candidates:
-        norm = _normalize_repo_url(candidate)
-        if norm and "github.com/" in norm.lower():
-            return norm
-    return _normalize_repo_url(candidates[0]) if candidates else None
+    value = mb_pick_repo_url(entry, normalize_repo_url_fn=_normalize_repo_url)
+    if not value:
+        return None
+    return value
 
 
 def _manager_custom_db_path() -> Path | None:
@@ -634,38 +614,17 @@ def _manager_github_stats_path() -> Path | None:
 
 def _parse_datetime(value: str | None) -> datetime | None:
     """Parse datetime text from manager metadata into timezone-aware object."""
-    if not isinstance(value, str):
-        return None
-    text = value.strip()
-    if not text:
-        return None
-    try:
-        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt
-    except Exception:
-        pass
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
-        except Exception:
-            continue
-    return None
+    return mb_parse_datetime(value)
 
 
 def _to_iso(dt: datetime | None) -> str | None:
     """Convert datetime value to ISO-8601 string in UTC."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat()
+    return mb_to_iso(dt)
 
 
 def _now_iso() -> str:
     """Return current UTC timestamp in ISO-8601 format."""
-    return datetime.now(timezone.utc).isoformat()
+    return mb_now_iso()
 
 
 def _set_comfyui_requirements_pending(pending: bool, before_commit: str = "", after_commit: str = "") -> None:
@@ -730,10 +689,7 @@ def _set_module_requirements_pending(
 
 def _normalize_comfyui_mode(value: str | None) -> str:
     """Normalize ComfyUI update-check mode to supported values."""
-    text = (value or "").strip().lower()
-    if text in {"commit", "commits", "git"}:
-        return "commits"
-    return "releases"
+    return mb_normalize_comfyui_mode(value)
 
 
 def _github_latest_release(owner: str, repo: str, timeout: float = 8.0) -> dict[str, Any]:
