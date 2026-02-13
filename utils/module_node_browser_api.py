@@ -186,6 +186,17 @@ from .module_browser.value_ops import (
     short_commit as mb_short_commit,
     to_iso as mb_to_iso,
 )
+from .module_browser.requirements_pending_ops import (
+    set_comfyui_requirements_pending as mb_set_comfyui_requirements_pending,
+    set_module_requirements_pending as mb_set_module_requirements_pending,
+)
+from .module_browser.path_ops import (
+    comfyui_root as mb_comfyui_root,
+    custom_nodes_roots as mb_custom_nodes_roots,
+    manager_custom_db_path as mb_manager_custom_db_path,
+    manager_github_stats_path as mb_manager_github_stats_path,
+    module_dir as mb_module_dir,
+)
 
 try:
     import folder_paths
@@ -496,14 +507,10 @@ def _fallback_annotation(node_cls: Any) -> str:
 
 def _custom_nodes_roots() -> list[Path]:
     """Return existing custom_nodes root directories."""
-    if folder_paths is not None and hasattr(folder_paths, "get_folder_paths"):
-        try:
-            roots = [Path(x) for x in folder_paths.get_folder_paths("custom_nodes") if x]
-            if roots:
-                return roots
-        except Exception:
-            pass
-    return [Path(__file__).resolve().parents[1]]
+    return mb_custom_nodes_roots(
+        folder_paths_module=folder_paths,
+        fallback_root=Path(__file__).resolve().parents[1],
+    )
 
 
 def _discover_custom_modules() -> list[str]:
@@ -596,20 +603,12 @@ def _pick_repo_url(entry: dict[str, Any]) -> str | None:
 
 def _manager_custom_db_path() -> Path | None:
     """Return path to ComfyUI-Manager custom-node database file."""
-    for root in _custom_nodes_roots():
-        db_path = root / "comfyui-manager" / "custom-node-list.json"
-        if db_path.exists():
-            return db_path
-    return None
+    return mb_manager_custom_db_path(custom_nodes_roots_fn=_custom_nodes_roots)
 
 
 def _manager_github_stats_path() -> Path | None:
     """Return path to cached GitHub-stats file maintained by ComfyUI-Manager."""
-    for root in _custom_nodes_roots():
-        db_path = root / "comfyui-manager" / "github-stats.json"
-        if db_path.exists():
-            return db_path
-    return None
+    return mb_manager_github_stats_path(custom_nodes_roots_fn=_custom_nodes_roots)
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -629,62 +628,32 @@ def _now_iso() -> str:
 
 def _set_comfyui_requirements_pending(pending: bool, before_commit: str = "", after_commit: str = "") -> None:
     """Persist pending ComfyUI requirements-install marker in module state cache."""
-    global _COMFYUI_STATUS_CACHE
-    state = _load_module_state()
-    if not isinstance(state, dict):
-        return
-    entry_raw = state.get("__comfyui__")
-    before_entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
-    entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
-    if pending:
-        entry["pending_requirements_update"] = True
-        if before_commit:
-            entry["pending_requirements_before_commit"] = before_commit
-        if after_commit:
-            entry["pending_requirements_after_commit"] = after_commit
-        entry["pending_requirements_updated_at"] = _now_iso()
-    else:
-        entry.pop("pending_requirements_update", None)
-        entry.pop("pending_requirements_before_commit", None)
-        entry.pop("pending_requirements_after_commit", None)
-        entry.pop("pending_requirements_updated_at", None)
-    if entry == before_entry:
-        return
-    state["__comfyui__"] = entry
-    _clear_comfyui_status_cache()
-    _save_module_state(state)
+    mb_set_comfyui_requirements_pending(
+        pending=bool(pending),
+        before_commit=before_commit or "",
+        after_commit=after_commit or "",
+        load_state_fn=_load_module_state,
+        save_state_fn=_save_module_state,
+        now_iso_fn=_now_iso,
+        on_state_changed=_clear_comfyui_status_cache,
+    )
 
 
 def _set_module_requirements_pending(
     module_name: str, pending: bool, before_commit: str = "", after_commit: str = ""
 ) -> None:
     """Persist pending requirements-install marker for one custom module."""
-    module = _canonical_custom_module_name(module_name)
-    if not module or module == "unknown":
-        return
-    state = _load_module_state()
-    if not isinstance(state, dict):
-        return
-    entry_raw = state.get(module)
-    before_entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
-    entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
-    if pending:
-        entry["pending_requirements_update"] = True
-        if before_commit:
-            entry["pending_requirements_before_commit"] = before_commit
-        if after_commit:
-            entry["pending_requirements_after_commit"] = after_commit
-        entry["pending_requirements_updated_at"] = _now_iso()
-    else:
-        entry.pop("pending_requirements_update", None)
-        entry.pop("pending_requirements_before_commit", None)
-        entry.pop("pending_requirements_after_commit", None)
-        entry.pop("pending_requirements_updated_at", None)
-    if entry == before_entry:
-        return
-    state[module] = entry
-    _MODULE_INFO_CACHE.clear()
-    _save_module_state(state)
+    mb_set_module_requirements_pending(
+        module_name=module_name,
+        pending=bool(pending),
+        before_commit=before_commit or "",
+        after_commit=after_commit or "",
+        canonical_custom_module_name_fn=_canonical_custom_module_name,
+        load_state_fn=_load_module_state,
+        save_state_fn=_save_module_state,
+        now_iso_fn=_now_iso,
+        on_state_changed=_MODULE_INFO_CACHE.clear,
+    )
 
 
 def _normalize_comfyui_mode(value: str | None) -> str:
@@ -844,14 +813,11 @@ def _is_git_local_changes_block(text: str | None) -> bool:
 
 def _module_dir(module_name: str) -> Path | None:
     """Resolve filesystem directory for a custom module by name."""
-    module_name = _canonical_custom_module_name((module_name or "").strip())
-    if not module_name:
-        return None
-    for root in _custom_nodes_roots():
-        module_dir = root / module_name
-        if module_dir.exists() and module_dir.is_dir():
-            return module_dir
-    return None
+    return mb_module_dir(
+        module_name,
+        canonical_custom_module_name_fn=_canonical_custom_module_name,
+        custom_nodes_roots_fn=_custom_nodes_roots,
+    )
 
 
 def _requirements_changed_between(module_dir: Path, before_commit: str, after_commit: str) -> bool:
@@ -1178,14 +1144,7 @@ def _sync_module_upstream(module_name: str, timeout: float = 15.0) -> bool:
 
 def _comfyui_root() -> Path | None:
     """Resolve root path of the currently running ComfyUI installation."""
-    base = Path(__file__).resolve()
-    for candidate in (base.parents[2], *base.parents):
-        try:
-            if (candidate / "nodes.py").exists() and (candidate / ".git").exists():
-                return candidate
-        except Exception:
-            continue
-    return None
+    return mb_comfyui_root(__file__)
 
 
 def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> dict[str, Any]:

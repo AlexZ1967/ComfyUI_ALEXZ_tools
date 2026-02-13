@@ -331,6 +331,15 @@ Deliverables:
   (`short_commit`, `normalize_repo_url`, `github_id`, `repo_name`,
   `pick_repo_url`, `parse_datetime`, `to_iso`, `now_iso`,
   `normalize_comfyui_mode`) with API facade wrappers preserved.
+- Step 25 completed: requirements-pending state mutation helpers moved to
+  `utils/module_browser/requirements_pending_ops.py`
+  (`set_comfyui_requirements_pending`, `set_module_requirements_pending`)
+  with API facade wrappers preserved.
+- Step 26 completed: path resolution helpers moved to
+  `utils/module_browser/path_ops.py`
+  (`custom_nodes_roots`, `manager_custom_db_path`,
+  `manager_github_stats_path`, `module_dir`, `comfyui_root`)
+  with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

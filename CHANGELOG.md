@@ -1,5 +1,24 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.6 — 2026-02-13
+- Phase 3 backend split continued (no API changes):
+  - extracted requirements pending-state helpers into
+    `utils/module_browser/requirements_pending_ops.py`:
+    `set_comfyui_requirements_pending`, `set_module_requirements_pending`;
+  - extracted path resolution helpers into
+    `utils/module_browser/path_ops.py`:
+    `custom_nodes_roots`, `manager_custom_db_path`,
+    `manager_github_stats_path`, `module_dir`, `comfyui_root`;
+  - switched API facade wrappers in `utils/module_node_browser_api.py`
+    to use extracted requirements-pending/path helper modules.
+- Tests:
+  - added `tests/test_module_browser_requirements_pending_ops.py`;
+  - added `tests/test_module_browser_path_ops.py`;
+  - regression check: `76 passed`
+    (`path_ops + requirements_pending_ops + value_ops + catalog_payload_ops + widget_mode_ops + module_browser_tracker + phase0_baseline`).
+- Plan/docs sync:
+  - marked Phase 3 Steps 25 and 26 completed in both adopted plans.
+
 ## 0.18.5 — 2026-02-13
 - Phase 3 backend split continued (no API changes):
   - extracted pure value/date/repository helpers into

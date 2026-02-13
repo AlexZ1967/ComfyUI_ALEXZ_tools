@@ -150,6 +150,17 @@ from .value_ops import (
     short_commit,
     to_iso,
 )
+from .requirements_pending_ops import (
+    set_comfyui_requirements_pending,
+    set_module_requirements_pending,
+)
+from .path_ops import (
+    comfyui_root,
+    custom_nodes_roots,
+    manager_custom_db_path,
+    manager_github_stats_path,
+    module_dir,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -238,6 +249,13 @@ __all__ = [
     "to_iso",
     "now_iso",
     "normalize_comfyui_mode",
+    "set_comfyui_requirements_pending",
+    "set_module_requirements_pending",
+    "custom_nodes_roots",
+    "manager_custom_db_path",
+    "manager_github_stats_path",
+    "module_dir",
+    "comfyui_root",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",
