@@ -80,6 +80,12 @@ from .comfyui_tracking_ops import (
     acknowledge_comfyui_novelty,
     track_comfyui_local_update,
 )
+from .node_snapshot_ops import (
+    build_node_snapshots,
+    file_digest,
+    node_source_file,
+    relative_to_custom_roots,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -124,6 +130,10 @@ __all__ = [
     "announce_tracked_module_updates",
     "track_comfyui_local_update",
     "acknowledge_comfyui_novelty",
+    "node_source_file",
+    "relative_to_custom_roots",
+    "file_digest",
+    "build_node_snapshots",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

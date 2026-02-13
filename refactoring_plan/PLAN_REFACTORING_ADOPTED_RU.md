@@ -284,6 +284,10 @@
   `utils/module_browser/comfyui_tracking_ops.py`
   (`track_comfyui_local_update`, `acknowledge_comfyui_novelty`)
   с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 12: helper-ы node snapshot/path вынесены в
+  `utils/module_browser/node_snapshot_ops.py`
+  (`node_source_file`, `relative_to_custom_roots`, `file_digest`,
+  `build_node_snapshots`) с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

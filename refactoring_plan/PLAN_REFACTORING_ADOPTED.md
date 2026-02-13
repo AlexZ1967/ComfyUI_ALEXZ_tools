@@ -284,6 +284,10 @@ Deliverables:
   `utils/module_browser/comfyui_tracking_ops.py`
   (`track_comfyui_local_update`, `acknowledge_comfyui_novelty`)
   with API facade wrappers preserved.
+- Step 12 completed: node snapshot/path helpers moved to
+  `utils/module_browser/node_snapshot_ops.py`
+  (`node_source_file`, `relative_to_custom_roots`, `file_digest`,
+  `build_node_snapshots`) with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.
