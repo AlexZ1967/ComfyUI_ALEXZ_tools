@@ -120,6 +120,14 @@ from .manager_data_ops import (
     manager_stats_last_update,
     resolve_manager_meta_for_module,
 )
+from .command_ops import (
+    extract_git_repo_from_args,
+    is_git_dubious_ownership_error,
+    run_command,
+    run_git,
+    tail_lines,
+    try_mark_git_safe_directory,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -186,6 +194,12 @@ __all__ = [
     "resolve_manager_meta_for_module",
     "manager_stats_last_update",
     "infer_update_from_manager_stats",
+    "extract_git_repo_from_args",
+    "is_git_dubious_ownership_error",
+    "try_mark_git_safe_directory",
+    "run_command",
+    "run_git",
+    "tail_lines",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

@@ -17,7 +17,6 @@ from __future__ import annotations
 import importlib
 import json
 import logging
-import os
 import re
 import subprocess
 import sys
@@ -156,6 +155,14 @@ from .module_browser.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
     pull_comfyui as mb_pull_comfyui,
     pull_custom_module as mb_pull_custom_module,
+)
+from .module_browser.command_ops import (
+    extract_git_repo_from_args as mb_extract_git_repo_from_args,
+    is_git_dubious_ownership_error as mb_is_git_dubious_ownership_error,
+    run_command as mb_run_command,
+    run_git as mb_run_git,
+    tail_lines as mb_tail_lines,
+    try_mark_git_safe_directory as mb_try_mark_git_safe_directory,
 )
 
 try:
@@ -838,127 +845,44 @@ def _infer_update_from_manager_stats(
 
 def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
     """Run git command in non-interactive mode and return trimmed stdout on success."""
-    result = _run_command(args, timeout=timeout, disable_git_prompt=True)
-    if not result.get("ok"):
-        return None
-    out = str(result.get("stdout") or "").strip()
-    return out or None
+    return mb_run_git(args, timeout=timeout, run_command_fn=_run_command)
 
 
 def _extract_git_repo_from_args(args: list[str]) -> str | None:
     """Extract normalized git working directory from `git -C <path>` argument list."""
-    if not args or str(args[0]).strip() != "git":
-        return None
-    try:
-        idx = args.index("-C")
-    except ValueError:
-        return None
-    if idx + 1 >= len(args):
-        return None
-    try:
-        return str(Path(str(args[idx + 1])).resolve())
-    except Exception:
-        return str(args[idx + 1])
+    return mb_extract_git_repo_from_args(args)
 
 
 def _is_git_dubious_ownership_error(text: str) -> bool:
     """Check whether git stderr/stdout indicates `safe.directory` ownership protection."""
-    lower = (text or "").strip().lower()
-    return "detected dubious ownership in repository" in lower and "safe.directory" in lower
+    return mb_is_git_dubious_ownership_error(text)
 
 
 def _try_mark_git_safe_directory(repo_dir: str, env: dict[str, str], timeout: float = 15.0) -> bool:
     """Attempt to add repository path to git safe.directory list."""
-    repo = str(repo_dir or "").strip()
-    if not repo:
-        return False
-    try:
-        proc = subprocess.run(
-            ["git", "config", "--global", "--add", "safe.directory", repo],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-            check=False,
-        )
-    except Exception as exc:
-        _LOGGER.warning("Failed to add safe.directory for %s: %s", repo, exc)
-        return False
-    if proc.returncode == 0:
-        _LOGGER.info("Added git safe.directory: %s", repo)
-        return True
-    _LOGGER.warning(
-        "Unable to add safe.directory for %s: %s",
-        repo,
-        (proc.stderr or proc.stdout or "unknown error").strip(),
+    return mb_try_mark_git_safe_directory(
+        repo_dir,
+        env,
+        timeout=timeout,
+        subprocess_run=subprocess.run,
+        logger=_LOGGER,
     )
-    return False
 
 
 def _run_command(args: list[str], timeout: float = 120.0, disable_git_prompt: bool = False) -> dict[str, Any]:
     """Run a subprocess command and return exit code plus output text."""
-    env = os.environ.copy()
-    if disable_git_prompt:
-        env["GIT_TERMINAL_PROMPT"] = "0"
-        env.setdefault("GIT_ASKPASS", "echo")
-    try:
-        proc = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-            check=False,
-        )
-    except Exception as exc:
-        return {"ok": False, "returncode": -1, "stdout": "", "stderr": str(exc)}
-    result = {
-        "ok": proc.returncode == 0,
-        "returncode": proc.returncode,
-        "stdout": (proc.stdout or "").strip(),
-        "stderr": (proc.stderr or "").strip(),
-    }
-    if result["ok"] or not args or str(args[0]).strip() != "git":
-        return result
-
-    repo_dir = _extract_git_repo_from_args(args)
-    if not repo_dir:
-        return result
-
-    error_text = f"{result.get('stderr', '')}\n{result.get('stdout', '')}"
-    if not _is_git_dubious_ownership_error(error_text):
-        return result
-
-    if not _try_mark_git_safe_directory(repo_dir, env):
-        return result
-
-    try:
-        proc_retry = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-            check=False,
-        )
-    except Exception as exc:
-        return {"ok": False, "returncode": -1, "stdout": "", "stderr": str(exc)}
-    return {
-        "ok": proc_retry.returncode == 0,
-        "returncode": proc_retry.returncode,
-        "stdout": (proc_retry.stdout or "").strip(),
-        "stderr": (proc_retry.stderr or "").strip(),
-    }
+    return mb_run_command(
+        args,
+        timeout=timeout,
+        disable_git_prompt=disable_git_prompt,
+        subprocess_run=subprocess.run,
+        logger=_LOGGER,
+    )
 
 
 def _tail_lines(text: str | None, max_lines: int = 80) -> str:
     """Return tail lines from command output for concise console diagnostics."""
-    lines = [line for line in str(text or "").splitlines() if line.strip()]
-    if not lines:
-        return ""
-    if len(lines) <= max_lines:
-        return "\n".join(lines)
-    return "\n".join(["...", *lines[-max_lines:]])
+    return mb_tail_lines(text, max_lines=max_lines)
 
 
 def _is_git_local_changes_block(text: str | None) -> bool:

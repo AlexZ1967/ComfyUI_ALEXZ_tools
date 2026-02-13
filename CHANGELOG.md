@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.3 — 2026-02-13
+- Phase 3 backend split continued (no API changes):
+  - extracted subprocess/git command helpers from `utils/module_node_browser_api.py`
+    into `utils/module_browser/command_ops.py`:
+    `run_command`, `run_git`, `extract_git_repo_from_args`,
+    `is_git_dubious_ownership_error`, `try_mark_git_safe_directory`, `tail_lines`;
+  - kept facade-compatible wrappers in `utils/module_node_browser_api.py` so existing
+    routes and monkeypatch points remain stable.
+- Package exports:
+  - added command helper exports in `utils/module_browser/__init__.py`.
+- Plan/docs sync:
+  - marked Phase 3 Step 21 completed in both adopted plans
+    (`PLAN_REFACTORING_ADOPTED.md`, `PLAN_REFACTORING_ADOPTED_RU.md`).
+- Tests:
+  - added `tests/test_module_browser_command_ops.py`;
+  - regression check target: `test_module_browser_command_ops + test_module_browser_tracker`.
+
 ## 0.18.2 — 2026-02-12
 - Slice 0 tooling extension:
   - added standalone manifest validator `utils/module_browser/manifest_check.py`;

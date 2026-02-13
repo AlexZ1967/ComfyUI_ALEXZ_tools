@@ -313,6 +313,11 @@
   `utils/module_browser/manager_data_ops.py`
   (`load_manager_index`, `load_manager_github_stats`, `resolve/infer` helper-ы)
   с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 21: helper-ы исполнения subprocess/git-команд вынесены в
+  `utils/module_browser/command_ops.py`
+  (`run_command`, `run_git`, `extract_git_repo_from_args`,
+  `is_git_dubious_ownership_error`, `try_mark_git_safe_directory`, `tail_lines`)
+  с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

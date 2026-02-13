@@ -313,6 +313,11 @@ Deliverables:
   `utils/module_browser/manager_data_ops.py`
   (`load_manager_index`, `load_manager_github_stats`, `resolve/infer` helpers)
   with API facade wrappers preserved.
+- Step 21 completed: subprocess/git command execution helpers moved to
+  `utils/module_browser/command_ops.py`
+  (`run_command`, `run_git`, `extract_git_repo_from_args`,
+  `is_git_dubious_ownership_error`, `try_mark_git_safe_directory`, `tail_lines`)
+  with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.
