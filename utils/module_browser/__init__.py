@@ -95,6 +95,12 @@ from .update_job_ops import (
 from .refresh_job_ops import (
     run_refresh_job,
 )
+from .module_identity import (
+    build_custom_module_aliases,
+    canonical_custom_module_name,
+    discover_custom_modules,
+    normalize_module_token,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -146,6 +152,10 @@ __all__ = [
     "refresh_module_runtime_state",
     "run_module_update_job",
     "run_refresh_job",
+    "discover_custom_modules",
+    "normalize_module_token",
+    "build_custom_module_aliases",
+    "canonical_custom_module_name",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

@@ -297,6 +297,9 @@
 - Выполнен шаг 15: логика исполнения refresh job вынесена в
   `utils/module_browser/refresh_job_ops.py`
   (`run_refresh_job`) при сохранении API worker-thread wrapper-а.
+- Выполнен шаг 16: helper-ы идентификации custom-модулей вынесены в
+  `utils/module_browser/module_identity.py`
+  (`discover/normalize/alias/canonical`) с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

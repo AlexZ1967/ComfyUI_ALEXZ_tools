@@ -127,6 +127,12 @@ from .module_browser.update_job_ops import (
 from .module_browser.refresh_job_ops import (
     run_refresh_job as mb_run_refresh_job,
 )
+from .module_browser.module_identity import (
+    build_custom_module_aliases as mb_build_custom_module_aliases,
+    canonical_custom_module_name as mb_canonical_custom_module_name,
+    discover_custom_modules as mb_discover_custom_modules,
+    normalize_module_token as mb_normalize_module_token,
+)
 from .module_browser.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
     pull_comfyui as mb_pull_comfyui,
@@ -522,33 +528,12 @@ def _custom_nodes_roots() -> list[Path]:
 
 def _discover_custom_modules() -> list[str]:
     """Discover installed custom module directories under custom_nodes roots."""
-    names: set[str] = set()
-    for root in _custom_nodes_roots():
-        if not root.exists():
-            continue
-        try:
-            entries = list(root.iterdir())
-        except Exception:
-            continue
-        for entry in entries:
-            if not entry.is_dir():
-                continue
-            name = entry.name
-            if not name or name.startswith(".") or name == "__pycache__":
-                continue
-            has_markers = (
-                (entry / "__init__.py").exists()
-                or (entry / "pyproject.toml").exists()
-                or any(entry.glob("*.py"))
-            )
-            if has_markers:
-                names.add(name)
-    return sorted(names, key=str.lower)
+    return mb_discover_custom_modules(custom_nodes_roots=_custom_nodes_roots)
 
 
 def _normalize_module_token(name: str) -> str:
     """Normalize module token for case-insensitive matching and aliases."""
-    return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+    return mb_normalize_module_token(name)
 
 
 def _custom_module_aliases() -> dict[str, str]:
@@ -557,35 +542,21 @@ def _custom_module_aliases() -> dict[str, str]:
     if _CUSTOM_MODULE_ALIAS_CACHE is not None:
         return _CUSTOM_MODULE_ALIAS_CACHE
 
-    aliases: dict[str, str] = {}
-    for module_name in _discover_custom_modules():
-        aliases[module_name] = module_name
-        aliases[module_name.lower()] = module_name
-        norm = _normalize_module_token(module_name)
-        if norm and norm not in aliases:
-            aliases[norm] = module_name
-
+    aliases = mb_build_custom_module_aliases(
+        discovered_modules=_discover_custom_modules(),
+        normalize_token=_normalize_module_token,
+    )
     _CUSTOM_MODULE_ALIAS_CACHE = aliases
     return aliases
 
 
 def _canonical_custom_module_name(module_name: str) -> str:
     """Resolve user-provided module token to canonical custom module name."""
-    name = (module_name or "").strip()
-    if not name:
-        return "unknown"
-
-    aliases = _custom_module_aliases()
-    direct = aliases.get(name) or aliases.get(name.lower())
-    if direct:
-        return direct
-
-    norm = _normalize_module_token(name)
-    if norm:
-        matched = aliases.get(norm)
-        if matched:
-            return matched
-    return name
+    return mb_canonical_custom_module_name(
+        module_name,
+        aliases=_custom_module_aliases(),
+        normalize_token=_normalize_module_token,
+    )
 
 
 def _classify_by_source_path(node_cls: Any) -> tuple[str, str] | None:

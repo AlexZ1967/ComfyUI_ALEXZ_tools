@@ -297,6 +297,9 @@ Deliverables:
 - Step 15 completed: refresh job execution logic moved to
   `utils/module_browser/refresh_job_ops.py`
   (`run_refresh_job`) with API worker-thread wrapper preserved.
+- Step 16 completed: custom module identity helpers moved to
+  `utils/module_browser/module_identity.py`
+  (`discover/normalize/alias/canonical`) with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.
