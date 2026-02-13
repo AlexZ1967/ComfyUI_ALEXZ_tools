@@ -124,6 +124,9 @@ from .module_browser.runtime_refresh_ops import (
 from .module_browser.update_job_ops import (
     run_module_update_job as mb_run_module_update_job,
 )
+from .module_browser.refresh_job_ops import (
+    run_refresh_job as mb_run_refresh_job,
+)
 from .module_browser.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
     pull_comfyui as mb_pull_comfyui,
@@ -2038,27 +2041,15 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
         """Background job worker that runs long update/refresh operations."""
         global _REFRESH_THREAD
         try:
-            _refresh_console_log(
-                "job started (sync_upstreams={sync}, log_mode={mode})".format(
-                    sync="on" if sync_upstreams else "off",
-                    mode=_get_update_console_log_mode(),
-                )
-            )
-            result = _refresh_module_runtime_state(sync_upstreams=sync_upstreams, progress_cb=_refresh_progress)
-            _set_refresh_status(
-                running=False,
-                phase="done",
-                message="done",
-                module="",
-                refreshed_at=result.get("refreshed_at", ""),
-                modules_need_update=max(0, int(result.get("modules_need_update", 0))),
-                modules_unknown_update=max(0, int(result.get("modules_unknown_update", 0))),
-            )
-            _refresh_console_log(
-                "job finished: modules_need_update={need}, modules_unknown_update={unknown}".format(
-                    need=max(0, int(result.get("modules_need_update", 0))),
-                    unknown=max(0, int(result.get("modules_unknown_update", 0))),
-                )
+            mb_run_refresh_job(
+                sync_upstreams=sync_upstreams,
+                get_update_console_log_mode=_get_update_console_log_mode,
+                refresh_console_log=lambda text, level="summary": _refresh_console_log(text, level=level),
+                refresh_module_runtime_state=lambda do_sync: _refresh_module_runtime_state(
+                    sync_upstreams=do_sync,
+                    progress_cb=_refresh_progress,
+                ),
+                set_refresh_status=_set_refresh_status,
             )
         except Exception as exc:
             _refresh_console_log(f"job error: {exc}")

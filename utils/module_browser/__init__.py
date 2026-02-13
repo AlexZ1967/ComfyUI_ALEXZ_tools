@@ -92,6 +92,9 @@ from .runtime_refresh_ops import (
 from .update_job_ops import (
     run_module_update_job,
 )
+from .refresh_job_ops import (
+    run_refresh_job,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -142,6 +145,7 @@ __all__ = [
     "build_node_snapshots",
     "refresh_module_runtime_state",
     "run_module_update_job",
+    "run_refresh_job",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

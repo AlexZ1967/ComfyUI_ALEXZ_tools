@@ -294,6 +294,9 @@ Deliverables:
 - Step 14 completed: module update job execution logic moved to
   `utils/module_browser/update_job_ops.py`
   (`run_module_update_job`) with API worker-thread wrapper preserved.
+- Step 15 completed: refresh job execution logic moved to
+  `utils/module_browser/refresh_job_ops.py`
+  (`run_refresh_job`) with API worker-thread wrapper preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.
