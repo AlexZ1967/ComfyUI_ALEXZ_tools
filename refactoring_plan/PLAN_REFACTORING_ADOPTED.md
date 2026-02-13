@@ -318,6 +318,14 @@ Deliverables:
   (`run_command`, `run_git`, `extract_git_repo_from_args`,
   `is_git_dubious_ownership_error`, `try_mark_git_safe_directory`, `tail_lines`)
   with API facade wrappers preserved.
+- Step 22 completed: catalog-route payload builders moved to
+  `utils/module_browser/catalog_payload_ops.py`
+  (`build_group_payload`, `build_module_list_payload`,
+  `build_module_nodes_payload`) with API facade wrappers preserved.
+- Step 23 completed: widget-mode/log-mode helpers moved to
+  `utils/module_browser/widget_mode_ops.py`
+  (`custom_update_checked_flag`, `info_only_rejection_payload`,
+  `set_custom_update_checked`, `normalize_log_mode`) with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

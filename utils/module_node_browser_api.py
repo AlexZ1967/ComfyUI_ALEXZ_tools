@@ -164,6 +164,17 @@ from .module_browser.command_ops import (
     tail_lines as mb_tail_lines,
     try_mark_git_safe_directory as mb_try_mark_git_safe_directory,
 )
+from .module_browser.catalog_payload_ops import (
+    build_group_payload as mb_build_group_payload,
+    build_module_list_payload as mb_build_module_list_payload,
+    build_module_nodes_payload as mb_build_module_nodes_payload,
+)
+from .module_browser.widget_mode_ops import (
+    custom_update_checked_flag as mb_custom_update_checked_flag,
+    info_only_rejection_payload as mb_info_only_rejection_payload,
+    normalize_log_mode as mb_normalize_log_mode,
+    set_custom_update_checked as mb_set_custom_update_checked,
+)
 
 try:
     import folder_paths
@@ -249,43 +260,28 @@ _INFO_ONLY_WIDGET_MODE = True
 def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
     """Return whether custom-module remote update check was explicitly run in current session."""
     cache = state if isinstance(state, dict) else _load_module_state()
-    meta = cache.get("__meta__") if isinstance(cache, dict) else None
-    if not isinstance(meta, dict):
-        return False
-    return bool(meta.get("custom_update_checked"))
+    return mb_custom_update_checked_flag(cache)
 
 
 def _info_only_rejection_payload(feature: str) -> dict[str, Any]:
     """Build a consistent rejection payload for disabled mutate operations."""
-    return {
-        "status": "disabled",
-        "feature": feature,
-        "message": "This widget runs in info-only mode. Use ComfyUI-Manager for install/update actions.",
-    }
+    return mb_info_only_rejection_payload(feature)
 
 
 def _set_custom_update_checked(checked: bool) -> None:
     """Persist custom-module update-check visibility gate for initial widget state."""
-    global _MODULE_INFO_CACHE
-    state = _load_module_state()
-    if not isinstance(state, dict):
-        return
-    meta_raw = state.get("__meta__")
-    meta = dict(meta_raw) if isinstance(meta_raw, dict) else {}
-    value = bool(checked)
-    if bool(meta.get("custom_update_checked")) == value:
-        return
-    meta["custom_update_checked"] = value
-    meta["custom_update_checked_at"] = _now_iso()
-    state["__meta__"] = meta
-    _save_module_state(state)
-    _MODULE_INFO_CACHE.clear()
+    mb_set_custom_update_checked(
+        checked=bool(checked),
+        load_state_fn=_load_module_state,
+        save_state_fn=_save_module_state,
+        now_iso_fn=_now_iso,
+        on_changed=_MODULE_INFO_CACHE.clear,
+    )
 
 
 def _normalize_log_mode(value: str | None) -> str:
     """Normalize console log mode for update jobs."""
-    text = str(value or "").strip().lower()
-    return "verbose" if text in {"verbose", "debug", "full", "detailed"} else "summary"
+    return mb_normalize_log_mode(value)
 
 
 def _set_update_console_log_mode(mode: str | None) -> str:
@@ -1467,6 +1463,32 @@ def _filter_modules(query: str, module_names: list[str]) -> list[str]:
     return catalog_filter_modules(query, module_names)
 
 
+def _build_group_payload(
+    grouped_nodes: dict[str, list[dict[str, Any]]],
+    modules_by_group: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Build ordered group payload for node-catalog API route."""
+    return mb_build_group_payload(
+        group_order=_GROUP_ORDER,
+        grouped_nodes=grouped_nodes,
+        modules_by_group=modules_by_group,
+    )
+
+
+def _build_module_list_payload(catalog: dict[str, list[dict[str, Any]]], query: str) -> dict[str, Any]:
+    """Build module-list payload for module-list API route."""
+    return mb_build_module_list_payload(catalog=catalog, query=query)
+
+
+def _build_module_nodes_payload(catalog: dict[str, list[dict[str, Any]]], query: str) -> dict[str, Any]:
+    """Build module-nodes payload for module-nodes API route."""
+    return mb_build_module_nodes_payload(
+        catalog=catalog,
+        query=query,
+        filter_modules_fn=_filter_modules,
+    )
+
+
 def _set_refresh_status(**kwargs: Any) -> None:
     """Set shared refresh job status fields in a thread-safe way."""
     set_refresh_status(
@@ -1929,20 +1951,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             custom_modules_need_update = _count_custom_modules_need_update() if show_custom_update_status else 0
             custom_modules_unknown_update = _count_custom_modules_unknown_update() if show_custom_update_status else 0
             runtime_warmup = _runtime_warmup_status()
-            groups = []
-            for group_id, group_title in _GROUP_ORDER:
-                nodes = grouped.get(group_id, [])
-                modules = modules_by_group.get(group_id, [])
-                groups.append(
-                    {
-                        "id": group_id,
-                        "title": group_title,
-                        "count": len(nodes),
-                        "nodes": nodes,
-                        "module_count": len(modules),
-                        "modules": modules,
-                    }
-                )
+            groups = _build_group_payload(grouped, modules_by_group)
             return web.json_response(
                 {
                     "groups": groups,
@@ -2064,12 +2073,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         query = (request.query.get("q", "") or "").strip().lower()
         try:
             catalog = _build_catalog()
-            modules = []
-            for module_name, nodes in catalog.items():
-                if query and query not in module_name.lower():
-                    continue
-                modules.append({"module": module_name, "count": len(nodes)})
-            return web.json_response({"query": query, "modules": modules})
+            return web.json_response(_build_module_list_payload(catalog, query))
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module list API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
@@ -2080,28 +2084,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         query = (request.query.get("module", "") or request.query.get("q", "")).strip()
         try:
             catalog = _build_catalog()
-            modules = list(catalog.keys())
-            selected_modules = _filter_modules(query, modules)
-
-            results = []
-            for module_name in selected_modules:
-                nodes = catalog.get(module_name, [])
-                results.append(
-                    {
-                        "module": module_name,
-                        "count": len(nodes),
-                        "nodes": nodes,
-                    }
-                )
-
-            return web.json_response(
-                {
-                    "query": query,
-                    "module_count": len(results),
-                    "results": results,
-                    "hint": "Введите имя python-модуля (например: ComfyUI_ALEXZ_tools).",
-                }
-            )
+            return web.json_response(_build_module_nodes_payload(catalog, query))
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module browser API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)

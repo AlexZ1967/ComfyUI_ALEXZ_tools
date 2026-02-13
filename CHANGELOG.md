@@ -1,5 +1,23 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.4 — 2026-02-13
+- Phase 3 backend split continued (no API changes):
+  - extracted catalog-route payload builders to `utils/module_browser/catalog_payload_ops.py`:
+    `build_group_payload`, `build_module_list_payload`, `build_module_nodes_payload`;
+  - extracted widget-mode/log-mode helpers to `utils/module_browser/widget_mode_ops.py`:
+    `custom_update_checked_flag`, `info_only_rejection_payload`,
+    `set_custom_update_checked`, `normalize_log_mode`;
+  - kept facade-compatible wrappers in `utils/module_node_browser_api.py`.
+- Package exports:
+  - added new helper exports in `utils/module_browser/__init__.py`.
+- Plan/docs sync:
+  - marked Phase 3 Steps 22 and 23 completed in both adopted plans.
+- Tests:
+  - added `tests/test_module_browser_catalog_payload_ops.py`;
+  - added `tests/test_module_browser_widget_mode_ops.py`;
+  - regression check: `63 passed`
+    (`catalog_payload_ops + widget_mode_ops + module_browser_tracker + phase0_baseline`).
+
 ## 0.18.3 — 2026-02-13
 - Phase 3 backend split continued (no API changes):
   - extracted subprocess/git command helpers from `utils/module_node_browser_api.py`

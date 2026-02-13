@@ -128,6 +128,17 @@ from .command_ops import (
     tail_lines,
     try_mark_git_safe_directory,
 )
+from .catalog_payload_ops import (
+    build_group_payload,
+    build_module_list_payload,
+    build_module_nodes_payload,
+)
+from .widget_mode_ops import (
+    custom_update_checked_flag,
+    info_only_rejection_payload,
+    normalize_log_mode,
+    set_custom_update_checked,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -200,6 +211,13 @@ __all__ = [
     "run_command",
     "run_git",
     "tail_lines",
+    "build_group_payload",
+    "build_module_list_payload",
+    "build_module_nodes_payload",
+    "custom_update_checked_flag",
+    "info_only_rejection_payload",
+    "set_custom_update_checked",
+    "normalize_log_mode",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",
