@@ -69,6 +69,13 @@ from .state_store import (
     load_state_file,
     save_state_file,
 )
+from .tracker_ops import (
+    acknowledge_all_novelty,
+    acknowledge_module_novelty,
+    announce_tracked_module_updates,
+    apply_node_change_info,
+    remember_module_state,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -106,6 +113,11 @@ __all__ = [
     "pull_custom_module",
     "load_state_file",
     "save_state_file",
+    "remember_module_state",
+    "apply_node_change_info",
+    "acknowledge_module_novelty",
+    "acknowledge_all_novelty",
+    "announce_tracked_module_updates",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

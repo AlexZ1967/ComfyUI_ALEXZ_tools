@@ -277,6 +277,9 @@
 - Выполнен шаг 9: операции чтения/записи state-cache вынесены в
   `utils/module_browser/state_store.py` (`load_state_file`,
   `save_state_file`) с сохранением API-cache facade.
+- Выполнен шаг 10: tracker/novelty операции вынесены в
+  `utils/module_browser/tracker_ops.py` (`remember/apply/acknowledge`,
+  `announce_tracked_module_updates`) с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

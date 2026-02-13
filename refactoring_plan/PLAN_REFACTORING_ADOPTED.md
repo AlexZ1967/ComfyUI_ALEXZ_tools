@@ -277,6 +277,9 @@ Deliverables:
 - Step 9 completed: module-state file IO helpers moved to
   `utils/module_browser/state_store.py` (`load_state_file`,
   `save_state_file`) with API cache facade preserved.
+- Step 10 completed: tracker/novelty operations moved to
+  `utils/module_browser/tracker_ops.py` (`remember/apply/acknowledge`,
+  `announce_tracked_module_updates`) with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.
