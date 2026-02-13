@@ -86,6 +86,9 @@ from .node_snapshot_ops import (
     node_source_file,
     relative_to_custom_roots,
 )
+from .runtime_refresh_ops import (
+    refresh_module_runtime_state,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -134,6 +137,7 @@ __all__ = [
     "relative_to_custom_roots",
     "file_digest",
     "build_node_snapshots",
+    "refresh_module_runtime_state",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

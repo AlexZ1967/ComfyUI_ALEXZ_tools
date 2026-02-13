@@ -288,6 +288,9 @@
   `utils/module_browser/node_snapshot_ops.py`
   (`node_source_file`, `relative_to_custom_roots`, `file_digest`,
   `build_node_snapshots`) с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 13: orchestration runtime-refresh фаз вынесен в
+  `utils/module_browser/runtime_refresh_ops.py`
+  (`refresh_module_runtime_state`) с сохранением facade-wrapper-а в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

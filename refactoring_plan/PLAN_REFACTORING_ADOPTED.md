@@ -288,6 +288,9 @@ Deliverables:
   `utils/module_browser/node_snapshot_ops.py`
   (`node_source_file`, `relative_to_custom_roots`, `file_digest`,
   `build_node_snapshots`) with API facade wrappers preserved.
+- Step 13 completed: runtime refresh phase orchestration moved to
+  `utils/module_browser/runtime_refresh_ops.py`
+  (`refresh_module_runtime_state`) with API facade wrapper preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

@@ -118,6 +118,9 @@ from .module_browser.node_snapshot_ops import (
     node_source_file as mb_node_source_file,
     relative_to_custom_roots as mb_relative_to_custom_roots,
 )
+from .module_browser.runtime_refresh_ops import (
+    refresh_module_runtime_state as mb_refresh_module_runtime_state,
+)
 from .module_browser.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
     pull_comfyui as mb_pull_comfyui,
@@ -1911,131 +1914,33 @@ def _refresh_progress(
 def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any | None = None) -> dict[str, Any]:
     """Recompute module snapshots and update persisted runtime tracking state."""
     global _LAZY_REFRESH_DONE
-    global _CUSTOM_MODULE_ALIAS_CACHE
-    global _COMFYUI_STATUS_CACHE
-    _MODULE_INFO_CACHE.clear()
-    _CUSTOM_MODULE_ALIAS_CACHE = None
-    _clear_comfyui_status_cache()
-    refresh_started = time.perf_counter()
-    _refresh_console_log(
-        "runtime refresh started (sync_upstreams={sync}, log_mode={mode})".format(
-            sync="on" if sync_upstreams else "off",
-            mode=_get_update_console_log_mode(),
-        )
-    )
+
+    def _reset_custom_alias_cache() -> None:
+        """Reset custom module alias cache before recomputing runtime state."""
+        global _CUSTOM_MODULE_ALIAS_CACHE
+        _CUSTOM_MODULE_ALIAS_CACHE = None
+
     if progress_cb is None:
         progress_cb = _refresh_progress
-    if sync_upstreams:
-        module_names = _discover_custom_modules()
-        total = len(module_names)
-        _refresh_console_log(f"phase 1/3: upstream sync enabled for {total} custom module(s)")
-        progress_cb(phase="sync", current=0, total=total, remaining=total, message="sync_upstreams")
-        for idx, module_name in enumerate(module_names, start=1):
-            sync_started = time.perf_counter()
-            synced = _sync_module_upstream(module_name)
-            elapsed = time.perf_counter() - sync_started
-            status = "synced" if synced else "skip"
-            progress_cb(
-                phase="sync",
-                current=idx,
-                total=total,
-                remaining=total - idx,
-                module=module_name,
-                message=f"{status} ({elapsed:.2f}s)",
-            )
-    else:
-        _refresh_console_log("phase 1/3: upstream sync skipped (fast mode)")
-        progress_cb(phase="sync", current=0, total=0, remaining=0, message="fast_mode")
-
-    scan_started = time.perf_counter()
-    _refresh_console_log("phase 2/3: recomputing module snapshots and local git deltas...")
-    progress_cb(phase="snapshots", current=0, total=0, remaining=0, message="recompute_snapshots")
-    announce_summary = _announce_tracked_module_updates()
-    modules_need_update = 0
-    modules_unknown_update = 0
-    if isinstance(announce_summary, dict):
-        modules_need_update = max(0, int(announce_summary.get("modules_need_update", 0)))
-        modules_unknown_update = max(0, int(announce_summary.get("modules_unknown_update", 0)))
-    modules_checked = max(0, int((announce_summary or {}).get("modules_checked", 0)))
-    commit_changed = list((announce_summary or {}).get("commit_change_modules") or [])
-    local_changed = list((announce_summary or {}).get("local_change_modules") or [])
-    node_changed = list((announce_summary or {}).get("node_changed_modules") or [])
-    new_modules_map = (announce_summary or {}).get("new_modules_between_runs") or {}
-    new_modules_count = 0
-    if isinstance(new_modules_map, dict):
-        for value in new_modules_map.values():
-            if isinstance(value, list):
-                new_modules_count += len(value)
-    scan_elapsed = time.perf_counter() - scan_started
-    _refresh_console_log(
-        "phase 2/3 done in {elapsed:.2f}s: checked={checked}, need_update={need}, unknown_update={unknown}, "
-        "commit_changed={commit}, local_changed={local}, node_changed={node}, new_modules={new}".format(
-            elapsed=scan_elapsed,
-            checked=modules_checked,
-            need=modules_need_update,
-            unknown=modules_unknown_update,
-            commit=len(commit_changed),
-            local=len(local_changed),
-            node=len(node_changed),
-            new=new_modules_count,
-        )
-    )
-    if commit_changed:
-        _refresh_console_log(f"commit changed modules: {', '.join(commit_changed)}", level="verbose")
-    if local_changed:
-        _refresh_console_log(f"locally changed modules: {', '.join(local_changed)}", level="verbose")
-    if node_changed:
-        _refresh_console_log(f"node changed modules: {', '.join(node_changed)}", level="verbose")
-    update_available_modules = list((announce_summary or {}).get("update_available_modules") or [])
-    if update_available_modules:
-        _refresh_console_log(f"update available modules: {', '.join(update_available_modules)}", level="verbose")
-    unknown_update_modules = list((announce_summary or {}).get("unknown_update_modules") or [])
-    if unknown_update_modules:
-        _refresh_console_log(f"unknown update status modules: {', '.join(unknown_update_modules)}")
-
-    _refresh_console_log("phase 3/3: checking ComfyUI status...")
-    comfy_started = time.perf_counter()
-    comfyui = _comfyui_git_status(force_refresh=True)
-    comfy_elapsed = time.perf_counter() - comfy_started
-    _refresh_console_log(
-        "phase 3/3 done in {elapsed:.2f}s: ComfyUI status={status}, behind={behind}, ahead={ahead}, "
-        "local={local}, remote={remote}".format(
-            elapsed=comfy_elapsed,
-            status=str(comfyui.get("update_status") or "unknown"),
-            behind=str(comfyui.get("behind") if comfyui.get("behind") is not None else "-"),
-            ahead=str(comfyui.get("ahead") if comfyui.get("ahead") is not None else "-"),
-            local=_short_commit(str(comfyui.get("installed_commit") or "")),
-            remote=_short_commit(str(comfyui.get("remote_commit") or "")),
-        )
-    )
-    progress_cb(
-        phase="done",
-        current=0,
-        total=0,
-        remaining=0,
-        modules_need_update=modules_need_update,
-        modules_unknown_update=modules_unknown_update,
-        message="done",
+    result = mb_refresh_module_runtime_state(
+        sync_upstreams=sync_upstreams,
+        progress_cb=progress_cb,
+        module_info_cache_clear=_MODULE_INFO_CACHE.clear,
+        reset_custom_alias_cache=_reset_custom_alias_cache,
+        clear_comfyui_status_cache=_clear_comfyui_status_cache,
+        refresh_console_log=lambda text, level="summary": _refresh_console_log(text, level=level),
+        get_update_console_log_mode=_get_update_console_log_mode,
+        discover_custom_modules=_discover_custom_modules,
+        sync_module_upstream=_sync_module_upstream,
+        announce_tracked_module_updates=_announce_tracked_module_updates,
+        comfyui_git_status=lambda: _comfyui_git_status(force_refresh=True),
+        short_commit=_short_commit,
+        set_custom_update_checked=_set_custom_update_checked,
+        now_iso=_now_iso,
+        perf_counter=time.perf_counter,
     )
     _LAZY_REFRESH_DONE = True
-    total_elapsed = time.perf_counter() - refresh_started
-    _refresh_console_log(
-        "runtime refresh finished in {elapsed:.2f}s (modules_need_update={need}, modules_unknown_update={unknown})".format(
-            elapsed=total_elapsed,
-            need=modules_need_update,
-            unknown=modules_unknown_update,
-        )
-    )
-    # Mark that update status was explicitly refreshed and can be shown in UI cards.
-    _set_custom_update_checked(True)
-    return {
-        "status": "ok",
-        "refreshed_at": _now_iso(),
-        "comfyui": comfyui,
-        "sync_upstreams": sync_upstreams,
-        "modules_need_update": modules_need_update,
-        "modules_unknown_update": modules_unknown_update,
-    }
+    return result
 
 
 def _ensure_runtime_state_ready() -> None:
