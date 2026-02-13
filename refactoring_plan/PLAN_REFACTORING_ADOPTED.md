@@ -291,6 +291,9 @@ Deliverables:
 - Step 13 completed: runtime refresh phase orchestration moved to
   `utils/module_browser/runtime_refresh_ops.py`
   (`refresh_module_runtime_state`) with API facade wrapper preserved.
+- Step 14 completed: module update job execution logic moved to
+  `utils/module_browser/update_job_ops.py`
+  (`run_module_update_job`) with API worker-thread wrapper preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

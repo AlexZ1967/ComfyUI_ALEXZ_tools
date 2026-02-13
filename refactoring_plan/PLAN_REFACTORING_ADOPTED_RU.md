@@ -291,6 +291,9 @@
 - Выполнен шаг 13: orchestration runtime-refresh фаз вынесен в
   `utils/module_browser/runtime_refresh_ops.py`
   (`refresh_module_runtime_state`) с сохранением facade-wrapper-а в API.
+- Выполнен шаг 14: логика исполнения module-update job вынесена в
+  `utils/module_browser/update_job_ops.py`
+  (`run_module_update_job`) при сохранении API worker-thread wrapper-а.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

@@ -121,6 +121,9 @@ from .module_browser.node_snapshot_ops import (
 from .module_browser.runtime_refresh_ops import (
     refresh_module_runtime_state as mb_refresh_module_runtime_state,
 )
+from .module_browser.update_job_ops import (
+    run_module_update_job as mb_run_module_update_job,
+)
 from .module_browser.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
     pull_comfyui as mb_pull_comfyui,
@@ -2158,144 +2161,21 @@ def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summ
         """Background job worker that runs long update/refresh operations."""
         global _UPDATE_THREAD
         try:
-            _update_console_log(
-                f"job started (scope={scope_norm}, module={module_name or '-'}, log_mode={normalized_log_mode})"
-            )
-            if scope_norm == "comfyui":
-                _update_console_log("ComfyUI update: pull start")
-                _set_update_status(phase="update", current=0, total=1, remaining=1, module="ComfyUI", message="pull")
-                item = _pull_comfyui()
-                status = str(item.get("status") or "")
-                _update_console_log(f"ComfyUI update: pull done (status={status})")
-                updated_count = 1 if status == "updated" else 0
-                uptodate_count = 1 if status == "up_to_date" else 0
-                failed_count = 1 if status not in {"updated", "up_to_date"} else 0
-                requirements_changed = bool(item.get("requirements_changed"))
-                _set_update_status(
-                    phase="update",
-                    current=1,
-                    total=1,
-                    remaining=0,
-                    module="ComfyUI",
-                    message=status or "done",
-                    updated=updated_count,
-                    up_to_date=uptodate_count,
-                    failed=failed_count,
-                    requirements_changed=requirements_changed,
-                    requirements_modules=[],
-                    results=[item],
-                )
-                _refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kwargs: None)
-                _set_update_status(
-                    running=False,
-                    phase="done",
-                    message="done",
-                    module="",
-                    finished_at=_now_iso(),
-                )
-                _update_console_log("job finished (scope=comfyui)")
-                return
-
-            targets = _resolve_update_targets(scope_norm, module_name)
-            total = len(targets)
-            _update_console_log(
-                "resolved targets: {total} ({mods})".format(
-                    total=total,
-                    mods=", ".join(targets) if targets else "-",
-                )
-            )
-            _set_update_status(phase="update", total=total, remaining=total, message="running")
-            if total == 0:
-                _refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kwargs: None)
-                _set_update_status(
-                    running=False,
-                    phase="done",
-                    message="nothing_to_update",
-                    results=[],
-                    requirements_changed=False,
-                    requirements_modules=[],
-                    finished_at=_now_iso(),
-                )
-                _update_console_log("job finished: nothing to update")
-                return
-
-            updated_count = 0
-            uptodate_count = 0
-            failed_count = 0
-            requirements_modules: list[str] = []
-            results: list[dict[str, Any]] = []
-
-            for idx, target in enumerate(targets, start=1):
-                _set_update_status(
-                    phase="update",
-                    current=idx - 1,
-                    total=total,
-                    remaining=total - idx + 1,
-                    module=target,
-                    message="pull",
-                )
-                _update_console_log(f"[{idx}/{total}] {target}: pull start", level="verbose")
-                pull_started = time.perf_counter()
-                item = _pull_custom_module(target)
-                pull_elapsed = time.perf_counter() - pull_started
-                results.append(item)
-                status = str(item.get("status") or "")
-                _update_console_log(
-                    "[{idx}/{total}] {target}: pull done (status={status}, elapsed={elapsed:.2f}s)".format(
-                        idx=idx,
-                        total=total,
-                        target=target,
-                        status=status or "unknown",
-                        elapsed=pull_elapsed,
-                    ),
-                    level="verbose",
-                )
-                if status == "updated":
-                    updated_count += 1
-                elif status == "up_to_date":
-                    uptodate_count += 1
-                else:
-                    failed_count += 1
-                    _update_console_log(
-                        "[{idx}/{total}] {target}: failed ({msg})".format(
-                            idx=idx,
-                            total=total,
-                            target=target,
-                            msg=str(item.get("message") or "unknown error"),
-                        )
-                    )
-                if bool(item.get("requirements_changed")):
-                    requirements_modules.append(target)
-                _set_update_status(
-                    phase="update",
-                    current=idx,
-                    total=total,
-                    remaining=total - idx,
-                    module=target,
-                    message=status or "done",
-                    updated=updated_count,
-                    up_to_date=uptodate_count,
-                    failed=failed_count,
-                    requirements_changed=bool(requirements_modules),
-                    requirements_modules=requirements_modules,
-                    results=results,
-                )
-
-            _update_console_log("refreshing runtime state after update run...")
-            _refresh_module_runtime_state(sync_upstreams=False, progress_cb=lambda **kwargs: None)
-            _set_update_status(
-                running=False,
-                phase="done",
-                message="done",
-                module="",
-                finished_at=_now_iso(),
-            )
-            _update_console_log(
-                "job finished: updated={updated}, up_to_date={uptodate}, failed={failed}".format(
-                    updated=updated_count,
-                    uptodate=uptodate_count,
-                    failed=failed_count,
-                )
+            mb_run_module_update_job(
+                scope_norm=scope_norm,
+                module_name=module_name,
+                normalized_log_mode=normalized_log_mode,
+                update_console_log=lambda text, level="summary": _update_console_log(text, level=level),
+                set_update_status=_set_update_status,
+                pull_comfyui=_pull_comfyui,
+                pull_custom_module=_pull_custom_module,
+                resolve_update_targets=_resolve_update_targets,
+                refresh_module_runtime_state=lambda: _refresh_module_runtime_state(
+                    sync_upstreams=False,
+                    progress_cb=lambda **kwargs: None,
+                ),
+                now_iso=_now_iso,
+                perf_counter=time.perf_counter,
             )
         except Exception as exc:
             _update_console_log(f"job error: {exc}")

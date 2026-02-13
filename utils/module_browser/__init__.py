@@ -89,6 +89,9 @@ from .node_snapshot_ops import (
 from .runtime_refresh_ops import (
     refresh_module_runtime_state,
 )
+from .update_job_ops import (
+    run_module_update_job,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -138,6 +141,7 @@ __all__ = [
     "file_digest",
     "build_node_snapshots",
     "refresh_module_runtime_state",
+    "run_module_update_job",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",
