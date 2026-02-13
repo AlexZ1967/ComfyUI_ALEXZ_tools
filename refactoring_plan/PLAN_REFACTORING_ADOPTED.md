@@ -280,6 +280,10 @@ Deliverables:
 - Step 10 completed: tracker/novelty operations moved to
   `utils/module_browser/tracker_ops.py` (`remember/apply/acknowledge`,
   `announce_tracked_module_updates`) with API facade wrappers preserved.
+- Step 11 completed: ComfyUI startup novelty tracking helpers moved to
+  `utils/module_browser/comfyui_tracking_ops.py`
+  (`track_comfyui_local_update`, `acknowledge_comfyui_novelty`)
+  with API facade wrappers preserved.
 
 Exit criteria:
 - Existing frontend works without API changes.

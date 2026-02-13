@@ -76,6 +76,10 @@ from .tracker_ops import (
     apply_node_change_info,
     remember_module_state,
 )
+from .comfyui_tracking_ops import (
+    acknowledge_comfyui_novelty,
+    track_comfyui_local_update,
+)
 
 __all__ = [
     "ComponentEntry",
@@ -118,6 +122,8 @@ __all__ = [
     "acknowledge_module_novelty",
     "acknowledge_all_novelty",
     "announce_tracked_module_updates",
+    "track_comfyui_local_update",
+    "acknowledge_comfyui_novelty",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",

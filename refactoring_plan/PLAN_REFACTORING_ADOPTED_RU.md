@@ -280,6 +280,10 @@
 - Выполнен шаг 10: tracker/novelty операции вынесены в
   `utils/module_browser/tracker_ops.py` (`remember/apply/acknowledge`,
   `announce_tracked_module_updates`) с сохранением facade-wrapper-ов в API.
+- Выполнен шаг 11: helper-ы startup-tracking для ComfyUI вынесены в
+  `utils/module_browser/comfyui_tracking_ops.py`
+  (`track_comfyui_local_update`, `acknowledge_comfyui_novelty`)
+  с сохранением facade-wrapper-ов в API.
 
 Критерии выхода:
 - Текущий frontend работает без API-изменений.

@@ -111,6 +111,10 @@ from .module_browser.tracker_ops import (
     apply_node_change_info as mb_apply_node_change_info,
     remember_module_state as mb_remember_module_state,
 )
+from .module_browser.comfyui_tracking_ops import (
+    acknowledge_comfyui_novelty as mb_acknowledge_comfyui_novelty,
+    track_comfyui_local_update as mb_track_comfyui_local_update,
+)
 from .module_browser.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
     pull_comfyui as mb_pull_comfyui,
@@ -1708,106 +1712,24 @@ def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> 
 
 def _track_comfyui_local_update() -> None:
     """Track local ComfyUI commit changes between restarts without upstream sync."""
-    global _COMFYUI_STATUS_CACHE
-    state = _load_module_state()
-    if not isinstance(state, dict):
-        return
-    root = _comfyui_root()
-    if root is None:
-        return
-    is_git = _run_git(["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"])
-    if is_git != "true":
-        return
-
-    current_commit = _run_git(["git", "-C", str(root), "rev-parse", "HEAD"]) or ""
-    current_updated_at = _run_git(["git", "-C", str(root), "log", "-1", "--format=%cI"]) or ""
-    if not current_commit:
-        return
-
-    entry_raw = state.get("__comfyui__")
-    entry = dict(entry_raw) if isinstance(entry_raw, dict) else {}
-    status_raw = entry.get("status")
-    status = dict(status_raw) if isinstance(status_raw, dict) else {}
-    status_by_mode_raw = entry.get("status_by_mode")
-    status_by_mode = dict(status_by_mode_raw) if isinstance(status_by_mode_raw, dict) else {}
-    prev_commit = (
-        (entry.get("installed_commit") or status.get("installed_commit") or "").strip()
+    mb_track_comfyui_local_update(
+        load_module_state=_load_module_state,
+        save_module_state=_save_module_state,
+        comfyui_root=_comfyui_root,
+        run_git=_run_git,
+        now_iso=_now_iso,
+        short_commit=_short_commit,
+        clear_comfyui_status_cache=_clear_comfyui_status_cache,
     )
-    now = _now_iso()
-    changed = False
-
-    if prev_commit and prev_commit != current_commit:
-        entry["pending_prev_commit"] = prev_commit
-        entry["pending_new_commit"] = current_commit
-        entry["pending_update_at"] = now
-        entry["startup_prev_commit"] = prev_commit
-        entry["startup_new_commit"] = current_commit
-        entry["startup_update_at"] = now
-        changed = True
-
-    if entry.get("installed_commit") != current_commit:
-        entry["installed_commit"] = current_commit
-        changed = True
-    if entry.get("installed_updated_at") != current_updated_at:
-        entry["installed_updated_at"] = current_updated_at
-        changed = True
-
-    status.setdefault("repository", "https://github.com/comfyanonymous/ComfyUI")
-    status["path"] = str(root)
-    status["installed_commit"] = current_commit
-    status["installed_commit_short"] = _short_commit(current_commit)
-    status["installed_updated_at"] = current_updated_at
-    status.setdefault("update_status", "unknown")
-    entry["status"] = status
-    for mode_name, mode_status_raw in status_by_mode.items():
-        if not isinstance(mode_status_raw, dict):
-            continue
-        mode_status = dict(mode_status_raw)
-        mode_status.setdefault("repository", "https://github.com/comfyanonymous/ComfyUI")
-        mode_status["path"] = str(root)
-        mode_status["installed_commit"] = current_commit
-        mode_status["installed_commit_short"] = _short_commit(current_commit)
-        mode_status["installed_updated_at"] = current_updated_at
-        mode_status.setdefault("update_status", "unknown")
-        status_by_mode[mode_name] = mode_status
-    if status_by_mode:
-        entry["status_by_mode"] = status_by_mode
-    entry["updated_at"] = now
-    state["__comfyui__"] = entry
-
-    if changed:
-        _clear_comfyui_status_cache()
-        _save_module_state(state)
 
 
 def _acknowledge_comfyui_novelty() -> dict[str, Any]:
     """Clear pending ComfyUI novelty markers after explicit user refresh action."""
-    global _COMFYUI_STATUS_CACHE
-    state = _load_module_state()
-    if not isinstance(state, dict):
-        return {"status": "ok", "changed": False}
-    entry_raw = state.get("__comfyui__")
-    if not isinstance(entry_raw, dict):
-        return {"status": "ok", "changed": False}
-
-    entry = dict(entry_raw)
-    before = dict(entry)
-    for key in (
-        "pending_prev_commit",
-        "pending_new_commit",
-        "pending_update_at",
-        "startup_prev_commit",
-        "startup_new_commit",
-        "startup_update_at",
-    ):
-        entry.pop(key, None)
-
-    changed = entry != before
-    if changed:
-        _clear_comfyui_status_cache()
-        state["__comfyui__"] = entry
-        _save_module_state(state)
-    return {"status": "ok", "changed": changed}
+    return mb_acknowledge_comfyui_novelty(
+        load_module_state=_load_module_state,
+        save_module_state=_save_module_state,
+        clear_comfyui_status_cache=_clear_comfyui_status_cache,
+    )
 
 
 def _load_module_state() -> dict[str, dict[str, Any]]:
