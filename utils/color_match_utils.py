@@ -364,6 +364,81 @@ def _match_oklab_full(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, 
     return np.clip(out_rgb, 0.0, 1.0)
 
 
+def _match_tone_curve(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, num_points: int = 5) -> np.ndarray:
+    """Match luminance using tone curve (quantile-based points)."""
+    if cv2 is None:
+        return out_np
+    
+    # Convert to grayscale for luminance extraction
+    out_gray = []
+    ref_gray = []
+    for idx in range(out_np.shape[0]):
+        out_gray.append(cv2.cvtColor(out_np[idx], cv2.COLOR_RGB2GRAY))
+        ref_gray.append(cv2.cvtColor(ref_np[idx], cv2.COLOR_RGB2GRAY))
+    out_gray = np.stack(out_gray, axis=0)
+    ref_gray = np.stack(ref_gray, axis=0)
+    
+    # Extract quantile points for tone curve
+    quantiles = np.linspace(0.05, 0.95, num_points)
+    
+    # Compute tone mapping for each batch
+    out_result = out_np.copy()
+    for batch_idx in range(out_np.shape[0]):
+        src_vals = out_gray[batch_idx][keep[batch_idx]]
+        ref_vals = ref_gray[batch_idx][keep[batch_idx]]
+        
+        if src_vals.size < 10 or ref_vals.size < 10:
+            continue
+        
+        src_quantiles = np.quantile(src_vals, quantiles)
+        ref_quantiles = np.quantile(ref_vals, quantiles)
+        
+        # Build tone curve mapping
+        src_points = np.concatenate([[0.0], src_quantiles, [1.0]])
+        ref_points = np.concatenate([[0.0], ref_quantiles, [1.0]])
+        
+        # Create luminance-based scale map per pixel
+        lum = out_gray[batch_idx]
+        tone_scale = np.interp(lum, src_points, ref_points / (src_points + 1e-6))
+        tone_scale = np.clip(tone_scale, 0.5, 2.0)
+        
+        # Apply tone scale to RGB channels
+        for c in range(3):
+            out_result[batch_idx, :, :, c] = out_np[batch_idx, :, :, c] * tone_scale
+    
+    return np.clip(out_result, 0.0, 1.0)
+
+
+def _match_adain(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) -> np.ndarray:
+    """Adaptive Instance Normalization: match mean and variance of ref to out per-channel."""
+    # Process per batch
+    out_result = out_np.copy()
+    for batch_idx in range(out_np.shape[0]):
+        mask_b = keep[batch_idx]
+        for c in range(3):
+            src_ch = out_np[batch_idx, :, :, c]
+            ref_ch = ref_np[batch_idx, :, :, c]
+            
+            src_vals = src_ch[mask_b]
+            ref_vals = ref_ch[mask_b]
+            
+            if src_vals.size < 10 or ref_vals.size < 10:
+                continue
+            
+            ref_mean = float(ref_vals.mean())
+            ref_std = float(ref_vals.std())
+            src_mean = float(src_vals.mean())
+            src_std = float(src_vals.std())
+            
+            src_std = max(src_std, 1e-6)
+            
+            # Normalize then scale: (x - mean) / std * ref_std + ref_mean
+            normalized = (src_ch - src_mean) / src_std * ref_std + ref_mean
+            out_result[batch_idx, :, :, c] = np.clip(normalized, 0.0, 1.0)
+    
+    return out_result
+
+
 def apply_color_match(
     output_images: torch.Tensor,
     reference_images: torch.Tensor,
@@ -397,6 +472,10 @@ def apply_color_match(
         out_np = _match_hist_rgb(out_np, ref_np, keep)
     elif mode == "pca_cov":
         out_np = _pca_cov_transfer(out_np, ref_np, keep)
+    elif mode == "tone_curve":
+        out_np = _match_tone_curve(out_np, ref_np, keep)
+    elif mode == "adain":
+        out_np = _match_adain(out_np, ref_np, keep)
     elif mode == "lab_l":
         out_np = _match_lab_l(out_np, ref_np, keep, use_cdf=False)
     elif mode == "lab_l_cdf":
