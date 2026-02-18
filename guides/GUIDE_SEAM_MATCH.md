@@ -23,7 +23,7 @@
 | `compute_device` | Устройство расчета (`auto`/`cpu`/`cuda`) | `auto` или `cuda` при наличии GPU |
 | `color_space` | Пространство оптимизации (`rgb`/`oklab`) | `oklab` по умолчанию |
 | `downscale_long_side` | Разрешение оптимизации (`as_is`, `1080p`, `720p`, `480p`) | `720p` |
-| `seam_model` | Модель трансформации (`v2_tonal`/`v1_affine`) | `v2_tonal` |
+| `seam_model` | Модель трансформации (`v2_tonal`/`v3_hybrid`/`v1_affine`) | `v2_tonal` |
 | `steps` | Шаги оптимизации | 25-60 |
 | `lr` | Скорость обучения | 0.02-0.08 |
 | `w_mse` | Вес robust MSE | 1.0 |
@@ -31,6 +31,9 @@
 | `w_grad` | Вес градиентного терма | 0.05-0.2 |
 | `reg_weight` | Регуляризация transform | 0.0005-0.005 |
 | `robust_delta` | Порог robust-loss | 0.005-0.02 |
+| `hybrid_residual_strength` | Сила tonal-residual в `v3_hybrid` | 0.8-1.2 |
+| `hybrid_residual_reg` | Штраф амплитуды residual в `v3_hybrid` | 0.0005-0.005 |
+| `hybrid_coherence_reg` | Штраф расхождения residual-бэндов в `v3_hybrid` | 0.0002-0.003 |
 
 ## Decision helper
 - Нужна максимальная скорость: `downscale_long_side=480p`, `steps=20-30`.
@@ -38,6 +41,7 @@
 - Нужна максимальная точность стыка: `downscale_long_side=1080p` или `as_is`, `steps=50-80`.
 - Есть GPU: `compute_device=cuda` для ускорения.
 - Если плохо ловит нелинейные сдвиги (color balance по диапазонам): `seam_model=v2_tonal`.
+- Если в паре есть и глобальный сдвиг, и нелинейный тональный сдвиг: `seam_model=v3_hybrid`.
 - Если нужна максимально быстрая и предсказуемая глобальная подгонка: `seam_model=v1_affine`.
 
 ## Интерпретация выходов
@@ -48,7 +52,7 @@
 ```json
 {
   "mode": "seam_match:oklab",
-  "optimization": {"downscale_long_side": "720p", "seam_model": "v2_tonal", "steps": 40, "loss_final": 0.0042},
+  "optimization": {"downscale_long_side": "720p", "seam_model": "v3_hybrid", "steps": 40, "loss_final": 0.0042},
   "quality": {
     "before": {"mse": 0.012, "ssim": 0.84},
     "after": {"mse": 0.006, "ssim": 0.91}
