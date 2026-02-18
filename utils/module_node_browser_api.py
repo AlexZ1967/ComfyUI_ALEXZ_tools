@@ -1756,7 +1756,9 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         if not module_name:
             return web.json_response({"error": "module is required"}, status=400)
         try:
-            _start_runtime_state_warmup()
+            # Ensure novelty markers are available on the very first module-info read.
+            # Async warmup can race with initial UI load and return empty new-node lists.
+            _ensure_runtime_state_ready()
             info = _resolve_module_info(
                 group,
                 module_name,
