@@ -1,7 +1,7 @@
 # Color Match To Reference — Guide
 
 ## Назначение
-Подгонка цвета `image` к `reference` по пресетам (`fast`, `balanced`, `quality`, `perceptual`).
+Подгонка цвета `image` к `reference` по методам (`mean_std`, `linear`, `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast`).
 
 ## Когда использовать
 - Стабилизация цвета между кадрами/источниками.
@@ -18,17 +18,17 @@
 |---|---|---|
 | `reference` | Эталон цвета | Кадр/изображение нужного look |
 | `image` | Что корректируем | Текущий кадр/изображение |
-| `preset` | Алгоритм подгонки | `fast` самый быстрый, `balanced` базовый, `quality` точнее, `perceptual` самый медленный |
+| `preset` | Метод цветокоррекции | `mean_std` — быстро, `linear` — дефолт, `lab_cdf` — Lab, `oklab_cdf` — Oklab (лучше), `perceptual_vgg_fast` — VGG |
 | `strength` | Сила применения [0..1] | 0.6-0.9 для мягкой коррекции |
 | `match_mask` | Где считать статистику | Белое = учитывать |
 | `apply_mask` | Где применять коррекцию | Белое = применять |
 | `preserve_alpha` | Сохранить альфу | Оставляйте `true` для RGBA |
 
 ## Decision helper
-- Нужно максимально быстро -> `fast`.
-- Нужен стабильный повседневный режим -> `balanced`.
-- Нужна лучшая точность по тону/цвету -> `quality`.
-- Нужна максимально перцептивная подгонка (дорого по времени) -> `perceptual`.
+- Нужна максимальная скорость → `mean_std` (быстрый, базовый).
+- Нужен стабильный режим → `linear` (линейная подгонка, дефолт).
+- Нужно лучше качество → `lab_cdf` (Lab гистограмма) или `oklab_cdf` (перцептивнее).
+- Максимум качества → `perceptual_vgg_fast` (нейросеть, медленный).
 
 ## Интерпретация выходов
 - `matched_image`: скорректированное изображение.
@@ -53,11 +53,11 @@
 
 ## Типовые ошибки и решения
 - Перекоррекция: снизьте `strength`.
-- Недокоррекция: `balanced -> quality` или `perceptual`.
+- Недокоррекция: `linear → lab_cdf`/`oklab_cdf` или `perceptual_vgg_fast`.
 - Проблема только в области: используйте `match_mask` и `apply_mask`.
-- `perceptual` недоступен: проверьте `torchvision` в среде ComfyUI.
+- `perceptual_vgg_fast` недоступен: проверьте `torchvision` в среде ComfyUI.
 
 ## Производительность
-- Скорость пресетов: `fast` > `balanced` > `quality` > `perceptual`.
+- Скорость методов: `mean_std` > `linear` > `lab_cdf` ≈ `oklab_cdf` > `perceptual_vgg_fast`.
 - Маски и большие разрешения увеличивают время.
-- `perceptual` может быть заметно медленным на 2K/4K.
+- `perceptual_vgg_fast` может быть заметно медленным на 2K/4K.

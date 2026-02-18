@@ -335,10 +335,10 @@ class ImageColorMatchToReference:
                 "reference": ("IMAGE", {"tooltip": "Базовое изображение (образец)."}),
                 "image": ("IMAGE", {"tooltip": "Изображение, которое нужно подогнать по цвету."}),
                 "preset": (
-                    ["fast", "balanced", "quality", "perceptual"],
+                    ["mean_std", "linear", "lab_cdf", "oklab_cdf", "perceptual_vgg_fast"],
                     {
-                        "default": "balanced",
-                        "tooltip": "Пресет: fast=самый быстрый, balanced=быстрый/стабильный, quality=медленнее/точнее, perceptual=самый медленный.",
+                        "default": "linear",
+                        "tooltip": "Метод: mean_std=среднее/стд, linear=линейная, lab_cdf=Lab гистограма, oklab_cdf=Oklab гистограма (лучше), perceptual_vgg_fast=VGG.",
                     },
                 ),
                 "strength": (
@@ -403,16 +403,19 @@ class ImageColorMatchToReference:
                 am_t = resize_mask_to_output(normalize_mask(am_t), ref_h, ref_w)
 
             deep_params = None
-            if preset == "fast":
+            if preset == "mean_std":
                 corrected_t = _mean_std_match(img_t, ref_t, mm_t)
                 mode = "mean_std"
-            elif preset == "balanced":
+            elif preset == "linear":
                 corrected_t = _linear_match(img_t, ref_t, mm_t)
                 mode = "linear"
-            elif preset == "quality":
+            elif preset == "lab_cdf":
                 corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "lab_cdf")
                 mode = "lab_cdf"
-            elif preset == "perceptual":
+            elif preset == "oklab_cdf":
+                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "oklab_cdf")
+                mode = "oklab_cdf"
+            elif preset == "perceptual_vgg_fast":
                 corrected_t, deep_params = _perceptual_vgg_fast(img_t, ref_t, 5, 0.05)
                 mode = "perceptual_vgg_fast"
             else:

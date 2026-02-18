@@ -244,6 +244,126 @@ def _match_lab_full(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, us
     return np.clip(out_rgb, 0.0, 1.0)
 
 
+def _rgb_to_oklab(rgb: np.ndarray) -> np.ndarray:
+    """Convert RGB [0, 1] to Oklab color space. Supports batches (B, H, W, 3) and single images (H, W, 3)."""
+    is_batch = rgb.ndim == 4
+    if is_batch:
+        batch_size = rgb.shape[0]
+        h, w = rgb.shape[1:3]
+        results = []
+        for i in range(batch_size):
+            results.append(_rgb_to_oklab(rgb[i]))
+        return np.stack(results, axis=0)
+    
+    # Linear RGB
+    linear = np.where(
+        rgb <= 0.04045,
+        rgb / 12.92,
+        np.power((rgb + 0.055) / 1.055, 2.4)
+    )
+    
+    # Linear RGB to LMS
+    l_mat = np.array([
+        [0.3, 0.622, 0.078],
+        [0.23, 0.692, 0.078],
+        [0.24342268924547819, 0.20476744424496821, 0.55314985651939574]
+    ])
+    lms = np.dot(linear, l_mat.T)
+    
+    # LMS to Oklab
+    lms_cubic = np.cbrt(lms)
+    oklab_mat = np.array([
+        [0.210454255534087, 0.791121460798369, -0.0040587710699851425],
+        [1.9779984951406756, -2.4285922050660405, 0.4505937099516859],
+        [0.029727982640443518, 0.78956734665305050, -0.81917763894369968]
+    ])
+    oklab = np.dot(lms_cubic, oklab_mat.T)
+    
+    return oklab
+
+
+def _oklab_to_rgb(oklab: np.ndarray) -> np.ndarray:
+    """Convert Oklab color space to RGB [0, 1]. Supports batches (B, H, W, 3) and single images (H, W, 3)."""
+    is_batch = oklab.ndim == 4
+    if is_batch:
+        batch_size = oklab.shape[0]
+        results = []
+        for i in range(batch_size):
+            results.append(_oklab_to_rgb(oklab[i]))
+        return np.stack(results, axis=0)
+    
+    # Oklab to LMS cubic
+    oklab_inv_mat = np.array([
+        [1.00246414, 0.39570516, 0.21269317],
+        [1.00249668, -0.10571463, -0.06311604],
+        [1.00263953, -0.08753328, -1.27385243]
+    ])
+    lms_cubic = np.dot(oklab, oklab_inv_mat.T)
+    
+    # LMS cubic to LMS (cube)
+    lms = lms_cubic ** 3
+    
+    # LMS to linear RGB
+    lms_inv_mat = np.array([
+        [11.03076189, -9.86634701, -0.16419485],
+        [-3.2549524, 4.41936727, -0.16419485],
+        [-3.64933556, 2.70586743, 1.94086738]
+    ])
+    linear = np.dot(lms, lms_inv_mat.T)
+    
+    # Linear RGB to RGB
+    rgb = np.where(
+        linear <= 0.0031308,
+        12.92 * linear,
+        1.055 * np.power(np.clip(linear, 0.0, None), 1.0 / 2.4) - 0.055
+    )
+    
+    return rgb
+
+
+def _match_oklab_l(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, use_cdf: bool) -> np.ndarray:
+    """Match only luminance channel in Oklab space while preserving chroma."""
+    out_oklab = _rgb_to_oklab(out_np)
+    ref_oklab = _rgb_to_oklab(ref_np)
+    
+    out_l = out_oklab[..., 0]
+    ref_l = ref_oklab[..., 0]
+    
+    if use_cdf:
+        out_l = _match_histogram_channel(out_l, ref_l, keep, bins=256, value_range=(0.0, 1.0))
+    else:
+        out_l = _match_mean_std_channel(out_l, ref_l, keep)
+    
+    out_oklab[..., 0] = np.clip(out_l, 0.0, 1.0)
+    out_rgb = _oklab_to_rgb(out_oklab)
+    
+    return np.clip(out_rgb, 0.0, 1.0)
+
+
+def _match_oklab_full(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray, use_cdf: bool) -> np.ndarray:
+    """Match full Oklab distribution and convert back to RGB."""
+    out_oklab = _rgb_to_oklab(out_np)
+    ref_oklab = _rgb_to_oklab(ref_np)
+    
+    ranges = [(0.0, 1.0), (-0.5, 0.5), (-0.5, 0.5)]
+    for ch in range(3):
+        if use_cdf:
+            out_oklab[..., ch] = _match_histogram_channel(
+                out_oklab[..., ch], ref_oklab[..., ch], keep, bins=256, value_range=ranges[ch]
+            )
+        else:
+            out_oklab[..., ch] = _match_mean_std_channel(
+                out_oklab[..., ch], ref_oklab[..., ch], keep
+            )
+    
+    out_oklab[..., 0] = np.clip(out_oklab[..., 0], 0.0, 1.0)
+    out_oklab[..., 1] = np.clip(out_oklab[..., 1], -0.5, 0.5)
+    out_oklab[..., 2] = np.clip(out_oklab[..., 2], -0.5, 0.5)
+    
+    out_rgb = _oklab_to_rgb(out_oklab)
+    return np.clip(out_rgb, 0.0, 1.0)
+
+
 def apply_color_match(
     output_images: torch.Tensor,
     reference_images: torch.Tensor,
@@ -283,8 +403,10 @@ def apply_color_match(
         out_np = _match_lab_l(out_np, ref_np, keep, use_cdf=True)
     elif mode == "lab_full":
         out_np = _match_lab_full(out_np, ref_np, keep, use_cdf=False)
-    elif mode == "lab_cdf":
-        out_np = _match_lab_full(out_np, ref_np, keep, use_cdf=True)
+    elif mode == "oklab_l":
+        out_np = _match_oklab_l(out_np, ref_np, keep, use_cdf=False)
+    elif mode == "oklab_cdf":
+        out_np = _match_oklab_full(out_np, ref_np, keep, use_cdf=True)
     else:
         return output_images
 

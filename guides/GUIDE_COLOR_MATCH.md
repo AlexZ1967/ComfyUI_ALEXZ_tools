@@ -16,22 +16,23 @@
 ## Параметры
 | Параметр | Что делает | Рекомендация |
 |---|---|---|
-| `preset` | Режим коррекции | `fast`/`balanced`/`quality`/`perceptual` |
+| `preset` | Метод цветокоррекции | `mean_std`, `linear`, `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast` |
 | `strength` | Сила эффекта | 0.6-0.9 |
 
 ## Decision helper
-- Скорость -> `fast`.
-- Базовое качество -> `balanced`.
-- Точность -> `quality`.
-- Максимум визуального match -> `perceptual`.
+- Скорость → `mean_std` (среднее/стд по каналам).
+- Базовое качество → `linear` (линейная подгонка, дефолт).
+- Высокое качество → `lab_cdf` (Lab гистограмма) или `oklab_cdf` (Oklab, перцептивнее).
+- Максимум → `perceptual_vgg_fast` (нейросить, медленнее).
 
 ## Интерпретация выходов
 - `matched_image`: результат.
 - `match_json.quality`: метрики до/после и `improvement_pct`.
 
 ## Типовые ошибки и решения
-- Перекоррекция -> снизить `strength`.
-- Слабая коррекция -> перейти на `quality` или `perceptual`.
+- Перекоррекция → снизить `strength`.
+- Слабая коррекция → перейти с `linear` на `lab_cdf`/`oklab_cdf` или `perceptual_vgg_fast`.
 
 ## Производительность
-- `fast` быстрее всех, `perceptual` медленнее всех.
+- `mean_std` быстрее всех, `perceptual_vgg_fast` медленнее всех.
+- `oklab_cdf` немного медленнее `lab_cdf` но перцептивно лучше.
