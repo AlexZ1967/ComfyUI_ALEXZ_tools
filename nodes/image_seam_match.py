@@ -759,76 +759,111 @@ def _metric_ssim(a_hwc: torch.Tensor, b_hwc: torch.Tensor) -> float:
     return float(_ssim_similarity_tensor(aa, bb).item())
 
 
+def _seam_required_inputs() -> dict:
+    """Shared required inputs for seam-match family nodes."""
+    return {
+        "reference": ("IMAGE", {"tooltip": "Эталонное изображение (куда подгоняем)."}),
+        "image": ("IMAGE", {"tooltip": "Изображение для подгонки под reference."}),
+        "strength": (
+            "FLOAT",
+            {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила применения итоговой коррекции (0..1)."},
+        ),
+    }
+
+
+def _seam_optional_common_inputs() -> dict:
+    """Shared optional inputs used by all seam-match variants."""
+    return {
+        "compute_device": (
+            ["auto", "cpu", "cuda"],
+            {"default": "auto", "tooltip": "Где считать оптимизацию: auto=CUDA если доступна, иначе CPU."},
+        ),
+        "color_space": (
+            ["rgb", "oklab"],
+            {"default": "oklab", "tooltip": "Пространство оптимизации: oklab обычно лучше для перцептивного seam-match."},
+        ),
+        "downscale_long_side": (
+            ["as_is", "1080p", "720p", "480p"],
+            {"default": "720p", "tooltip": "Размер для оптимизации: as_is, 1080p, 720p, 480p (без апскейла)."},
+        ),
+    }
+
+
+def _seam_optional_base_weights_inputs() -> dict:
+    """Shared optimization weight inputs."""
+    return {
+        "steps": ("INT", {"default": 40, "min": 1, "max": 200, "step": 1, "tooltip": "Количество шагов оптимизации."}),
+        "lr": ("FLOAT", {"default": 0.05, "min": 0.0005, "max": 0.5, "step": 0.0005, "tooltip": "Скорость обучения оптимизатора."}),
+        "w_mse": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.05, "tooltip": "Вес robust MSE-терма."}),
+        "w_ssim": ("FLOAT", {"default": 0.2, "min": 0.0, "max": 5.0, "step": 0.05, "tooltip": "Вес SSIM-терма (структурное сходство)."}),
+        "w_grad": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 5.0, "step": 0.05, "tooltip": "Вес градиентного терма (снижение заметности шва)."}),
+        "reg_weight": ("FLOAT", {"default": 0.001, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Регуляризация: удерживает transform ближе к identity."}),
+        "robust_delta": ("FLOAT", {"default": 0.01, "min": 0.0001, "max": 0.2, "step": 0.0005, "tooltip": "Порог robust-loss (больше = мягче к выбросам)."}),
+    }
+
+
+def _seam_optional_hybrid_inputs() -> dict:
+    """Hybrid-model specific inputs."""
+    return {
+        "hybrid_residual_strength": (
+            "FLOAT",
+            {"default": 0.7, "min": 0.0, "max": 2.0, "step": 0.05, "tooltip": "Только для v3_hybrid: сила тональных residual-поправок."},
+        ),
+        "hybrid_residual_reg": (
+            "FLOAT",
+            {"default": 0.002, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на амплитуду tonal-residual."},
+        ),
+        "hybrid_coherence_reg": (
+            "FLOAT",
+            {"default": 0.001, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на расхождение между tonal-бэндами."},
+        ),
+    }
+
+
+def _seam_optional_lut_inputs() -> dict:
+    """LUT-model specific inputs."""
+    return {
+        "lut_size": (
+            "INT",
+            {"default": 25, "min": 5, "max": 49, "step": 2, "tooltip": "Только для v4_lut: размер 3D LUT (17/25/33). Больше = точнее и медленнее."},
+        ),
+        "lut_identity_reg": (
+            "FLOAT",
+            {"default": 0.01, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v4_lut: штраф отклонения LUT от identity/affine-init."},
+        ),
+        "lut_smooth_reg": (
+            "FLOAT",
+            {"default": 0.02, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v4_lut: штраф гладкости LUT (TV в 3D)."},
+        ),
+        "lut_lr_scale": (
+            "FLOAT",
+            {"default": 0.35, "min": 0.05, "max": 2.0, "step": 0.01, "tooltip": "Только для v4_lut: множитель lr для LUT-оптимизации."},
+        ),
+    }
+
+
+def _build_seam_input_types(optional_inputs: dict) -> dict:
+    """Build INPUT_TYPES payload for seam node variants."""
+    return {"required": _seam_required_inputs(), "optional": optional_inputs}
+
+
 class ImageSeamMatchToReference:
     """ComfyUI node that minimizes seam-visible color differences to a reference."""
 
     @classmethod
     def INPUT_TYPES(cls):
         """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
-        return {
-            "required": {
-                "reference": ("IMAGE", {"tooltip": "Эталонное изображение (куда подгоняем)."}),
-                "image": ("IMAGE", {"tooltip": "Изображение для подгонки под reference."}),
-                "strength": (
-                    "FLOAT",
-                    {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила применения итоговой коррекции (0..1)."},
-                ),
-            },
-            "optional": {
-                "preserve_alpha": ("BOOLEAN", {"default": True, "tooltip": "Если вход RGBA, сохранить альфа-канал исходника."}),
-                "compute_device": (
-                    ["auto", "cpu", "cuda"],
-                    {"default": "auto", "tooltip": "Где считать оптимизацию: auto=CUDA если доступна, иначе CPU."},
-                ),
-                "color_space": (
-                    ["rgb", "oklab"],
-                    {"default": "oklab", "tooltip": "Пространство оптимизации: oklab обычно лучше для перцептивного seam-match."},
-                ),
-                "downscale_long_side": (
-                    ["as_is", "1080p", "720p", "480p"],
-                    {"default": "720p", "tooltip": "Размер для оптимизации: as_is, 1080p, 720p, 480p (без апскейла)."},
-                ),
-                "seam_model": (
-                    ["v2_tonal", "v3_hybrid", "v4_lut", "v1_affine"],
-                    {"default": "v2_tonal", "tooltip": "v2_tonal: 3 тональных affine; v3_hybrid: глобальный affine + tonal residual; v4_lut: 3D LUT (точнее, но медленнее); v1_affine: один глобальный affine."},
-                ),
-                "steps": ("INT", {"default": 40, "min": 1, "max": 200, "step": 1, "tooltip": "Количество шагов оптимизации."}),
-                "lr": ("FLOAT", {"default": 0.05, "min": 0.0005, "max": 0.5, "step": 0.0005, "tooltip": "Скорость обучения оптимизатора."}),
-                "w_mse": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.05, "tooltip": "Вес robust MSE-терма."}),
-                "w_ssim": ("FLOAT", {"default": 0.2, "min": 0.0, "max": 5.0, "step": 0.05, "tooltip": "Вес SSIM-терма (структурное сходство)."}),
-                "w_grad": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 5.0, "step": 0.05, "tooltip": "Вес градиентного терма (снижение заметности шва)."}),
-                "reg_weight": ("FLOAT", {"default": 0.001, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Регуляризация: удерживает transform ближе к identity."}),
-                "robust_delta": ("FLOAT", {"default": 0.01, "min": 0.0001, "max": 0.2, "step": 0.0005, "tooltip": "Порог robust-loss (больше = мягче к выбросам)."}),
-                "hybrid_residual_strength": (
-                    "FLOAT",
-                    {"default": 0.7, "min": 0.0, "max": 2.0, "step": 0.05, "tooltip": "Только для v3_hybrid: сила тональных residual-поправок."},
-                ),
-                "hybrid_residual_reg": (
-                    "FLOAT",
-                    {"default": 0.002, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на амплитуду tonal-residual."},
-                ),
-                "hybrid_coherence_reg": (
-                    "FLOAT",
-                    {"default": 0.001, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на расхождение между tonal-бэндами."},
-                ),
-                "lut_size": (
-                    "INT",
-                    {"default": 25, "min": 5, "max": 49, "step": 2, "tooltip": "Только для v4_lut: размер 3D LUT (17/25/33). Больше = точнее и медленнее."},
-                ),
-                "lut_identity_reg": (
-                    "FLOAT",
-                    {"default": 0.01, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v4_lut: штраф отклонения LUT от identity/affine-init."},
-                ),
-                "lut_smooth_reg": (
-                    "FLOAT",
-                    {"default": 0.02, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v4_lut: штраф гладкости LUT (TV в 3D)."},
-                ),
-                "lut_lr_scale": (
-                    "FLOAT",
-                    {"default": 0.35, "min": 0.05, "max": 2.0, "step": 0.01, "tooltip": "Только для v4_lut: множитель lr для LUT-оптимизации."},
-                ),
-            },
+        optional = {
+            **_seam_optional_common_inputs(),
+            "seam_model": (
+                ["v2_tonal", "v3_hybrid", "v4_lut", "v1_affine"],
+                {"default": "v2_tonal", "tooltip": "v2_tonal: 3 тональных affine; v3_hybrid: глобальный affine + tonal residual; v4_lut: 3D LUT (точнее, но медленнее); v1_affine: один глобальный affine."},
+            ),
+            **_seam_optional_base_weights_inputs(),
+            **_seam_optional_hybrid_inputs(),
+            **_seam_optional_lut_inputs(),
         }
+        return _build_seam_input_types(optional)
 
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("matched_image", "seam_json")
@@ -840,7 +875,6 @@ class ImageSeamMatchToReference:
         reference,
         image,
         strength=1.0,
-        preserve_alpha=True,
         compute_device="auto",
         color_space="oklab",
         downscale_long_side="720p",
@@ -960,7 +994,7 @@ class ImageSeamMatchToReference:
             ssim_after = _metric_ssim(corrected, ref_t)
 
             out_t = corrected.to(device=img_t_src.device)
-            if alpha_batch is not None and preserve_alpha:
+            if alpha_batch is not None:
                 out_t = torch.cat([out_t, alpha_batch[idx]], dim=-1)
             out_list.append(out_t.cpu())
 
@@ -1065,3 +1099,51 @@ class ImageSeamMatchToReference:
             json_list.append(json.dumps(payload, ensure_ascii=True))
 
         return (torch.stack(out_list, dim=0), json_list)
+
+
+class ImageSeamMatchV1AffineToReference(ImageSeamMatchToReference):
+    """Dedicated v1 affine seam-match node with compact parameter set."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return _build_seam_input_types({**_seam_optional_common_inputs(), **_seam_optional_base_weights_inputs()})
+
+    def match(self, reference, image, strength=1.0, **kwargs):
+        return super().match(reference=reference, image=image, strength=strength, seam_model="v1_affine", **kwargs)
+
+
+class ImageSeamMatchV2TonalToReference(ImageSeamMatchToReference):
+    """Dedicated v2 tonal seam-match node with compact parameter set."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return _build_seam_input_types({**_seam_optional_common_inputs(), **_seam_optional_base_weights_inputs()})
+
+    def match(self, reference, image, strength=1.0, **kwargs):
+        return super().match(reference=reference, image=image, strength=strength, seam_model="v2_tonal", **kwargs)
+
+
+class ImageSeamMatchV3HybridToReference(ImageSeamMatchToReference):
+    """Dedicated v3 hybrid seam-match node with hybrid-specific parameters."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return _build_seam_input_types(
+            {**_seam_optional_common_inputs(), **_seam_optional_base_weights_inputs(), **_seam_optional_hybrid_inputs()}
+        )
+
+    def match(self, reference, image, strength=1.0, **kwargs):
+        return super().match(reference=reference, image=image, strength=strength, seam_model="v3_hybrid", **kwargs)
+
+
+class ImageSeamMatchV4LUTToReference(ImageSeamMatchToReference):
+    """Dedicated v4 LUT seam-match node with LUT-specific parameters."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return _build_seam_input_types(
+            {**_seam_optional_common_inputs(), **_seam_optional_base_weights_inputs(), **_seam_optional_lut_inputs()}
+        )
+
+    def match(self, reference, image, strength=1.0, **kwargs):
+        return super().match(reference=reference, image=image, strength=strength, seam_model="v4_lut", **kwargs)

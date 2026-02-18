@@ -33,6 +33,10 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("VideoInpaintWatermark", "Remove Static Watermark from Video", ".video_inpaint", "VideoInpaintWatermark"),
     NodeSpec("ImageColorMatchToReference", "Color Match To Reference", ".image_color_match", "ImageColorMatchToReference"),
     NodeSpec("ImageSeamMatchToReference", "Seam Match To Reference", ".image_seam_match", "ImageSeamMatchToReference"),
+    NodeSpec("ImageSeamMatchV1AffineToReference", "Seam Match v1 Affine", ".image_seam_match", "ImageSeamMatchV1AffineToReference"),
+    NodeSpec("ImageSeamMatchV2TonalToReference", "Seam Match v2 Tonal", ".image_seam_match", "ImageSeamMatchV2TonalToReference"),
+    NodeSpec("ImageSeamMatchV3HybridToReference", "Seam Match v3 Hybrid", ".image_seam_match", "ImageSeamMatchV3HybridToReference"),
+    NodeSpec("ImageSeamMatchV4LUTToReference", "Seam Match v4 LUT", ".image_seam_match", "ImageSeamMatchV4LUTToReference"),
     NodeSpec("VideoFrameMatch", "Find Closest Video Frame", ".video_frame_match", "VideoFrameMatch"),
     NodeSpec("VideoCutMatch", "Match Video Cut Point", ".video_cut_match", "VideoCutMatch"),
     NodeSpec("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
@@ -73,6 +77,26 @@ NODE_UI_METADATA = {
         "description": "Сводит цвет к референсу с приоритетом минимальной видимости стыка.",
         "output_tooltips": ["Скорректированное изображение под seam-match.", "JSON с параметрами оптимизации и метриками."],
         "search_aliases": ["seam", "match", "reference", "color"],
+    },
+    "ImageSeamMatchV1AffineToReference": {
+        "description": "Seam-match v1: быстрый глобальный affine матчинг.",
+        "output_tooltips": ["Скорректированное изображение (v1 affine).", "JSON с параметрами оптимизации и метриками."],
+        "search_aliases": ["seam", "v1", "affine", "match"],
+    },
+    "ImageSeamMatchV2TonalToReference": {
+        "description": "Seam-match v2: отдельные трансформы для теней/середины/светов.",
+        "output_tooltips": ["Скорректированное изображение (v2 tonal).", "JSON с параметрами оптимизации и метриками."],
+        "search_aliases": ["seam", "v2", "tonal", "match"],
+    },
+    "ImageSeamMatchV3HybridToReference": {
+        "description": "Seam-match v3: глобальный affine + тональные residual-поправки.",
+        "output_tooltips": ["Скорректированное изображение (v3 hybrid).", "JSON с параметрами оптимизации и метриками."],
+        "search_aliases": ["seam", "v3", "hybrid", "match"],
+    },
+    "ImageSeamMatchV4LUTToReference": {
+        "description": "Seam-match v4: высокоточный 3D LUT матчинг (медленнее).",
+        "output_tooltips": ["Скорректированное изображение (v4 LUT).", "JSON с параметрами оптимизации и метриками."],
+        "search_aliases": ["seam", "v4", "lut", "match"],
     },
     "VideoFrameMatch": {
         "description": "Ищет наиболее похожий кадр в видео для входной картинки.",

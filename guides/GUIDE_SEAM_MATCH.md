@@ -10,8 +10,15 @@
 
 ## Минимальный сценарий (3 шага)
 1. Подайте `reference` и `image`.
-2. Выберите `downscale_long_side` (`720p` обычно баланс).
+2. Выберите подходящий вариант ноды (`v1`/`v2`/`v3`/`v4`) или используйте универсальную legacy-ноду с `seam_model`.
 3. Проверьте `seam_json.quality` и `difference` в вашем пайплайне.
+
+Варианты нод:
+- `Seam Match v1 Affine` (`ImageSeamMatchV1AffineToReference`) — быстрый глобальный affine.
+- `Seam Match v2 Tonal` (`ImageSeamMatchV2TonalToReference`) — тональные диапазоны.
+- `Seam Match v3 Hybrid` (`ImageSeamMatchV3HybridToReference`) — global + tonal residual.
+- `Seam Match v4 LUT` (`ImageSeamMatchV4LUTToReference`) — 3D LUT, максимальная точность (медленнее).
+- `Seam Match To Reference` (`ImageSeamMatchToReference`) — универсальная legacy-нода с `seam_model`.
 
 ## Параметры
 | Параметр | Что делает | Рекомендация |
@@ -19,11 +26,11 @@
 | `reference` | Эталон для подгонки | Кадр, к которому примыкает стык |
 | `image` | Что корректируем | Кадр, который нужно "подтянуть" |
 | `strength` | Сила применения [0..1] | 0.8-1.0 |
-| `preserve_alpha` | Сохранить альфу RGBA | Обычно `true` |
+| `alpha` | Сохраняется автоматически при наличии на входе | Без отдельного параметра |
 | `compute_device` | Устройство расчета (`auto`/`cpu`/`cuda`) | `auto` или `cuda` при наличии GPU |
 | `color_space` | Пространство оптимизации (`rgb`/`oklab`) | `oklab` по умолчанию |
 | `downscale_long_side` | Разрешение оптимизации (`as_is`, `1080p`, `720p`, `480p`) | `720p` |
-| `seam_model` | Модель трансформации (`v2_tonal`/`v3_hybrid`/`v4_lut`/`v1_affine`) | `v2_tonal` |
+| `seam_model` | Модель трансформации (`v2_tonal`/`v3_hybrid`/`v4_lut`/`v1_affine`) | Только в legacy-ноде |
 | `steps` | Шаги оптимизации | 25-60 |
 | `lr` | Скорость обучения | 0.02-0.08 |
 | `w_mse` | Вес robust MSE | 1.0 |

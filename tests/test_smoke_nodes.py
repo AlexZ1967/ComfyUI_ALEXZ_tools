@@ -502,6 +502,65 @@ class SmokeTests(unittest.TestCase):
             if model == "v4_lut":
                 self.assertIn("lut", data.get("transform", {}))
 
+    def test_seam_match_variant_nodes_and_inputs(self):
+        """Ensure dedicated seam v1/v2/v3/v4 nodes run and expose compact inputs."""
+        seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")
+        ref = torch.rand(1, 16, 16, 3)
+        img = torch.rand(1, 16, 16, 3)
+        variants = (
+            ("ImageSeamMatchV1AffineToReference", "v1_affine"),
+            ("ImageSeamMatchV2TonalToReference", "v2_tonal"),
+            ("ImageSeamMatchV3HybridToReference", "v3_hybrid"),
+            ("ImageSeamMatchV4LUTToReference", "v4_lut"),
+        )
+        for class_name, expected_mode in variants:
+            node = getattr(seam_mod, class_name)()
+            out, payload = node.match(
+                ref,
+                img,
+                strength=1.0,
+                downscale_long_side="as_is",
+                steps=1,
+                lr=0.03,
+            )
+            self.assertEqual(tuple(out.shape), (1, 16, 16, 3))
+            data = json.loads(payload[0])
+            self.assertEqual(data.get("optimization", {}).get("seam_model"), expected_mode)
+
+        # preserve_alpha must be removed from all seam nodes.
+        all_classes = [
+            seam_mod.ImageSeamMatchToReference,
+            seam_mod.ImageSeamMatchV1AffineToReference,
+            seam_mod.ImageSeamMatchV2TonalToReference,
+            seam_mod.ImageSeamMatchV3HybridToReference,
+            seam_mod.ImageSeamMatchV4LUTToReference,
+        ]
+        for cls in all_classes:
+            optional = cls.INPUT_TYPES().get("optional", {})
+            self.assertNotIn("preserve_alpha", optional)
+
+        # Dedicated variant nodes should not expose seam_model selector.
+        self.assertNotIn("seam_model", seam_mod.ImageSeamMatchV1AffineToReference.INPUT_TYPES().get("optional", {}))
+        self.assertNotIn("seam_model", seam_mod.ImageSeamMatchV2TonalToReference.INPUT_TYPES().get("optional", {}))
+        self.assertNotIn("seam_model", seam_mod.ImageSeamMatchV3HybridToReference.INPUT_TYPES().get("optional", {}))
+        self.assertNotIn("seam_model", seam_mod.ImageSeamMatchV4LUTToReference.INPUT_TYPES().get("optional", {}))
+
+    def test_seam_match_always_preserves_alpha_when_present(self):
+        """Ensure RGBA alpha channel is preserved automatically."""
+        seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")
+        node = seam_mod.ImageSeamMatchV2TonalToReference()
+        ref = torch.rand(1, 16, 16, 4)
+        img = torch.rand(1, 16, 16, 4)
+        out, _payload = node.match(
+            ref,
+            img,
+            strength=1.0,
+            downscale_long_side="as_is",
+            steps=1,
+            lr=0.03,
+        )
+        self.assertEqual(tuple(out.shape), (1, 16, 16, 4))
+
     def test_seam_match_compute_device_cpu(self):
         """Ensure explicit CPU compute_device is accepted and reported."""
         seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")

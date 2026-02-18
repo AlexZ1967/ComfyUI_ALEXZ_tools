@@ -1,5 +1,20 @@
 # Changelog — ALEXZ_tools
 
+## 0.21.2 — 2026-02-18
+- Seam Match node split and alpha behavior cleanup:
+  - added dedicated compact nodes with fixed models:
+    `ImageSeamMatchV1AffineToReference`,
+    `ImageSeamMatchV2TonalToReference`,
+    `ImageSeamMatchV3HybridToReference`,
+    `ImageSeamMatchV4LUTToReference`;
+  - kept universal legacy node `ImageSeamMatchToReference` with `seam_model` selector;
+  - removed `preserve_alpha` parameter from seam nodes;
+  - alpha is now preserved automatically when input is RGBA.
+- Registry/tests/docs:
+  - registered new seam nodes in `nodes/node_registry.py` (+ UI metadata);
+  - extended seam smoke tests for variant nodes and auto-alpha preservation;
+  - updated seam docs (`README.md`, `guides/GUIDE_SEAM_MATCH.md`).
+
 ## 0.21.1 — 2026-02-18
 - Seam Match quality update:
   - stabilized `v3_hybrid` optimization with phased training
