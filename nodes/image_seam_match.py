@@ -256,6 +256,116 @@ def _apply_hybrid_transform(
     return torch.clamp(out_work, 0.0, 1.0)
 
 
+def _workspace_channel_ranges(color_space: str, like: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return channel-wise workspace min/max bounds for LUT normalization."""
+    if color_space == "oklab":
+        mins = like.new_tensor([0.0, -0.45, -0.45])
+        maxs = like.new_tensor([1.0, 0.45, 0.45])
+    else:
+        mins = like.new_tensor([0.0, 0.0, 0.0])
+        maxs = like.new_tensor([1.0, 1.0, 1.0])
+    return mins, maxs
+
+
+def _to_workspace(img_hwc: torch.Tensor, color_space: str) -> torch.Tensor:
+    """Convert RGB image to selected optimization workspace."""
+    if color_space == "oklab":
+        return _rgb_to_oklab_torch(img_hwc)
+    return img_hwc
+
+
+def _from_workspace(work_hwc: torch.Tensor, color_space: str) -> torch.Tensor:
+    """Convert workspace image back to RGB."""
+    if color_space == "oklab":
+        return _oklab_to_rgb_torch(work_hwc)
+    return work_hwc
+
+
+def _normalize_workspace(work_hwc: torch.Tensor, color_space: str) -> torch.Tensor:
+    """Normalize workspace channels to [0,1] for LUT addressing."""
+    mins, maxs = _workspace_channel_ranges(color_space, work_hwc)
+    denom = torch.clamp(maxs - mins, min=1e-6)
+    return torch.clamp((work_hwc - mins) / denom, 0.0, 1.0)
+
+
+def _denormalize_workspace(norm_hwc: torch.Tensor, color_space: str) -> torch.Tensor:
+    """Convert normalized [0,1] LUT values back to workspace units."""
+    mins, maxs = _workspace_channel_ranges(color_space, norm_hwc)
+    return norm_hwc * (maxs - mins) + mins
+
+
+def _identity_lut_3d(size: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    """Create identity 3D LUT (stored as normalized output values in [0,1])."""
+    sz = max(5, int(size))
+    coords = torch.linspace(0.0, 1.0, steps=sz, device=device, dtype=dtype)
+    z, y, x = torch.meshgrid(coords, coords, coords, indexing="ij")
+    return torch.stack([x, y, z], dim=0)
+
+
+def _init_lut_from_affine(
+    A: torch.Tensor,
+    b: torch.Tensor,
+    size: int,
+    color_space: str,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Initialize LUT from affine transform for stable convergence."""
+    lut_id = _identity_lut_3d(size, device=device, dtype=dtype)
+    work_in = _denormalize_workspace(lut_id.permute(1, 2, 3, 0), color_space)
+    work_out = torch.matmul(work_in, A.to(dtype=dtype).t()) + b.to(dtype=dtype)
+    out_norm = _normalize_workspace(work_out, color_space)
+    return out_norm.permute(3, 0, 1, 2).contiguous()
+
+
+def _sample_lut_3d(lut_3d: torch.Tensor, coords_norm_hwc: torch.Tensor) -> torch.Tensor:
+    """Sample 3D LUT via trilinear interpolation using 5D grid_sample."""
+    grid = coords_norm_hwc.mul(2.0).sub(1.0).unsqueeze(0).unsqueeze(3)
+    lut_n = lut_3d.unsqueeze(0)
+    sampled = F.grid_sample(
+        lut_n,
+        grid,
+        mode="bilinear",
+        padding_mode="border",
+        align_corners=True,
+    )
+    return sampled.squeeze(0).squeeze(-1).permute(1, 2, 0)
+
+
+def _apply_lut_transform(
+    img_hwc: torch.Tensor,
+    lut_3d: torch.Tensor,
+    color_space: str,
+) -> torch.Tensor:
+    """Apply normalized 3D LUT in selected workspace."""
+    work = _to_workspace(img_hwc, color_space)
+    coords_norm = _normalize_workspace(work, color_space)
+    out_norm = _sample_lut_3d(lut_3d, coords_norm)
+    out_work = _denormalize_workspace(out_norm, color_space)
+    return torch.clamp(_from_workspace(out_work, color_space), 0.0, 1.0)
+
+
+def _lut_smoothness_reg(lut_3d: torch.Tensor) -> torch.Tensor:
+    """Smoothness regularizer over LUT cube dimensions."""
+    dz = (lut_3d[:, 1:, :, :] - lut_3d[:, :-1, :, :]).pow(2).mean()
+    dy = (lut_3d[:, :, 1:, :] - lut_3d[:, :, :-1, :]).pow(2).mean()
+    dx = (lut_3d[:, :, :, 1:] - lut_3d[:, :, :, :-1]).pow(2).mean()
+    return dz + dy + dx
+
+
+def _fit_affine_least_squares(src_hwc: torch.Tensor, dst_hwc: torch.Tensor, color_space: str) -> tuple[torch.Tensor, torch.Tensor]:
+    """Approximate mapping dst ~= A*src + b in selected workspace via least squares."""
+    src_w = _to_workspace(src_hwc, color_space).reshape(-1, 3).to(dtype=torch.float32)
+    dst_w = _to_workspace(dst_hwc, color_space).reshape(-1, 3).to(dtype=torch.float32)
+    ones = torch.ones((src_w.shape[0], 1), device=src_w.device, dtype=src_w.dtype)
+    X = torch.cat([src_w, ones], dim=1)
+    # Solve X @ P = dst, where P[:3,:] is A^T and P[3,:] is b
+    P = torch.linalg.lstsq(X, dst_w).solution
+    A = P[:3, :].t()
+    b = P[3, :]
+    return A.to(dtype=src_hwc.dtype), b.to(dtype=src_hwc.dtype)
+
+
 def _effective_affine_from_bands(
     A_bands: torch.Tensor,
     b_bands: torch.Tensor,
@@ -312,6 +422,10 @@ def _optimize_seam_transform(
     hybrid_residual_strength: float,
     hybrid_residual_reg: float,
     hybrid_coherence_reg: float,
+    lut_size: int,
+    lut_identity_reg: float,
+    lut_smooth_reg: float,
+    lut_lr_scale: float,
 ) -> tuple[torch.Tensor, torch.Tensor, float, dict]:
     """Optimize compact color transform for seam matching."""
     inf_ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else nullcontext()
@@ -323,7 +437,7 @@ def _optimize_seam_transform(
         device = img_work.device
         dtype = img_work.dtype
         model = str(seam_model).lower()
-        if model not in ("v1_affine", "v2_tonal", "v3_hybrid"):
+        if model not in ("v1_affine", "v2_tonal", "v3_hybrid", "v4_lut"):
             model = "v2_tonal"
         A0, b0 = _fit_linear_init(img_work, ref_work, color_space)
         eye = torch.eye(3, device=device, dtype=torch.float32)
@@ -517,6 +631,72 @@ def _optimize_seam_transform(
                 "global_eval_loss": float(global_eval.item()),
                 "fallback_to_global": fallback_to_global,
             }
+        elif model == "v4_lut":
+            lut_sz = int(max(5, lut_size))
+            lut_id = _identity_lut_3d(lut_sz, device=device, dtype=torch.float32)
+            lut0 = _init_lut_from_affine(
+                A0.to(dtype=torch.float32),
+                b0.to(dtype=torch.float32),
+                size=lut_sz,
+                color_space=color_space,
+                device=device,
+                dtype=torch.float32,
+            )
+            lut = lut0.clone().requires_grad_(True)
+            lut_lr = max(1e-5, float(lr) * max(0.05, float(lut_lr_scale)))
+            opt_lut = torch.optim.Adam([lut], lr=lut_lr)
+
+            with torch.enable_grad():
+                for _ in range(steps_int):
+                    check_interrupt()
+                    opt_lut.zero_grad(set_to_none=True)
+                    pred = _apply_lut_transform(img_work, lut.to(dtype=dtype), color_space)
+                    robust = _robust_charbonnier(pred - ref_work, robust_delta).mean()
+                    pred_bchw = pred.permute(2, 0, 1).unsqueeze(0)
+                    ref_bchw = ref_work.permute(2, 0, 1).unsqueeze(0)
+                    ssim_loss = 1.0 - _ssim_similarity_tensor(pred_bchw, ref_bchw)
+                    grad_loss = _gradient_consistency_loss(pred, ref_work)
+                    reg_id = (lut - lut_id).pow(2).mean()
+                    reg_smooth = _lut_smoothness_reg(lut)
+                    loss = (
+                        float(w_mse) * robust
+                        + float(w_ssim) * ssim_loss
+                        + float(w_grad) * grad_loss
+                        + float(reg_weight) * reg_id
+                        + float(lut_identity_reg) * reg_id
+                        + float(lut_smooth_reg) * reg_smooth
+                    )
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_([lut], max_norm=1.0)
+                    opt_lut.step()
+                    final_loss = float(loss.detach().item())
+
+            lut_out = lut.detach().to(dtype=dtype)
+            with torch.no_grad():
+                pred_lut_eval = _apply_lut_transform(img_work, lut_out, color_space)
+                pred_aff_eval = _apply_transform(img_work, A0.to(dtype=dtype), b0.to(dtype=dtype), color_space)
+                lut_eval = (
+                    float(w_mse) * _robust_charbonnier(pred_lut_eval - ref_work, robust_delta).mean()
+                    + float(w_ssim) * (1.0 - _ssim_similarity_tensor(pred_lut_eval.permute(2, 0, 1).unsqueeze(0), ref_work.permute(2, 0, 1).unsqueeze(0)))
+                    + float(w_grad) * _gradient_consistency_loss(pred_lut_eval, ref_work)
+                )
+                aff_eval = (
+                    float(w_mse) * _robust_charbonnier(pred_aff_eval - ref_work, robust_delta).mean()
+                    + float(w_ssim) * (1.0 - _ssim_similarity_tensor(pred_aff_eval.permute(2, 0, 1).unsqueeze(0), ref_work.permute(2, 0, 1).unsqueeze(0)))
+                    + float(w_grad) * _gradient_consistency_loss(pred_aff_eval, ref_work)
+                )
+                fallback_to_affine = bool(float(lut_eval.item()) > float(aff_eval.item()) * 1.01)
+                pred_final = pred_aff_eval if fallback_to_affine else pred_lut_eval
+
+            A_out, b_out = _fit_affine_least_squares(img_work, pred_final, color_space)
+            extra = {
+                "seam_model": "v4_lut",
+                "lut_3d": lut_out,
+                "lut_size": lut_sz,
+                "lut_eval_loss": float(lut_eval.item()),
+                "affine_eval_loss": float(aff_eval.item()),
+                "fallback_to_affine": fallback_to_affine,
+            }
         else:
             A = A0.to(device=device, dtype=torch.float32).clone().requires_grad_(True)
             b = b0.to(device=device, dtype=torch.float32).clone().requires_grad_(True)
@@ -555,6 +735,11 @@ def _optimize_seam_transform(
                 "db_bands": None,
                 "band_weights_mean": None,
                 "hybrid_residual_strength": None,
+                "lut_3d": None,
+                "lut_size": None,
+                "lut_eval_loss": None,
+                "affine_eval_loss": None,
+                "fallback_to_affine": None,
             }
 
     if final_loss is None:
@@ -604,8 +789,8 @@ class ImageSeamMatchToReference:
                     {"default": "720p", "tooltip": "Размер для оптимизации: as_is, 1080p, 720p, 480p (без апскейла)."},
                 ),
                 "seam_model": (
-                    ["v2_tonal", "v3_hybrid", "v1_affine"],
-                    {"default": "v2_tonal", "tooltip": "v2_tonal: 3 тональных affine; v3_hybrid: глобальный affine + тональные residual; v1_affine: один глобальный affine."},
+                    ["v2_tonal", "v3_hybrid", "v4_lut", "v1_affine"],
+                    {"default": "v2_tonal", "tooltip": "v2_tonal: 3 тональных affine; v3_hybrid: глобальный affine + tonal residual; v4_lut: 3D LUT (точнее, но медленнее); v1_affine: один глобальный affine."},
                 ),
                 "steps": ("INT", {"default": 40, "min": 1, "max": 200, "step": 1, "tooltip": "Количество шагов оптимизации."}),
                 "lr": ("FLOAT", {"default": 0.05, "min": 0.0005, "max": 0.5, "step": 0.0005, "tooltip": "Скорость обучения оптимизатора."}),
@@ -625,6 +810,22 @@ class ImageSeamMatchToReference:
                 "hybrid_coherence_reg": (
                     "FLOAT",
                     {"default": 0.001, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на расхождение между tonal-бэндами."},
+                ),
+                "lut_size": (
+                    "INT",
+                    {"default": 25, "min": 5, "max": 49, "step": 2, "tooltip": "Только для v4_lut: размер 3D LUT (17/25/33). Больше = точнее и медленнее."},
+                ),
+                "lut_identity_reg": (
+                    "FLOAT",
+                    {"default": 0.01, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v4_lut: штраф отклонения LUT от identity/affine-init."},
+                ),
+                "lut_smooth_reg": (
+                    "FLOAT",
+                    {"default": 0.02, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v4_lut: штраф гладкости LUT (TV в 3D)."},
+                ),
+                "lut_lr_scale": (
+                    "FLOAT",
+                    {"default": 0.35, "min": 0.05, "max": 2.0, "step": 0.01, "tooltip": "Только для v4_lut: множитель lr для LUT-оптимизации."},
                 ),
             },
         }
@@ -654,6 +855,10 @@ class ImageSeamMatchToReference:
         hybrid_residual_strength=0.7,
         hybrid_residual_reg=0.002,
         hybrid_coherence_reg=0.001,
+        lut_size=25,
+        lut_identity_reg=0.01,
+        lut_smooth_reg=0.02,
+        lut_lr_scale=0.35,
     ):
         """Execute seam-matching transform and return processed outputs for ComfyUI."""
         batch_size = max(reference.shape[0], image.shape[0])
@@ -707,6 +912,10 @@ class ImageSeamMatchToReference:
                 hybrid_residual_strength=float(hybrid_residual_strength),
                 hybrid_residual_reg=float(hybrid_residual_reg),
                 hybrid_coherence_reg=float(hybrid_coherence_reg),
+                lut_size=int(lut_size),
+                lut_identity_reg=float(lut_identity_reg),
+                lut_smooth_reg=float(lut_smooth_reg),
+                lut_lr_scale=float(lut_lr_scale),
             )
 
             if transform_meta.get("seam_model") == "v2_tonal" and transform_meta.get("A_bands") is not None:
@@ -728,6 +937,15 @@ class ImageSeamMatchToReference:
                         transform_meta["db_bands"],
                         str(color_space),
                         residual_strength=float(transform_meta.get("hybrid_residual_strength", hybrid_residual_strength)),
+                    )
+            elif transform_meta.get("seam_model") == "v4_lut" and transform_meta.get("lut_3d") is not None:
+                if bool(transform_meta.get("fallback_to_affine", False)):
+                    corrected = _apply_transform(img_t, A, b, str(color_space))
+                else:
+                    corrected = _apply_lut_transform(
+                        img_t,
+                        transform_meta["lut_3d"],
+                        str(color_space),
                     )
             else:
                 corrected = _apply_transform(img_t, A, b, str(color_space))
@@ -768,8 +986,13 @@ class ImageSeamMatchToReference:
                         "hybrid_residual_strength": float(hybrid_residual_strength),
                         "hybrid_residual_reg": float(hybrid_residual_reg),
                         "hybrid_coherence_reg": float(hybrid_coherence_reg),
+                        "lut_size": int(lut_size),
+                        "lut_identity_reg": float(lut_identity_reg),
+                        "lut_smooth_reg": float(lut_smooth_reg),
+                        "lut_lr_scale": float(lut_lr_scale),
                     },
                     "hybrid_fallback_to_global": bool(transform_meta.get("fallback_to_global", False)),
+                    "lut_fallback_to_affine": bool(transform_meta.get("fallback_to_affine", False)),
                 },
                 "transform": {
                     "matrix": [[round(float(v), 6) for v in row] for row in A.detach().cpu().tolist()],
@@ -824,6 +1047,21 @@ class ImageSeamMatchToReference:
                     payload["transform"]["band_weights_mean"] = [
                         round(float(v), 6) for v in transform_meta["band_weights_mean"].detach().cpu().tolist()
                     ]
+            if transform_meta.get("lut_3d") is not None:
+                lut_cpu = transform_meta["lut_3d"].detach().cpu()
+                lut_n = lut_cpu.shape[-1]
+                mid = lut_n // 2
+                payload["transform"]["lut"] = {
+                    "size": int(transform_meta.get("lut_size", lut_n)),
+                    "fallback_to_affine": bool(transform_meta.get("fallback_to_affine", False)),
+                    "eval_loss_lut": round(float(transform_meta.get("lut_eval_loss", 0.0)), 8),
+                    "eval_loss_affine": round(float(transform_meta.get("affine_eval_loss", 0.0)), 8),
+                    "samples": {
+                        "000": [round(float(v), 6) for v in lut_cpu[:, 0, 0, 0].tolist()],
+                        "mid": [round(float(v), 6) for v in lut_cpu[:, mid, mid, mid].tolist()],
+                        "111": [round(float(v), 6) for v in lut_cpu[:, -1, -1, -1].tolist()],
+                    },
+                }
             json_list.append(json.dumps(payload, ensure_ascii=True))
 
         return (torch.stack(out_list, dim=0), json_list)

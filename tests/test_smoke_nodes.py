@@ -455,7 +455,7 @@ class SmokeTests(unittest.TestCase):
         data = json.loads(payload[0])
         self.assertEqual(data.get("mode"), "seam_match:oklab")
         self.assertEqual(data.get("optimization", {}).get("downscale_long_side"), "720p")
-        self.assertIn(data.get("optimization", {}).get("seam_model"), ("v1_affine", "v2_tonal", "v3_hybrid"))
+        self.assertIn(data.get("optimization", {}).get("seam_model"), ("v1_affine", "v2_tonal", "v3_hybrid", "v4_lut"))
         self.assertIn("matrix", data.get("transform", {}))
 
     def test_seam_match_downscale_options(self):
@@ -482,7 +482,7 @@ class SmokeTests(unittest.TestCase):
         node = seam_mod.ImageSeamMatchToReference()
         ref = torch.rand(1, 16, 16, 3)
         img = torch.rand(1, 16, 16, 3)
-        for model in ("v1_affine", "v2_tonal", "v3_hybrid"):
+        for model in ("v1_affine", "v2_tonal", "v3_hybrid", "v4_lut"):
             _out, payload = node.match(
                 ref,
                 img,
@@ -499,6 +499,8 @@ class SmokeTests(unittest.TestCase):
                 self.assertIn("tonal_bands", data.get("transform", {}))
             if model == "v3_hybrid":
                 self.assertIn("hybrid", data.get("transform", {}))
+            if model == "v4_lut":
+                self.assertIn("lut", data.get("transform", {}))
 
     def test_seam_match_compute_device_cpu(self):
         """Ensure explicit CPU compute_device is accepted and reported."""
