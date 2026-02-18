@@ -205,27 +205,31 @@ def _optimize_seam_transform(
     robust_delta: float,
 ) -> tuple[torch.Tensor, torch.Tensor, float]:
     """Optimize compact color transform for seam matching."""
-    device = img_opt.device
-    dtype = img_opt.dtype
-    A0, b0 = _fit_linear_init(img_opt, ref_opt, color_space)
-    A = A0.to(device=device, dtype=torch.float32).clone().requires_grad_(True)
-    b = b0.to(device=device, dtype=torch.float32).clone().requires_grad_(True)
-    opt = torch.optim.Adam([A, b], lr=float(lr))
-    eye = torch.eye(3, device=device, dtype=torch.float32)
-    steps_int = max(1, int(steps))
-    final_loss = None
-
     inf_ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else nullcontext()
     with inf_ctx:
+        # ComfyUI may call nodes under global inference mode; convert to normal
+        # tensors before using autograd-tracked operations.
+        img_work = img_opt.detach().clone()
+        ref_work = ref_opt.detach().clone()
+        device = img_work.device
+        dtype = img_work.dtype
+        A0, b0 = _fit_linear_init(img_work, ref_work, color_space)
+        A = A0.to(device=device, dtype=torch.float32).clone().requires_grad_(True)
+        b = b0.to(device=device, dtype=torch.float32).clone().requires_grad_(True)
+        opt = torch.optim.Adam([A, b], lr=float(lr))
+        eye = torch.eye(3, device=device, dtype=torch.float32)
+        steps_int = max(1, int(steps))
+        final_loss = None
+
         with torch.enable_grad():
             for _ in range(steps_int):
                 opt.zero_grad(set_to_none=True)
-                pred = _apply_transform(img_opt, A.to(dtype=dtype), b.to(dtype=dtype), color_space)
-                robust = _robust_charbonnier(pred - ref_opt, robust_delta).mean()
+                pred = _apply_transform(img_work, A.to(dtype=dtype), b.to(dtype=dtype), color_space)
+                robust = _robust_charbonnier(pred - ref_work, robust_delta).mean()
                 pred_bchw = pred.permute(2, 0, 1).unsqueeze(0)
-                ref_bchw = ref_opt.permute(2, 0, 1).unsqueeze(0)
+                ref_bchw = ref_work.permute(2, 0, 1).unsqueeze(0)
                 ssim_loss = 1.0 - _ssim_similarity_tensor(pred_bchw, ref_bchw)
-                grad_loss = _gradient_consistency_loss(pred, ref_opt)
+                grad_loss = _gradient_consistency_loss(pred, ref_work)
                 reg_loss = ((A - eye) ** 2).mean() + (b ** 2).mean()
                 loss = (
                     float(w_mse) * robust
@@ -403,4 +407,3 @@ class ImageSeamMatchToReference:
             json_list.append(json.dumps(payload, ensure_ascii=True))
 
         return (torch.stack(out_list, dim=0), json_list)
-

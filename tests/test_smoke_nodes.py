@@ -475,6 +475,24 @@ class SmokeTests(unittest.TestCase):
             data = json.loads(payload[0])
             self.assertEqual(data.get("optimization", {}).get("downscale_long_side"), mode)
 
+    def test_seam_match_accepts_inference_tensors(self):
+        """Ensure seam-match can optimize when inputs come from inference mode."""
+        seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")
+        node = seam_mod.ImageSeamMatchToReference()
+        with torch.inference_mode():
+            ref = torch.rand(1, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+        out, payload = node.match(
+            ref,
+            img,
+            strength=1.0,
+            downscale_long_side="as_is",
+            steps=1,
+            lr=0.03,
+        )
+        self.assertEqual(tuple(out.shape), (1, 16, 16, 3))
+        self.assertEqual(json.loads(payload[0]).get("status"), "ok")
+
     def test_video_frame_topk_helpers(self):
         """Validate top-k and confidence helper math for frame matching."""
         video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_match")

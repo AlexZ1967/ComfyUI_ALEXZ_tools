@@ -7,6 +7,10 @@
   - added fixed optimization size options:
     `downscale_long_side` = `as_is` / `1080p` / `720p` / `480p`;
   - outputs optimization diagnostics in `seam_json`.
+  - fixed ComfyUI inference-mode compatibility:
+    seam optimization now converts inference tensors to regular tensors before
+    autograd, preventing runtime error
+    "Inference tensors cannot be saved for backward".
 - Color Match To Reference UI/UX and docs update (Stage 4):
   - added dedicated preset comparison matrix in
     `guides/GUIDE_COLOR_MATCH_DETAILED.md` with columns:
