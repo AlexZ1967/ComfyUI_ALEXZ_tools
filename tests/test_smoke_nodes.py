@@ -632,14 +632,37 @@ class SmokeTests(unittest.TestCase):
             img,
             strength=1.0,
             compute_device="cpu",
-            export_lut_cube=False,
+            export_lut_cube=True,
+            lut_size=17,
         )
         self.assertEqual(tuple(out.shape), (1, 20, 20, 4))
-        self.assertEqual(cube_text[0], "")
+        self.assertIn("LUT_3D_SIZE 17", cube_text[0])
         data = json.loads(look_json[0])
         self.assertEqual(data.get("schema_name"), "alexz.look_match.resolve")
         self.assertEqual(data.get("schema_version"), 1)
         self.assertEqual(data.get("status"), "ok")
+        self.assertEqual(data.get("phase"), "B_resolve_mvp")
+
+    def test_look_match_resolve_moves_toward_reference(self):
+        """Ensure resolve pipeline improves MSE on a simple tonal/color shift case."""
+        look_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_look_match")
+        node = look_mod.ImageLookMatchResolve()
+        ref = torch.full((1, 24, 24, 3), 0.8, dtype=torch.float32)
+        img = torch.full((1, 24, 24, 3), 0.2, dtype=torch.float32)
+        out, _look_json, _cube_text = node.match(
+            ref,
+            img,
+            strength=1.0,
+            compute_device="cpu",
+            downscale_long_side="as_is",
+            w_exposure=1.0,
+            w_tone=1.0,
+            w_chroma=1.0,
+            export_lut_cube=False,
+        )
+        mse_before = float(((img - ref) ** 2).mean().item())
+        mse_after = float(((out - ref) ** 2).mean().item())
+        self.assertLess(mse_after, mse_before)
 
     def test_look_match_nuke_build_apply_contract(self):
         """Ensure build/apply look-match nodes share stable schema contracts."""

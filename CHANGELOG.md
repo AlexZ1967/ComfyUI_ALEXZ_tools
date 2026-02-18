@@ -20,6 +20,13 @@
   - added initial guide:
     `guides/GUIDE_LOOK_MATCH.md`;
   - registered nodes in central registry and added smoke tests for contracts.
+- Phase B Resolve MVP implemented:
+  - `ImageLookMatchResolve` now performs staged fitting and application:
+    exposure/WB -> tone (`monotonic_spline` / `gamma_gain_lift`) ->
+    palette affine (`lut3d` / `rbf`) -> optional skin protection;
+  - `export_lut_cube` now bakes fitted resolve pipeline into `cube_text`
+    (non-identity LUT for current fit);
+  - extended resolve diagnostics JSON with fit/transform stage data.
 - Version updated to `0.22.0` in `pyproject.toml` and `README.md`.
 
 ## 0.21.2 — 2026-02-18

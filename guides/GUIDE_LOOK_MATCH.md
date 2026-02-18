@@ -2,12 +2,14 @@
 
 ## Назначение
 Набор нод для color/look matching в случаях, когда референс и исходник сильно отличаются.  
-В `0.22.x` это Phase A (contract baseline): зафиксированы интерфейсы, JSON-схемы и безопасное поведение без агрессивной перекраски.
+В `0.22.x`:
+- `Look Match Resolve` — Phase B MVP (рабочий staged алгоритм).
+- `Look Match Nuke Build/Apply` — Phase A contract baseline.
 
 ## Когда использовать
-- Нужен будущий профессиональный pipeline `Resolve-style` и `Nuke-style`.
-- Нужно заранее собрать workflow под стабильные контракты входов/выходов.
-- Требуется совместимость для дальнейшего апгрейда Phase B/C/D без пересборки графа.
+- Нужен быстрый и управляемый auto-look для сложного референса (`Look Match Resolve`).
+- Нужна заготовка model-pipeline Build/Apply под дальнейшую эволюцию (`Nuke` ноды).
+- Требуется совместимость контрактов для последующих фаз roadmap.
 
 ## Минимальный сценарий (3 шага)
 1. Для монолитного режима используйте `Look Match Resolve`.
@@ -28,6 +30,13 @@
 - `subject_mask`, `sky_mask`, `ground_mask`
 - `export_lut_cube`
 
+Алгоритм `Look Match Resolve` (Phase B MVP):
+1. Fit exposure/WB gain по downscaled версии.
+2. Fit tone model (`monotonic_spline` или `gamma_gain_lift`).
+3. Fit palette affine (`lut3d`=linear fit, `rbf`=mean/std fallback).
+4. Применение stages на full-res с весами.
+5. Опциональная защита skin-tones.
+
 `Look Match Nuke Build`:
 - `reference`, `source`
 - `fit_global`, `fit_tone`, `fit_hue_sectors`, `fit_local_regions`
@@ -41,21 +50,22 @@
 ## Decision helper
 - Нужна "одна нода, быстро": `Look Match Resolve`.
 - Нужен reusable look для серии кадров: `Look Match Nuke Build` + `Look Match Nuke Apply`.
-- Нужна максимальная художественная точность уже сейчас: пока используйте ваши текущие ручные пайплайны, т.к. Phase A — контрактный базис.
+- Нужна максимальная управляемость по регионам/шотам: пока через ручной грейдинг или будущие фазы Nuke-пайплайна.
 
 ## Интерпретация выходов
 - `matched_image`: результат применения текущего этапа.
 - `look_json`: JSON диагностики resolve-режима.
 - `look_model_json`: JSON-модель build-режима.
 - `apply_json`: JSON статуса применения модели.
-- `cube_text`: текст `.cube` (identity в Phase A при включенном экспорте).
+- `cube_text`: текст `.cube` (для Resolve-ноды запекается текущий fitted look).
 
 ## Типовые ошибки и решения
 - `invalid_or_missing_look_model_schema` в `apply_json`: подайте валидный `look_model_json` из `Look Match Nuke Build`.
 - `cuda_requested_but_unavailable`: переключите `compute_device` в `auto` или `cpu`.
-- Неожиданный визуальный эффект: в Phase A intentionally baseline-логика; качественная перекраска будет в следующих фазах roadmap.
+- Слишком агрессивный результат в Resolve-нoде: снизьте `strength`, `w_tone`, `w_chroma` и/или включите `skin_protection`.
 
 ## Производительность
-- Phase A быстрый и безопасный, т.к. без тяжелой оптимизации.
+- `Look Match Resolve` использует fit на downscaled изображении и apply на full-res.
 - Для больших батчей используйте `compute_device=auto`.
-- Для слабых систем снижайте `downscale_long_side`.
+- Для слабых систем снижайте `downscale_long_side` до `720p`.
+- `Nuke Build/Apply` в текущей фазе легковесны и служат контрактной базой.

@@ -4,11 +4,11 @@ Author: AlexZ1967
 Last updated: 2026-02-18
 
 Description:
-    Contract-first Look Match nodes for strong-reference scenarios.
+    Look Match nodes for strong-reference scenarios.
 
 Purpose:
-    Introduces Phase A interfaces for Resolve-style and Nuke-style look
-    pipelines with stable JSON schemas and safe identity-grade behavior.
+    Provides Resolve-style look transfer (Phase B MVP) and Nuke-style
+    Build/Apply contract nodes (Phase A baseline) with stable JSON schemas.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import json
 from typing import Any
 
 import torch
+import torch.nn.functional as torch_nn_func
 from tqdm import tqdm
 
 from ..utils import color_match_utils
@@ -26,6 +27,13 @@ _LOOK_RESOLVE_SCHEMA = "alexz.look_match.resolve"
 _LOOK_MODEL_SCHEMA = "alexz.look_model.nuke_build"
 _LOOK_APPLY_SCHEMA = "alexz.look_apply.nuke_apply"
 _SCHEMA_VERSION = 1
+_EPS = 1e-6
+_LONG_SIDE_TARGET = {
+    "as_is": None,
+    "1440p": 1440,
+    "1080p": 1080,
+    "720p": 720,
+}
 
 
 def _pad_batch_last(batch: torch.Tensor, batch_size: int) -> torch.Tensor:
@@ -71,6 +79,299 @@ def _identity_cube_text(size: int) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _prepare_optional_mask_batch(mask: torch.Tensor | None, batch_size: int, height: int, width: int) -> torch.Tensor | None:
+    """Normalize optional mask to BHW float tensor in [0, 1]."""
+    if mask is None:
+        return None
+    mm = _pad_batch_last(mask, batch_size).float()
+    if mm.dim() == 4:
+        if mm.shape[-1] == 1:
+            mm = mm[..., 0]
+        elif mm.shape[1] == 1:
+            mm = mm[:, 0]
+        else:
+            mm = mm[..., 0]
+    if mm.dim() == 2:
+        mm = mm.unsqueeze(0)
+    max_val = float(mm.max().item()) if mm.numel() else 0.0
+    if max_val > 1.0:
+        mm = mm / 255.0
+    mm = mm.clamp(0.0, 1.0)
+    if mm.shape[-2] != height or mm.shape[-1] != width:
+        mm = torch_nn_func.interpolate(mm.unsqueeze(1), size=(height, width), mode="nearest").squeeze(1)
+    return mm
+
+
+def _resize_mask_hw(mask_hw: torch.Tensor | None, height: int, width: int) -> torch.Tensor | None:
+    """Resize HxW mask to target HxW using nearest interpolation."""
+    if mask_hw is None:
+        return None
+    if mask_hw.shape[-2] == height and mask_hw.shape[-1] == width:
+        return mask_hw
+    return torch_nn_func.interpolate(mask_hw.unsqueeze(0).unsqueeze(0), size=(height, width), mode="nearest").squeeze(0).squeeze(0)
+
+
+def _downscale_hwc_long_side(image_hwc: torch.Tensor, mode: str) -> tuple[torch.Tensor, dict]:
+    """Downscale HWC tensor by long side target without upscaling."""
+    h = int(image_hwc.shape[0])
+    w = int(image_hwc.shape[1])
+    target = _LONG_SIDE_TARGET.get(str(mode), None)
+    if target is None:
+        return image_hwc, {"optimized_size": [h, w], "scale": 1.0}
+    long_side = max(h, w)
+    if long_side <= int(target):
+        return image_hwc, {"optimized_size": [h, w], "scale": 1.0}
+    scale = float(target) / float(long_side)
+    nh = max(1, int(round(h * scale)))
+    nw = max(1, int(round(w * scale)))
+    resized = torch_nn_func.interpolate(
+        image_hwc.permute(2, 0, 1).unsqueeze(0),
+        size=(nh, nw),
+        mode="bilinear",
+        align_corners=False,
+    ).squeeze(0).permute(1, 2, 0)
+    return resized, {"optimized_size": [nh, nw], "scale": scale}
+
+
+def _luma(rgb_hwc: torch.Tensor) -> torch.Tensor:
+    """Compute luma channel from RGB image."""
+    return (
+        rgb_hwc[..., 0] * 0.2126
+        + rgb_hwc[..., 1] * 0.7152
+        + rgb_hwc[..., 2] * 0.0722
+    )
+
+
+def _stage_alpha(weight: float) -> float:
+    """Convert stage weight to bounded blend alpha."""
+    w = max(0.0, float(weight))
+    return float(1.0 - torch.exp(torch.tensor(-w)).item())
+
+
+def _blend_stage(base: torch.Tensor, stage: torch.Tensor, alpha: float) -> torch.Tensor:
+    """Blend stage output with base image."""
+    a = float(max(0.0, min(1.0, alpha)))
+    if a <= 0.0:
+        return base
+    if a >= 1.0:
+        return stage
+    return base * (1.0 - a) + stage * a
+
+
+def _compose_fit_mask(subject: torch.Tensor | None, sky: torch.Tensor | None, ground: torch.Tensor | None) -> torch.Tensor | None:
+    """Compose weighted fit mask from optional region masks."""
+    template = subject if subject is not None else (sky if sky is not None else ground)
+    if template is None:
+        return None
+    m = torch.full_like(template, 0.25)
+    if subject is not None:
+        m = m + subject * 1.0
+    if sky is not None:
+        m = m + sky * 0.5
+    if ground is not None:
+        m = m + ground * 0.5
+    return m.clamp(0.0, 1.5)
+
+
+def _weighted_mean_channel(img_hwc: torch.Tensor, mask_hw: torch.Tensor | None) -> torch.Tensor:
+    """Compute per-channel weighted mean for HWC tensor."""
+    if mask_hw is None:
+        return img_hwc.mean(dim=(0, 1))
+    w = mask_hw.unsqueeze(-1).clamp(0.0, 1.5)
+    denom = w.sum().clamp_min(_EPS)
+    return (img_hwc * w).sum(dim=(0, 1)) / denom
+
+
+def _weighted_luma_mean(img_hwc: torch.Tensor, mask_hw: torch.Tensor | None) -> torch.Tensor:
+    """Compute weighted luma mean."""
+    lum = _luma(img_hwc)
+    if mask_hw is None:
+        return lum.mean()
+    w = mask_hw.clamp(0.0, 1.5)
+    return (lum * w).sum() / w.sum().clamp_min(_EPS)
+
+
+def _fit_exposure_gain(src_hwc: torch.Tensor, ref_hwc: torch.Tensor, fit_mask_hw: torch.Tensor | None) -> torch.Tensor:
+    """Fit exposure + white-balance gain vector."""
+    src_mean = _weighted_mean_channel(src_hwc, fit_mask_hw)
+    ref_mean = _weighted_mean_channel(ref_hwc, fit_mask_hw)
+    wb_gain = (ref_mean / src_mean.clamp_min(_EPS)).clamp(0.2, 5.0)
+    wb_gain = wb_gain / wb_gain.mean().clamp_min(_EPS)
+    src_l = _weighted_luma_mean(src_hwc, fit_mask_hw)
+    ref_l = _weighted_luma_mean(ref_hwc, fit_mask_hw)
+    exp_gain = (ref_l / src_l.clamp_min(_EPS)).clamp(0.25, 4.0)
+    return (wb_gain * exp_gain).clamp(0.2, 5.0)
+
+
+def _ensure_strict_knots(knots: torch.Tensor) -> torch.Tensor:
+    """Enforce monotonic knot vector for piecewise mapping."""
+    kk = knots.clamp(0.0, 1.0)
+    kk = torch.cummax(kk, dim=0).values
+    n = int(kk.numel())
+    if n > 1:
+        kk = (kk + torch.linspace(0.0, 1e-4, n, device=kk.device, dtype=kk.dtype)).clamp(0.0, 1.0)
+    kk[0] = 0.0
+    kk[-1] = 1.0
+    return kk
+
+
+def _piecewise_linear_map(values: torch.Tensor, xk: torch.Tensor, yk: torch.Tensor) -> torch.Tensor:
+    """Map values by monotonic piecewise linear curve."""
+    xk = _ensure_strict_knots(xk)
+    yk = yk.clamp(0.0, 1.0)
+    flat = values.reshape(-1)
+    idx = torch.bucketize(flat, xk)
+    last = int(xk.numel() - 1)
+    idx1 = idx.clamp(1, last)
+    idx0 = idx1 - 1
+    x0 = xk[idx0]
+    x1 = xk[idx1]
+    y0 = yk[idx0]
+    y1 = yk[idx1]
+    t = (flat - x0) / (x1 - x0).clamp_min(_EPS)
+    out = y0 + t * (y1 - y0)
+    out = torch.where(idx == 0, yk[0], out)
+    out = torch.where(idx >= xk.numel(), yk[-1], out)
+    return out.reshape(values.shape).clamp(0.0, 1.0)
+
+
+def _fit_tone_params(src_hwc: torch.Tensor, ref_hwc: torch.Tensor, tone_model: str) -> dict:
+    """Fit tone model parameters from source/reference pair."""
+    src_l = _luma(src_hwc).clamp(0.0, 1.0)
+    ref_l = _luma(ref_hwc).clamp(0.0, 1.0)
+    model = str(tone_model)
+    if model == "gamma_gain_lift":
+        src_m = src_l.mean().clamp_min(_EPS)
+        ref_m = ref_l.mean().clamp_min(_EPS)
+        gamma = (torch.log(ref_m) / torch.log(src_m)).clamp(0.35, 3.0)
+        mapped = src_l.clamp_min(_EPS).pow(gamma)
+        mapped_m = mapped.mean()
+        mapped_std = mapped.std(unbiased=False).clamp_min(_EPS)
+        ref_std = ref_l.std(unbiased=False).clamp_min(_EPS)
+        gain = (ref_std / mapped_std).clamp(0.25, 4.0)
+        lift = (ref_m - mapped_m * gain).clamp(-0.5, 0.5)
+        return {
+            "type": "gamma_gain_lift",
+            "gamma": float(gamma.item()),
+            "gain": float(gain.item()),
+            "lift": float(lift.item()),
+        }
+    q = torch.linspace(0.0, 1.0, 33, device=src_hwc.device, dtype=src_hwc.dtype)
+    src_q = torch.quantile(src_l.reshape(-1), q)
+    ref_q = torch.quantile(ref_l.reshape(-1), q)
+    return {
+        "type": "monotonic_spline",
+        "xk": src_q.detach(),
+        "yk": ref_q.detach(),
+    }
+
+
+def _apply_tone_model(src_hwc: torch.Tensor, tone_params: dict) -> torch.Tensor:
+    """Apply fitted tone model while preserving chroma relation."""
+    src_l = _luma(src_hwc).clamp(0.0, 1.0)
+    ttype = str(tone_params.get("type", "monotonic_spline"))
+    if ttype == "gamma_gain_lift":
+        gamma = float(tone_params.get("gamma", 1.0))
+        gain = float(tone_params.get("gain", 1.0))
+        lift = float(tone_params.get("lift", 0.0))
+        mapped_l = (src_l.clamp_min(_EPS).pow(gamma) * gain + lift).clamp(0.0, 1.0)
+    else:
+        xk = tone_params.get("xk")
+        yk = tone_params.get("yk")
+        if not isinstance(xk, torch.Tensor) or not isinstance(yk, torch.Tensor):
+            return src_hwc
+        mapped_l = _piecewise_linear_map(src_l, xk.to(src_hwc.device), yk.to(src_hwc.device))
+    ratio = (mapped_l / src_l.clamp_min(_EPS)).clamp(0.0, 4.0).unsqueeze(-1)
+    return (src_hwc * ratio).clamp(0.0, 1.0)
+
+
+def _fit_palette_affine(src_hwc: torch.Tensor, ref_hwc: torch.Tensor, fit_mask_hw: torch.Tensor | None, palette_model: str) -> tuple[torch.Tensor, torch.Tensor]:
+    """Fit per-channel affine palette transform."""
+    src_b = src_hwc.unsqueeze(0)
+    ref_b = ref_hwc.unsqueeze(0)
+    mask_b = fit_mask_hw.unsqueeze(0) if fit_mask_hw is not None else None
+    if str(palette_model) == "rbf":
+        scale, offset = color_match_utils.mean_std_fit_torch_batch(src_b, ref_b, mask_b)
+    else:
+        scale, offset = color_match_utils.linear_fit_torch_batch(src_b, ref_b, mask_b)
+    return scale[0].clamp(0.2, 5.0), offset[0].clamp(-1.0, 1.0)
+
+
+def _estimate_skin_mask(rgb_hwc: torch.Tensor) -> torch.Tensor:
+    """Estimate soft skin mask from RGB heuristics."""
+    r = rgb_hwc[..., 0]
+    g = rgb_hwc[..., 1]
+    b = rgb_hwc[..., 2]
+    cond = (
+        (r > 0.35)
+        & (g > 0.20)
+        & (b > 0.10)
+        & (r > g)
+        & (r > b)
+        & ((r - g) > 0.02)
+    )
+    return cond.to(dtype=rgb_hwc.dtype)
+
+
+def _apply_resolve_pipeline_to_rgb(
+    src_hwc: torch.Tensor,
+    exposure_gain: torch.Tensor,
+    exposure_alpha: float,
+    tone_params: dict,
+    tone_alpha: float,
+    palette_scale: torch.Tensor,
+    palette_offset: torch.Tensor,
+    palette_alpha: float,
+) -> torch.Tensor:
+    """Apply resolve stages to one RGB image tensor."""
+    exp_stage = (src_hwc * exposure_gain.view(1, 1, 3)).clamp(0.0, 1.0)
+    cur = _blend_stage(src_hwc, exp_stage, exposure_alpha).clamp(0.0, 1.0)
+
+    tone_stage = _apply_tone_model(cur, tone_params)
+    cur = _blend_stage(cur, tone_stage, tone_alpha).clamp(0.0, 1.0)
+
+    pal_stage = (cur * palette_scale.view(1, 1, 3) + palette_offset.view(1, 1, 3)).clamp(0.0, 1.0)
+    cur = _blend_stage(cur, pal_stage, palette_alpha).clamp(0.0, 1.0)
+    return cur
+
+
+def _build_resolve_cube_text(
+    size: int,
+    exposure_gain: torch.Tensor,
+    exposure_alpha: float,
+    tone_params: dict,
+    tone_alpha: float,
+    palette_scale: torch.Tensor,
+    palette_offset: torch.Tensor,
+    palette_alpha: float,
+) -> str:
+    """Bake current resolve parameters into .cube text."""
+    n = max(2, int(size))
+    device = exposure_gain.device
+    vals = torch.linspace(0.0, 1.0, n, device=device, dtype=exposure_gain.dtype)
+    bb, gg, rr = torch.meshgrid(vals, vals, vals, indexing="ij")
+    rgb = torch.stack([rr, gg, bb], dim=-1).reshape(-1, 3)
+    rgb_hwc = rgb.reshape(-1, 1, 3)
+    corrected = _apply_resolve_pipeline_to_rgb(
+        rgb_hwc,
+        exposure_gain=exposure_gain,
+        exposure_alpha=exposure_alpha,
+        tone_params=tone_params,
+        tone_alpha=tone_alpha,
+        palette_scale=palette_scale,
+        palette_offset=palette_offset,
+        palette_alpha=palette_alpha,
+    ).reshape(-1, 3)
+
+    lines = [
+        "# Generated by ALEXZ_tools Look Match Resolve Phase B",
+        f"LUT_3D_SIZE {n}",
+    ]
+    for row in corrected.detach().cpu().tolist():
+        lines.append(f"{row[0]:.6f} {row[1]:.6f} {row[2]:.6f}")
+    return "\n".join(lines) + "\n"
+
+
 def _safe_json_loads(text: Any) -> dict:
     """Parse JSON object from arbitrary STRING input."""
     if isinstance(text, (list, tuple)):
@@ -110,7 +411,7 @@ def _build_resolve_input_types() -> dict:
             ),
             "downscale_long_side": (
                 ["as_is", "1440p", "1080p", "720p"],
-                {"default": "1080p", "tooltip": "Размер внутренней оптимизации (Phase A: контрактный параметр)."},
+                {"default": "1080p", "tooltip": "Размер для fit-этапов (без апскейла)."},
             ),
             "tone_model": (
                 ["monotonic_spline", "gamma_gain_lift"],
@@ -118,7 +419,7 @@ def _build_resolve_input_types() -> dict:
             ),
             "palette_model": (
                 ["lut3d", "rbf"],
-                {"default": "lut3d", "tooltip": "Модель палитрового переноса (Phase A: контракт)."},
+                {"default": "lut3d", "tooltip": "Модель палитрового переноса: affine(lut3d) или mean/std(rbf)."},
             ),
             "lut_size": (
                 "INT",
@@ -133,9 +434,9 @@ def _build_resolve_input_types() -> dict:
                 {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила защиты skin-tones."},
             ),
             "subject_mask": ("MASK", {"tooltip": "Опциональная маска объекта (Phase A: контракт)."}),
-            "sky_mask": ("MASK", {"tooltip": "Опциональная маска неба (Phase A: контракт)."}),
-            "ground_mask": ("MASK", {"tooltip": "Опциональная маска земли/фона (Phase A: контракт)."}),
-            "export_lut_cube": ("BOOLEAN", {"default": False, "tooltip": "Выдать identity .cube (Phase A)."}),
+            "sky_mask": ("MASK", {"tooltip": "Опциональная маска неба."}),
+            "ground_mask": ("MASK", {"tooltip": "Опциональная маска земли/фона."}),
+            "export_lut_cube": ("BOOLEAN", {"default": False, "tooltip": "Запечь текущий resolve-look в .cube текст."}),
         },
     }
 
@@ -207,7 +508,7 @@ def _build_nuke_apply_input_types() -> dict:
 
 
 class ImageLookMatchResolve:
-    """Resolve-style monolithic look-match node (Phase A contract implementation)."""
+    """Resolve-style monolithic look-match node (Phase B MVP)."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -240,7 +541,7 @@ class ImageLookMatchResolve:
         ground_mask=None,
         export_lut_cube=False,
     ):
-        """Run Phase A resolve-style look transfer (identity-safe baseline)."""
+        """Run Resolve-style look transfer with staged fit/apply pipeline."""
         batch_size = max(reference.shape[0], image.shape[0])
         ref_batch = _pad_batch_last(reference, batch_size)
         img_batch = _pad_batch_last(image, batch_size)
@@ -253,8 +554,16 @@ class ImageLookMatchResolve:
         if img_alpha is not None and (img_alpha.shape[1] != ref_h or img_alpha.shape[2] != ref_w):
             img_alpha = color_match_utils.resize_images_to_size(img_alpha, ref_h, ref_w)
 
+        subject_batch = _prepare_optional_mask_batch(subject_mask, batch_size, ref_h, ref_w)
+        sky_batch = _prepare_optional_mask_batch(sky_mask, batch_size, ref_h, ref_w)
+        ground_batch = _prepare_optional_mask_batch(ground_mask, batch_size, ref_h, ref_w)
+
         device, warning = _resolve_compute_device(compute_device)
         s = float(max(0.0, min(1.0, strength)))
+        exposure_alpha = _stage_alpha(float(w_exposure))
+        tone_alpha = _stage_alpha(float(w_tone))
+        palette_alpha = _stage_alpha(float(w_chroma))
+        skin_alpha = float(max(0.0, min(1.0, float(skin_protection_strength))))
         out_list = []
         json_list = []
         cube_list = []
@@ -264,9 +573,39 @@ class ImageLookMatchResolve:
             check_interrupt()
             ref_t = ref_rgb[idx].detach().to(device=device).clone()
             img_t = img_rgb[idx].detach().to(device=device).clone()
+            subject_t = subject_batch[idx].to(device=device) if subject_batch is not None else None
+            sky_t = sky_batch[idx].to(device=device) if sky_batch is not None else None
+            ground_t = ground_batch[idx].to(device=device) if ground_batch is not None else None
 
-            # Phase A behavior intentionally keeps transform near identity.
-            corrected = img_t
+            fit_mask_full = _compose_fit_mask(subject_t, sky_t, ground_t)
+            img_fit, ds_info = _downscale_hwc_long_side(img_t, downscale_long_side)
+            ref_fit, _ = _downscale_hwc_long_side(ref_t, downscale_long_side)
+            fit_mask = _resize_mask_hw(fit_mask_full, img_fit.shape[0], img_fit.shape[1]) if fit_mask_full is not None else None
+
+            exposure_gain = _fit_exposure_gain(img_fit, ref_fit, fit_mask)
+            tone_fit_src = _blend_stage(
+                img_fit,
+                (img_fit * exposure_gain.view(1, 1, 3)).clamp(0.0, 1.0),
+                exposure_alpha,
+            )
+            tone_params = _fit_tone_params(tone_fit_src, ref_fit, tone_model)
+            tone_fit_img = _apply_tone_model(tone_fit_src, tone_params)
+            palette_fit_src = _blend_stage(tone_fit_src, tone_fit_img, tone_alpha)
+            palette_scale, palette_offset = _fit_palette_affine(palette_fit_src, ref_fit, fit_mask, palette_model)
+
+            corrected = _apply_resolve_pipeline_to_rgb(
+                img_t,
+                exposure_gain=exposure_gain,
+                exposure_alpha=exposure_alpha,
+                tone_params=tone_params,
+                tone_alpha=tone_alpha,
+                palette_scale=palette_scale,
+                palette_offset=palette_offset,
+                palette_alpha=palette_alpha,
+            )
+            if bool(skin_protection) and skin_alpha > 0.0:
+                skin_mask_soft = _estimate_skin_mask(img_t).unsqueeze(-1)
+                corrected = corrected * (1.0 - skin_mask_soft * skin_alpha) + img_t * (skin_mask_soft * skin_alpha)
             if s < 1.0:
                 corrected = img_t * (1.0 - s) + corrected * s
             corrected = corrected.clamp(0.0, 1.0)
@@ -284,11 +623,23 @@ class ImageLookMatchResolve:
                 "schema_name": _LOOK_RESOLVE_SCHEMA,
                 "schema_version": _SCHEMA_VERSION,
                 "mode": f"look_match_resolve:{working_space}",
-                "phase": "A_contract_baseline",
+                "phase": "B_resolve_mvp",
                 "contracts": {
                     "tone_model": str(tone_model),
                     "palette_model": str(palette_model),
                     "downscale_long_side": str(downscale_long_side),
+                },
+                "fit": {
+                    "optimized_size": ds_info.get("optimized_size"),
+                    "exposure_alpha": round(float(exposure_alpha), 6),
+                    "tone_alpha": round(float(tone_alpha), 6),
+                    "palette_alpha": round(float(palette_alpha), 6),
+                },
+                "transform": {
+                    "exposure_gain": [round(float(v), 6) for v in exposure_gain.detach().cpu().tolist()],
+                    "palette_scale": [round(float(v), 6) for v in palette_scale.detach().cpu().tolist()],
+                    "palette_offset": [round(float(v), 6) for v in palette_offset.detach().cpu().tolist()],
+                    "tone_type": str(tone_params.get("type", "unknown")),
                 },
                 "optimization": {
                     "compute_device_requested": str(compute_device).lower(),
@@ -316,7 +667,20 @@ class ImageLookMatchResolve:
                 },
             }
             json_list.append(json.dumps(payload, ensure_ascii=True))
-            cube_list.append(_identity_cube_text(lut_size) if export_lut_cube else "")
+            cube_list.append(
+                _build_resolve_cube_text(
+                    lut_size,
+                    exposure_gain=exposure_gain,
+                    exposure_alpha=exposure_alpha,
+                    tone_params=tone_params,
+                    tone_alpha=tone_alpha,
+                    palette_scale=palette_scale,
+                    palette_offset=palette_offset,
+                    palette_alpha=palette_alpha,
+                )
+                if export_lut_cube
+                else ""
+            )
 
         return (torch.stack(out_list, dim=0), json_list, cube_list)
 

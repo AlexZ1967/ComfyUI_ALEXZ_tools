@@ -111,7 +111,7 @@ Guide: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md), к
 
 ## Look Match Resolve
 Resolve-style монолитная нода для look transfer.  
-Текущий статус: Phase A contract baseline (стабильные интерфейсы и JSON-схема, безопасное базовое поведение).
+Текущий статус: Phase B MVP (реальный staged match: exposure/WB -> tone -> palette -> optional skin protection).
 
 - Display name: Look Match Resolve  
 - Type name: ImageLookMatchResolve  

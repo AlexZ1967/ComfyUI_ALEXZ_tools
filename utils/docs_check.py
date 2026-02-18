@@ -39,6 +39,24 @@ NODE_DOCS = [
         "readme_heading": "## Color Match To Reference",
     },
     {
+        "file": "nodes/image_look_match.py",
+        "class": "ImageLookMatchResolve",
+        "guide": "guides/GUIDE_LOOK_MATCH.md",
+        "readme_heading": "## Look Match Resolve",
+    },
+    {
+        "file": "nodes/image_look_match.py",
+        "class": "ImageLookMatchNukeBuild",
+        "guide": "guides/GUIDE_LOOK_MATCH.md",
+        "readme_heading": "## Look Match Nuke Build",
+    },
+    {
+        "file": "nodes/image_look_match.py",
+        "class": "ImageLookMatchNukeApply",
+        "guide": "guides/GUIDE_LOOK_MATCH.md",
+        "readme_heading": "## Look Match Nuke Apply",
+    },
+    {
         "file": "nodes/image_seam_match.py",
         "class": "ImageSeamMatchToReference",
         "guide": "guides/GUIDE_SEAM_MATCH.md",

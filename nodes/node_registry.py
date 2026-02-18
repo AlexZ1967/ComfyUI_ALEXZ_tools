@@ -77,7 +77,7 @@ NODE_UI_METADATA = {
         "search_aliases": ["color", "match", "reference", "grade"],
     },
     "ImageLookMatchResolve": {
-        "description": "Resolve-style монолитный перенос look (Phase A contract baseline).",
+        "description": "Resolve-style монолитный перенос look (Phase B MVP).",
         "output_tooltips": ["Скорректированное изображение.", "JSON контракта/диагностики.", "Опциональный .cube текст."],
         "search_aliases": ["look", "resolve", "match", "grade"],
     },
