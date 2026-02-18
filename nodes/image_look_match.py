@@ -133,6 +133,18 @@ def _downscale_hwc_long_side(image_hwc: torch.Tensor, mode: str) -> tuple[torch.
     return resized, {"optimized_size": [nh, nw], "scale": scale}
 
 
+def _resize_hwc_to(image_hwc: torch.Tensor, height: int, width: int) -> torch.Tensor:
+    """Resize HWC tensor to requested size with bilinear filtering."""
+    if int(image_hwc.shape[0]) == int(height) and int(image_hwc.shape[1]) == int(width):
+        return image_hwc
+    return torch_nn_func.interpolate(
+        image_hwc.permute(2, 0, 1).unsqueeze(0),
+        size=(int(height), int(width)),
+        mode="bilinear",
+        align_corners=False,
+    ).squeeze(0).permute(1, 2, 0)
+
+
 def _luma(rgb_hwc: torch.Tensor) -> torch.Tensor:
     """Compute luma channel from RGB image."""
     return (
@@ -546,17 +558,12 @@ class ImageLookMatchResolve:
         ref_batch = _pad_batch_last(reference, batch_size)
         img_batch = _pad_batch_last(image, batch_size)
 
-        ref_h, ref_w = ref_batch.shape[1], ref_batch.shape[2]
         ref_rgb, _ = _split_alpha(ref_batch)
         img_rgb, img_alpha = _split_alpha(img_batch)
-        if img_rgb.shape[1] != ref_h or img_rgb.shape[2] != ref_w:
-            img_rgb = color_match_utils.resize_images_to_size(img_rgb, ref_h, ref_w)
-        if img_alpha is not None and (img_alpha.shape[1] != ref_h or img_alpha.shape[2] != ref_w):
-            img_alpha = color_match_utils.resize_images_to_size(img_alpha, ref_h, ref_w)
-
-        subject_batch = _prepare_optional_mask_batch(subject_mask, batch_size, ref_h, ref_w)
-        sky_batch = _prepare_optional_mask_batch(sky_mask, batch_size, ref_h, ref_w)
-        ground_batch = _prepare_optional_mask_batch(ground_mask, batch_size, ref_h, ref_w)
+        img_h, img_w = img_rgb.shape[1], img_rgb.shape[2]
+        subject_batch = _prepare_optional_mask_batch(subject_mask, batch_size, img_h, img_w)
+        sky_batch = _prepare_optional_mask_batch(sky_mask, batch_size, img_h, img_w)
+        ground_batch = _prepare_optional_mask_batch(ground_mask, batch_size, img_h, img_w)
 
         device, warning = _resolve_compute_device(compute_device)
         s = float(max(0.0, min(1.0, strength)))
@@ -580,6 +587,8 @@ class ImageLookMatchResolve:
             fit_mask_full = _compose_fit_mask(subject_t, sky_t, ground_t)
             img_fit, ds_info = _downscale_hwc_long_side(img_t, downscale_long_side)
             ref_fit, _ = _downscale_hwc_long_side(ref_t, downscale_long_side)
+            if ref_fit.shape[0] != img_fit.shape[0] or ref_fit.shape[1] != img_fit.shape[1]:
+                ref_fit = _resize_hwc_to(ref_fit, img_fit.shape[0], img_fit.shape[1])
             fit_mask = _resize_mask_hw(fit_mask_full, img_fit.shape[0], img_fit.shape[1]) if fit_mask_full is not None else None
 
             exposure_gain = _fit_exposure_gain(img_fit, ref_fit, fit_mask)
@@ -615,8 +624,11 @@ class ImageLookMatchResolve:
                 out_t = torch.cat([out_t, img_alpha[idx]], dim=-1)
             out_list.append(out_t.cpu())
 
-            mse_before = float((img_t - ref_t).square().mean().item())
-            mse_after = float((corrected - ref_t).square().mean().item())
+            ref_eval = ref_t
+            if ref_eval.shape[0] != img_t.shape[0] or ref_eval.shape[1] != img_t.shape[1]:
+                ref_eval = _resize_hwc_to(ref_eval, img_t.shape[0], img_t.shape[1])
+            mse_before = float((img_t - ref_eval).square().mean().item())
+            mse_after = float((corrected - ref_eval).square().mean().item())
 
             payload = {
                 "status": "ok",
