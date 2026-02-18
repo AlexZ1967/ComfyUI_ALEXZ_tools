@@ -1,6 +1,6 @@
 # Changelog — ALEXZ_tools
 
-## 0.18.9 — 2026-02-18
+## 0.19.0 — 2026-02-18
 - Color Match To Reference performance and correctness update:
   - vectorized batch processing for `mean_std` and `linear` presets in `nodes/image_color_match.py`;
   - added VGG19 feature extractor cache for `perceptual_vgg_fast` (prevents repeated model reloads);
