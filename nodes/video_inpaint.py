@@ -24,6 +24,7 @@ import folder_paths
 from comfy import model_management
 from PIL import Image
 
+from ..utils.interrupt import check_interrupt as shared_check_interrupt
 from ..utils.color_match_utils import (
     apply_color_match as _apply_color_match,
     ensure_mask_batch as _ensure_mask_batch,
@@ -54,7 +55,7 @@ STREAM_STRIDE_DEFAULT = 1
 
 def _check_interrupt() -> None:
     """Raise an interrupt error when ComfyUI requests execution cancellation."""
-    model_management.throw_exception_if_processing_interrupted()
+    shared_check_interrupt()
 
 
 def _check_inputs(frames: torch.Tensor, masks: torch.Tensor) -> None:

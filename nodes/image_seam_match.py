@@ -27,24 +27,14 @@ except Exception:  # pragma: no cover - optional dependency
         return iterable if iterable is not None else []
 
 from ..utils import color_match_utils
+from ..utils.interrupt import check_interrupt
 
 _SSIM_WINDOW_CACHE = {}
-
-try:
-    from comfy import model_management as _model_management
-except Exception:  # pragma: no cover - comfy runtime dependency
-    _model_management = None
 
 
 def _pad_batch_last(batch: torch.Tensor, batch_size: int) -> torch.Tensor:
     """Compatibility wrapper around shared batch-padding helper."""
     return color_match_utils.pad_batch_last(batch, batch_size)
-
-
-def _check_interrupt() -> None:
-    """Raise interrupt error when ComfyUI requests execution cancellation."""
-    if _model_management is not None:
-        _model_management.throw_exception_if_processing_interrupted()
 
 
 def _resolve_compute_device(preferred: str) -> tuple[torch.device, str | None]:
@@ -250,7 +240,7 @@ def _optimize_seam_transform(
 
         with torch.enable_grad():
             for _ in range(steps_int):
-                _check_interrupt()
+                check_interrupt()
                 opt.zero_grad(set_to_none=True)
                 pred = _apply_transform(img_work, A.to(dtype=dtype), b.to(dtype=dtype), color_space)
                 robust = _robust_charbonnier(pred - ref_work, robust_delta).mean()
@@ -376,7 +366,7 @@ class ImageSeamMatchToReference:
         json_list = []
         iterator = tqdm(range(batch_size), desc="SeamMatch", unit="img")
         for idx in iterator:
-            _check_interrupt()
+            check_interrupt()
             ref_t_src = reference_rgb[idx]
             img_t_src = image_rgb[idx]
             ref_t = ref_t_src.detach().to(device=compute_dev).clone()

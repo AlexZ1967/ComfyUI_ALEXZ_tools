@@ -28,6 +28,7 @@ try:
 except Exception:  # pragma: no cover - optional
     tqdm = None
 
+from ..utils.interrupt import check_interrupt
 from ..utils.utils import ensure_hwc, normalize_to_reference
 
 _LOGGER = logging.getLogger("VideoCutMatch")
@@ -326,6 +327,7 @@ def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int
         return
     frame_bytes = width * height * 3
     while True:
+        check_interrupt()
         chunk = proc.stdout.read(frame_bytes)
         if not chunk or len(chunk) < frame_bytes:
             break
@@ -345,6 +347,7 @@ def _load_head_frames(video_path: str, max_frames: int):
     pbar = tqdm(desc="VideoCutMatch B head", unit="frame") if tqdm is not None else None
     try:
         while True:
+            check_interrupt()
             ret, frame_bgr = cap.read()
             if not ret:
                 break
@@ -408,6 +411,7 @@ def _load_tail_frames(video_path: str, max_frames: int):
     pbar = tqdm(desc="VideoCutMatch A tail fallback", unit="frame") if tqdm is not None else None
     try:
         while True:
+            check_interrupt()
             ret, frame_bgr = cap.read()
             if not ret:
                 break
@@ -548,7 +552,9 @@ class VideoCutMatch:
             pbar = tqdm(total=pairs_count, desc="VideoCutMatch coarse", unit="pair") if tqdm is not None else None
             try:
                 for i, fa in enumerate(coarse_a):
+                    check_interrupt()
                     for j, fb in enumerate(coarse_b):
+                        check_interrupt()
                         score = _mse_score(fa, fb)
                         _update_top_pairs(
                             coarse_top,
@@ -565,6 +571,7 @@ class VideoCutMatch:
             refined_scores = []
             try:
                 for item in coarse_top:
+                    check_interrupt()
                     i = item["i"]
                     j = item["j"]
                     fa = a_metric[i]
@@ -589,7 +596,9 @@ class VideoCutMatch:
             pbar = tqdm(total=pairs_count, desc="VideoCutMatch", unit="pair") if tqdm is not None else None
             try:
                 for i, fa_raw in enumerate(a_metric):
+                    check_interrupt()
                     for j, fb in enumerate(b_metric):
+                        check_interrupt()
                         fa = normalize_to_reference(fa_raw, fb, normalize) if normalize != "none" else fa_raw
                         score = _compute_score(metric, fa, fb, device)
                         pair = {

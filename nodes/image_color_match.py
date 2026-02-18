@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 from ..utils import color_match_utils
 from ..utils.color_match_utils import normalize_mask
+from ..utils.interrupt import check_interrupt
 
 _LOGGER = logging.getLogger("ImageColorMatchToReference")
 _SSIM_WINDOW_CACHE = {}
@@ -512,6 +513,7 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
         with torch.enable_grad():
             iterator = tqdm(range(steps_int), desc="perceptual_vgg", leave=False)
             for _ in iterator:
+                check_interrupt()
                 opt.zero_grad(set_to_none=True)
                 x = torch.clamp(torch.einsum("hwc,dc->hwd", img_work, W) + b, 0.0, 1.0)
                 feat_x = vgg(prep(x))
@@ -1027,6 +1029,7 @@ class ImageColorMatchToReference:
         json_list = []
         iterator = tqdm(range(batch_size), desc=f"ColorMatch[{preset}]", unit="img")
         for idx in iterator:
+            check_interrupt()
             ref_t = reference_rgb[idx]
             img_t = image_rgb[idx]
             mm_t = match_mask_batch[idx] if match_mask_batch is not None else None

@@ -475,6 +475,48 @@ class SmokeTests(unittest.TestCase):
             data = json.loads(payload[0])
             self.assertEqual(data.get("optimization", {}).get("downscale_long_side"), mode)
 
+    def test_seam_match_compute_device_cpu(self):
+        """Ensure explicit CPU compute_device is accepted and reported."""
+        seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")
+        node = seam_mod.ImageSeamMatchToReference()
+        ref = torch.rand(1, 16, 16, 3)
+        img = torch.rand(1, 16, 16, 3)
+        _out, payload = node.match(
+            ref,
+            img,
+            compute_device="cpu",
+            downscale_long_side="as_is",
+            steps=1,
+            lr=0.03,
+        )
+        data = json.loads(payload[0])
+        self.assertEqual(data.get("optimization", {}).get("compute_device_effective"), "cpu")
+
+    def test_seam_match_compute_device_cuda_fallback(self):
+        """Ensure CUDA request falls back safely when CUDA is unavailable."""
+        seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")
+        node = seam_mod.ImageSeamMatchToReference()
+        ref = torch.rand(1, 16, 16, 3)
+        img = torch.rand(1, 16, 16, 3)
+        _out, payload = node.match(
+            ref,
+            img,
+            compute_device="cuda",
+            downscale_long_side="as_is",
+            steps=1,
+            lr=0.03,
+        )
+        data = json.loads(payload[0])
+        effective = data.get("optimization", {}).get("compute_device_effective")
+        if torch.cuda.is_available():
+            self.assertEqual(effective, "cuda")
+        else:
+            self.assertEqual(effective, "cpu")
+            self.assertEqual(
+                data.get("optimization", {}).get("device_warning"),
+                "cuda_requested_but_unavailable",
+            )
+
     def test_seam_match_accepts_inference_tensors(self):
         """Ensure seam-match can optimize when inputs come from inference mode."""
         seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")

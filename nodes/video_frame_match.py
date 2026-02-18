@@ -27,6 +27,7 @@ try:
 except Exception:  # pragma: no cover - optional
     tqdm = None
 from ..utils.utils import ensure_hwc, normalize_to_reference
+from ..utils.interrupt import check_interrupt
 
 _LOGGER = logging.getLogger("VideoFrameMatch")
 
@@ -223,6 +224,7 @@ def _iter_ffmpeg_tail_frames(video_path: str, start_time: float, max_frames: int
         return
     frame_bytes = width * height * 3
     while True:
+        check_interrupt()
         chunk = proc.stdout.read(frame_bytes)
         if not chunk or len(chunk) < frame_bytes:
             break
@@ -498,6 +500,7 @@ class VideoFrameMatch:
                 idx = start_idx
                 processed = 0
                 for frame_rgb in _iter_ffmpeg_tail_frames(video_path, start_time, max_frames, vid_w, vid_h):
+                    check_interrupt()
                     frame_t, frame_metric = _prepare_frame(ensure_hwc(_to_tensor_rgb(frame_rgb)))
                     if two_pass_lpips:
                         score_val = _mse_score(_downscale_max_side(frame_metric, coarse_max_side), coarse_target)
@@ -524,6 +527,7 @@ class VideoFrameMatch:
             else:
                 idx = start_idx
                 while True:
+                    check_interrupt()
                     ret, frame_bgr = cap.read()
                     if not ret:
                         break
@@ -565,6 +569,7 @@ class VideoFrameMatch:
             pbar_refine = tqdm(total=len(candidates), desc="VideoFrameMatch refine", unit="cand") if tqdm is not None else None
             try:
                 for item in candidates:
+                    check_interrupt()
                     frame_t, frame_metric = _prepare_frame(ensure_hwc(_to_tensor_rgb(item["frame_rgb"])))
                     score_val = _compute_score(
                         metric,

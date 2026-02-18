@@ -1,6 +1,11 @@
 # Changelog — ALEXZ_tools
 
 ## 0.19.0 — 2026-02-18
+- Unified interrupt handling across long-running nodes:
+  - added shared helper `utils/interrupt.py` (`check_interrupt`);
+  - switched long loops in `image_seam_match`, `image_color_match`,
+    `video_frame_match`, `video_cut_match`, and `video_inpaint` to shared
+    interrupt checks for consistent `Interrupt` button behavior.
 - New node: `Seam Match To Reference` (`ImageSeamMatchToReference`):
   - added seam-focused color optimization mode for minimizing visible cuts/diff;
   - supports optimization spaces `rgb`/`oklab`;
