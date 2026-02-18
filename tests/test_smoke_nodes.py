@@ -14,6 +14,7 @@ import importlib
 import json
 import os
 import sys
+import tempfile
 import types
 import unittest
 
@@ -147,6 +148,61 @@ class SmokeTests(unittest.TestCase):
             image_color_match._lpips_alex_distance = old_lpips
 
         self.assertEqual(tuple(out.shape), (2, 16, 16, 3))
+
+    def test_color_match_auto_optimal_runs(self):
+        """Ensure auto_optimal preset selects a valid internal mode and returns JSON."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: 0.2
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+            out, payload = node.match(
+                ref,
+                img,
+                "auto_optimal",
+                compute_quality_metrics=False,
+                auto_optimal_metric="mse_ssim_lpips",
+                strength=1.0,
+            )
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+
+        self.assertEqual(tuple(out.shape), (1, 16, 16, 3))
+        data = json.loads(payload[0])
+        self.assertTrue(str(data.get("mode", "")).startswith("auto_optimal:"))
+        self.assertEqual(data.get("deep", {}).get("auto_optimal", {}).get("strategy"), "mse_ssim_lpips")
+
+    def test_color_match_lut_export_creates_cube(self):
+        """Ensure LUT export writes .cube file and path is returned in JSON."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+            with tempfile.TemporaryDirectory() as td:
+                _out, payload = node.match(
+                    ref,
+                    img,
+                    "linear",
+                    compute_quality_metrics=False,
+                    export_lut=True,
+                    lut_size=8,
+                    lut_output_dir=td,
+                    lut_name="smoke_lut",
+                    strength=1.0,
+                )
+                data = json.loads(payload[0])
+                lut = data.get("lut", {})
+                self.assertTrue(bool(lut.get("exported")))
+                lut_path = lut.get("path")
+                self.assertTrue(isinstance(lut_path, str) and lut_path.endswith(".cube"))
+                self.assertTrue(os.path.exists(lut_path))
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
 
     def test_video_frame_topk_helpers(self):
         """Validate top-k and confidence helper math for frame matching."""

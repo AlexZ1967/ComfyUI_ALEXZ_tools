@@ -16,9 +16,14 @@
 ## Параметры
 | Параметр | Что делает | Рекомендация |
 |---|---|---|
-| `preset` | Метод цветокоррекции | 8 методов: `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast` |
+| `preset` | Метод цветокоррекции | 9 методов: `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `auto_optimal`, `perceptual_vgg_fast` |
 | `strength` | Сила эффекта | 0.6-0.9 |
 | `compute_quality_metrics` | Считать quality-метрики | Отключить для ускорения батча |
+| `auto_optimal_metric` | Критерий выбора в `auto_optimal` | `mse_ssim` по умолчанию, `mse_ssim_lpips` для финального качества |
+| `export_lut` | Сохранять LUT `.cube` | Включить при подготовке grading pipeline |
+| `lut_size` | Размер 3D LUT | 17 или 33 для практики |
+| `lut_output_dir` | Папка LUT | Пусто = `./output/color_luts` |
+| `lut_name` | Имя LUT | Базовое имя без расширения |
 
 ## Decision helper
 - Скорость → `mean_std` (среднее/стд по каналам).
@@ -27,6 +32,7 @@
 - Перцептивно → `adain` (adaptive normalization).
 - Математически строго → `optimal_transport` (Wasserstein distance, монотонное отображение).
 - Высокое качество → `lab_cdf` (Lab гистограмма) или `oklab_cdf` (Oklab, перцептивнее).
+- Автовыбор (без ручного тюнинга) → `auto_optimal` (выбирает между `linear` и `oklab_cdf` по MSE к референсу).
 - Максимум → `perceptual_vgg_fast` (нейросеть, медленнее).
 
 ## Сравнение методов
@@ -40,6 +46,7 @@
 | `optimal_transport` | ⚡ | ⭐⭐⭐ | Wasserstein расстояние, математически обосновано |
 | `lab_cdf` | ⚡ | ⭐⭐⭐ | Хорошее качество, гистограмма |
 | `oklab_cdf` | ⚡ | ⭐⭐⭐⭐ | Лучший результат, перцептивно улучшенный |
+| `auto_optimal` | ⚡ | ⭐⭐⭐⭐ | Автовыбор между `linear` и `oklab_cdf` |
 | `perceptual_vgg_fast` | 🐢 | ⭐⭐⭐⭐⭐ | Максимальное качество через нейросеть |
 
 ## Интерпретация выходов

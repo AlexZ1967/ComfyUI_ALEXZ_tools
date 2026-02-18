@@ -75,15 +75,17 @@ Guide: [GUIDE_ALIGN.md](guides/GUIDE_ALIGN.md)
 ---
 
 ## Color Match To Reference
-Цветокоррекция по образцу с пресетами `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast`. Подробно: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md).
+Цветокоррекция по образцу с пресетами `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `auto_optimal`, `perceptual_vgg_fast`. Подробно: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md).
 
 - Display name: Color Match To Reference  
 - Type name: ImageColorMatchToReference  
 - Category: image/color
 
-Пресеты: `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast`.  
+Пресеты: `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `auto_optimal`, `perceptual_vgg_fast`.  
+Для `auto_optimal`: `auto_optimal_metric` = `mse` / `mse_ssim` / `mse_ssim_lpips`.  
 `match_json.quality`: метрики до/после (`mse`, `ssim`, `delta_e76`, `lpips_alex`) и `improvement_pct`.  
 `compute_quality_metrics=false` отключает расчёт метрик для ускорения обработки батчей.  
+`export_lut=true` сохраняет `.cube` (параметры: `lut_size`, `lut_output_dir`, `lut_name`) и возвращает путь в `match_json.lut`.  
 Выходы: `matched_image`, `match_json`.  
 Guide: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md), кратко — [GUIDE_COLOR_MATCH.md](guides/GUIDE_COLOR_MATCH.md)
 

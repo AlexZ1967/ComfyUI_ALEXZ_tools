@@ -18,12 +18,17 @@
 |---|---|---|
 | `reference` | Эталон цвета | Кадр/изображение нужного look |
 | `image` | Что корректируем | Текущий кадр/изображение |
-| `preset` | Метод цветокоррекции | `mean_std` — быстро, `linear` — дефолт, `tone_curve` — подгонка контраста, `adain` — быстро и перцептивно, `optimal_transport` — Wasserstein, `lab_cdf` — Lab, `oklab_cdf` — Oklab (лучше), `perceptual_vgg_fast` — VGG |
+| `preset` | Метод цветокоррекции | `mean_std` — быстро, `linear` — дефолт, `tone_curve` — подгонка контраста, `adain` — быстро и перцептивно, `optimal_transport` — Wasserstein, `lab_cdf` — Lab, `oklab_cdf` — Oklab (лучше), `auto_optimal` — автовыбор linear/oklab_cdf, `perceptual_vgg_fast` — VGG |
 | `strength` | Сила применения [0..1] | 0.6-0.9 для мягкой коррекции |
 | `match_mask` | Где считать статистику | Белое = учитывать |
 | `apply_mask` | Где применять коррекцию | Белое = применять |
 | `preserve_alpha` | Сохранить альфу | Оставляйте `true` для RGBA |
 | `compute_quality_metrics` | Считать метрики `mse/ssim/delta_e76/lpips_alex` | Отключайте для ускорения батчей |
+| `auto_optimal_metric` | Критерий выбора в `auto_optimal` | `mse_ssim` (баланс), `mse_ssim_lpips` (точнее, медленнее) |
+| `export_lut` | Экспорт LUT `.cube` | Включайте для передачи цветокоррекции в монтаж/грейдинг |
+| `lut_size` | Размер 3D LUT | 17 для скорости, 33 для качества |
+| `lut_output_dir` | Папка для LUT | Пусто = `./output/color_luts` |
+| `lut_name` | Базовое имя LUT | Например `sceneA_match` |
 
 ## Decision helper
 - Нужна максимальная скорость → `mean_std` (быстрый, базовый) или `adain` (хороший баланс).
@@ -31,6 +36,7 @@
 - Нужна подгонка контраста/экспозиции → `tone_curve`.
 - Нужна математически обоснованная подгонка → `optimal_transport` (Wasserstein distance).
 - Нужно лучше качество → `lab_cdf` (Lab гистограмма) или `oklab_cdf` (перцептивнее).
+- Нужен автоподбор без ручного выбора метода → `auto_optimal`.
 - Максимум качества → `perceptual_vgg_fast` (нейросеть, медленный).
 
 ## Сравнение методов цветокоррекции
@@ -46,6 +52,7 @@
 | `optimal_transport` | Wasserstein distance (монотонное отображение) | ⚡ | ⭐⭐⭐ | Математически обоснованное распределение (новый) |
 | `lab_cdf` | Histogram CDF equalization в Lab | ⚡ | ⭐⭐⭐ | Хорошее качество, универсальность |
 | `oklab_cdf` | Histogram CDF equalization в **Oklab** | ⚡ | ⭐⭐⭐⭐ | **Лучшее качество, перцептивно улучшенный** |
+| `auto_optimal` | Автовыбор `linear`/`oklab_cdf` по MSE | ⚡ | ⭐⭐⭐⭐ | Быстрый и надежный выбор без ручного тюнинга |
 | `perceptual_vgg_fast` | VGG19 feature optimization | 🐢 | ⭐⭐⭐⭐⭐ | Максимальное качество, готовые композиты |
 
 ### Технические различия
@@ -86,6 +93,7 @@
 ## Интерпретация выходов
 - `matched_image`: скорректированное изображение.
 - `match_json`: параметры коррекции + блок `quality`.
+- При `export_lut=true`: в `match_json.lut` возвращается путь к сохранённому `.cube`.
 
 Пример `quality`:
 ```json

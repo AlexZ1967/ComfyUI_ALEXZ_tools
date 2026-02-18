@@ -12,6 +12,14 @@
   - updated and extended smoke tests for color-match presets, mask semantics, batch padding, and metric-disable mode;
   - synced README and color-match guides with current preset names and `compute_quality_metrics` parameter;
   - docs consistency check passes.
+- Color Match To Reference feature expansion:
+  - added new preset `auto_optimal` (automatic method choice between `linear` and `oklab_cdf`);
+  - added configurable auto-selection strategy `auto_optimal_metric`:
+    `mse`, `mse_ssim`, `mse_ssim_lpips`;
+  - added `match_json.deep.auto_optimal` diagnostics with per-candidate metrics/scores and selected mode;
+  - added LUT export to `.cube` with new optional inputs:
+    `export_lut`, `lut_size`, `lut_output_dir`, `lut_name`;
+  - LUT generation supports exact linear transform for linear-like modes and polynomial bake for nonlinear modes.
 
 ## 0.18.8 — 2026-02-18
 - Pre-Phase 4 structural improvement:
