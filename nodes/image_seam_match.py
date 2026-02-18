@@ -385,12 +385,52 @@ def _optimize_seam_transform(
             db_bands = torch.zeros((3, 3), device=device, dtype=torch.float32, requires_grad=True)
             band_weights = _tonal_band_weights(img_work).detach().to(device=device, dtype=dtype)
             residual_strength = float(max(0.0, hybrid_residual_strength))
-            opt = torch.optim.Adam([A_global, b_global, dA_bands, db_bands], lr=float(lr))
+            lr_global = max(1e-5, float(lr) * 0.6)
+            lr_residual = max(1e-5, float(lr) * 0.2)
+            warm_steps = max(1, int(round(steps_int * 0.35)))
+            joint_steps = max(1, steps_int - warm_steps)
+            opt_global = torch.optim.Adam([A_global, b_global], lr=lr_global)
+            opt_joint = torch.optim.Adam(
+                [
+                    {"params": [A_global, b_global], "lr": max(1e-5, lr_global * 0.5)},
+                    {"params": [dA_bands, db_bands], "lr": lr_residual},
+                ],
+            )
 
             with torch.enable_grad():
-                for _ in range(steps_int):
+                # Phase 1: stabilize global transform before enabling residual branches.
+                for _ in range(warm_steps):
                     check_interrupt()
-                    opt.zero_grad(set_to_none=True)
+                    opt_global.zero_grad(set_to_none=True)
+                    pred = _apply_transform(
+                        img_work,
+                        A_global.to(dtype=dtype),
+                        b_global.to(dtype=dtype),
+                        color_space,
+                    )
+                    robust = _robust_charbonnier(pred - ref_work, robust_delta).mean()
+                    pred_bchw = pred.permute(2, 0, 1).unsqueeze(0)
+                    ref_bchw = ref_work.permute(2, 0, 1).unsqueeze(0)
+                    ssim_loss = 1.0 - _ssim_similarity_tensor(pred_bchw, ref_bchw)
+                    grad_loss = _gradient_consistency_loss(pred, ref_work)
+                    reg_global = ((A_global - eye) ** 2).mean() + (b_global ** 2).mean()
+                    loss = (
+                        float(w_mse) * robust
+                        + float(w_ssim) * ssim_loss
+                        + float(w_grad) * grad_loss
+                        + float(reg_weight) * reg_global
+                    )
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_([A_global, b_global], max_norm=1.5)
+                    opt_global.step()
+                    final_loss = float(loss.detach().item())
+
+                # Phase 2: joint optimization with gradual residual ramp.
+                for step_idx in range(joint_steps):
+                    check_interrupt()
+                    opt_joint.zero_grad(set_to_none=True)
+                    ramp = float(step_idx + 1) / float(joint_steps)
+                    residual_step = residual_strength * (ramp ** 1.5)
                     pred = _apply_hybrid_transform(
                         img_work,
                         A_global.to(dtype=dtype),
@@ -398,7 +438,7 @@ def _optimize_seam_transform(
                         dA_bands.to(dtype=dtype),
                         db_bands.to(dtype=dtype),
                         color_space,
-                        residual_strength=residual_strength,
+                        residual_strength=residual_step,
                         band_weights=band_weights,
                     )
                     robust = _robust_charbonnier(pred - ref_work, robust_delta).mean()
@@ -421,14 +461,16 @@ def _optimize_seam_transform(
                         + float(hybrid_coherence_reg) * reg_coherence
                     )
                     loss.backward()
-                    opt.step()
+                    torch.nn.utils.clip_grad_norm_([A_global, b_global], max_norm=1.5)
+                    torch.nn.utils.clip_grad_norm_([dA_bands, db_bands], max_norm=1.0)
+                    opt_joint.step()
                     final_loss = float(loss.detach().item())
 
             A_global_out = A_global.detach().to(dtype=dtype)
             b_global_out = b_global.detach().to(dtype=dtype)
             dA_out = dA_bands.detach().to(dtype=dtype)
             db_out = db_bands.detach().to(dtype=dtype)
-            A_out, b_out, mean_w = _effective_affine_from_hybrid(
+            A_hybrid, b_hybrid, mean_w = _effective_affine_from_hybrid(
                 A_global_out,
                 b_global_out,
                 dA_out,
@@ -436,6 +478,33 @@ def _optimize_seam_transform(
                 band_weights,
                 residual_strength=residual_strength,
             )
+            with torch.no_grad():
+                pred_global_eval = _apply_transform(img_work, A_global_out, b_global_out, color_space)
+                pred_hybrid_eval = _apply_hybrid_transform(
+                    img_work,
+                    A_global_out,
+                    b_global_out,
+                    dA_out,
+                    db_out,
+                    color_space,
+                    residual_strength=residual_strength,
+                    band_weights=band_weights,
+                )
+                global_eval = (
+                    float(w_mse) * _robust_charbonnier(pred_global_eval - ref_work, robust_delta).mean()
+                    + float(w_ssim) * (1.0 - _ssim_similarity_tensor(pred_global_eval.permute(2, 0, 1).unsqueeze(0), ref_work.permute(2, 0, 1).unsqueeze(0)))
+                    + float(w_grad) * _gradient_consistency_loss(pred_global_eval, ref_work)
+                )
+                hybrid_eval = (
+                    float(w_mse) * _robust_charbonnier(pred_hybrid_eval - ref_work, robust_delta).mean()
+                    + float(w_ssim) * (1.0 - _ssim_similarity_tensor(pred_hybrid_eval.permute(2, 0, 1).unsqueeze(0), ref_work.permute(2, 0, 1).unsqueeze(0)))
+                    + float(w_grad) * _gradient_consistency_loss(pred_hybrid_eval, ref_work)
+                )
+                fallback_to_global = bool(float(hybrid_eval.item()) > float(global_eval.item()) * 1.02)
+            if fallback_to_global:
+                A_out, b_out = A_global_out, b_global_out
+            else:
+                A_out, b_out = A_hybrid, b_hybrid
             extra = {
                 "seam_model": "v3_hybrid",
                 "A_global": A_global_out,
@@ -444,6 +513,9 @@ def _optimize_seam_transform(
                 "db_bands": db_out,
                 "hybrid_residual_strength": residual_strength,
                 "band_weights_mean": mean_w.detach().to(dtype=dtype),
+                "hybrid_eval_loss": float(hybrid_eval.item()),
+                "global_eval_loss": float(global_eval.item()),
+                "fallback_to_global": fallback_to_global,
             }
         else:
             A = A0.to(device=device, dtype=torch.float32).clone().requires_grad_(True)
@@ -544,15 +616,15 @@ class ImageSeamMatchToReference:
                 "robust_delta": ("FLOAT", {"default": 0.01, "min": 0.0001, "max": 0.2, "step": 0.0005, "tooltip": "Порог robust-loss (больше = мягче к выбросам)."}),
                 "hybrid_residual_strength": (
                     "FLOAT",
-                    {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.05, "tooltip": "Только для v3_hybrid: сила тональных residual-поправок."},
+                    {"default": 0.7, "min": 0.0, "max": 2.0, "step": 0.05, "tooltip": "Только для v3_hybrid: сила тональных residual-поправок."},
                 ),
                 "hybrid_residual_reg": (
                     "FLOAT",
-                    {"default": 0.001, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на амплитуду tonal-residual."},
+                    {"default": 0.002, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на амплитуду tonal-residual."},
                 ),
                 "hybrid_coherence_reg": (
                     "FLOAT",
-                    {"default": 0.0005, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на расхождение между tonal-бэндами."},
+                    {"default": 0.001, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Только для v3_hybrid: штраф на расхождение между tonal-бэндами."},
                 ),
             },
         }
@@ -579,9 +651,9 @@ class ImageSeamMatchToReference:
         w_grad=0.1,
         reg_weight=0.001,
         robust_delta=0.01,
-        hybrid_residual_strength=1.0,
-        hybrid_residual_reg=0.001,
-        hybrid_coherence_reg=0.0005,
+        hybrid_residual_strength=0.7,
+        hybrid_residual_reg=0.002,
+        hybrid_coherence_reg=0.001,
     ):
         """Execute seam-matching transform and return processed outputs for ComfyUI."""
         batch_size = max(reference.shape[0], image.shape[0])
@@ -645,15 +717,18 @@ class ImageSeamMatchToReference:
                     str(color_space),
                 )
             elif transform_meta.get("seam_model") == "v3_hybrid" and transform_meta.get("A_global") is not None:
-                corrected = _apply_hybrid_transform(
-                    img_t,
-                    transform_meta["A_global"],
-                    transform_meta["b_global"],
-                    transform_meta["dA_bands"],
-                    transform_meta["db_bands"],
-                    str(color_space),
-                    residual_strength=float(transform_meta.get("hybrid_residual_strength", hybrid_residual_strength)),
-                )
+                if bool(transform_meta.get("fallback_to_global", False)):
+                    corrected = _apply_transform(img_t, transform_meta["A_global"], transform_meta["b_global"], str(color_space))
+                else:
+                    corrected = _apply_hybrid_transform(
+                        img_t,
+                        transform_meta["A_global"],
+                        transform_meta["b_global"],
+                        transform_meta["dA_bands"],
+                        transform_meta["db_bands"],
+                        str(color_space),
+                        residual_strength=float(transform_meta.get("hybrid_residual_strength", hybrid_residual_strength)),
+                    )
             else:
                 corrected = _apply_transform(img_t, A, b, str(color_space))
             if float(strength) < 1.0:
@@ -694,6 +769,7 @@ class ImageSeamMatchToReference:
                         "hybrid_residual_reg": float(hybrid_residual_reg),
                         "hybrid_coherence_reg": float(hybrid_coherence_reg),
                     },
+                    "hybrid_fallback_to_global": bool(transform_meta.get("fallback_to_global", False)),
                 },
                 "transform": {
                     "matrix": [[round(float(v), 6) for v in row] for row in A.detach().cpu().tolist()],
@@ -740,6 +816,9 @@ class ImageSeamMatchToReference:
                     },
                     "residual_bands": residual_bands,
                     "residual_strength": round(float(transform_meta.get("hybrid_residual_strength", 1.0)), 6),
+                    "fallback_to_global": bool(transform_meta.get("fallback_to_global", False)),
+                    "eval_loss_global": round(float(transform_meta.get("global_eval_loss", 0.0)), 8),
+                    "eval_loss_hybrid": round(float(transform_meta.get("hybrid_eval_loss", 0.0)), 8),
                 }
                 if transform_meta.get("band_weights_mean") is not None:
                     payload["transform"]["band_weights_mean"] = [
