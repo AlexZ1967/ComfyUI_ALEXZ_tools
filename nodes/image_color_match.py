@@ -335,10 +335,10 @@ class ImageColorMatchToReference:
                 "reference": ("IMAGE", {"tooltip": "Базовое изображение (образец)."}),
                 "image": ("IMAGE", {"tooltip": "Изображение, которое нужно подогнать по цвету."}),
                 "preset": (
-                    ["mean_std", "linear", "tone_curve", "adain", "lab_cdf", "oklab_cdf", "perceptual_vgg_fast"],
+                    ["mean_std", "linear", "tone_curve", "adain", "optimal_transport", "lab_cdf", "oklab_cdf", "perceptual_vgg_fast"],
                     {
                         "default": "linear",
-                        "tooltip": "Метод: mean_std=стд, linear=линейная, tone_curve=кривая, adain=AdaIN норм, lab_cdf=Lab, oklab_cdf=Oklab, perceptual_vgg_fast=VGG.",
+                        "tooltip": "Метод: mean_std=стд, linear=линейная, tone_curve=кривая, adain=AdaIN норм, optimal_transport=Wasserstein, lab_cdf=Lab, oklab_cdf=Oklab, perceptual_vgg_fast=VGG.",
                     },
                 ),
                 "strength": (
@@ -415,6 +415,9 @@ class ImageColorMatchToReference:
             elif preset == "adain":
                 corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "adain")
                 mode = "adain"
+            elif preset == "optimal_transport":
+                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "optimal_transport")
+                mode = "optimal_transport"
             elif preset == "lab_cdf":
                 corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "lab_cdf")
                 mode = "lab_cdf"

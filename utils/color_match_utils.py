@@ -439,6 +439,57 @@ def _match_adain(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) -> np
     return out_result
 
 
+def _match_optimal_transport(out_np: np.ndarray, ref_np: np.ndarray, keep: np.ndarray) -> np.ndarray:
+    """
+    Оптимальный транспорт (Wasserstein distance) для подгонки цвета.
+    
+    Для каждого RGB канала отдельно решает 1D задачу оптимального транспорта:
+    - Сортирует пиксели источника и эталона
+    - Матчит их монотонно (в отсортированном порядке)
+    - Восстанавливает исходный порядок
+    
+    Это более математически обосновано чем tone_curve с квантилями.
+    """
+    out_result = out_np.copy()
+    
+    for batch_idx in range(out_np.shape[0]):
+        mask_b = keep[batch_idx]
+        
+        for c in range(3):
+            src_ch = out_np[batch_idx, :, :, c]
+            ref_ch = ref_np[batch_idx, :, :, c]
+            
+            # Получить пиксели из маски
+            src_vals = src_ch[mask_b]
+            ref_vals = ref_ch[mask_b]
+            
+            if src_vals.size < 10 or ref_vals.size < 10:
+                continue
+            
+            # Отсортировать оба распределения
+            src_indices = np.argsort(src_vals)
+            ref_indices = np.argsort(ref_vals)
+            
+            src_sorted = src_vals[src_indices]
+            ref_sorted = ref_vals[ref_indices]
+            
+            # Интерполировать эталонные значения для каждого отсортированного источника
+            # (монотонное отображение - основа 1D OT)
+            ref_as_cdf = np.interp(
+                src_sorted,
+                np.linspace(0, 1, len(ref_sorted)),
+                ref_sorted
+            )
+            
+            # Восстановить исходный порядок пикселей
+            out_ch = np.empty_like(src_ch)
+            out_ch[mask_b] = ref_as_cdf[np.argsort(src_indices)]
+            
+            out_result[batch_idx, :, :, c] = np.clip(out_ch, 0.0, 1.0)
+    
+    return out_result
+
+
 def apply_color_match(
     output_images: torch.Tensor,
     reference_images: torch.Tensor,
@@ -476,6 +527,8 @@ def apply_color_match(
         out_np = _match_tone_curve(out_np, ref_np, keep)
     elif mode == "adain":
         out_np = _match_adain(out_np, ref_np, keep)
+    elif mode == "optimal_transport":
+        out_np = _match_optimal_transport(out_np, ref_np, keep)
     elif mode == "lab_l":
         out_np = _match_lab_l(out_np, ref_np, keep, use_cdf=False)
     elif mode == "lab_l_cdf":
