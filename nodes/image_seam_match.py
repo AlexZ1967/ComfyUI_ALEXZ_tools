@@ -30,10 +30,37 @@ from ..utils import color_match_utils
 
 _SSIM_WINDOW_CACHE = {}
 
+try:
+    from comfy import model_management as _model_management
+except Exception:  # pragma: no cover - comfy runtime dependency
+    _model_management = None
+
 
 def _pad_batch_last(batch: torch.Tensor, batch_size: int) -> torch.Tensor:
     """Compatibility wrapper around shared batch-padding helper."""
     return color_match_utils.pad_batch_last(batch, batch_size)
+
+
+def _check_interrupt() -> None:
+    """Raise interrupt error when ComfyUI requests execution cancellation."""
+    if _model_management is not None:
+        _model_management.throw_exception_if_processing_interrupted()
+
+
+def _resolve_compute_device(preferred: str) -> tuple[torch.device, str | None]:
+    """Resolve compute device with safe fallback rules."""
+    mode = str(preferred).lower()
+    if mode not in ("auto", "cpu", "cuda"):
+        mode = "auto"
+    if mode == "cpu":
+        return torch.device("cpu"), None
+    if mode == "cuda":
+        if torch.cuda.is_available():
+            return torch.device("cuda"), None
+        return torch.device("cpu"), "cuda_requested_but_unavailable"
+    if torch.cuda.is_available():
+        return torch.device("cuda"), None
+    return torch.device("cpu"), None
 
 
 def _srgb_to_linear(rgb: torch.Tensor) -> torch.Tensor:
@@ -223,6 +250,7 @@ def _optimize_seam_transform(
 
         with torch.enable_grad():
             for _ in range(steps_int):
+                _check_interrupt()
                 opt.zero_grad(set_to_none=True)
                 pred = _apply_transform(img_work, A.to(dtype=dtype), b.to(dtype=dtype), color_space)
                 robust = _robust_charbonnier(pred - ref_work, robust_delta).mean()
@@ -275,6 +303,10 @@ class ImageSeamMatchToReference:
             },
             "optional": {
                 "preserve_alpha": ("BOOLEAN", {"default": True, "tooltip": "Если вход RGBA, сохранить альфа-канал исходника."}),
+                "compute_device": (
+                    ["auto", "cpu", "cuda"],
+                    {"default": "auto", "tooltip": "Где считать оптимизацию: auto=CUDA если доступна, иначе CPU."},
+                ),
                 "color_space": (
                     ["rgb", "oklab"],
                     {"default": "oklab", "tooltip": "Пространство оптимизации: oklab обычно лучше для перцептивного seam-match."},
@@ -304,6 +336,7 @@ class ImageSeamMatchToReference:
         image,
         strength=1.0,
         preserve_alpha=True,
+        compute_device="auto",
         color_space="oklab",
         downscale_long_side="720p",
         steps=40,
@@ -336,12 +369,18 @@ class ImageSeamMatchToReference:
         if alpha_batch is not None and (alpha_batch.shape[1] != ref_h or alpha_batch.shape[2] != ref_w):
             alpha_batch = color_match_utils.resize_images_to_size(alpha_batch, ref_h, ref_w)
 
+        requested_device = str(compute_device).lower()
+        compute_dev, device_warning = _resolve_compute_device(requested_device)
+
         out_list = []
         json_list = []
         iterator = tqdm(range(batch_size), desc="SeamMatch", unit="img")
         for idx in iterator:
-            ref_t = reference_rgb[idx]
-            img_t = image_rgb[idx]
+            _check_interrupt()
+            ref_t_src = reference_rgb[idx]
+            img_t_src = image_rgb[idx]
+            ref_t = ref_t_src.detach().to(device=compute_dev).clone()
+            img_t = img_t_src.detach().to(device=compute_dev).clone()
             img_opt, ds_info = _downscale_hwc_long_side(img_t, downscale_long_side)
             ref_opt, _ = _downscale_hwc_long_side(ref_t, downscale_long_side)
 
@@ -369,7 +408,7 @@ class ImageSeamMatchToReference:
             ssim_before = _metric_ssim(img_t, ref_t)
             ssim_after = _metric_ssim(corrected, ref_t)
 
-            out_t = corrected
+            out_t = corrected.to(device=img_t_src.device)
             if alpha_batch is not None and preserve_alpha:
                 out_t = torch.cat([out_t, alpha_batch[idx]], dim=-1)
             out_list.append(out_t.cpu())
@@ -378,6 +417,9 @@ class ImageSeamMatchToReference:
                 "status": "ok",
                 "mode": f"seam_match:{color_space}",
                 "optimization": {
+                    "compute_device_requested": requested_device,
+                    "compute_device_effective": str(compute_dev),
+                    "device_warning": device_warning,
                     "downscale_long_side": str(downscale_long_side),
                     "optimized_size": ds_info.get("optimized_size"),
                     "steps": int(steps),

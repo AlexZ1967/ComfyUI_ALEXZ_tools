@@ -4,6 +4,8 @@
 - New node: `Seam Match To Reference` (`ImageSeamMatchToReference`):
   - added seam-focused color optimization mode for minimizing visible cuts/diff;
   - supports optimization spaces `rgb`/`oklab`;
+  - added `compute_device` selection:
+    `auto` / `cpu` / `cuda` (with safe CPU fallback when CUDA unavailable);
   - added fixed optimization size options:
     `downscale_long_side` = `as_is` / `1080p` / `720p` / `480p`;
   - outputs optimization diagnostics in `seam_json`.
@@ -11,6 +13,8 @@
     seam optimization now converts inference tensors to regular tensors before
     autograd, preventing runtime error
     "Inference tensors cannot be saved for backward".
+  - added ComfyUI interrupt checks inside seam-match optimization loop,
+    so `Interrupt` (red stop button) reacts during long runs.
 - Color Match To Reference UI/UX and docs update (Stage 4):
   - added dedicated preset comparison matrix in
     `guides/GUIDE_COLOR_MATCH_DETAILED.md` with columns:
