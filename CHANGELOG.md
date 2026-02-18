@@ -11,6 +11,9 @@
     `guides/assets/color_match_examples/generate_case01.py`;
   - expanded `INPUT_TYPES` tooltips with runtime/dependency hints
     (CPU/GPU expectations, `torchvision`/`lpips` notes).
+  - added real-pair visual example set `case02`
+    (`warm western -> cold cinematic`) in
+    `guides/assets/color_match_examples/case02/`.
 - Color Match To Reference advanced matching update:
   - added optional local matching by tiles with `spatial_grid` (NxN) for
     `linear`, `mean_std`, `adain`, and `auto_optimal`;

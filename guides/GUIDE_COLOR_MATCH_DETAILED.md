@@ -84,22 +84,23 @@
 | `perceptual_vgg_fast` | Низкая | Максимальная | Очень хорошее |
 
 ## Визуальные примеры
-- Все примеры ниже построены на одном и том же наборе (`case01`): слева `До`, справа результат выбранного `preset`.
-- Папка с файлами: `guides/assets/color_match_examples/case01/`.
-- Референс для примеров: `guides/assets/color_match_examples/case01/reference.png`.
-- Перегенерация примеров: `python guides/assets/color_match_examples/generate_case01.py`.
+- Все примеры ниже построены на одном и том же наборе (`case02`, реальная пара warm->cold): слева `До`, справа результат выбранного `preset`.
+- Папка с файлами: `guides/assets/color_match_examples/case02/`.
+- Референс для примеров: `guides/assets/color_match_examples/case02/reference.png`.
+- Перегенерация примеров:
+  `python guides/assets/color_match_examples/generate_case01.py --case case02 --image guides/assets/color_match_examples/before_image.jpg --reference guides/assets/color_match_examples/reference.jpg`.
 
 | Метод | До | После |
 |---|---|---|
-| `mean_std` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_mean_std.png) |
-| `linear` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_linear.png) |
-| `tone_curve` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_tone_curve.png) |
-| `adain` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_adain.png) |
-| `optimal_transport` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_optimal_transport.png) |
-| `lab_cdf` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_lab_cdf.png) |
-| `oklab_cdf` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_oklab_cdf.png) |
-| `auto_optimal` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_auto_optimal.png) |
-| `perceptual_vgg_fast` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_perceptual_vgg_fast.png) |
+| `mean_std` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_mean_std.png) |
+| `linear` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_linear.png) |
+| `tone_curve` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_tone_curve.png) |
+| `adain` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_adain.png) |
+| `optimal_transport` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_optimal_transport.png) |
+| `lab_cdf` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_lab_cdf.png) |
+| `oklab_cdf` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_oklab_cdf.png) |
+| `auto_optimal` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_auto_optimal.png) |
+| `perceptual_vgg_fast` | ![](assets/color_match_examples/case02/before_image.png) | ![](assets/color_match_examples/case02/after_perceptual_vgg_fast.png) |
 
 ### Технические различия
 

@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Generate deterministic before/after examples for Color Match guide."""
+"""Generate before/after examples for Color Match guide."""
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import sys
 import types
 from pathlib import Path
 
+import numpy as np
 import torch
 from PIL import Image
 
@@ -44,6 +46,12 @@ def _save_tensor_image(t: torch.Tensor, path: Path):
     Image.fromarray(arr, mode="RGB").save(path)
 
 
+def _load_image_tensor(path: Path) -> torch.Tensor:
+    img = Image.open(path).convert("RGB")
+    arr = torch.from_numpy(np.asarray(img, dtype=np.float32) / 255.0)
+    return arr.unsqueeze(0)
+
+
 def _make_synthetic_pair(height: int = 192, width: int = 320):
     yy, xx = torch.meshgrid(
         torch.linspace(0.0, 1.0, steps=height),
@@ -75,15 +83,8 @@ def _make_synthetic_pair(height: int = 192, width: int = 320):
     return image.unsqueeze(0), ref.unsqueeze(0)
 
 
-def main():
-    repo_root = Path(__file__).resolve().parents[3]
-    out_dir = Path(__file__).resolve().parent / "case01"
+def _run_case(node, out_dir: Path, image: torch.Tensor, reference: torch.Tensor, case_name: str):
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    mod = _load_color_match_module(repo_root)
-    node = mod.ImageColorMatchToReference()
-
-    image, reference = _make_synthetic_pair()
     _save_tensor_image(image[0], out_dir / "before_image.png")
     _save_tensor_image(reference[0], out_dir / "reference.png")
 
@@ -99,7 +100,7 @@ def main():
         "perceptual_vgg_fast",
     ]
 
-    summary = {"case": "case01", "status": "ok", "presets": {}}
+    summary = {"case": case_name, "status": "ok", "presets": {}}
     for preset in presets:
         try:
             out, payload = node.match(
@@ -122,6 +123,28 @@ def main():
 
     (out_dir / "manifest.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"Generated examples in: {out_dir}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate Color Match guide examples.")
+    parser.add_argument("--case", default="case01", help="Case output directory name under color_match_examples/")
+    parser.add_argument("--image", default="", help="Path to source image (image to be color-corrected).")
+    parser.add_argument("--reference", default="", help="Path to reference image.")
+    args = parser.parse_args()
+
+    repo_root = Path(__file__).resolve().parents[3]
+    out_dir = Path(__file__).resolve().parent / args.case
+
+    mod = _load_color_match_module(repo_root)
+    node = mod.ImageColorMatchToReference()
+
+    if args.image and args.reference:
+        image = _load_image_tensor(Path(args.image))
+        reference = _load_image_tensor(Path(args.reference))
+    else:
+        image, reference = _make_synthetic_pair()
+
+    _run_case(node, out_dir, image, reference, args.case)
 
 
 if __name__ == "__main__":
