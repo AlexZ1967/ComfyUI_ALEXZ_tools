@@ -43,7 +43,7 @@ Refactoring plan (RU): [PLAN_REFACTORING_ADOPTED_RU.md](refactoring_plan/PLAN_RE
 - [Image Prepare for QwenEdit Outpaint](#image-prepare-for-qwenedit-outpaint)
 - [Align Overlay To Background](#align-overlay-to-background)
 - [Color Match To Reference](#color-match-to-reference)
-- [Seam Match To Reference](#seam-match-to-reference)
+- [Seam Match To Reference (Legacy)](#seam-match-to-reference-legacy)
 - [Find Closest Video Frame](#find-closest-video-frame)
 - [Match Video Cut Point](#match-video-cut-point)
 - [Image Difference](#image-difference)
@@ -105,10 +105,10 @@ Guide: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md), к
 
 ---
 
-## Seam Match To Reference
+## Seam Match To Reference (Legacy)
 Оптимизированная подгонка кадра к референсу с приоритетом минимальной видимости стыка (минимальный diff) на всей картинке.
 
-- Display name: Seam Match To Reference  
+- Display name: Seam Match To Reference (Legacy)  
 - Type name: ImageSeamMatchToReference  
 - Category: image/color
 

@@ -16,6 +16,8 @@
   - updated seam docs (`README.md`, `guides/GUIDE_SEAM_MATCH.md`).
   - added UI troubleshooting guide for dynamic widget visibility:
     `guides/GUIDE_WIDGET_VISIBILITY_PROFILES.md`.
+  - marked universal seam node display as legacy:
+    `Seam Match To Reference (Legacy)`.
 
 ## 0.21.1 — 2026-02-18
 - Seam Match quality update:

@@ -32,7 +32,7 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("JsonDisplayAndSave", "Show/Save JSON", ".json_output", "JsonDisplayAndSave"),
     NodeSpec("VideoInpaintWatermark", "Remove Static Watermark from Video", ".video_inpaint", "VideoInpaintWatermark"),
     NodeSpec("ImageColorMatchToReference", "Color Match To Reference", ".image_color_match", "ImageColorMatchToReference"),
-    NodeSpec("ImageSeamMatchToReference", "Seam Match To Reference", ".image_seam_match", "ImageSeamMatchToReference"),
+    NodeSpec("ImageSeamMatchToReference", "Seam Match To Reference (Legacy)", ".image_seam_match", "ImageSeamMatchToReference"),
     NodeSpec("ImageSeamMatchV1AffineToReference", "Seam Match v1 Affine", ".image_seam_match", "ImageSeamMatchV1AffineToReference"),
     NodeSpec("ImageSeamMatchV2TonalToReference", "Seam Match v2 Tonal", ".image_seam_match", "ImageSeamMatchV2TonalToReference"),
     NodeSpec("ImageSeamMatchV3HybridToReference", "Seam Match v3 Hybrid", ".image_seam_match", "ImageSeamMatchV3HybridToReference"),
@@ -74,9 +74,9 @@ NODE_UI_METADATA = {
         "search_aliases": ["color", "match", "reference", "grade"],
     },
     "ImageSeamMatchToReference": {
-        "description": "Сводит цвет к референсу с приоритетом минимальной видимости стыка.",
+        "description": "Legacy: универсальная seam-match нода с выбором модели через seam_model.",
         "output_tooltips": ["Скорректированное изображение под seam-match.", "JSON с параметрами оптимизации и метриками."],
-        "search_aliases": ["seam", "match", "reference", "color"],
+        "search_aliases": ["seam", "match", "reference", "color", "legacy"],
     },
     "ImageSeamMatchV1AffineToReference": {
         "description": "Seam-match v1: быстрый глобальный affine матчинг.",
