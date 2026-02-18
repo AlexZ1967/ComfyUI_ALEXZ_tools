@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.18.7
+Version: 0.18.9
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -20,7 +20,7 @@ Refactoring plan (RU): [PLAN_REFACTORING_ADOPTED_RU.md](refactoring_plan/PLAN_RE
   `python utils/docs_check.py`
 
 ## Runtime notes
-- `Color Match To Reference` preset `perceptual` использует `torchvision` из базовой среды ComfyUI.
+- `Color Match To Reference` preset `perceptual_vgg_fast` использует `torchvision` из базовой среды ComfyUI.
 - `Find Closest Video Frame` при `max_frames > 0` использует `ffmpeg` (должен быть в `PATH`).
   Linux: `sudo apt install ffmpeg`  
   Windows: `choco install ffmpeg`  
@@ -75,14 +75,15 @@ Guide: [GUIDE_ALIGN.md](guides/GUIDE_ALIGN.md)
 ---
 
 ## Color Match To Reference
-Цветокоррекция по образцу с пресетами качества: fast (mean/std), balanced (linear), quality (LAB CDF), perceptual (VGG). Подробно: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md).
+Цветокоррекция по образцу с пресетами `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast`. Подробно: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md).
 
 - Display name: Color Match To Reference  
 - Type name: ImageColorMatchToReference  
 - Category: image/color
 
-Пресеты: `fast`=mean/std, `balanced`=linear, `quality`=LAB CDF, `perceptual`=VGG.  
+Пресеты: `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast`.  
 `match_json.quality`: метрики до/после (`mse`, `ssim`, `delta_e76`, `lpips_alex`) и `improvement_pct`.  
+`compute_quality_metrics=false` отключает расчёт метрик для ускорения обработки батчей.  
 Выходы: `matched_image`, `match_json`.  
 Guide: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md), кратко — [GUIDE_COLOR_MATCH.md](guides/GUIDE_COLOR_MATCH.md)
 

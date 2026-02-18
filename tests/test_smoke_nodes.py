@@ -64,7 +64,7 @@ class SmokeTests(unittest.TestCase):
             node = image_color_match.ImageColorMatchToReference()
             ref = torch.rand(1, 48, 48, 3)
             img = torch.rand(1, 48, 48, 3)
-            matched, payload = node.match(ref, img, "fast", strength=0.8)
+            matched, payload = node.match(ref, img, "linear", strength=0.8)
         finally:
             image_color_match._lpips_alex_distance = old_lpips
 
@@ -76,6 +76,77 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("improvement_pct", data["quality"])
         self.assertIn("mse", data["quality"]["before"])
         self.assertIn("ssim", data["quality"]["after"])
+
+    def test_color_match_mask_white_region_used_for_adain(self):
+        """Ensure match_mask white area drives stats for presets routed via color_match_utils."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            img = torch.zeros(1, 8, 8, 3)
+            ref = torch.zeros(1, 8, 8, 3)
+            img[:, :4, :4, :] = 0.2
+            img[:, 4:, 4:, :] = 0.8
+            ref[:, :4, :4, :] = 0.9
+            ref[:, 4:, 4:, :] = 0.1
+            match_mask = torch.zeros(1, 8, 8)
+            match_mask[:, :4, :4] = 1.0
+            matched, _payload = node.match(ref, img, "adain", match_mask=match_mask, strength=1.0)
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+
+        top_left_mean = float(matched[0, :4, :4, :].mean().item())
+        self.assertGreater(top_left_mean, 0.75)
+
+    def test_color_match_batch_repeat_last_item(self):
+        """Ensure smaller image batch is padded by repeating its last frame."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(2, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+            out, _payload = node.match(ref, img, "linear", strength=1.0)
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+
+        self.assertEqual(tuple(out.shape), (2, 16, 16, 3))
+
+    def test_color_match_can_disable_quality_metrics(self):
+        """Ensure quality metrics can be skipped for faster processing."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+            _out, payload = node.match(ref, img, "oklab_cdf", compute_quality_metrics=False, strength=1.0)
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+
+        data = json.loads(payload[0])
+        self.assertIsNone(data["quality"]["before"]["mse"])
+        self.assertIsNone(data["quality"]["after"]["ssim"])
+        self.assertIsNone(data["quality"]["improvement_pct"]["delta_e76"])
+
+    def test_color_match_tone_curve_runs(self):
+        """Ensure tone_curve preset runs through batch path and keeps output shape."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(2, 16, 16, 3)
+            img = torch.rand(2, 16, 16, 3)
+            out, _payload = node.match(ref, img, "tone_curve", compute_quality_metrics=False, strength=1.0)
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+
+        self.assertEqual(tuple(out.shape), (2, 16, 16, 3))
 
     def test_video_frame_topk_helpers(self):
         """Validate top-k and confidence helper math for frame matching."""

@@ -495,6 +495,7 @@ def apply_color_match(
     reference_images: torch.Tensor,
     mask: torch.Tensor,
     mode: str,
+    mask_white_is_keep: bool = False,
 ) -> torch.Tensor:
     """Apply selected color-match mode and return corrected image tensor."""
     if mode == "none":
@@ -503,7 +504,8 @@ def apply_color_match(
     mask = normalize_mask(mask)
     mask = ensure_mask_batch(mask, output_images.size(dim=0))
     mask = resize_mask_to_output(mask, output_images.shape[1], output_images.shape[2])
-    keep = (mask < 0.5).detach().cpu().numpy()
+    keep_t = mask > 0.5 if mask_white_is_keep else mask < 0.5
+    keep = keep_t.detach().cpu().numpy()
     if keep.sum() < 10:
         return output_images
 
@@ -535,6 +537,8 @@ def apply_color_match(
         out_np = _match_lab_l(out_np, ref_np, keep, use_cdf=True)
     elif mode == "lab_full":
         out_np = _match_lab_full(out_np, ref_np, keep, use_cdf=False)
+    elif mode == "lab_cdf":
+        out_np = _match_lab_full(out_np, ref_np, keep, use_cdf=True)
     elif mode == "oklab_l":
         out_np = _match_oklab_l(out_np, ref_np, keep, use_cdf=False)
     elif mode == "oklab_cdf":
@@ -543,4 +547,4 @@ def apply_color_match(
         return output_images
 
     out_np = np.clip(out_np, 0.0, 1.0)
-    return torch.from_numpy(out_np)
+    return torch.from_numpy(out_np).to(device=output_images.device, dtype=output_images.dtype)

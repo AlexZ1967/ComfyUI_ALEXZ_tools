@@ -18,6 +18,7 @@
 |---|---|---|
 | `preset` | Метод цветокоррекции | 8 методов: `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast` |
 | `strength` | Сила эффекта | 0.6-0.9 |
+| `compute_quality_metrics` | Считать quality-метрики | Отключить для ускорения батча |
 
 ## Decision helper
 - Скорость → `mean_std` (среднее/стд по каналам).

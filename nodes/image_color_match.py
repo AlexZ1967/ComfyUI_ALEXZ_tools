@@ -29,12 +29,12 @@ except Exception:  # pragma: no cover - optional dependency
 
 from ..utils import color_match_utils
 from ..utils.color_match_utils import normalize_mask, resize_mask_to_output
-from ..utils.utils import select_batch_item
 
 _LOGGER = logging.getLogger("ImageColorMatchToReference")
 _EPS = 1e-6
 _SSIM_WINDOW_CACHE = {}
 _LPIPS_CACHE = {}
+_VGG_CACHE = {}
 
 
 def _resize_image(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
@@ -50,38 +50,100 @@ def _resize_image(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
     return out.squeeze(0).permute(1, 2, 0)
 
 
-def _linear_fit_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
-    """Solve linear scale/offset coefficients that map source values to reference values."""
-    if mask is not None:
-        m = mask > 0.5
-        img_sel = img[m]
-        ref_sel = ref[m]
+def _pad_batch_last(batch: torch.Tensor, batch_size: int) -> torch.Tensor:
+    """Pad batch to target size by repeating the last element (Comfy batch semantics)."""
+    if batch.dim() == 2:
+        batch = batch.unsqueeze(0)
+    if batch.shape[0] >= batch_size:
+        return batch[:batch_size]
+    if batch.shape[0] == 0:
+        raise ValueError("Empty batch is not supported.")
+    pad_n = batch_size - batch.shape[0]
+    repeats = [1] * batch.dim()
+    repeats[0] = pad_n
+    pad = batch[-1:].repeat(*repeats)
+    return torch.cat([batch, pad], dim=0)
+
+
+def _prepare_optional_mask_batch(
+    mask: Optional[torch.Tensor],
+    batch_size: int,
+    height: int,
+    width: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> Optional[torch.Tensor]:
+    """Normalize, batch-pad, and resize optional masks once for the whole batch."""
+    if mask is None:
+        return None
+    mask = _pad_batch_last(mask, batch_size)
+    mask = normalize_mask(mask)
+    mask = resize_mask_to_output(mask, height, width)
+    return mask.to(device=device, dtype=dtype)
+
+
+def _mask_weights_for_batch(
+    img: torch.Tensor, mask: Optional[torch.Tensor]
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build per-batch mask weights and fallback to full-frame when mask is empty."""
+    if mask is None:
+        weights = torch.ones((img.shape[0], img.shape[1], img.shape[2], 1), device=img.device, dtype=img.dtype)
     else:
-        img_sel = img.reshape(-1, 3)
-        ref_sel = ref.reshape(-1, 3)
-    mean_img = img_sel.mean(dim=0)
-    mean_ref = ref_sel.mean(dim=0)
-    var_img = ((img_sel - mean_img) ** 2).mean(dim=0)
-    cov = ((img_sel - mean_img) * (ref_sel - mean_ref)).mean(dim=0)
+        weights = (mask > 0.5).to(dtype=img.dtype, device=img.device)
+        if weights.dim() == 3:
+            weights = weights.unsqueeze(-1)
+    counts = weights.sum(dim=(1, 2), keepdim=True)
+    empty = counts <= 0.5
+    if torch.any(empty):
+        weights = torch.where(empty, torch.ones_like(weights), weights)
+        counts = weights.sum(dim=(1, 2), keepdim=True)
+    return weights, counts.clamp_min(1.0)
+
+
+def _linear_fit_torch_batch(
+    img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Solve per-batch linear scale/offset coefficients in a vectorized way."""
+    weights, counts = _mask_weights_for_batch(img, mask)
+    counts_flat = counts.view(counts.shape[0], 1)
+    mean_img = (img * weights).sum(dim=(1, 2)) / counts_flat
+    mean_ref = (ref * weights).sum(dim=(1, 2)) / counts_flat
+    centered_img = img - mean_img[:, None, None, :]
+    centered_ref = ref - mean_ref[:, None, None, :]
+    var_img = (centered_img.square() * weights).sum(dim=(1, 2)) / counts_flat
+    cov = ((centered_img * centered_ref) * weights).sum(dim=(1, 2)) / counts_flat
     scale = torch.where(var_img > _EPS, cov / torch.clamp(var_img, min=_EPS), torch.ones_like(var_img))
     offset = mean_ref - scale * mean_img
     return scale, offset
 
 
+def _linear_fit_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
+    """Solve linear scale/offset coefficients that map source values to reference values."""
+    mask_b = None if mask is None else mask.unsqueeze(0)
+    scale_b, offset_b = _linear_fit_torch_batch(img.unsqueeze(0), ref.unsqueeze(0), mask_b)
+    return scale_b[0], offset_b[0]
+
+
 def _mean_std_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
     """Match source channels to reference mean and standard deviation."""
-    if mask is not None:
-        m = mask > 0.5
-        img_sel = img[m]
-        ref_sel = ref[m]
-    else:
-        img_sel = img.reshape(-1, 3)
-        ref_sel = ref.reshape(-1, 3)
-    mean_img = img_sel.mean(dim=0)
-    mean_ref = ref_sel.mean(dim=0)
-    std_img = torch.clamp(img_sel.std(dim=0), min=_EPS)
-    std_ref = ref_sel.std(dim=0)
-    out = (img - mean_img) * (std_ref / std_img) + mean_ref
+    mask_b = None if mask is None else mask.unsqueeze(0)
+    out_b = _mean_std_match_batch(img.unsqueeze(0), ref.unsqueeze(0), mask_b)
+    return out_b[0]
+
+
+def _mean_std_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Match source channels to reference mean/std in vectorized batch mode."""
+    weights, counts = _mask_weights_for_batch(img, mask)
+    counts_flat = counts.view(counts.shape[0], 1)
+    mean_img = (img * weights).sum(dim=(1, 2)) / counts_flat
+    mean_ref = (ref * weights).sum(dim=(1, 2)) / counts_flat
+    centered_img = img - mean_img[:, None, None, :]
+    centered_ref = ref - mean_ref[:, None, None, :]
+    var_img = (centered_img.square() * weights).sum(dim=(1, 2)) / counts_flat
+    var_ref = (centered_ref.square() * weights).sum(dim=(1, 2)) / counts_flat
+    std_img = torch.sqrt(torch.clamp(var_img, min=_EPS))
+    std_ref = torch.sqrt(torch.clamp(var_ref, min=0.0))
+    out = centered_img * (std_ref / std_img)[:, None, None, :] + mean_ref[:, None, None, :]
     return torch.clamp(out, 0.0, 1.0)
 
 
@@ -91,22 +153,297 @@ def _linear_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Ten
     return torch.clamp(img * scale + offset, 0.0, 1.0)
 
 
+def _linear_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Apply linear color matching in vectorized batch mode."""
+    scale, offset = _linear_fit_torch_batch(img, ref, mask)
+    return torch.clamp(img * scale[:, None, None, :] + offset[:, None, None, :], 0.0, 1.0)
+
+
 def _lab_match_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor], mode: str):
     """Match color statistics in Lab space and return corrected RGB tensor."""
-    mask_t = torch.zeros((img.shape[0], img.shape[1]), dtype=img.dtype, device=img.device)
-    if mask is not None:
+    if mask is None:
+        mask_t = torch.ones((img.shape[0], img.shape[1]), dtype=img.dtype, device=img.device)
+    else:
         mask_t = normalize_mask(mask)
     out = color_match_utils.apply_color_match(
         img.unsqueeze(0),
         ref.unsqueeze(0),
         mask_t,
         mode,
+        mask_white_is_keep=True,
     )
     return out[0]
 
 
-def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float):
-    """Optimize image parameters against VGG perceptual features for high-quality matching."""
+def _srgb_to_linear(rgb: torch.Tensor) -> torch.Tensor:
+    """Convert sRGB values [0,1] to linear RGB."""
+    return torch.where(rgb <= 0.04045, rgb / 12.92, torch.pow((rgb + 0.055) / 1.055, 2.4))
+
+
+def _linear_to_srgb(rgb: torch.Tensor) -> torch.Tensor:
+    """Convert linear RGB values to sRGB [0,1]."""
+    return torch.where(
+        rgb <= 0.0031308,
+        12.92 * rgb,
+        1.055 * torch.pow(torch.clamp(rgb, min=0.0), 1.0 / 2.4) - 0.055,
+    )
+
+
+def _rgb_to_lab_torch(rgb: torch.Tensor) -> torch.Tensor:
+    """Convert RGB image tensor (...,3) in [0,1] to CIE Lab."""
+    rgb_lin = _srgb_to_linear(torch.clamp(rgb, 0.0, 1.0))
+    m_rgb_xyz = rgb_lin.new_tensor(
+        [
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
+        ]
+    )
+    xyz = torch.matmul(rgb_lin, m_rgb_xyz.t())
+    white = xyz.new_tensor([0.95047, 1.0, 1.08883])
+    xyz_n = xyz / white
+    delta = 6.0 / 29.0
+    delta3 = delta ** 3
+    f = torch.where(
+        xyz_n > delta3,
+        torch.pow(torch.clamp(xyz_n, min=0.0), 1.0 / 3.0),
+        xyz_n / (3.0 * delta * delta) + (4.0 / 29.0),
+    )
+    l = 116.0 * f[..., 1] - 16.0
+    a = 500.0 * (f[..., 0] - f[..., 1])
+    b = 200.0 * (f[..., 1] - f[..., 2])
+    return torch.stack([l, a, b], dim=-1)
+
+
+def _lab_to_rgb_torch(lab: torch.Tensor) -> torch.Tensor:
+    """Convert CIE Lab tensor (...,3) back to RGB in [0,1]."""
+    l, a, b = lab[..., 0], lab[..., 1], lab[..., 2]
+    fy = (l + 16.0) / 116.0
+    fx = fy + a / 500.0
+    fz = fy - b / 200.0
+    delta = 6.0 / 29.0
+
+    def invf(t: torch.Tensor) -> torch.Tensor:
+        return torch.where(t > delta, t ** 3, 3.0 * (delta ** 2) * (t - 4.0 / 29.0))
+
+    white = lab.new_tensor([0.95047, 1.0, 1.08883])
+    xyz = torch.stack([invf(fx), invf(fy), invf(fz)], dim=-1) * white
+    m_xyz_rgb = lab.new_tensor(
+        [
+            [3.2404542, -1.5371385, -0.4985314],
+            [-0.9692660, 1.8760108, 0.0415560],
+            [0.0556434, -0.2040259, 1.0572252],
+        ]
+    )
+    rgb_lin = torch.matmul(xyz, m_xyz_rgb.t())
+    rgb = _linear_to_srgb(rgb_lin)
+    return torch.clamp(rgb, 0.0, 1.0)
+
+
+def _rgb_to_oklab_torch(rgb: torch.Tensor) -> torch.Tensor:
+    """Convert RGB tensor (...,3) in [0,1] to Oklab."""
+    rgb_lin = _srgb_to_linear(torch.clamp(rgb, 0.0, 1.0))
+    m_rgb_lms = rgb.new_tensor(
+        [
+            [0.4122214708, 0.5363325363, 0.0514459929],
+            [0.2119034982, 0.6806995451, 0.1073969566],
+            [0.0883024619, 0.2817188376, 0.6299787005],
+        ]
+    )
+    lms = torch.matmul(rgb_lin, m_rgb_lms.t())
+    lms_cbrt = torch.pow(torch.clamp(lms, min=0.0), 1.0 / 3.0)
+    m_lms_oklab = rgb.new_tensor(
+        [
+            [0.2104542553, 0.7936177850, -0.0040720468],
+            [1.9779984951, -2.4285922050, 0.4505937099],
+            [0.0259040371, 0.7827717662, -0.8086757660],
+        ]
+    )
+    return torch.matmul(lms_cbrt, m_lms_oklab.t())
+
+
+def _oklab_to_rgb_torch(oklab: torch.Tensor) -> torch.Tensor:
+    """Convert Oklab tensor (...,3) to RGB in [0,1]."""
+    m_oklab_lms = oklab.new_tensor(
+        [
+            [1.0, 0.3963377774, 0.2158037573],
+            [1.0, -0.1055613458, -0.0638541728],
+            [1.0, -0.0894841775, -1.2914855480],
+        ]
+    )
+    lms_cbrt = torch.matmul(oklab, m_oklab_lms.t())
+    lms = lms_cbrt ** 3
+    m_lms_rgb = oklab.new_tensor(
+        [
+            [4.0767416621, -3.3077115913, 0.2309699292],
+            [-1.2684380046, 2.6097574011, -0.3413193965],
+            [-0.0041960863, -0.7034186147, 1.7076147010],
+        ]
+    )
+    rgb_lin = torch.matmul(lms, m_lms_rgb.t())
+    rgb = _linear_to_srgb(rgb_lin)
+    return torch.clamp(rgb, 0.0, 1.0)
+
+
+def _interp1d_torch(x: torch.Tensor, xp: torch.Tensor, fp: torch.Tensor) -> torch.Tensor:
+    """1D linear interpolation on tensors with monotonic xp."""
+    idx = torch.searchsorted(xp, x, right=False)
+    max_idx = xp.shape[0] - 1
+    idx0 = torch.clamp(idx - 1, 0, max_idx)
+    idx1 = torch.clamp(idx, 0, max_idx)
+    x0 = xp[idx0]
+    x1 = xp[idx1]
+    y0 = fp[idx0]
+    y1 = fp[idx1]
+    denom = torch.clamp(x1 - x0, min=1e-8)
+    w = (x - x0) / denom
+    y = y0 + w * (y1 - y0)
+    y = torch.where(idx <= 0, fp[0], y)
+    y = torch.where(idx >= xp.shape[0], fp[-1], y)
+    return y
+
+
+def _hist_match_channel_torch(
+    src: torch.Tensor,
+    ref: torch.Tensor,
+    keep: torch.Tensor,
+    bins: int,
+    value_range: tuple[float, float],
+) -> torch.Tensor:
+    """Histogram CDF matching for one channel using torch ops only."""
+    src_vals = src[keep]
+    ref_vals = ref[keep]
+    if src_vals.numel() < 10 or ref_vals.numel() < 10:
+        return src
+    vmin, vmax = value_range
+    src_hist = torch.histc(src_vals.float(), bins=bins, min=vmin, max=vmax)
+    ref_hist = torch.histc(ref_vals.float(), bins=bins, min=vmin, max=vmax)
+    src_cdf = torch.cumsum(src_hist, dim=0)
+    ref_cdf = torch.cumsum(ref_hist, dim=0)
+    src_cdf = src_cdf / torch.clamp(src_cdf[-1], min=1e-8)
+    ref_cdf = ref_cdf / torch.clamp(ref_cdf[-1], min=1e-8)
+    bin_edges = torch.linspace(vmin, vmax, steps=bins + 1, device=src.device, dtype=torch.float32)
+    centers = (bin_edges[:-1] + bin_edges[1:]) * 0.5
+    interp_values = _interp1d_torch(src_cdf, ref_cdf, centers)
+    src_flat = src.contiguous().view(-1).float()
+    indices = torch.bucketize(src_flat, bin_edges, right=True) - 1
+    indices = torch.clamp(indices, 0, bins - 1)
+    matched = interp_values[indices].reshape_as(src).to(dtype=src.dtype)
+    return matched
+
+
+def _adain_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """AdaIN-style matching using masked mean/std statistics."""
+    return _mean_std_match_batch(img, ref, mask)
+
+
+def _tone_curve_match_batch(
+    img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor], num_points: int = 5
+) -> torch.Tensor:
+    """Tone-curve luminance matching (quantile-based) in torch."""
+    bsz, h, w, _ = img.shape
+    out = img.clone()
+    keep_all = torch.ones((h, w), dtype=torch.bool, device=img.device)
+    quantiles = torch.linspace(0.05, 0.95, steps=num_points, device=img.device, dtype=torch.float32)
+    zero = torch.tensor([0.0], device=img.device, dtype=torch.float32)
+    one = torch.tensor([1.0], device=img.device, dtype=torch.float32)
+    src_gray = img[..., 0] * 0.299 + img[..., 1] * 0.587 + img[..., 2] * 0.114
+    ref_gray = ref[..., 0] * 0.299 + ref[..., 1] * 0.587 + ref[..., 2] * 0.114
+    for b in range(bsz):
+        keep = keep_all if mask is None else (mask[b] > 0.5)
+        src_vals = src_gray[b][keep]
+        ref_vals = ref_gray[b][keep]
+        if src_vals.numel() < 10 or ref_vals.numel() < 10:
+            continue
+        src_q = torch.quantile(src_vals.float(), quantiles)
+        ref_q = torch.quantile(ref_vals.float(), quantiles)
+        src_points = torch.cat([zero, src_q, one], dim=0)
+        ref_points = torch.cat([zero, ref_q, one], dim=0)
+        lum = src_gray[b].float()
+        mapped = _interp1d_torch(lum.contiguous().view(-1), src_points, ref_points).view(h, w)
+        scale = mapped / torch.clamp(lum, min=1e-6)
+        scale = torch.clamp(scale, 0.5, 2.0).to(dtype=img.dtype)
+        out[b] = torch.clamp(img[b] * scale.unsqueeze(-1), 0.0, 1.0)
+    return out
+
+
+def _optimal_transport_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Per-channel 1D optimal transport matching in torch."""
+    bsz, h, w, _ = img.shape
+    out = img.clone()
+    keep_all = torch.ones((h, w), dtype=torch.bool, device=img.device)
+    for b in range(bsz):
+        keep = keep_all if mask is None else (mask[b] > 0.5)
+        if keep.sum() < 10:
+            continue
+        for c in range(3):
+            src = img[b, :, :, c]
+            tar = ref[b, :, :, c]
+            src_vals = src[keep]
+            ref_vals = tar[keep]
+            if src_vals.numel() < 10 or ref_vals.numel() < 10:
+                continue
+            src_sorted, src_order = torch.sort(src_vals)
+            ref_sorted, _ = torch.sort(ref_vals)
+            src_q = torch.linspace(0.0, 1.0, steps=src_sorted.numel(), device=img.device, dtype=torch.float32)
+            ref_q = torch.linspace(0.0, 1.0, steps=ref_sorted.numel(), device=img.device, dtype=torch.float32)
+            mapped_sorted = _interp1d_torch(src_q, ref_q, ref_sorted.float()).to(dtype=img.dtype)
+            mapped = torch.empty_like(src_vals)
+            mapped[src_order] = mapped_sorted
+            out[b, :, :, c][keep] = mapped
+    return torch.clamp(out, 0.0, 1.0)
+
+
+def _cdf_match_batch_space(
+    space_img: torch.Tensor,
+    space_ref: torch.Tensor,
+    mask: Optional[torch.Tensor],
+    ranges: tuple[tuple[float, float], tuple[float, float], tuple[float, float]],
+) -> torch.Tensor:
+    """Apply per-channel CDF matching in arbitrary 3-channel color space."""
+    bsz, h, w, _ = space_img.shape
+    out = space_img.clone()
+    keep_all = torch.ones((h, w), dtype=torch.bool, device=space_img.device)
+    for b in range(bsz):
+        keep = keep_all if mask is None else (mask[b] > 0.5)
+        if keep.sum() < 10:
+            continue
+        for c in range(3):
+            out[b, :, :, c] = _hist_match_channel_torch(
+                space_img[b, :, :, c], space_ref[b, :, :, c], keep, bins=256, value_range=ranges[c]
+            )
+    return out
+
+
+def _lab_cdf_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Torch-only Lab CDF matching."""
+    lab_img = _rgb_to_lab_torch(img)
+    lab_ref = _rgb_to_lab_torch(ref)
+    ranges = ((0.0, 100.0), (-127.0, 127.0), (-127.0, 127.0))
+    matched = _cdf_match_batch_space(lab_img, lab_ref, mask, ranges)
+    matched[..., 0] = torch.clamp(matched[..., 0], 0.0, 100.0)
+    matched[..., 1] = torch.clamp(matched[..., 1], -127.0, 127.0)
+    matched[..., 2] = torch.clamp(matched[..., 2], -127.0, 127.0)
+    return _lab_to_rgb_torch(matched)
+
+
+def _oklab_cdf_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Torch-only Oklab CDF matching."""
+    oklab_img = _rgb_to_oklab_torch(img)
+    oklab_ref = _rgb_to_oklab_torch(ref)
+    ranges = ((0.0, 1.0), (-0.5, 0.5), (-0.5, 0.5))
+    matched = _cdf_match_batch_space(oklab_img, oklab_ref, mask, ranges)
+    matched[..., 0] = torch.clamp(matched[..., 0], 0.0, 1.0)
+    matched[..., 1] = torch.clamp(matched[..., 1], -0.5, 0.5)
+    matched[..., 2] = torch.clamp(matched[..., 2], -0.5, 0.5)
+    return _oklab_to_rgb_torch(matched)
+
+
+def _vgg19_features(device: torch.device):
+    """Load and cache VGG19 feature extractor used by perceptual matching."""
+    key = ("vgg19_f12", device.type, device.index if device.type == "cuda" else -1)
+    if key in _VGG_CACHE:
+        return _VGG_CACHE[key]
     try:
         from torchvision.models import VGG19_Weights, vgg19
     except Exception as exc:  # pragma: no cover - runtime dependency check
@@ -114,21 +451,27 @@ def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float)
             "torchvision is required for preset=perceptual. "
             "Use ComfyUI default environment or install torchvision."
         ) from exc
-
-    device = img.device
     _LOGGER.info("Loading VGG19 (perceptual_vgg)...")
+    vgg = vgg19(weights=VGG19_Weights.DEFAULT).features[:12].to(device).eval()
+    for p in vgg.parameters():
+        p.requires_grad = False
+    _VGG_CACHE[key] = vgg
+    return vgg
+
+
+def _perceptual_vgg(img: torch.Tensor, ref: torch.Tensor, steps: int, lr: float):
+    """Optimize image parameters against VGG perceptual features for high-quality matching."""
+    device = img.device
     inf_ctx = torch.inference_mode(False) if torch.is_inference_mode_enabled() else nullcontext()
 
     with inf_ctx:
-        vgg = vgg19(weights=VGG19_Weights.DEFAULT).features[:12].to(device).eval()
-        for p in vgg.parameters():
-            p.requires_grad = False
+        vgg = _vgg19_features(device)
+        mean = torch.tensor([0.485, 0.456, 0.406], device=device, dtype=torch.float32).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225], device=device, dtype=torch.float32).view(1, 3, 1, 1)
 
         def prep(x):
             """Normalize and resize an image tensor for VGG feature extraction."""
-            x = x.permute(2, 0, 1).unsqueeze(0)
-            mean = torch.tensor([0.485, 0.456, 0.406], device=device).view(1, 3, 1, 1)
-            std = torch.tensor([0.229, 0.224, 0.225], device=device).view(1, 3, 1, 1)
+            x = x.float().permute(2, 0, 1).unsqueeze(0)
             return (x - mean) / std
 
         with torch.no_grad():
@@ -304,6 +647,16 @@ def _quality_metrics(img: torch.Tensor, ref: torch.Tensor):
     }
 
 
+def _empty_quality_metrics() -> dict:
+    """Return empty quality metrics payload when metric evaluation is disabled."""
+    return {
+        "mse": None,
+        "ssim": None,
+        "delta_e76": None,
+        "lpips_alex": None,
+    }
+
+
 def _improvement_pct(before: dict, after: dict) -> dict:
     """Convert metric pairs into percentage-improvement values."""
     res = {}
@@ -356,6 +709,7 @@ class ImageColorMatchToReference:
                 "match_mask": ("MASK", {"tooltip": "Где считать статистику (белое=учитывать)."}),
                 "apply_mask": ("MASK", {"tooltip": "Где применять коррекцию (белое=применить, чёрное=оставить исходное). Маски повышают время обработки."}),
                 "preserve_alpha": ("BOOLEAN", {"default": True, "tooltip": "Если вход RGBA — сохранить альфу из исходника."}),
+                "compute_quality_metrics": ("BOOLEAN", {"default": True, "tooltip": "Считать MSE/SSIM/DeltaE/LPIPS. Отключите для ускорения батчей."}),
             },
         }
 
@@ -372,58 +726,69 @@ class ImageColorMatchToReference:
         match_mask=None,
         apply_mask=None,
         preserve_alpha=True,
+        compute_quality_metrics=True,
         strength=1.0,
     ):
         """Execute the node and return processed outputs for ComfyUI."""
         batch_size = max(reference.shape[0], image.shape[0])
+        reference_batch = _pad_batch_last(reference, batch_size)
+        image_batch = _pad_batch_last(image, batch_size)
+        ref_h, ref_w = reference_batch.shape[1], reference_batch.shape[2]
+
+        alpha_batch = None
+        reference_rgb = reference_batch
+        image_rgb = image_batch
+        if reference_batch.shape[3] > 3:
+            alpha_batch = reference_batch[..., 3:4]
+            reference_rgb = reference_batch[..., :3]
+        if image_batch.shape[3] > 3:
+            if alpha_batch is None:
+                alpha_batch = image_batch[..., 3:4]
+            image_rgb = image_batch[..., :3]
+
+        if image_rgb.shape[1] != ref_h or image_rgb.shape[2] != ref_w:
+            image_rgb = color_match_utils.resize_images_to_size(image_rgb, ref_h, ref_w)
+        if alpha_batch is not None and (alpha_batch.shape[1] != ref_h or alpha_batch.shape[2] != ref_w):
+            alpha_batch = color_match_utils.resize_images_to_size(alpha_batch, ref_h, ref_w)
+
+        match_mask_batch = _prepare_optional_mask_batch(
+            match_mask, batch_size, ref_h, ref_w, reference_rgb.device, reference_rgb.dtype
+        )
+        apply_mask_batch = _prepare_optional_mask_batch(
+            apply_mask, batch_size, ref_h, ref_w, reference_rgb.device, reference_rgb.dtype
+        )
+
+        corrected_batch = None
+        if preset == "mean_std":
+            corrected_batch = _mean_std_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "linear":
+            corrected_batch = _linear_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "tone_curve":
+            corrected_batch = _tone_curve_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "adain":
+            corrected_batch = _adain_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "optimal_transport":
+            corrected_batch = _optimal_transport_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "lab_cdf":
+            corrected_batch = _lab_cdf_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "oklab_cdf":
+            corrected_batch = _oklab_cdf_match_batch(image_rgb, reference_rgb, match_mask_batch)
+
+        scale_batch, offset_batch = _linear_fit_torch_batch(image_rgb, reference_rgb, match_mask_batch)
+
         matched_list = []
         json_list = []
         iterator = tqdm(range(batch_size), desc=f"ColorMatch[{preset}]", unit="img")
         for idx in iterator:
-            ref_t = select_batch_item(reference, idx)
-            img_t = select_batch_item(image, idx)
-            ref_h, ref_w = ref_t.shape[0], ref_t.shape[1]
-
-            alpha_channel = None
-            if ref_t.shape[2] > 3:
-                alpha_channel = ref_t[..., 3:4]
-                ref_t = ref_t[..., :3]
-            if img_t.shape[2] > 3:
-                alpha_channel = img_t[..., 3:4] if alpha_channel is None else alpha_channel
-                img_t = img_t[..., :3]
-
-            if img_t.shape[0] != ref_h or img_t.shape[1] != ref_w:
-                img_t = _resize_image(img_t, ref_h, ref_w)
-
-            mm_t = select_batch_item(match_mask, idx) if match_mask is not None else None
-            am_t = select_batch_item(apply_mask, idx) if apply_mask is not None else None
-            if mm_t is not None:
-                mm_t = resize_mask_to_output(normalize_mask(mm_t), ref_h, ref_w)
-            if am_t is not None:
-                am_t = resize_mask_to_output(normalize_mask(am_t), ref_h, ref_w)
+            ref_t = reference_rgb[idx]
+            img_t = image_rgb[idx]
+            mm_t = match_mask_batch[idx] if match_mask_batch is not None else None
+            am_t = apply_mask_batch[idx] if apply_mask_batch is not None else None
 
             deep_params = None
-            if preset == "mean_std":
-                corrected_t = _mean_std_match(img_t, ref_t, mm_t)
-                mode = "mean_std"
-            elif preset == "linear":
-                corrected_t = _linear_match(img_t, ref_t, mm_t)
-                mode = "linear"
-            elif preset == "tone_curve":
-                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "tone_curve")
-                mode = "tone_curve"
-            elif preset == "adain":
-                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "adain")
-                mode = "adain"
-            elif preset == "optimal_transport":
-                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "optimal_transport")
-                mode = "optimal_transport"
-            elif preset == "lab_cdf":
-                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "lab_cdf")
-                mode = "lab_cdf"
-            elif preset == "oklab_cdf":
-                corrected_t = _lab_match_torch(img_t, ref_t, mm_t, "oklab_cdf")
-                mode = "oklab_cdf"
+            if corrected_batch is not None:
+                corrected_t = corrected_batch[idx]
+                mode = preset
             elif preset == "perceptual_vgg_fast":
                 corrected_t, deep_params = _perceptual_vgg_fast(img_t, ref_t, 5, 0.05)
                 mode = "perceptual_vgg_fast"
@@ -434,7 +799,7 @@ class ImageColorMatchToReference:
             if strength < 1.0:
                 corrected_t = img_t * (1.0 - strength) + corrected_t * strength
 
-            scale_t, offset_t = _linear_fit_torch(img_t, ref_t, mm_t)
+            scale_t, offset_t = scale_batch[idx], offset_batch[idx]
             resolve_params = {
                 "scale": [round(float(s), 5) for s in scale_t],
                 "offset": [round(float(o), 5) for o in offset_t],
@@ -451,12 +816,17 @@ class ImageColorMatchToReference:
                 corrected_t = corrected_t * mask_apply + img_t * (1.0 - mask_apply)
 
             corrected_t = torch.clamp(corrected_t, 0.0, 1.0)
-            metrics_before = _quality_metrics(img_t, ref_t)
-            metrics_after = _quality_metrics(corrected_t, ref_t)
-            improvement = _improvement_pct(metrics_before, metrics_after)
+            if compute_quality_metrics:
+                metrics_before = _quality_metrics(img_t, ref_t)
+                metrics_after = _quality_metrics(corrected_t, ref_t)
+                improvement = _improvement_pct(metrics_before, metrics_after)
+            else:
+                metrics_before = _empty_quality_metrics()
+                metrics_after = _empty_quality_metrics()
+                improvement = _empty_quality_metrics()
             matched_t = corrected_t
-            if alpha_channel is not None and preserve_alpha:
-                matched_t = torch.cat([matched_t, alpha_channel], dim=-1)
+            if alpha_batch is not None and preserve_alpha:
+                matched_t = torch.cat([matched_t, alpha_batch[idx]], dim=-1)
 
             stats = {
                 "ref_mean": [round(float(x), 4) for x in ref_t.reshape(-1, 3).mean(dim=0)],

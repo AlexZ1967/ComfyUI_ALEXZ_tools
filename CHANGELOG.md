@@ -1,5 +1,18 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.9 — 2026-02-18
+- Color Match To Reference performance and correctness update:
+  - vectorized batch processing for `mean_std` and `linear` presets in `nodes/image_color_match.py`;
+  - added VGG19 feature extractor cache for `perceptual_vgg_fast` (prevents repeated model reloads);
+  - moved `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf` node path to torch-side processing, reducing CPU roundtrips;
+  - added optional input `compute_quality_metrics` (default `true`) to skip MSE/SSIM/DeltaE/LPIPS computation for faster batch runs;
+  - fixed `match_mask` semantics for node presets routed via color-match utils (`white = include`);
+  - fixed `lab_cdf` execution path in `utils/color_match_utils.py` and stabilized output dtype/device.
+- Tests and docs:
+  - updated and extended smoke tests for color-match presets, mask semantics, batch padding, and metric-disable mode;
+  - synced README and color-match guides with current preset names and `compute_quality_metrics` parameter;
+  - docs consistency check passes.
+
 ## 0.18.8 — 2026-02-18
 - Pre-Phase 4 structural improvement:
   - reorganized `utils/module_browser/` monolithic module into functional submodules:
