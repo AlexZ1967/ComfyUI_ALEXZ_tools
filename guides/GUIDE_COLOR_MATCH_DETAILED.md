@@ -23,8 +23,14 @@
 | `match_mask` | Где считать статистику | Белое = учитывать |
 | `apply_mask` | Где применять коррекцию | Белое = применять |
 | `preserve_alpha` | Сохранить альфу | Оставляйте `true` для RGBA |
-| `compute_quality_metrics` | Считать метрики `mse/ssim/delta_e76/lpips_alex` | Отключайте для ускорения батчей |
+| `compute_quality_metrics` | Legacy-флаг метрик | `false` принудительно выключает метрики |
+| `quality_metrics_mode` | Режим расчета метрик | `off` / `fast` (`mse+ssim`) / `full` |
 | `auto_optimal_metric` | Критерий выбора в `auto_optimal` | `mse_ssim` (баланс), `mse_ssim_lpips` (точнее, медленнее) |
+| `auto_temporal_stability` | Стабилизация выбора в `auto_optimal` | Для видео последовательностей |
+| `auto_temporal_alpha` | EMA сглаживание оценки | 0.75 по умолчанию |
+| `auto_switch_threshold` | Порог переключения между `linear` и `oklab_cdf` | Больше значение = меньше переключений |
+| `skin_tone_protection` | Защита оттенков кожи | Полезно для портретов |
+| `skin_protection_strength` | Сила защиты кожи | 0.0-1.0 |
 | `export_lut` | Экспорт LUT `.cube` | Включайте для передачи цветокоррекции в монтаж/грейдинг |
 | `lut_size` | Размер 3D LUT | 17 для скорости, 33 для качества |
 | `lut_output_dir` | Папка для LUT | Пусто = `./output/color_luts` |
@@ -37,6 +43,7 @@
 - Нужна математически обоснованная подгонка → `optimal_transport` (Wasserstein distance).
 - Нужно лучше качество → `lab_cdf` (Lab гистограмма) или `oklab_cdf` (перцептивнее).
 - Нужен автоподбор без ручного выбора метода → `auto_optimal`.
+- Для видео с `auto_optimal`: включите `auto_temporal_stability` и при необходимости увеличьте `auto_switch_threshold`.
 - Максимум качества → `perceptual_vgg_fast` (нейросеть, медленный).
 
 ## Сравнение методов цветокоррекции
@@ -160,6 +167,7 @@
 - Недокоррекция: `linear → lab_cdf`/`oklab_cdf` или `perceptual_vgg_fast`.
 - Проблема только в области: используйте `match_mask` и `apply_mask`.
 - Пустая `match_mask` (нет белых пикселей): нода возвращает исходное изображение для такого кадра и пишет warning в лог.
+- Слишком частые переключения `auto_optimal` между кадрами: включите `auto_temporal_stability`, увеличьте `auto_temporal_alpha` и/или `auto_switch_threshold`.
 - `perceptual_vgg_fast` недоступен: проверьте `torchvision` в среде ComfyUI.
 
 ## Производительность

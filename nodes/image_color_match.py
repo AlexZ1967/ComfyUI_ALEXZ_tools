@@ -626,6 +626,18 @@ def _quality_metrics(img: torch.Tensor, ref: torch.Tensor):
     }
 
 
+def _quality_metrics_fast(img: torch.Tensor, ref: torch.Tensor):
+    """Compute fast quality metrics (MSE + SSIM only)."""
+    mse = float(torch.mean((img - ref) ** 2).item())
+    ssim = _ssim_similarity(img, ref)
+    return {
+        "mse": mse,
+        "ssim": ssim,
+        "delta_e76": None,
+        "lpips_alex": None,
+    }
+
+
 def _auto_optimal_candidate_metrics(candidate: torch.Tensor, ref: torch.Tensor, strategy: str) -> dict:
     """Compute candidate metrics used to pick auto_optimal method."""
     mse = float(torch.mean((candidate - ref) ** 2).item())
@@ -662,6 +674,36 @@ def _empty_quality_metrics() -> dict:
         "delta_e76": None,
         "lpips_alex": None,
     }
+
+
+def _skin_tone_mask_soft(img: torch.Tensor) -> torch.Tensor:
+    """Estimate a soft skin-likelihood mask from RGB image in [0,1]."""
+    r = img[..., 0]
+    g = img[..., 1]
+    b = img[..., 2]
+    y = 0.299 * r + 0.587 * g + 0.114 * b
+    cb = 0.564 * (b - y) + 0.5
+    cr = 0.713 * (r - y) + 0.5
+    cb_w = (1.0 - torch.abs(cb - 0.40) / 0.15).clamp(0.0, 1.0)
+    cr_w = (1.0 - torch.abs(cr - 0.60) / 0.18).clamp(0.0, 1.0)
+    sat = (img.max(dim=-1).values - img.min(dim=-1).values).clamp(0.0, 1.0)
+    sat_w = (sat / 0.45).clamp(0.0, 1.0)
+    lum_w = ((y - 0.08) / 0.62).clamp(0.0, 1.0)
+    mask = cb_w * cr_w * sat_w * lum_w
+    return mask.clamp(0.0, 1.0)
+
+
+def _apply_skin_tone_protection(
+    corrected: torch.Tensor, original: torch.Tensor, strength: float
+) -> tuple[torch.Tensor, float]:
+    """Blend corrected image back toward original in skin-tone areas."""
+    s = float(max(0.0, min(1.0, strength)))
+    if s <= 0.0:
+        return corrected, 0.0
+    skin = _skin_tone_mask_soft(original)
+    w = (skin * s).unsqueeze(-1)
+    out = corrected * (1.0 - w) + original * w
+    return torch.clamp(out, 0.0, 1.0), float(skin.mean().item())
 
 
 def _improvement_pct(before: dict, after: dict) -> dict:
@@ -717,9 +759,33 @@ class ImageColorMatchToReference:
                 "apply_mask": ("MASK", {"tooltip": "Где применять коррекцию (белое=применить, чёрное=оставить исходное). Маски повышают время обработки."}),
                 "preserve_alpha": ("BOOLEAN", {"default": True, "tooltip": "Если вход RGBA — сохранить альфу из исходника."}),
                 "compute_quality_metrics": ("BOOLEAN", {"default": True, "tooltip": "Считать MSE/SSIM/DeltaE/LPIPS. Отключите для ускорения батчей."}),
+                "quality_metrics_mode": (
+                    ["off", "fast", "full"],
+                    {"default": "full", "tooltip": "off=без метрик, fast=MSE+SSIM, full=MSE+SSIM+DeltaE+LPIPS."},
+                ),
                 "auto_optimal_metric": (
                     ["mse", "mse_ssim", "mse_ssim_lpips"],
                     {"default": "mse_ssim", "tooltip": "Критерий выбора для auto_optimal. mse_ssim_lpips точнее, но медленнее."},
+                ),
+                "auto_temporal_stability": (
+                    "BOOLEAN",
+                    {"default": False, "tooltip": "Стабилизирует выбор метода в auto_optimal между соседними кадрами."},
+                ),
+                "auto_temporal_alpha": (
+                    "FLOAT",
+                    {"default": 0.75, "min": 0.0, "max": 0.99, "step": 0.01, "tooltip": "Сглаживание EMA для auto_optimal (выше = стабильнее)."},
+                ),
+                "auto_switch_threshold": (
+                    "FLOAT",
+                    {"default": 0.01, "min": 0.0, "max": 1.0, "step": 0.001, "tooltip": "Порог переключения режима в auto_optimal (hysteresis)."},
+                ),
+                "skin_tone_protection": (
+                    "BOOLEAN",
+                    {"default": False, "tooltip": "Сохранять тона кожи, ослабляя коррекцию в skin-областях."},
+                ),
+                "skin_protection_strength": (
+                    "FLOAT",
+                    {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила защиты кожи (0..1)."},
                 ),
                 "export_lut": ("BOOLEAN", {"default": False, "tooltip": "Экспортировать LUT .cube для каждой пары вход/референс."}),
                 "lut_size": ("INT", {"default": 33, "min": 8, "max": 65, "tooltip": "Размер 3D LUT (типично 17/33)."}),
@@ -742,7 +808,13 @@ class ImageColorMatchToReference:
         apply_mask=None,
         preserve_alpha=True,
         compute_quality_metrics=True,
+        quality_metrics_mode="full",
         auto_optimal_metric="mse_ssim",
+        auto_temporal_stability=False,
+        auto_temporal_alpha=0.75,
+        auto_switch_threshold=0.01,
+        skin_tone_protection=False,
+        skin_protection_strength=0.6,
         export_lut=False,
         lut_size=33,
         lut_output_dir="",
@@ -786,6 +858,8 @@ class ImageColorMatchToReference:
         auto_mode_batch = None
         auto_linear_batch = None
         auto_oklab_batch = None
+        auto_pre_score_linear = None
+        auto_pre_score_oklab = None
         mean_std_scale_batch = None
         mean_std_offset_batch = None
         if preset == "mean_std":
@@ -811,10 +885,10 @@ class ImageColorMatchToReference:
         elif preset == "auto_optimal":
             auto_linear_batch = _linear_match_batch(image_rgb, reference_rgb, match_mask_batch)
             auto_oklab_batch = _oklab_cdf_match_batch(image_rgb, reference_rgb, match_mask_batch)
-            if auto_optimal_metric == "mse":
-                mse_linear = torch.mean((auto_linear_batch - reference_rgb) ** 2, dim=(1, 2, 3))
-                mse_oklab = torch.mean((auto_oklab_batch - reference_rgb) ** 2, dim=(1, 2, 3))
-                choose_oklab = mse_oklab + 1e-6 < mse_linear
+            if auto_optimal_metric == "mse" and not auto_temporal_stability:
+                auto_pre_score_linear = torch.mean((auto_linear_batch - reference_rgb) ** 2, dim=(1, 2, 3))
+                auto_pre_score_oklab = torch.mean((auto_oklab_batch - reference_rgb) ** 2, dim=(1, 2, 3))
+                choose_oklab = auto_pre_score_oklab + 1e-6 < auto_pre_score_linear
                 auto_mode_batch = ["oklab_cdf" if bool(v) else "linear" for v in choose_oklab.tolist()]
                 corrected_batch = torch.where(choose_oklab[:, None, None, None], auto_oklab_batch, auto_linear_batch)
 
@@ -822,6 +896,12 @@ class ImageColorMatchToReference:
         lut_dir = Path(lut_output_dir).expanduser() if str(lut_output_dir).strip() else (Path.cwd() / "output" / "color_luts")
         lut_base = _sanitize_lut_name(lut_name)
         lut_size_int = int(max(8, min(65, int(lut_size))))
+        effective_quality_mode = quality_metrics_mode if str(quality_metrics_mode) in ("off", "fast", "full") else "full"
+        if not compute_quality_metrics:
+            effective_quality_mode = "off"
+        auto_prev_selected = None
+        auto_ema_linear = None
+        auto_ema_oklab = None
 
         matched_list = []
         json_list = []
@@ -848,9 +928,10 @@ class ImageColorMatchToReference:
                     deep_params = {
                         "auto_optimal": {
                             "strategy": auto_optimal_metric,
-                            "score_linear": None,
-                            "score_oklab_cdf": None,
+                            "score_linear": None if auto_pre_score_linear is None else round(float(auto_pre_score_linear[idx]), 6),
+                            "score_oklab_cdf": None if auto_pre_score_oklab is None else round(float(auto_pre_score_oklab[idx]), 6),
                             "selected": chosen,
+                            "temporal_stability": bool(auto_temporal_stability),
                         }
                     }
                 else:
@@ -860,12 +941,31 @@ class ImageColorMatchToReference:
                     oklab_metrics = _auto_optimal_candidate_metrics(oklab_t, ref_t, auto_optimal_metric)
                     score_linear = _auto_optimal_score(linear_metrics, auto_optimal_metric)
                     score_oklab = _auto_optimal_score(oklab_metrics, auto_optimal_metric)
-                    if score_oklab + 1e-8 < score_linear:
-                        corrected_t = oklab_t
-                        chosen = "oklab_cdf"
+                    ema_linear = score_linear
+                    ema_oklab = score_oklab
+                    if auto_temporal_stability:
+                        alpha = float(max(0.0, min(0.99, auto_temporal_alpha)))
+                        if auto_ema_linear is None:
+                            auto_ema_linear = score_linear
+                            auto_ema_oklab = score_oklab
+                        else:
+                            auto_ema_linear = alpha * auto_ema_linear + (1.0 - alpha) * score_linear
+                            auto_ema_oklab = alpha * auto_ema_oklab + (1.0 - alpha) * score_oklab
+                        ema_linear = auto_ema_linear
+                        ema_oklab = auto_ema_oklab
+                    if ema_oklab + 1e-8 < ema_linear:
+                        candidate = "oklab_cdf"
                     else:
-                        corrected_t = linear_t
-                        chosen = "linear"
+                        candidate = "linear"
+                    chosen = candidate
+                    if auto_temporal_stability and auto_prev_selected is not None and candidate != auto_prev_selected:
+                        threshold = float(max(0.0, auto_switch_threshold))
+                        prev_score = ema_linear if auto_prev_selected == "linear" else ema_oklab
+                        cand_score = ema_oklab if auto_prev_selected == "linear" else ema_linear
+                        if cand_score + threshold >= prev_score:
+                            chosen = auto_prev_selected
+                    corrected_t = linear_t if chosen == "linear" else oklab_t
+                    auto_prev_selected = chosen
                     mode = f"auto_optimal:{chosen}"
                     deep_params = {
                         "auto_optimal": {
@@ -874,6 +974,10 @@ class ImageColorMatchToReference:
                             "oklab_cdf": oklab_metrics,
                             "score_linear": round(float(score_linear), 6),
                             "score_oklab_cdf": round(float(score_oklab), 6),
+                            "ema_score_linear": round(float(ema_linear), 6),
+                            "ema_score_oklab_cdf": round(float(ema_oklab), 6),
+                            "switch_threshold": float(auto_switch_threshold),
+                            "temporal_stability": bool(auto_temporal_stability),
                             "selected": chosen,
                         }
                     }
@@ -910,11 +1014,20 @@ class ImageColorMatchToReference:
             if am_t is not None:
                 mask_apply = am_t[..., None]
                 corrected_t = corrected_t * mask_apply + img_t * (1.0 - mask_apply)
+            skin_mask_mean = None
+            if skin_tone_protection:
+                corrected_t, skin_mask_mean = _apply_skin_tone_protection(
+                    corrected_t, img_t, float(skin_protection_strength)
+                )
 
             corrected_t = torch.clamp(corrected_t, 0.0, 1.0)
-            if compute_quality_metrics:
+            if effective_quality_mode == "full":
                 metrics_before = _quality_metrics(img_t, ref_t)
                 metrics_after = _quality_metrics(corrected_t, ref_t)
+                improvement = _improvement_pct(metrics_before, metrics_after)
+            elif effective_quality_mode == "fast":
+                metrics_before = _quality_metrics_fast(img_t, ref_t)
+                metrics_after = _quality_metrics_fast(corrected_t, ref_t)
                 improvement = _improvement_pct(metrics_before, metrics_after)
             else:
                 metrics_before = _empty_quality_metrics()
@@ -930,6 +1043,9 @@ class ImageColorMatchToReference:
                 "ref_std": [round(float(x), 4) for x in ref_t.reshape(-1, 3).std(dim=0)],
                 "img_std": [round(float(x), 4) for x in img_t.reshape(-1, 3).std(dim=0)],
                 "mask_used": mm_t is not None,
+                "quality_mode": effective_quality_mode,
+                "skin_tone_protection": bool(skin_tone_protection),
+                "skin_mask_mean": None if skin_mask_mean is None else round(float(skin_mask_mean), 6),
             }
             payload = {
                 "status": "ok",

@@ -18,8 +18,14 @@
 |---|---|---|
 | `preset` | Метод цветокоррекции | 9 методов: `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `auto_optimal`, `perceptual_vgg_fast` |
 | `strength` | Сила эффекта | 0.6-0.9 |
-| `compute_quality_metrics` | Считать quality-метрики | Отключить для ускорения батча |
+| `compute_quality_metrics` | Legacy-флаг метрик | `false` принудительно отключает метрики |
+| `quality_metrics_mode` | Режим метрик | `off` / `fast` / `full` |
 | `auto_optimal_metric` | Критерий выбора в `auto_optimal` | `mse_ssim` по умолчанию, `mse_ssim_lpips` для финального качества |
+| `auto_temporal_stability` | Стабилизация выбора в `auto_optimal` | Включать для видео |
+| `auto_temporal_alpha` | EMA сглаживание авто-оценки | 0.7-0.9 |
+| `auto_switch_threshold` | Порог переключения метода | 0.005-0.03 |
+| `skin_tone_protection` | Защита оттенков кожи | Включать для портретов |
+| `skin_protection_strength` | Сила защиты кожи | 0.4-0.8 |
 | `export_lut` | Сохранять LUT `.cube` | Включить при подготовке grading pipeline |
 | `lut_size` | Размер 3D LUT | 17 или 33 для практики |
 | `lut_output_dir` | Папка LUT | Пусто = `./output/color_luts` |
@@ -33,6 +39,7 @@
 - Математически строго → `optimal_transport` (Wasserstein distance, монотонное отображение).
 - Высокое качество → `lab_cdf` (Lab гистограмма) или `oklab_cdf` (Oklab, перцептивнее).
 - Автовыбор (без ручного тюнинга) → `auto_optimal` (выбирает между `linear` и `oklab_cdf` по MSE к референсу).
+- Для видео в `auto_optimal` включайте `auto_temporal_stability` чтобы избежать частых переключений метода.
 - Максимум → `perceptual_vgg_fast` (нейросеть, медленнее).
 
 ## Сравнение методов

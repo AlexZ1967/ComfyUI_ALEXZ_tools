@@ -229,6 +229,121 @@ class SmokeTests(unittest.TestCase):
         data = json.loads(payload[0])
         self.assertIn("empty_match_mask", str(data.get("mode", "")))
 
+    def test_color_match_quality_metrics_mode_fast(self):
+        """Ensure fast metrics mode reports MSE/SSIM but skips DeltaE/LPIPS."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: 0.123
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+            _out, payload = node.match(
+                ref,
+                img,
+                "linear",
+                quality_metrics_mode="fast",
+                compute_quality_metrics=True,
+                strength=1.0,
+            )
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+        data = json.loads(payload[0])
+        before = data["quality"]["before"]
+        self.assertIsNotNone(before["mse"])
+        self.assertIsNotNone(before["ssim"])
+        self.assertIsNone(before["delta_e76"])
+        self.assertIsNone(before["lpips_alex"])
+
+    def test_color_match_skin_tone_protection_reduces_shift(self):
+        """Ensure skin protection keeps output closer to original for skin-like colors."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            img = torch.zeros(1, 24, 24, 3)
+            img[:, :, :, 0] = 0.76
+            img[:, :, :, 1] = 0.57
+            img[:, :, :, 2] = 0.44
+            ref = torch.zeros(1, 24, 24, 3)
+            ref[:, :, :, 0] = 0.08
+            ref[:, :, :, 1] = 0.22
+            ref[:, :, :, 2] = 0.88
+            out_no, _ = node.match(
+                ref,
+                img,
+                "linear",
+                compute_quality_metrics=False,
+                skin_tone_protection=False,
+                strength=1.0,
+            )
+            out_yes, _ = node.match(
+                ref,
+                img,
+                "linear",
+                compute_quality_metrics=False,
+                skin_tone_protection=True,
+                skin_protection_strength=1.0,
+                strength=1.0,
+            )
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+        diff_no = float(torch.mean(torch.abs(out_no - img)).item())
+        diff_yes = float(torch.mean(torch.abs(out_yes - img)).item())
+        self.assertLess(diff_yes, diff_no)
+
+    def test_auto_optimal_temporal_stability_hysteresis(self):
+        """Ensure temporal hysteresis can keep previous mode when score gain is small."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        old_linear = image_color_match._linear_match_batch
+        old_oklab = image_color_match._oklab_cdf_match_batch
+        old_candidate = image_color_match._auto_optimal_candidate_metrics
+        try:
+            image_color_match._lpips_alex_distance = lambda a, b: None
+
+            def _fake_linear(img, ref, mask):
+                out = img.clone()
+                out[0] = 0.10
+                out[1] = 0.90
+                return out
+
+            def _fake_oklab(img, ref, mask):
+                out = img.clone()
+                out[0] = 0.90
+                out[1] = 0.20
+                return out
+
+            def _fake_candidate(candidate, ref, strategy):
+                return {"mse": float(candidate.mean().item()), "ssim": None, "lpips_alex": None}
+
+            image_color_match._linear_match_batch = _fake_linear
+            image_color_match._oklab_cdf_match_batch = _fake_oklab
+            image_color_match._auto_optimal_candidate_metrics = _fake_candidate
+
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(2, 16, 16, 3)
+            img = torch.rand(2, 16, 16, 3)
+            _out, payload = node.match(
+                ref,
+                img,
+                "auto_optimal",
+                auto_optimal_metric="mse",
+                auto_temporal_stability=True,
+                auto_switch_threshold=1.0,
+                compute_quality_metrics=False,
+                strength=1.0,
+            )
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+            image_color_match._linear_match_batch = old_linear
+            image_color_match._oklab_cdf_match_batch = old_oklab
+            image_color_match._auto_optimal_candidate_metrics = old_candidate
+
+        modes = [json.loads(payload[0])["mode"], json.loads(payload[1])["mode"]]
+        self.assertEqual(modes, ["auto_optimal:linear", "auto_optimal:linear"])
+
     def test_video_frame_topk_helpers(self):
         """Validate top-k and confidence helper math for frame matching."""
         video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_match")

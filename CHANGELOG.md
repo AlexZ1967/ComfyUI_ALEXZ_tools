@@ -1,6 +1,18 @@
 # Changelog — ALEXZ_tools
 
 ## 0.19.0 — 2026-02-18
+- Color Match To Reference quality/stability update:
+  - added `quality_metrics_mode`: `off` / `fast` / `full`;
+  - kept backward compatibility: `compute_quality_metrics=false` forces metrics mode to `off`;
+  - `fast` mode computes only `mse` + `ssim` (skips `delta_e76` + `lpips_alex`) for faster evaluation.
+- Color Match To Reference temporal and portrait improvements:
+  - extended `auto_optimal` with temporal stabilization:
+    `auto_temporal_stability`, `auto_temporal_alpha`, `auto_switch_threshold`;
+  - added EMA + hysteresis method switching logic for video frame consistency;
+  - added optional skin-tone protection:
+    `skin_tone_protection`, `skin_protection_strength`;
+  - extended JSON diagnostics with `quality_mode`, skin-mask stats,
+    and temporal auto-optimal score fields.
 - Color Match To Reference performance and correctness update:
   - vectorized batch processing for `mean_std` and `linear` presets in `nodes/image_color_match.py`;
   - added VGG19 feature extractor cache for `perceptual_vgg_fast` (prevents repeated model reloads);
