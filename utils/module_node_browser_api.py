@@ -32,7 +32,7 @@ from .module_browser import (
     compute_snapshot_signature,
     ensure_module_state_schema,
 )
-from .module_browser.api_manifest import (
+from .module_browser.catalog.api_manifest import (
     ROUTE_COMFYUI_INFO,
     ROUTE_COMFYUI_INSTALL_REQUIREMENTS,
     ROUTE_COMPONENT_REGISTRY,
@@ -67,15 +67,15 @@ from .module_browser.catalog import (
     collect_nodes as catalog_collect_nodes,
     filter_modules as catalog_filter_modules,
 )
-from .module_browser.module_info_text import (
+from .module_browser.module.module_info_text import (
     module_local_readme_summary as mb_module_local_readme_summary,
     sanitize_module_description as mb_sanitize_module_description,
 )
-from .module_browser.module_info import (
+from .module_browser.module.module_info import (
     cached_module_flags as mb_cached_module_flags,
     resolve_module_info_uncached as mb_resolve_module_info_uncached,
 )
-from .module_browser.git_helpers import (
+from .module_browser.git.git_helpers import (
     git_pick_remote as mb_git_pick_remote,
     git_ref_exists as mb_git_ref_exists,
     git_remote_names as mb_git_remote_names,
@@ -86,73 +86,73 @@ from .module_browser.git_helpers import (
     resolve_release_ref as mb_resolve_release_ref,
     sync_module_upstream as mb_sync_module_upstream,
 )
-from .module_browser.update_ops import (
+from .module_browser.jobs.update_ops import (
     install_comfyui_requirements as mb_install_comfyui_requirements,
     install_requirements_for_modules as mb_install_requirements_for_modules,
     install_module_requirements as mb_install_module_requirements,
     requirements_changed_between as mb_requirements_changed_between,
 )
-from .module_browser.state_store import (
+from .module_browser.state.state_store import (
     load_state_file as mb_load_state_file,
     save_state_file as mb_save_state_file,
 )
-from .module_browser.tracker_ops import (
+from .module_browser.tracking.tracker_ops import (
     acknowledge_all_novelty as mb_acknowledge_all_novelty,
     acknowledge_module_novelty as mb_acknowledge_module_novelty,
     announce_tracked_module_updates as mb_announce_tracked_module_updates,
     apply_node_change_info as mb_apply_node_change_info,
     remember_module_state as mb_remember_module_state,
 )
-from .module_browser.comfyui_tracking_ops import (
+from .module_browser.comfyui.comfyui_tracking_ops import (
     acknowledge_comfyui_novelty as mb_acknowledge_comfyui_novelty,
     track_comfyui_local_update as mb_track_comfyui_local_update,
 )
-from .module_browser.node_snapshot_ops import (
+from .module_browser.module.node_snapshot_ops import (
     build_node_snapshots as mb_build_node_snapshots,
     file_digest as mb_file_digest,
     node_source_file as mb_node_source_file,
     relative_to_custom_roots as mb_relative_to_custom_roots,
 )
-from .module_browser.runtime_refresh_ops import (
+from .module_browser.state.runtime_refresh_ops import (
     refresh_module_runtime_state as mb_refresh_module_runtime_state,
 )
-from .module_browser.update_job_ops import (
+from .module_browser.jobs.update_job_ops import (
     run_module_update_job as mb_run_module_update_job,
 )
-from .module_browser.refresh_job_ops import (
+from .module_browser.jobs.refresh_job_ops import (
     run_refresh_job as mb_run_refresh_job,
 )
-from .module_browser.module_identity import (
+from .module_browser.module.module_identity import (
     build_custom_module_aliases as mb_build_custom_module_aliases,
     canonical_custom_module_name as mb_canonical_custom_module_name,
     discover_custom_modules as mb_discover_custom_modules,
     normalize_module_token as mb_normalize_module_token,
 )
-from .module_browser.comfyui_state_ops import (
+from .module_browser.comfyui.comfyui_state_ops import (
     apply_cached_pending_fields as mb_apply_cached_pending_fields,
     comfyui_status_template as mb_comfyui_status_template,
     persist_comfyui_status as mb_persist_comfyui_status,
     resolve_cached_status as mb_resolve_cached_comfyui_status,
 )
-from .module_browser.comfyui_git_status_ops import (
+from .module_browser.comfyui.comfyui_git_status_ops import (
     collect_comfyui_git_status as mb_collect_comfyui_git_status,
 )
-from .module_browser.component_registry_payload_ops import (
+from .module_browser.catalog.component_registry_payload_ops import (
     collect_component_registry_payload as mb_collect_component_registry_payload,
 )
-from .module_browser.manager_data_ops import (
+from .module_browser.comfyui.manager_data_ops import (
     infer_update_from_manager_stats as mb_infer_update_from_manager_stats,
     load_manager_github_stats as mb_load_manager_github_stats,
     load_manager_index as mb_load_manager_index,
     manager_stats_last_update as mb_manager_stats_last_update,
     resolve_manager_meta_for_module as mb_resolve_manager_meta_for_module,
 )
-from .module_browser.pull_ops import (
+from .module_browser.git.pull_ops import (
     is_git_local_changes_block as mb_is_git_local_changes_block,
     pull_comfyui as mb_pull_comfyui,
     pull_custom_module as mb_pull_custom_module,
 )
-from .module_browser.command_ops import (
+from .module_browser.git.command_ops import (
     extract_git_repo_from_args as mb_extract_git_repo_from_args,
     is_git_dubious_ownership_error as mb_is_git_dubious_ownership_error,
     run_command as mb_run_command,
@@ -160,18 +160,18 @@ from .module_browser.command_ops import (
     tail_lines as mb_tail_lines,
     try_mark_git_safe_directory as mb_try_mark_git_safe_directory,
 )
-from .module_browser.catalog_payload_ops import (
+from .module_browser.catalog.catalog_payload_ops import (
     build_group_payload as mb_build_group_payload,
     build_module_list_payload as mb_build_module_list_payload,
     build_module_nodes_payload as mb_build_module_nodes_payload,
 )
-from .module_browser.widget_mode_ops import (
+from .module_browser.core.widget_mode_ops import (
     custom_update_checked_flag as mb_custom_update_checked_flag,
     info_only_rejection_payload as mb_info_only_rejection_payload,
     normalize_log_mode as mb_normalize_log_mode,
     set_custom_update_checked as mb_set_custom_update_checked,
 )
-from .module_browser.value_ops import (
+from .module_browser.core.value_ops import (
     github_id as mb_github_id,
     normalize_comfyui_mode as mb_normalize_comfyui_mode,
     normalize_repo_url as mb_normalize_repo_url,
@@ -182,31 +182,31 @@ from .module_browser.value_ops import (
     short_commit as mb_short_commit,
     to_iso as mb_to_iso,
 )
-from .module_browser.requirements_pending_ops import (
+from .module_browser.state.requirements_pending_ops import (
     set_comfyui_requirements_pending as mb_set_comfyui_requirements_pending,
     set_module_requirements_pending as mb_set_module_requirements_pending,
 )
-from .module_browser.path_ops import (
+from .module_browser.core.path_ops import (
     comfyui_root as mb_comfyui_root,
     custom_nodes_roots as mb_custom_nodes_roots,
     manager_custom_db_path as mb_manager_custom_db_path,
     manager_github_stats_path as mb_manager_github_stats_path,
     module_dir as mb_module_dir,
 )
-from .module_browser.release_ops import (
+from .module_browser.core.release_ops import (
     github_latest_release as mb_github_latest_release,
 )
-from .module_browser.module_update_state_ops import (
+from .module_browser.module.module_update_state_ops import (
     comfyui_needs_update_now as mb_comfyui_needs_update_now,
     count_custom_modules_need_update as mb_count_custom_modules_need_update,
     count_custom_modules_unknown_update as mb_count_custom_modules_unknown_update,
     module_needs_update_now as mb_module_needs_update_now,
 )
-from .module_browser.repo_bootstrap_ops import (
+from .module_browser.bootstrap.repo_bootstrap_ops import (
     bootstrap_module_remote_from_manager as mb_bootstrap_module_remote_from_manager,
     comfyui_requirements_path as mb_comfyui_requirements_path,
 )
-from .module_browser.node_classification_ops import (
+from .module_browser.module.node_classification_ops import (
     classify_by_relative_module as mb_classify_by_relative_module,
     classify_by_source_path as mb_classify_by_source_path,
     fallback_annotation as mb_fallback_annotation,

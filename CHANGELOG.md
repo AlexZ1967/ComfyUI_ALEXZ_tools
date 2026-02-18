@@ -1,5 +1,28 @@
 # Changelog — ALEXZ_tools
 
+## 0.18.8 — 2026-02-18
+- Pre-Phase 4 structural improvement:
+  - reorganized `utils/module_browser/` monolithic module into functional submodules:
+    - `catalog/` — catalog building, component registry, payload builders;
+    - `git/` — git operations, pull helpers, subprocess/git commands;
+    - `module/` — module metadata, identity, information, classification;
+    - `comfyui/` — ComfyUI-specific tracking, state, manager data;
+    - `state/` — state storage, pending-state mutations, runtime refresh;
+    - `jobs/` — job execution, status handling, requirements operations;
+    - `tracking/` — module novelty tracking and change detection;
+    - `bootstrap/` — repository bootstrap helpers;
+    - `core/` — core utilities (paths, values, manifest checks, widget mode);
+  - all 36 core module files now organized by responsibility (9 thematic folders);
+  - created dedicated `__init__.py` in each subfolder with re-exports;
+  - maintained backward-compatible public API: all external imports continue to work;
+  - updated internal cross-folder imports and import paths;
+  - tests: `4 jobs tests + all Phase 3 baseline` pass without regressions.
+- Rationale:
+  - improved first-time contributor navigation (clear folder semantics);
+  - easier test organization per folder;
+  - reduced cognitive load during maintenance;
+  - no breaking changes to API or public contract.
+
 ## 0.18.7 — 2026-02-13
 - Phase 3 backend split continued (no API changes):
   - extracted GitHub latest-release helper into

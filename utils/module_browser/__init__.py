@@ -9,17 +9,11 @@ Description:
 Purpose:
     Hosts reusable contracts and registry primitives used during Slice 0 / Phase 3
     refactoring, while keeping external API routes unchanged.
+    
+    Organized into functional submodules for easier maintenance and testing.
 """
 
-from .component_registry import (
-    ComponentEntry,
-    ComponentRegistry,
-    build_default_component_registry,
-    build_registry_snapshot,
-    compute_snapshot_signature,
-)
-from .api_manifest import iter_component_api_routes
-from .widget_manifest import WidgetSpec, iter_widget_specs
+# Core contracts and infra
 from .contracts import (
     COMPONENT_REGISTRY_SCHEMA_NAME,
     COMPONENT_REGISTRY_SCHEMA_VERSION,
@@ -27,158 +21,153 @@ from .contracts import (
     ensure_module_state_schema,
 )
 from .health import build_component_health_report
-from .manifest_check import run_manifest_check
+
+# Catalog operations (catalog/, core/)
 from .catalog import (
+    ComponentEntry,
+    ComponentRegistry,
+    build_default_component_registry,
+    build_registry_snapshot,
+    compute_snapshot_signature,
     build_catalog,
     build_group_catalog,
     build_group_modules,
     collect_nodes,
     filter_modules,
-)
-from .module_info_text import (
-    module_local_readme_summary,
-    sanitize_module_description,
-)
-from .module_info import (
-    cached_module_flags,
-    resolve_module_info_uncached,
-)
-from .git_helpers import (
-    git_pick_remote,
-    git_ref_exists,
-    git_remote_names,
-    git_resolve_remote_ref,
-    module_git_state,
-    module_repo_url,
-    module_worktree_signature,
-    resolve_release_ref,
-    sync_module_upstream,
-)
-from .update_ops import (
-    install_comfyui_requirements,
-    install_requirements_for_modules,
-    install_module_requirements,
-    requirements_changed_between,
-)
-from .pull_ops import (
-    is_git_local_changes_block,
-    pull_comfyui,
-    pull_custom_module,
-)
-from .state_store import (
-    load_state_file,
-    save_state_file,
-)
-from .tracker_ops import (
-    acknowledge_all_novelty,
-    acknowledge_module_novelty,
-    announce_tracked_module_updates,
-    apply_node_change_info,
-    remember_module_state,
-)
-from .comfyui_tracking_ops import (
-    acknowledge_comfyui_novelty,
-    track_comfyui_local_update,
-)
-from .node_snapshot_ops import (
-    build_node_snapshots,
-    file_digest,
-    node_source_file,
-    relative_to_custom_roots,
-)
-from .runtime_refresh_ops import (
-    refresh_module_runtime_state,
-)
-from .update_job_ops import (
-    run_module_update_job,
-)
-from .refresh_job_ops import (
-    run_refresh_job,
-)
-from .module_identity import (
-    build_custom_module_aliases,
-    canonical_custom_module_name,
-    discover_custom_modules,
-    normalize_module_token,
-)
-from .comfyui_state_ops import (
-    apply_cached_pending_fields,
-    comfyui_status_template,
-    persist_comfyui_status,
-    resolve_cached_status,
-)
-from .comfyui_git_status_ops import (
-    collect_comfyui_git_status,
-)
-from .component_registry_payload_ops import (
-    collect_component_registry_payload,
-)
-from .manager_data_ops import (
-    infer_update_from_manager_stats,
-    load_manager_github_stats,
-    load_manager_index,
-    manager_stats_last_update,
-    resolve_manager_meta_for_module,
-)
-from .command_ops import (
-    extract_git_repo_from_args,
-    is_git_dubious_ownership_error,
-    run_command,
-    run_git,
-    tail_lines,
-    try_mark_git_safe_directory,
-)
-from .catalog_payload_ops import (
     build_group_payload,
     build_module_list_payload,
     build_module_nodes_payload,
+    collect_component_registry_payload,
+    iter_component_api_routes,
+    WidgetSpec,
+    iter_widget_specs,
 )
-from .widget_mode_ops import (
-    custom_update_checked_flag,
-    info_only_rejection_payload,
-    normalize_log_mode,
-    set_custom_update_checked,
+
+# Module operations (module/, core/)
+from .module import (
+    discover_custom_modules,
+    normalize_module_token,
+    build_custom_module_aliases,
+    canonical_custom_module_name,
+    cached_module_flags,
+    resolve_module_info_uncached,
+    module_local_readme_summary,
+    sanitize_module_description,
+    module_needs_update_now,
+    count_custom_modules_need_update,
+    count_custom_modules_unknown_update,
+    comfyui_needs_update_now,
+    classify_by_source_path,
+    classify_by_relative_module,
+    fallback_annotation,
+    module_root,
+    node_source_file,
+    relative_to_custom_roots,
+    file_digest,
+    build_node_snapshots,
 )
-from .value_ops import (
-    github_id,
-    normalize_comfyui_mode,
-    normalize_repo_url,
-    now_iso,
-    parse_datetime,
-    pick_repo_url,
-    repo_name,
-    short_commit,
-    to_iso,
+
+# Git operations (git/)
+from .git import (
+    git_remote_names,
+    git_pick_remote,
+    git_ref_exists,
+    git_resolve_remote_ref,
+    resolve_release_ref,
+    module_repo_url,
+    module_git_state,
+    module_worktree_signature,
+    sync_module_upstream,
+    is_git_local_changes_block,
+    pull_comfyui,
+    pull_custom_module,
+    extract_git_repo_from_args,
+    is_git_dubious_ownership_error,
+    try_mark_git_safe_directory,
+    run_command,
+    run_git,
+    tail_lines,
 )
-from .requirements_pending_ops import (
+
+# Jobs operations (jobs/)
+from .jobs import (
+    emit_refresh_progress,
+    format_update_status_line,
+    refresh_status_snapshot,
+    resolve_update_targets,
+    set_refresh_status,
+    set_update_status,
+    update_status_snapshot,
+    run_module_update_job,
+    run_refresh_job,
+    requirements_changed_between,
+    install_module_requirements,
+    install_comfyui_requirements,
+    install_requirements_for_modules,
+)
+
+# State operations (state/)
+from .state import (
+    load_state_file,
+    save_state_file,
     set_comfyui_requirements_pending,
     set_module_requirements_pending,
+    refresh_module_runtime_state,
 )
-from .path_ops import (
-    comfyui_root,
+
+# Tracking operations (tracking/)
+from .tracking import (
+    remember_module_state,
+    apply_node_change_info,
+    acknowledge_module_novelty,
+    acknowledge_all_novelty,
+    announce_tracked_module_updates,
+)
+
+# ComfyUI operations (comfyui/)
+from .comfyui import (
+    acknowledge_comfyui_novelty,
+    track_comfyui_local_update,
+    comfyui_status_template,
+    resolve_cached_status,
+    apply_cached_pending_fields,
+    persist_comfyui_status,
+    collect_comfyui_git_status,
+    load_manager_github_stats,
+    load_manager_index,
+    resolve_manager_meta_for_module,
+    manager_stats_last_update,
+    infer_update_from_manager_stats,
+)
+
+# Bootstrap operations (bootstrap/)
+from .bootstrap import (
+    comfyui_requirements_path,
+    bootstrap_module_remote_from_manager,
+)
+
+# Core utilities (core/)
+from .core import (
+    short_commit,
+    normalize_repo_url,
+    github_id,
+    repo_name,
+    pick_repo_url,
+    parse_datetime,
+    to_iso,
+    now_iso,
+    normalize_comfyui_mode,
     custom_nodes_roots,
     manager_custom_db_path,
     manager_github_stats_path,
     module_dir,
-)
-from .release_ops import (
+    comfyui_root,
     github_latest_release,
-)
-from .module_update_state_ops import (
-    comfyui_needs_update_now,
-    count_custom_modules_need_update,
-    count_custom_modules_unknown_update,
-    module_needs_update_now,
-)
-from .repo_bootstrap_ops import (
-    bootstrap_module_remote_from_manager,
-    comfyui_requirements_path,
-)
-from .node_classification_ops import (
-    classify_by_relative_module,
-    classify_by_source_path,
-    fallback_annotation,
-    module_root,
+    custom_update_checked_flag,
+    info_only_rejection_payload,
+    set_custom_update_checked,
+    normalize_log_mode,
+    run_manifest_check,
 )
 
 __all__ = [

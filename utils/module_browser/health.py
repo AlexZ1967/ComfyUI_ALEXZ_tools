@@ -16,8 +16,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .api_manifest import iter_all_api_routes, iter_component_api_routes
-from .widget_manifest import iter_widget_specs
+from .catalog.api_manifest import iter_all_api_routes, iter_component_api_routes
+from .catalog.widget_manifest import iter_widget_specs
 
 
 def _iter_node_specs() -> list[tuple[str, str, str, str]]:

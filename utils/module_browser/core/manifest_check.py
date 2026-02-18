@@ -17,12 +17,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .component_registry import (
+from ..catalog.component_registry import (
     build_default_component_registry,
     build_registry_snapshot,
     compute_snapshot_signature,
 )
-from .health import build_component_health_report
+from ..health import build_component_health_report
 
 
 def run_manifest_check(strict: bool = True) -> dict[str, Any]:

@@ -244,7 +244,7 @@ Exit criteria:
 
 ## Phase 3 — Backend Modular Split (No API Changes)
 
-Status: 🔄 in progress (2026-02-13)
+Status: ✅ completed (2026-02-13)
 
 Deliverables:
 - Internally split `utils/module_node_browser_api.py` into focused modules:
@@ -362,6 +362,39 @@ Exit criteria:
 - Internal modules are easier to test in isolation.
 
 ## Phase 4 — Hardening and Coverage
+
+### Slice 1 — Backend Module Structural Reorganization (2026-02-18)
+
+Status: ✅ completed (2026-02-18)
+
+Deliverables:
+- Reorganized monolithic `utils/module_browser/` (36 files in one folder) into 9 functional subfolders:
+  - `catalog/` — catalog building, component registry, payload builders;
+  - `git/` — git operations, pull helpers, subprocess/git commands;
+  - `module/` — module metadata, identity, information, classification;
+  - `comfyui/` — ComfyUI-specific tracking, state, manager data;
+  - `state/` — state storage, pending-state mutations, runtime refresh;
+  - `jobs/` — job execution, status handling, requirements operations;
+  - `tracking/` — module novelty tracking and change detection;
+  - `bootstrap/` — repository bootstrap helpers;
+  - `core/` — core utilities (paths, values, manifest checks, widget mode).
+- Created dedicated `__init__.py` in each subfolder with re-exports.
+- Maintained full backward-compatibility of public API.
+- Updated internal imports and import paths.
+- Tests: all Phase 3 baseline tests pass without regressions.
+
+Rationale:
+- improved first-time contributor navigation (clear folder semantics)
+- easier test organization per folder
+- reduced cognitive load during long-term maintenance
+- no breaking changes to API
+
+Exit criteria:
+- API fully backward-compatible.
+- Structural folders logically organized.
+- Imports work in both code and tests.
+
+## Phase 4 Remaining — Quality and Coverage
 
 Deliverables:
 - Add integration tests for critical routes.
