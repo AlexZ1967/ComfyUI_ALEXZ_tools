@@ -14,6 +14,8 @@
   - registered new seam nodes in `nodes/node_registry.py` (+ UI metadata);
   - extended seam smoke tests for variant nodes and auto-alpha preservation;
   - updated seam docs (`README.md`, `guides/GUIDE_SEAM_MATCH.md`).
+  - added UI troubleshooting guide for dynamic widget visibility:
+    `guides/GUIDE_WIDGET_VISIBILITY_PROFILES.md`.
 
 ## 0.21.1 — 2026-02-18
 - Seam Match quality update:

@@ -31,6 +31,8 @@ Refactoring plan (RU): [PLAN_REFACTORING_ADOPTED_RU.md](refactoring_plan/PLAN_RE
   Windows: `choco install ffmpeg`  
   macOS: `brew install ffmpeg`
 - Ноды дополнены UI-метаданными (`DESCRIPTION`, `OUTPUT_TOOLTIPS`, `SEARCH_ALIASES`) для совместимости с новым дизайном карточек (Nodes 2.0), при этом полностью совместимы со старым UI.
+- Диагностика динамического скрытия параметров в UI:
+  [GUIDE_WIDGET_VISIBILITY_PROFILES.md](guides/GUIDE_WIDGET_VISIBILITY_PROFILES.md)
 
 ## UI Tool: Module Node Picker
 - Инструмент показывает ноды по модулям (`Core/Extras/API/Custom`), дает быстрый поиск, статус обновлений и вставку выбранной ноды в workflow.
