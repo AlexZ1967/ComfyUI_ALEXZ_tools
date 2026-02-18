@@ -17,6 +17,7 @@ const EXT_NAME = "ALEXZ.Tools.WidgetVisibilityProfiles";
 const HIDDEN_STATE_KEY = "__alexz_hidden_state";
 const WRAP_STATE_KEY = "__alexz_visibility_callback_wrapped";
 const HIDDEN_INPUTS_KEY = "__alexz_hidden_inputs_by_widget";
+const CONVERTED_WIDGET_TYPE = "converted-widget";
 
 /**
  * Add new reusable profiles here.
@@ -41,6 +42,25 @@ const VISIBILITY_PROFILES = [
 
 function findWidget(node, name) {
     return node?.widgets?.find((w) => w?.name === name) || null;
+}
+
+function collectLinkedWidgets(widget, out = []) {
+    if (!widget || out.includes(widget)) {
+        return out;
+    }
+    out.push(widget);
+    if (Array.isArray(widget.linkedWidgets)) {
+        widget.linkedWidgets.forEach((child) => collectLinkedWidgets(child, out));
+    }
+    return out;
+}
+
+function widgetsForManagedName(node, managedName) {
+    const root = findWidget(node, managedName);
+    if (!root) {
+        return [];
+    }
+    return collectLinkedWidgets(root, []);
 }
 
 function collectManagedWidgetNames(profile) {
@@ -75,8 +95,10 @@ function setWidgetVisible(widget, visible) {
             return;
         }
         widget.type = state.type;
+        widget.hidden = state.hidden;
         widget.computeSize = state.computeSize;
         widget.serialize = state.serialize;
+        widget.serializeValue = state.serializeValue;
         delete widget[HIDDEN_STATE_KEY];
         return;
     }
@@ -87,10 +109,13 @@ function setWidgetVisible(widget, visible) {
 
     widget[HIDDEN_STATE_KEY] = {
         type: widget.type,
+        hidden: widget.hidden,
         computeSize: widget.computeSize,
         serialize: widget.serialize,
+        serializeValue: widget.serializeValue,
     };
-    widget.type = "hidden";
+    widget.hidden = true;
+    widget.type = CONVERTED_WIDGET_TYPE;
     widget.computeSize = () => [0, -4];
 }
 
@@ -139,24 +164,59 @@ function ensureHiddenInputsStore(node) {
     return node[HIDDEN_INPUTS_KEY];
 }
 
+function hasActiveInputLink(node, slot) {
+    const id = slot?.link;
+    if (id == null || id === -1 || id === 0) {
+        return false;
+    }
+    const links = node?.graph?.links;
+    if (!links) {
+        // If graph is unavailable, be conservative and keep the slot.
+        return true;
+    }
+    return !!links[id];
+}
+
+function relayoutNodeWidgets(node) {
+    if (!Array.isArray(node?.widgets)) {
+        return;
+    }
+    let y = 0;
+    for (const widget of node.widgets) {
+        if (!widget) {
+            continue;
+        }
+        widget.last_y = y;
+        if (widget[HIDDEN_STATE_KEY]) {
+            continue;
+        }
+        const size = widget.computeSize?.(node.size?.[0] || 0);
+        const h = Array.isArray(size) ? Number(size[1]) : 20;
+        y += Math.max(0, Number.isFinite(h) ? h : 20) + 4;
+    }
+}
+
 function hideInputSlotForWidget(node, widgetName) {
-    const idx = findInputIndexByWidgetName(node, widgetName);
-    if (idx < 0) {
-        return;
-    }
-    const slot = node.inputs[idx];
-    // Do not silently drop active links. Keep visible connector if linked.
-    if (slot?.link != null) {
-        return;
-    }
     const store = ensureHiddenInputsStore(node);
-    if (!store[widgetName]) {
-        store[widgetName] = {
-            index: idx,
-            slot: cloneSlotShallow(slot),
-        };
+    // Remove all matching slots (defensive against duplicates).
+    while (true) {
+        const idx = findInputIndexByWidgetName(node, widgetName);
+        if (idx < 0) {
+            break;
+        }
+        const slot = node.inputs[idx];
+        // Enforce hide semantics: unlink and remove hidden parameter slot.
+        if (hasActiveInputLink(node, slot)) {
+            node.disconnectInput?.(idx);
+        }
+        if (!store[widgetName]) {
+            store[widgetName] = {
+                index: idx,
+                slot: cloneSlotShallow(slot),
+            };
+        }
+        node.removeInput(idx);
     }
-    node.removeInput(idx);
 }
 
 function showInputSlotForWidget(node, widgetName) {
@@ -186,17 +246,42 @@ function applyProfileVisibility(node, profile) {
     const managedNames = collectManagedWidgetNames(profile);
 
     managedNames.forEach((name) => {
-        const widget = findWidget(node, name);
         const visible = visibleNames.has(name);
-        setWidgetVisible(widget, visible);
-        if (visible) {
-            showInputSlotForWidget(node, name);
-        } else {
-            hideInputSlotForWidget(node, name);
+        const widgets = widgetsForManagedName(node, name);
+        if (!widgets.length) {
+            // Fallback for cases where a widget wasn't built yet.
+            if (visible) {
+                showInputSlotForWidget(node, name);
+            } else {
+                hideInputSlotForWidget(node, name);
+            }
+            return;
         }
+
+        widgets.forEach((widget) => {
+            setWidgetVisible(widget, visible);
+            const widgetName = widget?.name;
+            if (!widgetName) {
+                return;
+            }
+            if (visible) {
+                showInputSlotForWidget(node, widgetName);
+            } else {
+                hideInputSlotForWidget(node, widgetName);
+            }
+        });
     });
 
-    node.setSize?.(node.computeSize());
+    relayoutNodeWidgets(node);
+    const computed = node.computeSize?.();
+    if (Array.isArray(computed) && computed.length >= 2) {
+        const w = Math.max(180, Number(computed[0]) || 180);
+        const h = Math.max(60, Number(computed[1]) || 60);
+        node.size = [w, h];
+        node.setSize?.([w, h]);
+    } else {
+        node.setSize?.(node.computeSize());
+    }
     node.graph?.setDirtyCanvas?.(true, true);
 }
 
