@@ -1,5 +1,15 @@
 # Changelog — ALEXZ_tools
 
+## 0.22.0 — 2026-02-18
+- Opened new minor line `0.22.x` for advanced Look Match development.
+- Added formal implementation roadmap:
+  `refactoring_plan/ROADMAP_LOOK_MATCH_0_22_RU.md`.
+- Scope of roadmap:
+  - `ImageLookMatchResolve` (Resolve-style monolithic look transfer),
+  - `ImageLookMatchNukeBuild` + `ImageLookMatchNukeApply` (Nuke-style model pipeline),
+  - contracts/tests/docs/performance checkpoints for strong-reference scenarios.
+- Version updated to `0.22.0` in `pyproject.toml` and `README.md`.
+
 ## 0.21.2 — 2026-02-18
 - Seam Match node split and alpha behavior cleanup:
   - added dedicated compact nodes with fixed models:
