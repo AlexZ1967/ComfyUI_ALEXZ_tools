@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.20.0 — 2026-02-18
+- Seam Match v2 (`ImageSeamMatchToReference`) for harder seam cases:
+  - added `seam_model` selector:
+    `v2_tonal` (new default) / `v1_affine` (legacy behavior);
+  - implemented `v2_tonal` optimization with 3 smooth tonal bands
+    (shadow/midtone/highlight), each with its own affine transform;
+  - blended band transforms by luminance weights to better fit nonlinear
+    tonal shifts (e.g. color-balance style offsets by range);
+  - extended `seam_json` diagnostics:
+    `optimization.seam_model`, `transform.tonal_bands`,
+    `transform.band_weights_mean`.
+- Tests/docs/version:
+  - added smoke test coverage for `seam_model` options and v2 JSON fields;
+  - updated `README.md` and `guides/GUIDE_SEAM_MATCH.md` with new parameter and usage hints;
+  - bumped package version to `0.20.0`.
+
 ## 0.19.0 — 2026-02-18
 - Unified interrupt handling across long-running nodes:
   - added shared helper `utils/interrupt.py` (`check_interrupt`);

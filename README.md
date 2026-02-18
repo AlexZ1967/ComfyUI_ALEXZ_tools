@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.19.0
+Version: 0.20.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -105,7 +105,7 @@ Guide: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md), к
 - Type name: ImageSeamMatchToReference  
 - Category: image/color
 
-Ключевые входы: `reference`, `image`, `strength`, `compute_device` (`auto`/`cpu`/`cuda`), `color_space` (`rgb`/`oklab`), `downscale_long_side` (`as_is`/`1080p`/`720p`/`480p`), `steps`, `lr`, `w_mse`, `w_ssim`, `w_grad`, `reg_weight`, `robust_delta`.  
+Ключевые входы: `reference`, `image`, `strength`, `compute_device` (`auto`/`cpu`/`cuda`), `color_space` (`rgb`/`oklab`), `downscale_long_side` (`as_is`/`1080p`/`720p`/`480p`), `seam_model` (`v2_tonal`/`v1_affine`), `steps`, `lr`, `w_mse`, `w_ssim`, `w_grad`, `reg_weight`, `robust_delta`.  
 Выходы: `matched_image`, `seam_json`.  
 Guide: [GUIDE_SEAM_MATCH.md](guides/GUIDE_SEAM_MATCH.md)
 

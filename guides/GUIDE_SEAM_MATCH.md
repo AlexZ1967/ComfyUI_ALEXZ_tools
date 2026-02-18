@@ -23,6 +23,7 @@
 | `compute_device` | Устройство расчета (`auto`/`cpu`/`cuda`) | `auto` или `cuda` при наличии GPU |
 | `color_space` | Пространство оптимизации (`rgb`/`oklab`) | `oklab` по умолчанию |
 | `downscale_long_side` | Разрешение оптимизации (`as_is`, `1080p`, `720p`, `480p`) | `720p` |
+| `seam_model` | Модель трансформации (`v2_tonal`/`v1_affine`) | `v2_tonal` |
 | `steps` | Шаги оптимизации | 25-60 |
 | `lr` | Скорость обучения | 0.02-0.08 |
 | `w_mse` | Вес robust MSE | 1.0 |
@@ -36,6 +37,8 @@
 - Нужен баланс: `downscale_long_side=720p`, `steps=35-45`.
 - Нужна максимальная точность стыка: `downscale_long_side=1080p` или `as_is`, `steps=50-80`.
 - Есть GPU: `compute_device=cuda` для ускорения.
+- Если плохо ловит нелинейные сдвиги (color balance по диапазонам): `seam_model=v2_tonal`.
+- Если нужна максимально быстрая и предсказуемая глобальная подгонка: `seam_model=v1_affine`.
 
 ## Интерпретация выходов
 - `matched_image`: скорректированная картинка.
@@ -45,7 +48,7 @@
 ```json
 {
   "mode": "seam_match:oklab",
-  "optimization": {"downscale_long_side": "720p", "steps": 40, "loss_final": 0.0042},
+  "optimization": {"downscale_long_side": "720p", "seam_model": "v2_tonal", "steps": 40, "loss_final": 0.0042},
   "quality": {
     "before": {"mse": 0.012, "ssim": 0.84},
     "after": {"mse": 0.006, "ssim": 0.91}

@@ -455,6 +455,7 @@ class SmokeTests(unittest.TestCase):
         data = json.loads(payload[0])
         self.assertEqual(data.get("mode"), "seam_match:oklab")
         self.assertEqual(data.get("optimization", {}).get("downscale_long_side"), "720p")
+        self.assertIn(data.get("optimization", {}).get("seam_model"), ("v1_affine", "v2_tonal"))
         self.assertIn("matrix", data.get("transform", {}))
 
     def test_seam_match_downscale_options(self):
@@ -474,6 +475,28 @@ class SmokeTests(unittest.TestCase):
             )
             data = json.loads(payload[0])
             self.assertEqual(data.get("optimization", {}).get("downscale_long_side"), mode)
+
+    def test_seam_match_model_options(self):
+        """Ensure seam model selector works for v1/v2 modes."""
+        seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")
+        node = seam_mod.ImageSeamMatchToReference()
+        ref = torch.rand(1, 16, 16, 3)
+        img = torch.rand(1, 16, 16, 3)
+        for model in ("v1_affine", "v2_tonal"):
+            _out, payload = node.match(
+                ref,
+                img,
+                strength=1.0,
+                seam_model=model,
+                downscale_long_side="as_is",
+                steps=1,
+                lr=0.03,
+            )
+            data = json.loads(payload[0])
+            self.assertEqual(data.get("optimization", {}).get("seam_model"), model)
+            self.assertIn("matrix", data.get("transform", {}))
+            if model == "v2_tonal":
+                self.assertIn("tonal_bands", data.get("transform", {}))
 
     def test_seam_match_compute_device_cpu(self):
         """Ensure explicit CPU compute_device is accepted and reported."""
