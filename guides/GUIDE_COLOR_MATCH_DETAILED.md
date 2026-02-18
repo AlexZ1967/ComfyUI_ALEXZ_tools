@@ -159,6 +159,7 @@
 - Перекоррекция: снизьте `strength`.
 - Недокоррекция: `linear → lab_cdf`/`oklab_cdf` или `perceptual_vgg_fast`.
 - Проблема только в области: используйте `match_mask` и `apply_mask`.
+- Пустая `match_mask` (нет белых пикселей): нода возвращает исходное изображение для такого кадра и пишет warning в лог.
 - `perceptual_vgg_fast` недоступен: проверьте `torchvision` в среде ComfyUI.
 
 ## Производительность

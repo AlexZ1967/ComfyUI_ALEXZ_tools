@@ -14,11 +14,14 @@ import numpy as np
 
 import torch
 import torch.nn.functional as torch_nn_func
+from typing import Optional
 
 try:
     import cv2
 except Exception:  # pragma: no cover - runtime dependency check
     cv2 = None
+
+_EPS = 1e-6
 
 
 def normalize_mask(mask: torch.Tensor) -> torch.Tensor:
@@ -62,6 +65,128 @@ def resize_images_to_size(images: torch.Tensor, height: int, width: int) -> torc
         align_corners=False,
     )
     return resized.permute(0, 2, 3, 1)
+
+
+def pad_batch_last(batch: torch.Tensor, batch_size: int) -> torch.Tensor:
+    """Pad batch to target size by repeating the last element."""
+    if batch.dim() == 2:
+        batch = batch.unsqueeze(0)
+    if batch.shape[0] >= batch_size:
+        return batch[:batch_size]
+    if batch.shape[0] == 0:
+        raise ValueError("Empty batch is not supported.")
+    pad_n = batch_size - batch.shape[0]
+    repeats = [1] * batch.dim()
+    repeats[0] = pad_n
+    pad = batch[-1:].repeat(*repeats)
+    return torch.cat([batch, pad], dim=0)
+
+
+def prepare_mask_batch(
+    mask: Optional[torch.Tensor],
+    batch_size: int,
+    height: int,
+    width: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> Optional[torch.Tensor]:
+    """Normalize, batch-pad, resize and cast optional mask."""
+    if mask is None:
+        return None
+    mask = pad_batch_last(mask, batch_size)
+    mask = normalize_mask(mask)
+    mask = resize_mask_to_output(mask, height, width)
+    return mask.to(device=device, dtype=dtype)
+
+
+def prepare_match_and_apply_masks(
+    match_mask: Optional[torch.Tensor],
+    apply_mask: Optional[torch.Tensor],
+    batch_size: int,
+    height: int,
+    width: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> tuple[Optional[torch.Tensor], Optional[torch.Tensor], torch.Tensor]:
+    """Prepare both masks and return per-frame validity for match_mask."""
+    match_mask_b = prepare_mask_batch(match_mask, batch_size, height, width, device, dtype)
+    apply_mask_b = prepare_mask_batch(apply_mask, batch_size, height, width, device, dtype)
+    if match_mask_b is None:
+        match_valid = torch.ones(batch_size, dtype=torch.bool, device=device)
+    else:
+        match_valid = (match_mask_b > 0.5).view(batch_size, -1).any(dim=1)
+    return match_mask_b, apply_mask_b, match_valid
+
+
+def mask_weights_for_batch(
+    img: torch.Tensor,
+    mask: Optional[torch.Tensor],
+    fallback_full_frame: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build per-batch mask weights and pixel counts."""
+    if mask is None:
+        weights = torch.ones((img.shape[0], img.shape[1], img.shape[2], 1), device=img.device, dtype=img.dtype)
+    else:
+        weights = (mask > 0.5).to(dtype=img.dtype, device=img.device)
+        if weights.dim() == 3:
+            weights = weights.unsqueeze(-1)
+    counts = weights.sum(dim=(1, 2), keepdim=True)
+    if fallback_full_frame:
+        empty = counts <= 0.5
+        if torch.any(empty):
+            weights = torch.where(empty, torch.ones_like(weights), weights)
+            counts = weights.sum(dim=(1, 2), keepdim=True)
+    return weights, counts.clamp_min(1.0)
+
+
+def linear_fit_torch_batch(
+    img: torch.Tensor,
+    ref: torch.Tensor,
+    mask: Optional[torch.Tensor],
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Solve per-batch linear scale/offset coefficients."""
+    weights, counts = mask_weights_for_batch(img, mask, fallback_full_frame=True)
+    counts_flat = counts.view(counts.shape[0], 1)
+    mean_img = (img * weights).sum(dim=(1, 2)) / counts_flat
+    mean_ref = (ref * weights).sum(dim=(1, 2)) / counts_flat
+    centered_img = img - mean_img[:, None, None, :]
+    centered_ref = ref - mean_ref[:, None, None, :]
+    var_img = (centered_img.square() * weights).sum(dim=(1, 2)) / counts_flat
+    cov = ((centered_img * centered_ref) * weights).sum(dim=(1, 2)) / counts_flat
+    scale = torch.where(var_img > _EPS, cov / torch.clamp(var_img, min=_EPS), torch.ones_like(var_img))
+    offset = mean_ref - scale * mean_img
+    return scale, offset
+
+
+def linear_match_torch_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Apply linear RGB matching in batch mode."""
+    scale, offset = linear_fit_torch_batch(img, ref, mask)
+    return torch.clamp(img * scale[:, None, None, :] + offset[:, None, None, :], 0.0, 1.0)
+
+
+def mean_std_fit_torch_batch(
+    img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return per-batch scale/offset for mean/std matching."""
+    weights, counts = mask_weights_for_batch(img, mask, fallback_full_frame=True)
+    counts_flat = counts.view(counts.shape[0], 1)
+    mean_img = (img * weights).sum(dim=(1, 2)) / counts_flat
+    mean_ref = (ref * weights).sum(dim=(1, 2)) / counts_flat
+    centered_img = img - mean_img[:, None, None, :]
+    centered_ref = ref - mean_ref[:, None, None, :]
+    var_img = (centered_img.square() * weights).sum(dim=(1, 2)) / counts_flat
+    var_ref = (centered_ref.square() * weights).sum(dim=(1, 2)) / counts_flat
+    std_img = torch.sqrt(torch.clamp(var_img, min=_EPS))
+    std_ref = torch.sqrt(torch.clamp(var_ref, min=0.0))
+    scale = std_ref / torch.clamp(std_img, min=_EPS)
+    offset = mean_ref - scale * mean_img
+    return scale, offset
+
+
+def mean_std_match_torch_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Apply mean/std RGB matching in batch mode."""
+    scale, offset = mean_std_fit_torch_batch(img, ref, mask)
+    return torch.clamp(img * scale[:, None, None, :] + offset[:, None, None, :], 0.0, 1.0)
 
 
 def _match_mean_std_channel(src: np.ndarray, ref: np.ndarray, keep: np.ndarray, eps: float = 1e-6) -> np.ndarray:
@@ -505,23 +630,27 @@ def apply_color_match(
     mask = ensure_mask_batch(mask, output_images.size(dim=0))
     mask = resize_mask_to_output(mask, output_images.shape[1], output_images.shape[2])
     keep_t = mask > 0.5 if mask_white_is_keep else mask < 0.5
-    keep = keep_t.detach().cpu().numpy()
-    if keep.sum() < 10:
-        return output_images
-
     if reference_images.shape[1:3] != output_images.shape[1:3]:
         reference_images = resize_images_to_size(
             reference_images, output_images.shape[1], output_images.shape[2]
         )
 
+    # Use shared torch backend for linear/mean_std modes to avoid CPU roundtrip.
+    if mode == "mean_std":
+        out_t = mean_std_match_torch_batch(output_images, reference_images, keep_t.to(output_images.dtype))
+        return out_t.to(device=output_images.device, dtype=output_images.dtype)
+    if mode == "linear":
+        out_t = linear_match_torch_batch(output_images, reference_images, keep_t.to(output_images.dtype))
+        return out_t.to(device=output_images.device, dtype=output_images.dtype)
+
+    keep = keep_t.detach().cpu().numpy()
+    if keep.sum() < 10:
+        return output_images
+
     out_np = output_images.detach().cpu().numpy().astype(np.float32)
     ref_np = reference_images.detach().cpu().numpy().astype(np.float32)
 
-    if mode == "mean_std":
-        out_np = _match_mean_std_rgb(out_np, ref_np, keep)
-    elif mode == "linear":
-        out_np = _match_linear_rgb(out_np, ref_np, keep)
-    elif mode == "hist":
+    if mode == "hist":
         out_np = _match_hist_rgb(out_np, ref_np, keep)
     elif mode == "pca_cov":
         out_np = _pca_cov_transfer(out_np, ref_np, keep)

@@ -29,135 +29,34 @@ except Exception:  # pragma: no cover - optional dependency
         return iterable if iterable is not None else []
 
 from ..utils import color_match_utils
-from ..utils.color_match_utils import normalize_mask, resize_mask_to_output
+from ..utils.color_match_utils import normalize_mask
 
 _LOGGER = logging.getLogger("ImageColorMatchToReference")
-_EPS = 1e-6
 _SSIM_WINDOW_CACHE = {}
 _LPIPS_CACHE = {}
 _VGG_CACHE = {}
 
 
-def _resize_image(img: torch.Tensor, h: int, w: int) -> torch.Tensor:
-    """Resize an image tensor to target height and width using bilinear interpolation."""
-    if img.shape[0] == h and img.shape[1] == w:
-        return img
-    out = F.interpolate(
-        img.permute(2, 0, 1).unsqueeze(0),
-        size=(h, w),
-        mode="bilinear",
-        align_corners=False,
-    )
-    return out.squeeze(0).permute(1, 2, 0)
-
-
 def _pad_batch_last(batch: torch.Tensor, batch_size: int) -> torch.Tensor:
-    """Pad batch to target size by repeating the last element (Comfy batch semantics)."""
-    if batch.dim() == 2:
-        batch = batch.unsqueeze(0)
-    if batch.shape[0] >= batch_size:
-        return batch[:batch_size]
-    if batch.shape[0] == 0:
-        raise ValueError("Empty batch is not supported.")
-    pad_n = batch_size - batch.shape[0]
-    repeats = [1] * batch.dim()
-    repeats[0] = pad_n
-    pad = batch[-1:].repeat(*repeats)
-    return torch.cat([batch, pad], dim=0)
-
-
-def _prepare_optional_mask_batch(
-    mask: Optional[torch.Tensor],
-    batch_size: int,
-    height: int,
-    width: int,
-    device: torch.device,
-    dtype: torch.dtype,
-) -> Optional[torch.Tensor]:
-    """Normalize, batch-pad, and resize optional masks once for the whole batch."""
-    if mask is None:
-        return None
-    mask = _pad_batch_last(mask, batch_size)
-    mask = normalize_mask(mask)
-    mask = resize_mask_to_output(mask, height, width)
-    return mask.to(device=device, dtype=dtype)
-
-
-def _mask_weights_for_batch(
-    img: torch.Tensor, mask: Optional[torch.Tensor]
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Build per-batch mask weights and fallback to full-frame when mask is empty."""
-    if mask is None:
-        weights = torch.ones((img.shape[0], img.shape[1], img.shape[2], 1), device=img.device, dtype=img.dtype)
-    else:
-        weights = (mask > 0.5).to(dtype=img.dtype, device=img.device)
-        if weights.dim() == 3:
-            weights = weights.unsqueeze(-1)
-    counts = weights.sum(dim=(1, 2), keepdim=True)
-    empty = counts <= 0.5
-    if torch.any(empty):
-        weights = torch.where(empty, torch.ones_like(weights), weights)
-        counts = weights.sum(dim=(1, 2), keepdim=True)
-    return weights, counts.clamp_min(1.0)
+    """Compatibility wrapper around shared batch-padding helper."""
+    return color_match_utils.pad_batch_last(batch, batch_size)
 
 
 def _linear_fit_torch_batch(
     img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Solve per-batch linear scale/offset coefficients in a vectorized way."""
-    weights, counts = _mask_weights_for_batch(img, mask)
-    counts_flat = counts.view(counts.shape[0], 1)
-    mean_img = (img * weights).sum(dim=(1, 2)) / counts_flat
-    mean_ref = (ref * weights).sum(dim=(1, 2)) / counts_flat
-    centered_img = img - mean_img[:, None, None, :]
-    centered_ref = ref - mean_ref[:, None, None, :]
-    var_img = (centered_img.square() * weights).sum(dim=(1, 2)) / counts_flat
-    cov = ((centered_img * centered_ref) * weights).sum(dim=(1, 2)) / counts_flat
-    scale = torch.where(var_img > _EPS, cov / torch.clamp(var_img, min=_EPS), torch.ones_like(var_img))
-    offset = mean_ref - scale * mean_img
-    return scale, offset
-
-
-def _linear_fit_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
-    """Solve linear scale/offset coefficients that map source values to reference values."""
-    mask_b = None if mask is None else mask.unsqueeze(0)
-    scale_b, offset_b = _linear_fit_torch_batch(img.unsqueeze(0), ref.unsqueeze(0), mask_b)
-    return scale_b[0], offset_b[0]
-
-
-def _mean_std_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
-    """Match source channels to reference mean and standard deviation."""
-    mask_b = None if mask is None else mask.unsqueeze(0)
-    out_b = _mean_std_match_batch(img.unsqueeze(0), ref.unsqueeze(0), mask_b)
-    return out_b[0]
+    """Compatibility wrapper around shared linear-fit helper."""
+    return color_match_utils.linear_fit_torch_batch(img, ref, mask)
 
 
 def _mean_std_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
-    """Match source channels to reference mean/std in vectorized batch mode."""
-    weights, counts = _mask_weights_for_batch(img, mask)
-    counts_flat = counts.view(counts.shape[0], 1)
-    mean_img = (img * weights).sum(dim=(1, 2)) / counts_flat
-    mean_ref = (ref * weights).sum(dim=(1, 2)) / counts_flat
-    centered_img = img - mean_img[:, None, None, :]
-    centered_ref = ref - mean_ref[:, None, None, :]
-    var_img = (centered_img.square() * weights).sum(dim=(1, 2)) / counts_flat
-    var_ref = (centered_ref.square() * weights).sum(dim=(1, 2)) / counts_flat
-    std_img = torch.sqrt(torch.clamp(var_img, min=_EPS))
-    std_ref = torch.sqrt(torch.clamp(var_ref, min=0.0))
-    out = centered_img * (std_ref / std_img)[:, None, None, :] + mean_ref[:, None, None, :]
-    return torch.clamp(out, 0.0, 1.0)
-
-
-def _linear_match(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]):
-    """Apply linear color matching with optional masking support."""
-    scale, offset = _linear_fit_torch(img, ref, mask)
-    return torch.clamp(img * scale + offset, 0.0, 1.0)
+    """Compatibility wrapper around shared mean/std helper."""
+    return color_match_utils.mean_std_match_torch_batch(img, ref, mask)
 
 
 def _linear_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
-    """Apply linear color matching in vectorized batch mode."""
-    scale, offset = _linear_fit_torch_batch(img, ref, mask)
-    return torch.clamp(img * scale[:, None, None, :] + offset[:, None, None, :], 0.0, 1.0)
+    """Compatibility wrapper around shared linear-match helper."""
+    return color_match_utils.linear_match_torch_batch(img, ref, mask)
 
 
 def _lab_match_torch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor], mode: str):
@@ -443,20 +342,8 @@ def _oklab_cdf_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[
 def _mean_std_fit_torch_batch(
     img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return per-batch scale/offset for mean-std style matching."""
-    weights, counts = _mask_weights_for_batch(img, mask)
-    counts_flat = counts.view(counts.shape[0], 1)
-    mean_img = (img * weights).sum(dim=(1, 2)) / counts_flat
-    mean_ref = (ref * weights).sum(dim=(1, 2)) / counts_flat
-    centered_img = img - mean_img[:, None, None, :]
-    centered_ref = ref - mean_ref[:, None, None, :]
-    var_img = (centered_img.square() * weights).sum(dim=(1, 2)) / counts_flat
-    var_ref = (centered_ref.square() * weights).sum(dim=(1, 2)) / counts_flat
-    std_img = torch.sqrt(torch.clamp(var_img, min=_EPS))
-    std_ref = torch.sqrt(torch.clamp(var_ref, min=0.0))
-    scale = std_ref / torch.clamp(std_img, min=_EPS)
-    offset = mean_ref - scale * mean_img
-    return scale, offset
+    """Compatibility wrapper around shared mean/std-fit helper."""
+    return color_match_utils.mean_std_fit_torch_batch(img, ref, mask)
 
 
 def _lut_grid_colors(size: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
@@ -884,12 +771,16 @@ class ImageColorMatchToReference:
         if alpha_batch is not None and (alpha_batch.shape[1] != ref_h or alpha_batch.shape[2] != ref_w):
             alpha_batch = color_match_utils.resize_images_to_size(alpha_batch, ref_h, ref_w)
 
-        match_mask_batch = _prepare_optional_mask_batch(
-            match_mask, batch_size, ref_h, ref_w, reference_rgb.device, reference_rgb.dtype
+        match_mask_batch, apply_mask_batch, match_mask_valid = color_match_utils.prepare_match_and_apply_masks(
+            match_mask, apply_mask, batch_size, ref_h, ref_w, reference_rgb.device, reference_rgb.dtype
         )
-        apply_mask_batch = _prepare_optional_mask_batch(
-            apply_mask, batch_size, ref_h, ref_w, reference_rgb.device, reference_rgb.dtype
-        )
+        if match_mask is not None:
+            empty_mask_idx = (~match_mask_valid).nonzero(as_tuple=False).flatten().tolist()
+            if empty_mask_idx:
+                _LOGGER.warning(
+                    "ColorMatch: match_mask has no white pixels for frames %s; returning original image for those frames.",
+                    empty_mask_idx,
+                )
 
         corrected_batch = None
         auto_mode_batch = None
@@ -940,9 +831,16 @@ class ImageColorMatchToReference:
             img_t = image_rgb[idx]
             mm_t = match_mask_batch[idx] if match_mask_batch is not None else None
             am_t = apply_mask_batch[idx] if apply_mask_batch is not None else None
+            match_valid = bool(match_mask_valid[idx].item())
 
             deep_params = None
-            if preset == "auto_optimal":
+            if not match_valid:
+                corrected_t = img_t
+                mode = f"{preset}:empty_match_mask"
+                deep_params = {
+                    "warning": "empty_match_mask",
+                }
+            elif preset == "auto_optimal":
                 if corrected_batch is not None:
                     corrected_t = corrected_batch[idx]
                     chosen = auto_mode_batch[idx]
@@ -993,7 +891,11 @@ class ImageColorMatchToReference:
                 corrected_t = img_t * (1.0 - strength) + corrected_t * strength
             corrected_for_lut = corrected_t.clone()
 
-            scale_t, offset_t = scale_batch[idx], offset_batch[idx]
+            if match_valid:
+                scale_t, offset_t = scale_batch[idx], offset_batch[idx]
+            else:
+                scale_t = torch.ones_like(scale_batch[idx])
+                offset_t = torch.zeros_like(offset_batch[idx])
             resolve_params = {
                 "scale": [round(float(s), 5) for s in scale_t],
                 "offset": [round(float(o), 5) for o in offset_t],
@@ -1052,23 +954,27 @@ class ImageColorMatchToReference:
                 lut_payload = {"exported": False, "path": None, "size": int(lut_size_int), "method": None, "error": None}
                 try:
                     lut_colors = _lut_grid_colors(lut_size_int, img_t.device, img_t.dtype)
-                    lut_method = "baked_poly2"
-                    exact_scale = None
-                    exact_offset = None
-                    if mode == "linear" or mode == "auto_optimal:linear":
-                        exact_scale = scale_t
-                        exact_offset = offset_t
-                    elif mode == "mean_std" or mode == "adain":
-                        exact_scale = mean_std_scale_batch[idx]
-                        exact_offset = mean_std_offset_batch[idx]
-                    if exact_scale is not None and exact_offset is not None:
-                        mix_scale = (1.0 - float(strength)) + float(strength) * exact_scale
-                        mix_offset = float(strength) * exact_offset
-                        lut_out = torch.clamp(lut_colors * mix_scale[None, :] + mix_offset[None, :], 0.0, 1.0)
-                        lut_method = "exact_linear"
+                    if not match_valid:
+                        lut_out = lut_colors
+                        lut_method = "identity_empty_match_mask"
                     else:
-                        beta = _fit_poly2_color_map(img_t, corrected_for_lut, mm_t)
-                        lut_out = _apply_poly2_color_map(lut_colors, beta)
+                        lut_method = "baked_poly2"
+                        exact_scale = None
+                        exact_offset = None
+                        if mode == "linear" or mode == "auto_optimal:linear":
+                            exact_scale = scale_t
+                            exact_offset = offset_t
+                        elif mode == "mean_std" or mode == "adain":
+                            exact_scale = mean_std_scale_batch[idx]
+                            exact_offset = mean_std_offset_batch[idx]
+                        if exact_scale is not None and exact_offset is not None:
+                            mix_scale = (1.0 - float(strength)) + float(strength) * exact_scale
+                            mix_offset = float(strength) * exact_offset
+                            lut_out = torch.clamp(lut_colors * mix_scale[None, :] + mix_offset[None, :], 0.0, 1.0)
+                            lut_method = "exact_linear"
+                        else:
+                            beta = _fit_poly2_color_map(img_t, corrected_for_lut, mm_t)
+                            lut_out = _apply_poly2_color_map(lut_colors, beta)
                     file_name = f"{lut_base}.cube" if batch_size == 1 else f"{lut_base}_{idx:04d}.cube"
                     lut_path = (lut_dir / file_name).resolve()
                     _write_cube_file(lut_path, lut_out, lut_size_int, f"{lut_base}_{idx:04d}")

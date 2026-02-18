@@ -204,6 +204,31 @@ class SmokeTests(unittest.TestCase):
         finally:
             image_color_match._lpips_alex_distance = old_lpips
 
+    def test_color_match_empty_match_mask_returns_original(self):
+        """Ensure empty match_mask returns original image for affected frames."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+            empty_match = torch.zeros(1, 16, 16)
+            out, payload = node.match(
+                ref,
+                img,
+                "auto_optimal",
+                match_mask=empty_match,
+                compute_quality_metrics=False,
+                strength=1.0,
+            )
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+
+        self.assertTrue(torch.allclose(out, img, atol=1e-6))
+        data = json.loads(payload[0])
+        self.assertIn("empty_match_mask", str(data.get("mode", "")))
+
     def test_video_frame_topk_helpers(self):
         """Validate top-k and confidence helper math for frame matching."""
         video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_match")

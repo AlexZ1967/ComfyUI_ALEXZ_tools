@@ -20,6 +20,15 @@
   - added LUT export to `.cube` with new optional inputs:
     `export_lut`, `lut_size`, `lut_output_dir`, `lut_name`;
   - LUT generation supports exact linear transform for linear-like modes and polynomial bake for nonlinear modes.
+- Color Match To Reference refactoring (Stage 2, architecture cleanup):
+  - unified shared torch helpers in `utils/color_match_utils.py` for:
+    batch padding, mask preparation, mask weights, `linear` fit/match, `mean_std` fit/match;
+  - switched node-side duplicated math/shape plumbing in `nodes/image_color_match.py`
+    to shared `utils/color_match_utils.py` helpers;
+  - standardized match/apply mask preprocessing via one pipeline (`prepare_match_and_apply_masks`);
+  - added explicit empty `match_mask` handling:
+    frame returns original image, logs warning, and marks mode with `empty_match_mask`;
+  - updated smoke tests and guides for empty-mask behavior.
 
 ## 0.18.8 — 2026-02-18
 - Pre-Phase 4 structural improvement:
