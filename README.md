@@ -19,6 +19,11 @@ Refactoring plan (RU): [PLAN_REFACTORING_ADOPTED_RU.md](refactoring_plan/PLAN_RE
 - Проверка синхронизации параметров/выходов нод и документации:  
   `python utils/docs_check.py`
 
+## Development Environment
+- Для локальных проверок используйте Conda-окружение `p313`.
+- Рекомендуемый префикс команд: `conda run -n p313 ...`
+- Быстрые команды: `make docs-check`, `make seam-smoke`, `make smoke`, `make js-check`
+
 ## Runtime notes
 - `Color Match To Reference` preset `perceptual_vgg_fast` использует `torchvision` из базовой среды ComfyUI.
 - `Find Closest Video Frame` при `max_frames > 0` использует `ffmpeg` (должен быть в `PATH`).
