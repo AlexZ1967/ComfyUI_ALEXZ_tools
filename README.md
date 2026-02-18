@@ -84,9 +84,12 @@ Guide: [GUIDE_ALIGN.md](guides/GUIDE_ALIGN.md)
 Пресеты: `mean_std`, `linear`, `tone_curve`, `adain`, `optimal_transport`, `lab_cdf`, `oklab_cdf`, `auto_optimal`, `perceptual_vgg_fast`.  
 Для `auto_optimal`: `auto_optimal_metric` = `mse` / `mse_ssim` / `mse_ssim_lpips`.  
 Для видео: `auto_temporal_stability` + `auto_temporal_alpha` + `auto_switch_threshold` стабилизируют выбор метода между кадрами.  
+Для сложных кадров в `auto_optimal`: `auto_quality_fallback` + `auto_fallback_method` + `auto_fallback_threshold` включают fallback к более тяжелому методу.  
 `quality_metrics_mode`: `off` / `fast` / `full`; legacy `compute_quality_metrics=false` принудительно ставит `off`.  
+`spatial_grid` (NxN) включает локальный матчинг по плиткам для `linear` / `mean_std` / `adain` / `auto_optimal`.  
 `skin_tone_protection` + `skin_protection_strength` уменьшают цветовой сдвиг в skin-областях.  
 `match_json.quality`: метрики до/после (`mse`, `ssim`, `delta_e76`, `lpips_alex`) и `improvement_pct`.  
+`delta_e76` теперь считается torch-формулой (быстрее, без обязательной зависимости от `cv2`).  
 `compute_quality_metrics=false` отключает расчёт метрик для ускорения обработки батчей.  
 `export_lut=true` сохраняет `.cube` (параметры: `lut_size`, `lut_output_dir`, `lut_name`) и возвращает путь в `match_json.lut`.  
 Выходы: `matched_image`, `match_json`.  

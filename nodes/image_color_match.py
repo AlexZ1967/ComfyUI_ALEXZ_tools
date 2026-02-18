@@ -339,6 +339,53 @@ def _oklab_cdf_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[
     return _oklab_to_rgb_torch(matched)
 
 
+def _grid_match_batch(
+    img: torch.Tensor,
+    ref: torch.Tensor,
+    mask: Optional[torch.Tensor],
+    grid: int,
+    matcher_fn,
+) -> torch.Tensor:
+    """Apply batch matcher independently per spatial tile."""
+    grid_i = int(max(1, grid))
+    if grid_i <= 1:
+        return matcher_fn(img, ref, mask)
+    _, h, w, _ = img.shape
+    out = torch.empty_like(img)
+    for gy in range(grid_i):
+        y0 = (gy * h) // grid_i
+        y1 = ((gy + 1) * h) // grid_i
+        if y1 <= y0:
+            continue
+        for gx in range(grid_i):
+            x0 = (gx * w) // grid_i
+            x1 = ((gx + 1) * w) // grid_i
+            if x1 <= x0:
+                continue
+            img_tile = img[:, y0:y1, x0:x1, :]
+            ref_tile = ref[:, y0:y1, x0:x1, :]
+            mask_tile = None if mask is None else mask[:, y0:y1, x0:x1]
+            out[:, y0:y1, x0:x1, :] = matcher_fn(img_tile, ref_tile, mask_tile)
+    return torch.clamp(out, 0.0, 1.0)
+
+
+def _run_auto_fallback_single(
+    img: torch.Tensor,
+    ref: torch.Tensor,
+    mask: Optional[torch.Tensor],
+    method: str,
+) -> tuple[torch.Tensor, Optional[dict]]:
+    """Run one fallback method for auto_optimal on a single frame."""
+    mask_b = None if mask is None else mask.unsqueeze(0)
+    if method == "lab_cdf":
+        return _lab_cdf_match_batch(img.unsqueeze(0), ref.unsqueeze(0), mask_b)[0], None
+    if method == "oklab_cdf":
+        return _oklab_cdf_match_batch(img.unsqueeze(0), ref.unsqueeze(0), mask_b)[0], None
+    if method == "perceptual_vgg_fast":
+        return _perceptual_vgg_fast(img, ref, 5, 0.05)
+    return img, None
+
+
 def _mean_std_fit_torch_batch(
     img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -601,15 +648,21 @@ def _lpips_alex_distance(a: torch.Tensor, b: torch.Tensor) -> Optional[float]:
 
 
 def _delta_e76_mean(a: torch.Tensor, b: torch.Tensor) -> Optional[float]:
-    """Compute mean DeltaE76 color distance in Lab space."""
-    if color_match_utils.cv2 is None:
-        return None
-    a_np = np.clip(a.detach().cpu().numpy().astype(np.float32), 0.0, 1.0)
-    b_np = np.clip(b.detach().cpu().numpy().astype(np.float32), 0.0, 1.0)
-    a_lab = color_match_utils.cv2.cvtColor(a_np, color_match_utils.cv2.COLOR_RGB2LAB)
-    b_lab = color_match_utils.cv2.cvtColor(b_np, color_match_utils.cv2.COLOR_RGB2LAB)
-    delta = np.linalg.norm(a_lab - b_lab, axis=2)
-    return float(np.mean(delta))
+    """Compute mean DeltaE76 color distance in Lab space (torch-first)."""
+    try:
+        a_lab = _rgb_to_lab_torch(torch.clamp(a, 0.0, 1.0).float())
+        b_lab = _rgb_to_lab_torch(torch.clamp(b, 0.0, 1.0).float())
+        delta = torch.linalg.norm(a_lab - b_lab, dim=-1)
+        return float(delta.mean().item())
+    except Exception:
+        if color_match_utils.cv2 is None:
+            return None
+        a_np = np.clip(a.detach().cpu().numpy().astype(np.float32), 0.0, 1.0)
+        b_np = np.clip(b.detach().cpu().numpy().astype(np.float32), 0.0, 1.0)
+        a_lab = color_match_utils.cv2.cvtColor(a_np, color_match_utils.cv2.COLOR_RGB2LAB)
+        b_lab = color_match_utils.cv2.cvtColor(b_np, color_match_utils.cv2.COLOR_RGB2LAB)
+        delta = np.linalg.norm(a_lab - b_lab, axis=2)
+        return float(np.mean(delta))
 
 
 def _quality_metrics(img: torch.Tensor, ref: torch.Tensor):
@@ -779,6 +832,22 @@ class ImageColorMatchToReference:
                     "FLOAT",
                     {"default": 0.01, "min": 0.0, "max": 1.0, "step": 0.001, "tooltip": "Порог переключения режима в auto_optimal (hysteresis)."},
                 ),
+                "auto_quality_fallback": (
+                    "BOOLEAN",
+                    {"default": False, "tooltip": "В auto_optimal включает fallback к более тяжелому методу, если качество низкое."},
+                ),
+                "auto_fallback_threshold": (
+                    "FLOAT",
+                    {"default": 0.05, "min": 0.0, "max": 1.0, "step": 0.001, "tooltip": "Порог score в auto_optimal; выше порога активируется fallback."},
+                ),
+                "auto_fallback_margin": (
+                    "FLOAT",
+                    {"default": 0.001, "min": 0.0, "max": 1.0, "step": 0.0005, "tooltip": "Минимальный выигрыш score для принятия fallback-результата."},
+                ),
+                "auto_fallback_method": (
+                    ["lab_cdf", "oklab_cdf", "perceptual_vgg_fast"],
+                    {"default": "lab_cdf", "tooltip": "Метод fallback в auto_optimal при низком качестве."},
+                ),
                 "skin_tone_protection": (
                     "BOOLEAN",
                     {"default": False, "tooltip": "Сохранять тона кожи, ослабляя коррекцию в skin-областях."},
@@ -786,6 +855,10 @@ class ImageColorMatchToReference:
                 "skin_protection_strength": (
                     "FLOAT",
                     {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила защиты кожи (0..1)."},
+                ),
+                "spatial_grid": (
+                    "INT",
+                    {"default": 1, "min": 1, "max": 8, "step": 1, "tooltip": "Локальный матчинг по сетке NxN (работает для linear/mean_std/adain/auto_optimal)."},
                 ),
                 "export_lut": ("BOOLEAN", {"default": False, "tooltip": "Экспортировать LUT .cube для каждой пары вход/референс."}),
                 "lut_size": ("INT", {"default": 33, "min": 8, "max": 65, "tooltip": "Размер 3D LUT (типично 17/33)."}),
@@ -813,8 +886,13 @@ class ImageColorMatchToReference:
         auto_temporal_stability=False,
         auto_temporal_alpha=0.75,
         auto_switch_threshold=0.01,
+        auto_quality_fallback=False,
+        auto_fallback_threshold=0.05,
+        auto_fallback_margin=0.001,
+        auto_fallback_method="lab_cdf",
         skin_tone_protection=False,
         skin_protection_strength=0.6,
+        spatial_grid=1,
         export_lut=False,
         lut_size=33,
         lut_output_dir="",
@@ -854,6 +932,16 @@ class ImageColorMatchToReference:
                     empty_mask_idx,
                 )
 
+        spatial_grid_int = int(max(1, int(spatial_grid)))
+        spatial_grid_supported = {"linear", "mean_std", "adain", "auto_optimal"}
+        spatial_grid_applied = spatial_grid_int > 1 and preset in spatial_grid_supported
+        if spatial_grid_int > 1 and not spatial_grid_applied:
+            _LOGGER.info(
+                "ColorMatch: spatial_grid=%d ignored for preset=%s (supported: linear/mean_std/adain/auto_optimal).",
+                spatial_grid_int,
+                preset,
+            )
+
         corrected_batch = None
         auto_mode_batch = None
         auto_linear_batch = None
@@ -863,16 +951,31 @@ class ImageColorMatchToReference:
         mean_std_scale_batch = None
         mean_std_offset_batch = None
         if preset == "mean_std":
-            corrected_batch = _mean_std_match_batch(image_rgb, reference_rgb, match_mask_batch)
+            if spatial_grid_applied:
+                corrected_batch = _grid_match_batch(
+                    image_rgb, reference_rgb, match_mask_batch, spatial_grid_int, _mean_std_match_batch
+                )
+            else:
+                corrected_batch = _mean_std_match_batch(image_rgb, reference_rgb, match_mask_batch)
             mean_std_scale_batch, mean_std_offset_batch = _mean_std_fit_torch_batch(
                 image_rgb, reference_rgb, match_mask_batch
             )
         elif preset == "linear":
-            corrected_batch = _linear_match_batch(image_rgb, reference_rgb, match_mask_batch)
+            if spatial_grid_applied:
+                corrected_batch = _grid_match_batch(
+                    image_rgb, reference_rgb, match_mask_batch, spatial_grid_int, _linear_match_batch
+                )
+            else:
+                corrected_batch = _linear_match_batch(image_rgb, reference_rgb, match_mask_batch)
         elif preset == "tone_curve":
             corrected_batch = _tone_curve_match_batch(image_rgb, reference_rgb, match_mask_batch)
         elif preset == "adain":
-            corrected_batch = _adain_match_batch(image_rgb, reference_rgb, match_mask_batch)
+            if spatial_grid_applied:
+                corrected_batch = _grid_match_batch(
+                    image_rgb, reference_rgb, match_mask_batch, spatial_grid_int, _adain_match_batch
+                )
+            else:
+                corrected_batch = _adain_match_batch(image_rgb, reference_rgb, match_mask_batch)
             mean_std_scale_batch, mean_std_offset_batch = _mean_std_fit_torch_batch(
                 image_rgb, reference_rgb, match_mask_batch
             )
@@ -883,8 +986,16 @@ class ImageColorMatchToReference:
         elif preset == "oklab_cdf":
             corrected_batch = _oklab_cdf_match_batch(image_rgb, reference_rgb, match_mask_batch)
         elif preset == "auto_optimal":
-            auto_linear_batch = _linear_match_batch(image_rgb, reference_rgb, match_mask_batch)
-            auto_oklab_batch = _oklab_cdf_match_batch(image_rgb, reference_rgb, match_mask_batch)
+            if spatial_grid_applied:
+                auto_linear_batch = _grid_match_batch(
+                    image_rgb, reference_rgb, match_mask_batch, spatial_grid_int, _linear_match_batch
+                )
+                auto_oklab_batch = _grid_match_batch(
+                    image_rgb, reference_rgb, match_mask_batch, spatial_grid_int, _oklab_cdf_match_batch
+                )
+            else:
+                auto_linear_batch = _linear_match_batch(image_rgb, reference_rgb, match_mask_batch)
+                auto_oklab_batch = _oklab_cdf_match_batch(image_rgb, reference_rgb, match_mask_batch)
             if auto_optimal_metric == "mse" and not auto_temporal_stability:
                 auto_pre_score_linear = torch.mean((auto_linear_batch - reference_rgb) ** 2, dim=(1, 2, 3))
                 auto_pre_score_oklab = torch.mean((auto_oklab_batch - reference_rgb) ** 2, dim=(1, 2, 3))
@@ -902,6 +1013,15 @@ class ImageColorMatchToReference:
         auto_prev_selected = None
         auto_ema_linear = None
         auto_ema_oklab = None
+        auto_fallback_enabled = bool(auto_quality_fallback)
+        auto_fallback_threshold_f = float(max(0.0, auto_fallback_threshold))
+        auto_fallback_margin_f = float(max(0.0, auto_fallback_margin))
+        auto_fallback_method_s = (
+            auto_fallback_method
+            if str(auto_fallback_method) in ("lab_cdf", "oklab_cdf", "perceptual_vgg_fast")
+            else "lab_cdf"
+        )
+        grid_suffix = f":grid{spatial_grid_int}x{spatial_grid_int}" if spatial_grid_applied else ""
 
         matched_list = []
         json_list = []
@@ -924,7 +1044,26 @@ class ImageColorMatchToReference:
                 if corrected_batch is not None:
                     corrected_t = corrected_batch[idx]
                     chosen = auto_mode_batch[idx]
-                    mode = f"auto_optimal:{chosen}"
+                    selected_score = (
+                        float(auto_pre_score_linear[idx]) if chosen == "linear" else float(auto_pre_score_oklab[idx])
+                    )
+                    fallback_selected = None
+                    fallback_score = None
+                    fallback_meta = None
+                    if auto_fallback_enabled and selected_score > auto_fallback_threshold_f:
+                        fallback_t, fallback_meta = _run_auto_fallback_single(
+                            img_t, ref_t, mm_t, auto_fallback_method_s
+                        )
+                        fallback_metrics = _auto_optimal_candidate_metrics(
+                            fallback_t, ref_t, auto_optimal_metric
+                        )
+                        fallback_score = _auto_optimal_score(fallback_metrics, auto_optimal_metric)
+                        if fallback_score + auto_fallback_margin_f < selected_score:
+                            corrected_t = fallback_t
+                            fallback_selected = auto_fallback_method_s
+                    mode = f"auto_optimal:{chosen}{grid_suffix}"
+                    if fallback_selected is not None:
+                        mode = f"{mode}:fallback:{fallback_selected}"
                     deep_params = {
                         "auto_optimal": {
                             "strategy": auto_optimal_metric,
@@ -932,6 +1071,14 @@ class ImageColorMatchToReference:
                             "score_oklab_cdf": None if auto_pre_score_oklab is None else round(float(auto_pre_score_oklab[idx]), 6),
                             "selected": chosen,
                             "temporal_stability": bool(auto_temporal_stability),
+                            "spatial_grid": int(spatial_grid_int if spatial_grid_applied else 1),
+                            "fallback_enabled": bool(auto_fallback_enabled),
+                            "fallback_method": auto_fallback_method_s,
+                            "fallback_threshold": auto_fallback_threshold_f,
+                            "fallback_margin": auto_fallback_margin_f,
+                            "fallback_score": None if fallback_score is None else round(float(fallback_score), 6),
+                            "fallback_applied": bool(fallback_selected is not None),
+                            "fallback_meta": fallback_meta,
                         }
                     }
                 else:
@@ -965,8 +1112,25 @@ class ImageColorMatchToReference:
                         if cand_score + threshold >= prev_score:
                             chosen = auto_prev_selected
                     corrected_t = linear_t if chosen == "linear" else oklab_t
+                    selected_score = score_linear if chosen == "linear" else score_oklab
+                    fallback_selected = None
+                    fallback_score = None
+                    fallback_meta = None
+                    if auto_fallback_enabled and selected_score > auto_fallback_threshold_f:
+                        fallback_t, fallback_meta = _run_auto_fallback_single(
+                            img_t, ref_t, mm_t, auto_fallback_method_s
+                        )
+                        fallback_metrics = _auto_optimal_candidate_metrics(
+                            fallback_t, ref_t, auto_optimal_metric
+                        )
+                        fallback_score = _auto_optimal_score(fallback_metrics, auto_optimal_metric)
+                        if fallback_score + auto_fallback_margin_f < selected_score:
+                            corrected_t = fallback_t
+                            fallback_selected = auto_fallback_method_s
                     auto_prev_selected = chosen
-                    mode = f"auto_optimal:{chosen}"
+                    mode = f"auto_optimal:{chosen}{grid_suffix}"
+                    if fallback_selected is not None:
+                        mode = f"{mode}:fallback:{fallback_selected}"
                     deep_params = {
                         "auto_optimal": {
                             "strategy": auto_optimal_metric,
@@ -978,12 +1142,20 @@ class ImageColorMatchToReference:
                             "ema_score_oklab_cdf": round(float(ema_oklab), 6),
                             "switch_threshold": float(auto_switch_threshold),
                             "temporal_stability": bool(auto_temporal_stability),
+                            "spatial_grid": int(spatial_grid_int if spatial_grid_applied else 1),
+                            "fallback_enabled": bool(auto_fallback_enabled),
+                            "fallback_method": auto_fallback_method_s,
+                            "fallback_threshold": auto_fallback_threshold_f,
+                            "fallback_margin": auto_fallback_margin_f,
+                            "fallback_score": None if fallback_score is None else round(float(fallback_score), 6),
+                            "fallback_applied": bool(fallback_selected is not None),
+                            "fallback_meta": fallback_meta,
                             "selected": chosen,
                         }
                     }
             elif corrected_batch is not None:
                 corrected_t = corrected_batch[idx]
-                mode = preset
+                mode = f"{preset}{grid_suffix}" if spatial_grid_applied else preset
             elif preset == "perceptual_vgg_fast":
                 corrected_t, deep_params = _perceptual_vgg_fast(img_t, ref_t, 5, 0.05)
                 mode = "perceptual_vgg_fast"
@@ -1046,6 +1218,8 @@ class ImageColorMatchToReference:
                 "quality_mode": effective_quality_mode,
                 "skin_tone_protection": bool(skin_tone_protection),
                 "skin_mask_mean": None if skin_mask_mean is None else round(float(skin_mask_mean), 6),
+                "spatial_grid": int(spatial_grid_int if spatial_grid_applied else 1),
+                "spatial_grid_applied": bool(spatial_grid_applied),
             }
             payload = {
                 "status": "ok",

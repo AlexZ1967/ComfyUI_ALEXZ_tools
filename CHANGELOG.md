@@ -1,6 +1,17 @@
 # Changelog — ALEXZ_tools
 
 ## 0.19.0 — 2026-02-18
+- Color Match To Reference advanced matching update:
+  - added optional local matching by tiles with `spatial_grid` (NxN) for
+    `linear`, `mean_std`, `adain`, and `auto_optimal`;
+  - extended `auto_optimal` with quality-gated fallback:
+    `auto_quality_fallback`, `auto_fallback_method`,
+    `auto_fallback_threshold`, `auto_fallback_margin`;
+  - extended diagnostics (`match_json.deep.auto_optimal` and `stats`) with
+    fallback and spatial-grid fields.
+- Color Match To Reference metric backend improvement:
+  - switched `delta_e76` full-metric calculation to torch-first Lab distance
+    (no mandatory `cv2` dependency for this metric path).
 - Color Match To Reference quality/stability update:
   - added `quality_metrics_mode`: `off` / `fast` / `full`;
   - kept backward compatibility: `compute_quality_metrics=false` forces metrics mode to `off`;

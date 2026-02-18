@@ -344,6 +344,98 @@ class SmokeTests(unittest.TestCase):
         modes = [json.loads(payload[0])["mode"], json.loads(payload[1])["mode"]]
         self.assertEqual(modes, ["auto_optimal:linear", "auto_optimal:linear"])
 
+    def test_color_match_spatial_grid_mode(self):
+        """Ensure spatial grid mode is applied for supported presets."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 18, 18, 3)
+            img = torch.rand(1, 18, 18, 3)
+            out, payload = node.match(
+                ref,
+                img,
+                "linear",
+                spatial_grid=2,
+                compute_quality_metrics=False,
+                strength=1.0,
+            )
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+        self.assertEqual(tuple(out.shape), (1, 18, 18, 3))
+        data = json.loads(payload[0])
+        self.assertIn("grid2x2", str(data.get("mode", "")))
+        self.assertTrue(bool(data.get("stats", {}).get("spatial_grid_applied")))
+
+    def test_auto_optimal_quality_fallback_applies(self):
+        """Ensure auto fallback can override selected auto_optimal candidate."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        old_linear = image_color_match._linear_match_batch
+        old_oklab = image_color_match._oklab_cdf_match_batch
+        old_lab = image_color_match._lab_cdf_match_batch
+        old_candidate = image_color_match._auto_optimal_candidate_metrics
+        try:
+            image_color_match._lpips_alex_distance = lambda a, b: None
+            image_color_match._linear_match_batch = lambda img, ref, mask: torch.zeros_like(img) + 0.8
+            image_color_match._oklab_cdf_match_batch = lambda img, ref, mask: torch.zeros_like(img) + 0.7
+            image_color_match._lab_cdf_match_batch = lambda img, ref, mask: torch.zeros_like(img) + 0.1
+            image_color_match._auto_optimal_candidate_metrics = (
+                lambda candidate, ref, strategy: {"mse": float(candidate.mean().item()), "ssim": None, "lpips_alex": None}
+            )
+
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+            _out, payload = node.match(
+                ref,
+                img,
+                "auto_optimal",
+                auto_optimal_metric="mse",
+                auto_quality_fallback=True,
+                auto_fallback_method="lab_cdf",
+                auto_fallback_threshold=0.0,
+                auto_fallback_margin=0.0,
+                compute_quality_metrics=False,
+                strength=1.0,
+            )
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+            image_color_match._linear_match_batch = old_linear
+            image_color_match._oklab_cdf_match_batch = old_oklab
+            image_color_match._lab_cdf_match_batch = old_lab
+            image_color_match._auto_optimal_candidate_metrics = old_candidate
+
+        data = json.loads(payload[0])
+        self.assertIn("fallback:lab_cdf", str(data.get("mode", "")))
+        self.assertTrue(bool(data.get("deep", {}).get("auto_optimal", {}).get("fallback_applied")))
+
+    def test_color_match_delta_e76_torch_without_cv2(self):
+        """Ensure full metrics still report delta_e76 when cv2 is unavailable."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        old_cv2 = image_color_match.color_match_utils.cv2
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        image_color_match.color_match_utils.cv2 = None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 16, 16, 3)
+            img = torch.rand(1, 16, 16, 3)
+            _out, payload = node.match(
+                ref,
+                img,
+                "linear",
+                quality_metrics_mode="full",
+                compute_quality_metrics=True,
+                strength=1.0,
+            )
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+            image_color_match.color_match_utils.cv2 = old_cv2
+        data = json.loads(payload[0])
+        self.assertIsNotNone(data["quality"]["before"]["delta_e76"])
+
     def test_video_frame_topk_helpers(self):
         """Validate top-k and confidence helper math for frame matching."""
         video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_match")

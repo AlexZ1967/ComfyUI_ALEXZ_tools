@@ -24,6 +24,11 @@
 | `auto_temporal_stability` | Стабилизация выбора в `auto_optimal` | Включать для видео |
 | `auto_temporal_alpha` | EMA сглаживание авто-оценки | 0.7-0.9 |
 | `auto_switch_threshold` | Порог переключения метода | 0.005-0.03 |
+| `auto_quality_fallback` | Fallback в `auto_optimal` | Включить для сложных сцен |
+| `auto_fallback_method` | Метод fallback | `lab_cdf` / `oklab_cdf` / `perceptual_vgg_fast` |
+| `auto_fallback_threshold` | Порог включения fallback | 0.02-0.08 |
+| `auto_fallback_margin` | Мин. улучшение score для fallback | 0.0005-0.005 |
+| `spatial_grid` | Локальный матчинг NxN | 2-4 для неравномерного света |
 | `skin_tone_protection` | Защита оттенков кожи | Включать для портретов |
 | `skin_protection_strength` | Сила защиты кожи | 0.4-0.8 |
 | `export_lut` | Сохранять LUT `.cube` | Включить при подготовке grading pipeline |
@@ -40,6 +45,8 @@
 - Высокое качество → `lab_cdf` (Lab гистограмма) или `oklab_cdf` (Oklab, перцептивнее).
 - Автовыбор (без ручного тюнинга) → `auto_optimal` (выбирает между `linear` и `oklab_cdf` по MSE к референсу).
 - Для видео в `auto_optimal` включайте `auto_temporal_stability` чтобы избежать частых переключений метода.
+- Для сложных кейсов включайте `auto_quality_fallback`, чтобы `auto_optimal` мог перейти на более тяжелый метод.
+- При градиентах освещения используйте `spatial_grid` для локальной подгонки.
 - Максимум → `perceptual_vgg_fast` (нейросеть, медленнее).
 
 ## Сравнение методов

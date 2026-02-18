@@ -29,6 +29,11 @@
 | `auto_temporal_stability` | Стабилизация выбора в `auto_optimal` | Для видео последовательностей |
 | `auto_temporal_alpha` | EMA сглаживание оценки | 0.75 по умолчанию |
 | `auto_switch_threshold` | Порог переключения между `linear` и `oklab_cdf` | Больше значение = меньше переключений |
+| `auto_quality_fallback` | Разрешить fallback на тяжелый метод при низком качестве `auto_optimal` | Для сложных сцен/смешанного света |
+| `auto_fallback_method` | Метод fallback в `auto_optimal` | `lab_cdf`, `oklab_cdf`, `perceptual_vgg_fast` |
+| `auto_fallback_threshold` | Порог score, после которого запускается fallback | 0.05 по умолчанию |
+| `auto_fallback_margin` | Минимальный выигрыш score для принятия fallback | 0.001 по умолчанию |
+| `spatial_grid` | Локальный матчинг по сетке NxN | Работает для `linear`, `mean_std`, `adain`, `auto_optimal` |
 | `skin_tone_protection` | Защита оттенков кожи | Полезно для портретов |
 | `skin_protection_strength` | Сила защиты кожи | 0.0-1.0 |
 | `export_lut` | Экспорт LUT `.cube` | Включайте для передачи цветокоррекции в монтаж/грейдинг |
@@ -44,6 +49,8 @@
 - Нужно лучше качество → `lab_cdf` (Lab гистограмма) или `oklab_cdf` (перцептивнее).
 - Нужен автоподбор без ручного выбора метода → `auto_optimal`.
 - Для видео с `auto_optimal`: включите `auto_temporal_stability` и при необходимости увеличьте `auto_switch_threshold`.
+- Для сложных кадров в `auto_optimal`: включите `auto_quality_fallback` и подберите `auto_fallback_threshold`.
+- Для локальных перепадов освещения: включите `spatial_grid` (обычно 2-4).
 - Максимум качества → `perceptual_vgg_fast` (нейросеть, медленный).
 
 ## Сравнение методов цветокоррекции
@@ -168,9 +175,12 @@
 - Проблема только в области: используйте `match_mask` и `apply_mask`.
 - Пустая `match_mask` (нет белых пикселей): нода возвращает исходное изображение для такого кадра и пишет warning в лог.
 - Слишком частые переключения `auto_optimal` между кадрами: включите `auto_temporal_stability`, увеличьте `auto_temporal_alpha` и/или `auto_switch_threshold`.
+- Если `auto_optimal` иногда «не дотягивает»: включите `auto_quality_fallback` и уменьшите `auto_fallback_threshold`.
+- Если кадр неравномерно освещен: включите `spatial_grid` (2-4) для локального матчинга.
 - `perceptual_vgg_fast` недоступен: проверьте `torchvision` в среде ComfyUI.
 
 ## Производительность
 - Скорость методов: `mean_std` > `linear` > `lab_cdf` ≈ `oklab_cdf` > `perceptual_vgg_fast`.
 - Маски и большие разрешения увеличивают время.
 - `perceptual_vgg_fast` может быть заметно медленным на 2K/4K.
+- `delta_e76` в `quality_metrics_mode=full` считается torch-формулой и не требует `cv2`.
