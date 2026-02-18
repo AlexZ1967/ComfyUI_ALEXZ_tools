@@ -32,6 +32,9 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("JsonDisplayAndSave", "Show/Save JSON", ".json_output", "JsonDisplayAndSave"),
     NodeSpec("VideoInpaintWatermark", "Remove Static Watermark from Video", ".video_inpaint", "VideoInpaintWatermark"),
     NodeSpec("ImageColorMatchToReference", "Color Match To Reference", ".image_color_match", "ImageColorMatchToReference"),
+    NodeSpec("ImageLookMatchResolve", "Look Match Resolve", ".image_look_match", "ImageLookMatchResolve"),
+    NodeSpec("ImageLookMatchNukeBuild", "Look Match Nuke Build", ".image_look_match", "ImageLookMatchNukeBuild"),
+    NodeSpec("ImageLookMatchNukeApply", "Look Match Nuke Apply", ".image_look_match", "ImageLookMatchNukeApply"),
     NodeSpec("ImageSeamMatchToReference", "Seam Match To Reference (Legacy)", ".image_seam_match", "ImageSeamMatchToReference"),
     NodeSpec("ImageSeamMatchV1AffineToReference", "Seam Match v1 Affine", ".image_seam_match", "ImageSeamMatchV1AffineToReference"),
     NodeSpec("ImageSeamMatchV2TonalToReference", "Seam Match v2 Tonal", ".image_seam_match", "ImageSeamMatchV2TonalToReference"),
@@ -72,6 +75,21 @@ NODE_UI_METADATA = {
         "description": "Подгоняет цвет и тон изображения под референс.",
         "output_tooltips": ["Цветокорректированное изображение.", "JSON параметров и метрик качества."],
         "search_aliases": ["color", "match", "reference", "grade"],
+    },
+    "ImageLookMatchResolve": {
+        "description": "Resolve-style монолитный перенос look (Phase A contract baseline).",
+        "output_tooltips": ["Скорректированное изображение.", "JSON контракта/диагностики.", "Опциональный .cube текст."],
+        "search_aliases": ["look", "resolve", "match", "grade"],
+    },
+    "ImageLookMatchNukeBuild": {
+        "description": "Nuke-style build: собирает reusable look-модель из пары source/reference.",
+        "output_tooltips": ["JSON look-модели.", "Опциональный .cube текст."],
+        "search_aliases": ["look", "nuke", "build", "model"],
+    },
+    "ImageLookMatchNukeApply": {
+        "description": "Nuke-style apply: применяет look-модель к кадру/батчу.",
+        "output_tooltips": ["Скорректированное изображение.", "JSON применения/диагностики."],
+        "search_aliases": ["look", "nuke", "apply", "model"],
     },
     "ImageSeamMatchToReference": {
         "description": "Legacy: универсальная seam-match нода с выбором модели через seam_model.",

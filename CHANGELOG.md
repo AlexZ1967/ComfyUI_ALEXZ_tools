@@ -8,6 +8,18 @@
   - `ImageLookMatchResolve` (Resolve-style monolithic look transfer),
   - `ImageLookMatchNukeBuild` + `ImageLookMatchNukeApply` (Nuke-style model pipeline),
   - contracts/tests/docs/performance checkpoints for strong-reference scenarios.
+- Phase A contract baseline implemented:
+  - added new nodes:
+    `ImageLookMatchResolve`,
+    `ImageLookMatchNukeBuild`,
+    `ImageLookMatchNukeApply`;
+  - added stable JSON schema contracts:
+    `alexz.look_match.resolve`,
+    `alexz.look_model.nuke_build`,
+    `alexz.look_apply.nuke_apply` (version `1`);
+  - added initial guide:
+    `guides/GUIDE_LOOK_MATCH.md`;
+  - registered nodes in central registry and added smoke tests for contracts.
 - Version updated to `0.22.0` in `pyproject.toml` and `README.md`.
 
 ## 0.21.2 — 2026-02-18

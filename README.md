@@ -44,6 +44,9 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Image Prepare for QwenEdit Outpaint](#image-prepare-for-qwenedit-outpaint)
 - [Align Overlay To Background](#align-overlay-to-background)
 - [Color Match To Reference](#color-match-to-reference)
+- [Look Match Resolve](#look-match-resolve)
+- [Look Match Nuke Build](#look-match-nuke-build)
+- [Look Match Nuke Apply](#look-match-nuke-apply)
 - [Seam Match To Reference (Legacy)](#seam-match-to-reference-legacy)
 - [Find Closest Video Frame](#find-closest-video-frame)
 - [Match Video Cut Point](#match-video-cut-point)
@@ -103,6 +106,48 @@ Guide: [GUIDE_ALIGN.md](guides/GUIDE_ALIGN.md)
 `export_lut=true` сохраняет `.cube` (параметры: `lut_size`, `lut_output_dir`, `lut_name`) и возвращает путь в `match_json.lut`.  
 Выходы: `matched_image`, `match_json`.  
 Guide: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md), кратко — [GUIDE_COLOR_MATCH.md](guides/GUIDE_COLOR_MATCH.md)
+
+---
+
+## Look Match Resolve
+Resolve-style монолитная нода для look transfer.  
+Текущий статус: Phase A contract baseline (стабильные интерфейсы и JSON-схема, безопасное базовое поведение).
+
+- Display name: Look Match Resolve  
+- Type name: ImageLookMatchResolve  
+- Category: image/color
+
+Ключевые входы: `reference`, `image`, `strength`, `compute_device`, `working_space`, `downscale_long_side`, `tone_model`, `palette_model`, `lut_size`, `w_exposure`, `w_tone`, `w_chroma`, `skin_protection`, `skin_protection_strength`, `subject_mask`, `sky_mask`, `ground_mask`, `export_lut_cube`.  
+Выходы: `matched_image`, `look_json`, `cube_text`.
+Guide: [GUIDE_LOOK_MATCH.md](guides/GUIDE_LOOK_MATCH.md)
+
+---
+
+## Look Match Nuke Build
+Nuke-style нода построения reusable look-модели (Build часть).  
+Текущий статус: Phase A contract baseline.
+
+- Display name: Look Match Nuke Build  
+- Type name: ImageLookMatchNukeBuild  
+- Category: image/color
+
+Ключевые входы: `reference`, `source`, `compute_device`, `working_space`, `downscale_long_side`, `fit_global`, `fit_tone`, `fit_hue_sectors`, `fit_local_regions`, `skin_mask`, `sky_mask`, `ground_mask`, `subject_mask`, `export_lut_cube`, `lut_size`.  
+Выходы: `look_model_json`, `cube_text`.
+Guide: [GUIDE_LOOK_MATCH.md](guides/GUIDE_LOOK_MATCH.md)
+
+---
+
+## Look Match Nuke Apply
+Nuke-style нода применения look-модели (Apply часть).  
+Текущий статус: Phase A contract baseline.
+
+- Display name: Look Match Nuke Apply  
+- Type name: ImageLookMatchNukeApply  
+- Category: image/color
+
+Ключевые входы: `image`, `look_model_json`, `strength`, `compute_device`, `temporal_stabilization`, `temporal_alpha`, `shot_change_threshold`.  
+Выходы: `matched_image`, `apply_json`.
+Guide: [GUIDE_LOOK_MATCH.md](guides/GUIDE_LOOK_MATCH.md)
 
 ---
 

@@ -621,6 +621,58 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(tuple(out.shape), (1, 16, 16, 3))
         self.assertEqual(json.loads(payload[0]).get("status"), "ok")
 
+    def test_look_match_resolve_contract_and_alpha(self):
+        """Ensure resolve look-match node returns contract JSON and preserves RGBA alpha."""
+        look_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_look_match")
+        node = look_mod.ImageLookMatchResolve()
+        ref = torch.rand(1, 20, 20, 3)
+        img = torch.rand(1, 20, 20, 4)
+        out, look_json, cube_text = node.match(
+            ref,
+            img,
+            strength=1.0,
+            compute_device="cpu",
+            export_lut_cube=False,
+        )
+        self.assertEqual(tuple(out.shape), (1, 20, 20, 4))
+        self.assertEqual(cube_text[0], "")
+        data = json.loads(look_json[0])
+        self.assertEqual(data.get("schema_name"), "alexz.look_match.resolve")
+        self.assertEqual(data.get("schema_version"), 1)
+        self.assertEqual(data.get("status"), "ok")
+
+    def test_look_match_nuke_build_apply_contract(self):
+        """Ensure build/apply look-match nodes share stable schema contracts."""
+        look_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_look_match")
+        build_node = look_mod.ImageLookMatchNukeBuild()
+        apply_node = look_mod.ImageLookMatchNukeApply()
+
+        ref = torch.rand(1, 16, 16, 3)
+        src = torch.rand(1, 16, 16, 3)
+        model_json, cube_text = build_node.build(
+            ref,
+            src,
+            compute_device="cpu",
+            export_lut_cube=False,
+        )
+        self.assertEqual(cube_text, "")
+        model_data = json.loads(model_json)
+        self.assertEqual(model_data.get("schema_name"), "alexz.look_model.nuke_build")
+        self.assertEqual(model_data.get("schema_version"), 1)
+
+        img = torch.rand(1, 16, 16, 4)
+        out, apply_json = apply_node.apply(
+            img,
+            model_json,
+            strength=1.0,
+            compute_device="cpu",
+        )
+        self.assertEqual(tuple(out.shape), (1, 16, 16, 4))
+        apply_data = json.loads(apply_json[0])
+        self.assertEqual(apply_data.get("schema_name"), "alexz.look_apply.nuke_apply")
+        self.assertEqual(apply_data.get("schema_version"), 1)
+        self.assertEqual(apply_data.get("status"), "ok")
+
     def test_video_frame_topk_helpers(self):
         """Validate top-k and confidence helper math for frame matching."""
         video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_match")
