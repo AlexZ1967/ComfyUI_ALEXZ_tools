@@ -1,5 +1,20 @@
 # Changelog — ALEXZ_tools
 
+## 0.21.1 — 2026-02-18
+- Seam Match quality update:
+  - stabilized `v3_hybrid` optimization with phased training
+    (global warmup + joint residual phase), gradient clipping and
+    safe fallback to global affine when hybrid branch is worse;
+  - added new high-precision model `seam_model=v4_lut`:
+    differentiable 3D LUT optimization (`rgb`/`oklab`) with identity/smoothness regularization;
+  - added LUT controls:
+    `lut_size`, `lut_identity_reg`, `lut_smooth_reg`, `lut_lr_scale`;
+  - extended seam diagnostics with LUT/hybrid fallback flags and eval losses
+    (`optimization.lut_fallback_to_affine`, `transform.lut.*`).
+- Tests/docs:
+  - extended seam smoke tests for `v4_lut`;
+  - updated seam docs and README parameter list.
+
 ## 0.21.0 — 2026-02-18
 - Seam Match v3 hybrid update (`ImageSeamMatchToReference`):
   - added new `seam_model=v3_hybrid`:
