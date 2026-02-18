@@ -1,6 +1,16 @@
 # Changelog — ALEXZ_tools
 
 ## 0.19.0 — 2026-02-18
+- Color Match To Reference UI/UX and docs update (Stage 4):
+  - added dedicated preset comparison matrix in
+    `guides/GUIDE_COLOR_MATCH_DETAILED.md` with columns:
+    method, speed, color accuracy, detail preservation;
+  - added visual before/after section for all presets on a single shared case
+    (`guides/assets/color_match_examples/case01/`);
+  - added reproducible example generator:
+    `guides/assets/color_match_examples/generate_case01.py`;
+  - expanded `INPUT_TYPES` tooltips with runtime/dependency hints
+    (CPU/GPU expectations, `torchvision`/`lpips` notes).
 - Color Match To Reference advanced matching update:
   - added optional local matching by tiles with `spatial_grid` (NxN) for
     `linear`, `mean_std`, `adain`, and `auto_optimal`;

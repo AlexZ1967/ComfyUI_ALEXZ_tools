@@ -69,6 +69,38 @@
 | `auto_optimal` | Автовыбор `linear`/`oklab_cdf` по MSE | ⚡ | ⭐⭐⭐⭐ | Быстрый и надежный выбор без ручного тюнинга |
 | `perceptual_vgg_fast` | VGG19 feature optimization | 🐢 | ⭐⭐⭐⭐⭐ | Максимальное качество, готовые композиты |
 
+### Сравнение пресетов (Скорость / Точность / Детали)
+
+| Метод | Скорость | Точность цвета | Сохранение деталей |
+|---|---|---|---|
+| `mean_std` | Очень высокая | Низкая-средняя | Среднее |
+| `linear` | Высокая | Средняя | Хорошее |
+| `tone_curve` | Высокая | Средняя | Хорошее в тенях/светах |
+| `adain` | Высокая | Средняя-хорошая | Хорошее |
+| `optimal_transport` | Средняя | Хорошая | Хорошее |
+| `lab_cdf` | Средняя | Хорошая | Среднее-хорошее |
+| `oklab_cdf` | Средняя | Очень хорошая | Хорошее |
+| `auto_optimal` | Средняя | Очень хорошая | Хорошее |
+| `perceptual_vgg_fast` | Низкая | Максимальная | Очень хорошее |
+
+## Визуальные примеры
+- Все примеры ниже построены на одном и том же наборе (`case01`): слева `До`, справа результат выбранного `preset`.
+- Папка с файлами: `guides/assets/color_match_examples/case01/`.
+- Референс для примеров: `guides/assets/color_match_examples/case01/reference.png`.
+- Перегенерация примеров: `python guides/assets/color_match_examples/generate_case01.py`.
+
+| Метод | До | После |
+|---|---|---|
+| `mean_std` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_mean_std.png) |
+| `linear` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_linear.png) |
+| `tone_curve` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_tone_curve.png) |
+| `adain` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_adain.png) |
+| `optimal_transport` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_optimal_transport.png) |
+| `lab_cdf` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_lab_cdf.png) |
+| `oklab_cdf` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_oklab_cdf.png) |
+| `auto_optimal` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_auto_optimal.png) |
+| `perceptual_vgg_fast` | ![](assets/color_match_examples/case01/before_image.png) | ![](assets/color_match_examples/case01/after_perceptual_vgg_fast.png) |
+
 ### Технические различия
 
 **mean_std vs linear:**

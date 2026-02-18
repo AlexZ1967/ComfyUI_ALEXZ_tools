@@ -793,7 +793,7 @@ class ImageColorMatchToReference:
                     ["mean_std", "linear", "tone_curve", "adain", "optimal_transport", "lab_cdf", "oklab_cdf", "auto_optimal", "perceptual_vgg_fast"],
                     {
                         "default": "linear",
-                        "tooltip": "Метод: mean_std=стд, linear=линейная, tone_curve=кривая, adain=AdaIN норм, optimal_transport=Wasserstein, lab_cdf=Lab, oklab_cdf=Oklab, auto_optimal=автовыбор linear/oklab_cdf, perceptual_vgg_fast=VGG.",
+                        "tooltip": "Метод: mean_std/linear/tone_curve/adain=быстрые CPU-friendly; optimal_transport/lab_cdf/oklab_cdf=точнее, но тяжелее; auto_optimal=автовыбор; perceptual_vgg_fast=VGG (требует torchvision, предпочтителен GPU).",
                     },
                 ),
                 "strength": (
@@ -814,7 +814,7 @@ class ImageColorMatchToReference:
                 "compute_quality_metrics": ("BOOLEAN", {"default": True, "tooltip": "Считать MSE/SSIM/DeltaE/LPIPS. Отключите для ускорения батчей."}),
                 "quality_metrics_mode": (
                     ["off", "fast", "full"],
-                    {"default": "full", "tooltip": "off=без метрик, fast=MSE+SSIM, full=MSE+SSIM+DeltaE+LPIPS."},
+                    {"default": "full", "tooltip": "off=без метрик, fast=MSE+SSIM, full=MSE+SSIM+DeltaE+LPIPS (LPIPS требует пакет lpips, медленнее на CPU)."},
                 ),
                 "auto_optimal_metric": (
                     ["mse", "mse_ssim", "mse_ssim_lpips"],
@@ -846,7 +846,7 @@ class ImageColorMatchToReference:
                 ),
                 "auto_fallback_method": (
                     ["lab_cdf", "oklab_cdf", "perceptual_vgg_fast"],
-                    {"default": "lab_cdf", "tooltip": "Метод fallback в auto_optimal при низком качестве."},
+                    {"default": "lab_cdf", "tooltip": "Метод fallback в auto_optimal при низком качестве. perceptual_vgg_fast требует torchvision и обычно GPU."},
                 ),
                 "skin_tone_protection": (
                     "BOOLEAN",
@@ -858,7 +858,7 @@ class ImageColorMatchToReference:
                 ),
                 "spatial_grid": (
                     "INT",
-                    {"default": 1, "min": 1, "max": 8, "step": 1, "tooltip": "Локальный матчинг по сетке NxN (работает для linear/mean_std/adain/auto_optimal)."},
+                    {"default": 1, "min": 1, "max": 8, "step": 1, "tooltip": "Локальный матчинг по сетке NxN (работает для linear/mean_std/adain/auto_optimal). Увеличение сетки повышает нагрузку на CPU/GPU."},
                 ),
                 "export_lut": ("BOOLEAN", {"default": False, "tooltip": "Экспортировать LUT .cube для каждой пары вход/референс."}),
                 "lut_size": ("INT", {"default": 33, "min": 8, "max": 65, "tooltip": "Размер 3D LUT (типично 17/33)."}),

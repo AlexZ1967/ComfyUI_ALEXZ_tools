@@ -1,0 +1,51 @@
+{
+  "case": "case01",
+  "status": "ok",
+  "presets": {
+    "mean_std": {
+      "ok": true,
+      "mode": "mean_std",
+      "image": "after_mean_std.png"
+    },
+    "linear": {
+      "ok": true,
+      "mode": "linear",
+      "image": "after_linear.png"
+    },
+    "tone_curve": {
+      "ok": true,
+      "mode": "tone_curve",
+      "image": "after_tone_curve.png"
+    },
+    "adain": {
+      "ok": true,
+      "mode": "adain",
+      "image": "after_adain.png"
+    },
+    "optimal_transport": {
+      "ok": true,
+      "mode": "optimal_transport",
+      "image": "after_optimal_transport.png"
+    },
+    "lab_cdf": {
+      "ok": true,
+      "mode": "lab_cdf",
+      "image": "after_lab_cdf.png"
+    },
+    "oklab_cdf": {
+      "ok": true,
+      "mode": "oklab_cdf",
+      "image": "after_oklab_cdf.png"
+    },
+    "auto_optimal": {
+      "ok": true,
+      "mode": "auto_optimal:oklab_cdf",
+      "image": "after_auto_optimal.png"
+    },
+    "perceptual_vgg_fast": {
+      "ok": true,
+      "mode": "perceptual_vgg_fast",
+      "image": "after_perceptual_vgg_fast.png"
+    }
+  }
+}
