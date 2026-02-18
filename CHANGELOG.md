@@ -1,5 +1,20 @@
 # Changelog — ALEXZ_tools
 
+## 0.21.0 — 2026-02-18
+- Seam Match v3 hybrid update (`ImageSeamMatchToReference`):
+  - added new `seam_model=v3_hybrid`:
+    global affine + tonal residuals (shadow/midtone/highlight) optimized jointly;
+  - added v3-specific tuning controls:
+    `hybrid_residual_strength`, `hybrid_residual_reg`,
+    `hybrid_coherence_reg`;
+  - extended seam diagnostics JSON with `transform.hybrid`
+    (`global`, `residual_bands`, `residual_strength`);
+  - kept compatibility with existing models:
+    `v2_tonal` and `v1_affine`.
+- Tests/docs:
+  - extended seam smoke tests for `v3_hybrid` mode and JSON payload fields;
+  - updated seam docs and README input list for hybrid parameters.
+
 ## 0.20.0 — 2026-02-18
 - Seam Match v2 (`ImageSeamMatchToReference`) for harder seam cases:
   - added `seam_model` selector:
