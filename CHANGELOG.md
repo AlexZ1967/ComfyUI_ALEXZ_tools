@@ -1,6 +1,12 @@
 # Changelog — ALEXZ_tools
 
 ## 0.19.0 — 2026-02-18
+- New node: `Seam Match To Reference` (`ImageSeamMatchToReference`):
+  - added seam-focused color optimization mode for minimizing visible cuts/diff;
+  - supports optimization spaces `rgb`/`oklab`;
+  - added fixed optimization size options:
+    `downscale_long_side` = `as_is` / `1080p` / `720p` / `480p`;
+  - outputs optimization diagnostics in `seam_json`.
 - Color Match To Reference UI/UX and docs update (Stage 4):
   - added dedicated preset comparison matrix in
     `guides/GUIDE_COLOR_MATCH_DETAILED.md` with columns:

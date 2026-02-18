@@ -39,6 +39,12 @@ NODE_DOCS = [
         "readme_heading": "## Color Match To Reference",
     },
     {
+        "file": "nodes/image_seam_match.py",
+        "class": "ImageSeamMatchToReference",
+        "guide": "guides/GUIDE_SEAM_MATCH.md",
+        "readme_heading": "## Seam Match To Reference",
+    },
+    {
         "file": "nodes/video_frame_match.py",
         "class": "VideoFrameMatch",
         "guide": "guides/GUIDE_VIDEO_FRAME_MATCH.md",

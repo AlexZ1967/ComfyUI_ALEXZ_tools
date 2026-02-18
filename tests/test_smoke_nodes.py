@@ -436,6 +436,45 @@ class SmokeTests(unittest.TestCase):
         data = json.loads(payload[0])
         self.assertIsNotNone(data["quality"]["before"]["delta_e76"])
 
+    def test_seam_match_node_runs_and_reports_json(self):
+        """Ensure seam-match node runs and returns optimization diagnostics."""
+        seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")
+        node = seam_mod.ImageSeamMatchToReference()
+        ref = torch.rand(1, 20, 20, 3)
+        img = torch.rand(1, 20, 20, 3)
+        out, payload = node.match(
+            ref,
+            img,
+            strength=1.0,
+            color_space="oklab",
+            downscale_long_side="720p",
+            steps=2,
+            lr=0.05,
+        )
+        self.assertEqual(tuple(out.shape), (1, 20, 20, 3))
+        data = json.loads(payload[0])
+        self.assertEqual(data.get("mode"), "seam_match:oklab")
+        self.assertEqual(data.get("optimization", {}).get("downscale_long_side"), "720p")
+        self.assertIn("matrix", data.get("transform", {}))
+
+    def test_seam_match_downscale_options(self):
+        """Ensure all declared downscale options are accepted."""
+        seam_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_seam_match")
+        node = seam_mod.ImageSeamMatchToReference()
+        ref = torch.rand(1, 16, 16, 3)
+        img = torch.rand(1, 16, 16, 3)
+        for mode in ("as_is", "1080p", "720p", "480p"):
+            _out, payload = node.match(
+                ref,
+                img,
+                strength=1.0,
+                downscale_long_side=mode,
+                steps=1,
+                lr=0.03,
+            )
+            data = json.loads(payload[0])
+            self.assertEqual(data.get("optimization", {}).get("downscale_long_side"), mode)
+
     def test_video_frame_topk_helpers(self):
         """Validate top-k and confidence helper math for frame matching."""
         video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_match")

@@ -36,6 +36,7 @@ Refactoring plan (RU): [PLAN_REFACTORING_ADOPTED_RU.md](refactoring_plan/PLAN_RE
 - [Image Prepare for QwenEdit Outpaint](#image-prepare-for-qwenedit-outpaint)
 - [Align Overlay To Background](#align-overlay-to-background)
 - [Color Match To Reference](#color-match-to-reference)
+- [Seam Match To Reference](#seam-match-to-reference)
 - [Find Closest Video Frame](#find-closest-video-frame)
 - [Match Video Cut Point](#match-video-cut-point)
 - [Image Difference](#image-difference)
@@ -94,6 +95,19 @@ Guide: [GUIDE_ALIGN.md](guides/GUIDE_ALIGN.md)
 `export_lut=true` сохраняет `.cube` (параметры: `lut_size`, `lut_output_dir`, `lut_name`) и возвращает путь в `match_json.lut`.  
 Выходы: `matched_image`, `match_json`.  
 Guide: [GUIDE_COLOR_MATCH_DETAILED.md](guides/GUIDE_COLOR_MATCH_DETAILED.md), кратко — [GUIDE_COLOR_MATCH.md](guides/GUIDE_COLOR_MATCH.md)
+
+---
+
+## Seam Match To Reference
+Оптимизированная подгонка кадра к референсу с приоритетом минимальной видимости стыка (минимальный diff) на всей картинке.
+
+- Display name: Seam Match To Reference  
+- Type name: ImageSeamMatchToReference  
+- Category: image/color
+
+Ключевые входы: `reference`, `image`, `strength`, `color_space` (`rgb`/`oklab`), `downscale_long_side` (`as_is`/`1080p`/`720p`/`480p`), `steps`, `lr`, `w_mse`, `w_ssim`, `w_grad`, `reg_weight`, `robust_delta`.  
+Выходы: `matched_image`, `seam_json`.  
+Guide: [GUIDE_SEAM_MATCH.md](guides/GUIDE_SEAM_MATCH.md)
 
 ---
 
