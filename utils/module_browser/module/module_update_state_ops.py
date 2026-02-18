@@ -51,6 +51,9 @@ def module_needs_update_now(
             return inferred
         return bool(cached_update)
 
+    if bool(git_state.get("manager_cnr_nightly")):
+        return False
+
     behind = git_state.get("behind")
     if isinstance(behind, int):
         return behind > 0
@@ -121,4 +124,3 @@ def comfyui_needs_update_now(*, comfyui_git_status_fn: Callable[..., dict[str, A
     if isinstance(behind, int):
         return behind > 0
     return bool(status.get("update_status") == "can_update")
-

@@ -233,6 +233,13 @@ def module_git_state(
             if remote_target
             else None
         )
+        manager_cnr_id = ""
+        cnr_marker = module_dir / ".git" / ".cnr-id"
+        try:
+            if cnr_marker.is_file():
+                manager_cnr_id = cnr_marker.read_text(encoding="utf-8", errors="ignore").strip()
+        except Exception:
+            manager_cnr_id = ""
         state: dict[str, Any] = {
             "module_path": str(module_dir),
             "repository": normalize_repo_url(remote_repo_url),
@@ -248,6 +255,8 @@ def module_git_state(
             "ahead": None,
             "behind": None,
             "remote_head": remote_head,
+            "manager_cnr_id": manager_cnr_id,
+            "manager_cnr_nightly": bool(manager_cnr_id),
         }
 
         counts_target = f"HEAD...{remote_target}" if remote_target else ""

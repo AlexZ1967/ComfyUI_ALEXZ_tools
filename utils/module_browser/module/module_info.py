@@ -13,7 +13,19 @@ Purpose:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
+
+
+def _has_manager_cnr_marker(module_path: str | None) -> bool:
+    """Check whether module directory contains ComfyUI-Manager nightly marker."""
+    if not module_path:
+        return False
+    try:
+        marker = Path(str(module_path)) / ".git" / ".cnr-id"
+        return marker.is_file() and bool(marker.read_text(encoding="utf-8", errors="ignore").strip())
+    except Exception:
+        return False
 
 
 def cached_module_flags(
@@ -229,6 +241,9 @@ def resolve_module_info_uncached(
             result["update_status"] = str(cache_entry.get("update_status") or "unknown")
         result["last_checked_at"] = cache_entry.get("last_checked_at") or ""
         result["last_local_change_at"] = cache_entry.get("last_local_change_at") or ""
+        if _has_manager_cnr_marker(result.get("module_path")):
+            result["update_available"] = False
+            result["update_status"] = "up_to_date"
     elif cache_only and not custom_update_checked:
         result["update_available"] = False
         result["update_status"] = "up_to_date"
@@ -241,18 +256,22 @@ def resolve_module_info_uncached(
         result["git_has_upstream"] = bool(git_state.get("has_upstream"))
         result["git_ahead"] = git_state.get("ahead")
         result["git_behind"] = git_state.get("behind")
-        behind = git_state.get("behind")
-        remote_head = git_state.get("remote_head")
-        if isinstance(behind, int):
-            result["update_available"] = behind > 0
-            result["update_status"] = "can_update" if behind > 0 else "up_to_date"
-        elif result["git_has_upstream"] and remote_head and result["installed_commit"]:
-            if remote_head == result["installed_commit"]:
-                result["update_available"] = False
-                result["update_status"] = "up_to_date"
-            else:
-                result["update_available"] = True
-                result["update_status"] = "can_update"
+        if bool(git_state.get("manager_cnr_nightly")):
+            result["update_available"] = False
+            result["update_status"] = "up_to_date"
+        else:
+            behind = git_state.get("behind")
+            remote_head = git_state.get("remote_head")
+            if isinstance(behind, int):
+                result["update_available"] = behind > 0
+                result["update_status"] = "can_update" if behind > 0 else "up_to_date"
+            elif result["git_has_upstream"] and remote_head and result["installed_commit"]:
+                if remote_head == result["installed_commit"]:
+                    result["update_available"] = False
+                    result["update_status"] = "up_to_date"
+                else:
+                    result["update_available"] = True
+                    result["update_status"] = "can_update"
 
     inferred_update, inferred_remote_updated_at = infer_update_from_manager_stats(
         result.get("repository"),
