@@ -247,6 +247,14 @@ def _piecewise_linear_map(values: torch.Tensor, xk: torch.Tensor, yk: torch.Tens
     return out.reshape(values.shape).clamp(0.0, 1.0)
 
 
+def _soft_rolloff_unit(values: torch.Tensor, shoulder: float = 0.25) -> torch.Tensor:
+    """Apply smooth bounded roll-off to avoid hard clipping artifacts."""
+    sh = float(max(0.08, min(0.8, shoulder)))
+    den = torch.tanh(torch.tensor(0.5 / sh, device=values.device, dtype=values.dtype)).clamp_min(_EPS)
+    mapped = 0.5 + 0.5 * torch.tanh((values - 0.5) / sh) / den
+    return mapped.clamp(0.0, 1.0)
+
+
 def _fit_tone_params(src_hwc: torch.Tensor, ref_hwc: torch.Tensor, tone_model: str) -> dict:
     """Fit tone model parameters from source/reference pair."""
     src_l = _luma(src_hwc).clamp(0.0, 1.0)
@@ -306,7 +314,36 @@ def _fit_palette_affine(src_hwc: torch.Tensor, ref_hwc: torch.Tensor, fit_mask_h
         scale, offset = color_match_utils.mean_std_fit_torch_batch(src_b, ref_b, mask_b)
     else:
         scale, offset = color_match_utils.linear_fit_torch_batch(src_b, ref_b, mask_b)
-    return scale[0].clamp(0.2, 5.0), offset[0].clamp(-1.0, 1.0)
+    sc = scale[0]
+    of = offset[0]
+    model = str(palette_model)
+    # Regularize aggressive affine fits to keep tonal continuity.
+    if model == "rbf":
+        reg = 0.30
+        sc = torch.lerp(sc, torch.ones_like(sc), reg).clamp(0.55, 1.9)
+        of = torch.lerp(of, torch.zeros_like(of), reg).clamp(-0.25, 0.25)
+    else:
+        reg = 0.45
+        sc = torch.lerp(sc, torch.ones_like(sc), reg).clamp(0.45, 2.2)
+        of = torch.lerp(of, torch.zeros_like(of), reg).clamp(-0.35, 0.35)
+    return sc, of
+
+
+def _preserve_source_contrast(src_hwc: torch.Tensor, corrected_hwc: torch.Tensor, strength: float) -> torch.Tensor:
+    """Blend corrected luminance contrast back toward source softness."""
+    s = float(max(0.0, min(1.0, strength)))
+    if s <= 0.0:
+        return corrected_hwc
+    src_l = _luma(src_hwc).clamp(0.0, 1.0)
+    out_l = _luma(corrected_hwc).clamp(0.0, 1.0)
+    src_std = src_l.std(unbiased=False).clamp_min(_EPS)
+    out_std = out_l.std(unbiased=False).clamp_min(_EPS)
+    target_std = out_std + (src_std - out_std) * s
+    gain = (target_std / out_std).clamp(0.6, 1.8)
+    out_mean = out_l.mean()
+    target_l = ((out_l - out_mean) * gain + out_mean).clamp(0.0, 1.0)
+    ratio = (target_l / out_l.clamp_min(_EPS)).unsqueeze(-1)
+    return _soft_rolloff_unit(corrected_hwc * ratio)
 
 
 def _estimate_skin_mask(rgb_hwc: torch.Tensor) -> torch.Tensor:
@@ -336,15 +373,15 @@ def _apply_resolve_pipeline_to_rgb(
     palette_alpha: float,
 ) -> torch.Tensor:
     """Apply resolve stages to one RGB image tensor."""
-    exp_stage = (src_hwc * exposure_gain.view(1, 1, 3)).clamp(0.0, 1.0)
+    exp_stage = _soft_rolloff_unit(src_hwc * exposure_gain.view(1, 1, 3))
     cur = _blend_stage(src_hwc, exp_stage, exposure_alpha).clamp(0.0, 1.0)
 
-    tone_stage = _apply_tone_model(cur, tone_params)
+    tone_stage = _soft_rolloff_unit(_apply_tone_model(cur, tone_params))
     cur = _blend_stage(cur, tone_stage, tone_alpha).clamp(0.0, 1.0)
 
-    pal_stage = (cur * palette_scale.view(1, 1, 3) + palette_offset.view(1, 1, 3)).clamp(0.0, 1.0)
+    pal_stage = _soft_rolloff_unit(cur * palette_scale.view(1, 1, 3) + palette_offset.view(1, 1, 3))
     cur = _blend_stage(cur, pal_stage, palette_alpha).clamp(0.0, 1.0)
-    return cur
+    return _soft_rolloff_unit(cur)
 
 
 def _build_resolve_cube_text(
@@ -444,6 +481,14 @@ def _build_resolve_input_types() -> dict:
             "skin_protection_strength": (
                 "FLOAT",
                 {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила защиты skin-tones."},
+            ),
+            "preserve_contrast": (
+                "BOOLEAN",
+                {"default": True, "tooltip": "Сохранять мягкость контраста исходника (уменьшает соляризацию)."},
+            ),
+            "contrast_preserve_strength": (
+                "FLOAT",
+                {"default": 0.45, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила сохранения контраста исходника."},
             ),
             "auto_fallback_cdf": (
                 "BOOLEAN",
@@ -555,6 +600,8 @@ class ImageLookMatchResolve:
         w_chroma=1.0,
         skin_protection=True,
         skin_protection_strength=0.6,
+        preserve_contrast=True,
+        contrast_preserve_strength=0.45,
         auto_fallback_cdf=True,
         subject_mask=None,
         sky_mask=None,
@@ -620,6 +667,8 @@ class ImageLookMatchResolve:
                 palette_offset=palette_offset,
                 palette_alpha=palette_alpha,
             )
+            if bool(preserve_contrast):
+                corrected = _preserve_source_contrast(img_t, corrected, float(contrast_preserve_strength))
             if bool(skin_protection) and skin_alpha > 0.0:
                 skin_mask_soft = _estimate_skin_mask(img_t).unsqueeze(-1)
                 corrected = corrected * (1.0 - skin_mask_soft * skin_alpha) + img_t * (skin_mask_soft * skin_alpha)
@@ -636,35 +685,43 @@ class ImageLookMatchResolve:
             fallback_mode = ""
             fallback_mse = None
             if bool(auto_fallback_cdf):
-                # If resolve-stage fit barely improves result, try robust CDF color transfer.
+                # If resolve-stage fit is weak, try robust global alternatives and pick best.
                 improve_ratio = (mse_before - mse_after) / max(mse_before, 1e-8)
                 if improve_ratio < 0.05 or mse_after > 0.03:
                     cdf_mode = "oklab_cdf" if str(working_space) == "oklab" else "lab_cdf"
+                    candidates = [cdf_mode, "linear"]
+                    best_out = corrected
+                    best_mse = mse_after
                     zero_mask = torch.zeros(
                         (1, img_t.shape[0], img_t.shape[1]),
                         device=img_t.device,
                         dtype=img_t.dtype,
                     )
-                    cdf_out = color_match_utils.apply_color_match(
-                        img_t.unsqueeze(0),
-                        ref_eval.unsqueeze(0),
-                        zero_mask,
-                        mode=cdf_mode,
-                        mask_white_is_keep=False,
-                    )[0].to(device=img_t.device, dtype=img_t.dtype)
-                    if bool(skin_protection) and skin_alpha > 0.0:
-                        skin_mask_soft = _estimate_skin_mask(img_t).unsqueeze(-1)
-                        cdf_out = cdf_out * (1.0 - skin_mask_soft * skin_alpha) + img_t * (skin_mask_soft * skin_alpha)
-                    if s < 1.0:
-                        cdf_out = img_t * (1.0 - s) + cdf_out * s
-                    cdf_out = cdf_out.clamp(0.0, 1.0)
-                    cdf_mse = float((cdf_out - ref_eval).square().mean().item())
-                    fallback_mse = cdf_mse
-                    if cdf_mse < mse_after:
-                        corrected = cdf_out
-                        mse_after = cdf_mse
+                    for cand_mode in candidates:
+                        cand_out = color_match_utils.apply_color_match(
+                            img_t.unsqueeze(0),
+                            ref_eval.unsqueeze(0),
+                            zero_mask,
+                            mode=cand_mode,
+                            mask_white_is_keep=False,
+                        )[0].to(device=img_t.device, dtype=img_t.dtype)
+                        if bool(skin_protection) and skin_alpha > 0.0:
+                            skin_mask_soft = _estimate_skin_mask(img_t).unsqueeze(-1)
+                            cand_out = cand_out * (1.0 - skin_mask_soft * skin_alpha) + img_t * (skin_mask_soft * skin_alpha)
+                        if s < 1.0:
+                            cand_out = img_t * (1.0 - s) + cand_out * s
+                        cand_out = cand_out.clamp(0.0, 1.0)
+                        cand_mse = float((cand_out - ref_eval).square().mean().item())
+                        if fallback_mse is None or cand_mse < fallback_mse:
+                            fallback_mse = cand_mse
+                        if cand_mse < best_mse:
+                            best_mse = cand_mse
+                            best_out = cand_out
+                            fallback_mode = cand_mode
+                    if best_mse < mse_after:
+                        corrected = best_out
+                        mse_after = best_mse
                         fallback_used = True
-                        fallback_mode = cdf_mode
 
             out_t = corrected.to(device=img_rgb.device)
             if img_alpha is not None:
@@ -699,6 +756,8 @@ class ImageLookMatchResolve:
                     "compute_device_effective": str(device),
                     "device_warning": warning,
                     "auto_fallback_cdf": bool(auto_fallback_cdf),
+                    "preserve_contrast": bool(preserve_contrast),
+                    "contrast_preserve_strength": float(contrast_preserve_strength),
                     "weights": {
                         "w_exposure": float(w_exposure),
                         "w_tone": float(w_tone),
