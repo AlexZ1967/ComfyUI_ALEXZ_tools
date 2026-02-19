@@ -445,6 +445,13 @@ def _build_resolve_input_types() -> dict:
                 "FLOAT",
                 {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила защиты skin-tones."},
             ),
+            "auto_fallback_cdf": (
+                "BOOLEAN",
+                {
+                    "default": True,
+                    "tooltip": "Авто-фоллбек: если Resolve-fit слабо улучшает MSE, пробовать CDF (oklab/lab) и выбирать лучший результат.",
+                },
+            ),
             "subject_mask": ("MASK", {"tooltip": "Опциональная маска объекта (Phase A: контракт)."}),
             "sky_mask": ("MASK", {"tooltip": "Опциональная маска неба."}),
             "ground_mask": ("MASK", {"tooltip": "Опциональная маска земли/фона."}),
@@ -548,6 +555,7 @@ class ImageLookMatchResolve:
         w_chroma=1.0,
         skin_protection=True,
         skin_protection_strength=0.6,
+        auto_fallback_cdf=True,
         subject_mask=None,
         sky_mask=None,
         ground_mask=None,
@@ -619,16 +627,49 @@ class ImageLookMatchResolve:
                 corrected = img_t * (1.0 - s) + corrected * s
             corrected = corrected.clamp(0.0, 1.0)
 
-            out_t = corrected.to(device=img_rgb.device)
-            if img_alpha is not None:
-                out_t = torch.cat([out_t, img_alpha[idx]], dim=-1)
-            out_list.append(out_t.cpu())
-
             ref_eval = ref_t
             if ref_eval.shape[0] != img_t.shape[0] or ref_eval.shape[1] != img_t.shape[1]:
                 ref_eval = _resize_hwc_to(ref_eval, img_t.shape[0], img_t.shape[1])
             mse_before = float((img_t - ref_eval).square().mean().item())
             mse_after = float((corrected - ref_eval).square().mean().item())
+            fallback_used = False
+            fallback_mode = ""
+            fallback_mse = None
+            if bool(auto_fallback_cdf):
+                # If resolve-stage fit barely improves result, try robust CDF color transfer.
+                improve_ratio = (mse_before - mse_after) / max(mse_before, 1e-8)
+                if improve_ratio < 0.05 or mse_after > 0.03:
+                    cdf_mode = "oklab_cdf" if str(working_space) == "oklab" else "lab_cdf"
+                    zero_mask = torch.zeros(
+                        (1, img_t.shape[0], img_t.shape[1]),
+                        device=img_t.device,
+                        dtype=img_t.dtype,
+                    )
+                    cdf_out = color_match_utils.apply_color_match(
+                        img_t.unsqueeze(0),
+                        ref_eval.unsqueeze(0),
+                        zero_mask,
+                        mode=cdf_mode,
+                        mask_white_is_keep=False,
+                    )[0].to(device=img_t.device, dtype=img_t.dtype)
+                    if bool(skin_protection) and skin_alpha > 0.0:
+                        skin_mask_soft = _estimate_skin_mask(img_t).unsqueeze(-1)
+                        cdf_out = cdf_out * (1.0 - skin_mask_soft * skin_alpha) + img_t * (skin_mask_soft * skin_alpha)
+                    if s < 1.0:
+                        cdf_out = img_t * (1.0 - s) + cdf_out * s
+                    cdf_out = cdf_out.clamp(0.0, 1.0)
+                    cdf_mse = float((cdf_out - ref_eval).square().mean().item())
+                    fallback_mse = cdf_mse
+                    if cdf_mse < mse_after:
+                        corrected = cdf_out
+                        mse_after = cdf_mse
+                        fallback_used = True
+                        fallback_mode = cdf_mode
+
+            out_t = corrected.to(device=img_rgb.device)
+            if img_alpha is not None:
+                out_t = torch.cat([out_t, img_alpha[idx]], dim=-1)
+            out_list.append(out_t.cpu())
 
             payload = {
                 "status": "ok",
@@ -657,6 +698,7 @@ class ImageLookMatchResolve:
                     "compute_device_requested": str(compute_device).lower(),
                     "compute_device_effective": str(device),
                     "device_warning": warning,
+                    "auto_fallback_cdf": bool(auto_fallback_cdf),
                     "weights": {
                         "w_exposure": float(w_exposure),
                         "w_tone": float(w_tone),
@@ -673,6 +715,11 @@ class ImageLookMatchResolve:
                 "quality": {
                     "before": {"mse": round(mse_before, 8)},
                     "after": {"mse": round(mse_after, 8)},
+                    "fallback": {
+                        "used": bool(fallback_used),
+                        "mode": str(fallback_mode),
+                        "mse": round(float(fallback_mse), 8) if fallback_mse is not None else None,
+                    },
                     "improvement_pct": {
                         "mse": round((mse_before - mse_after) / max(mse_before, 1e-8) * 100.0, 3),
                     },
