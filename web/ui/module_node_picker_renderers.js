@@ -9,6 +9,10 @@
  * Purpose:
  *   Keeps large UI rendering blocks isolated from picker orchestration logic.
  */
+import {
+    addNodeToCurrentGraph,
+    markNodeCanvasDirty,
+} from "./module_node_picker_node_factory.js";
 
 /**
  * Render node cards for the selected module and bind node insertion actions.
@@ -25,7 +29,6 @@ export function renderNodeListPanel(context) {
     const moduleNodeDiffs = context?.moduleNodeDiffs;
     const createNodeByInfo = context?.createNodeByInfo;
     const app = context?.app;
-    const centerNode = context?.centerNode;
     const marks = context?.marks || {};
 
     if (!nodeListEl) {
@@ -101,19 +104,30 @@ export function renderNodeListPanel(context) {
         } else if (nodeDiff.updatedNodes.has(nodeInfo.node_name)) {
             item.classList.add("alexz-mod-picker-node--updated");
         }
-        item.onclick = () => {
-            if (typeof createNodeByInfo !== "function") {
-                return;
+        item.onclick = async () => {
+            try {
+                if (typeof createNodeByInfo !== "function") {
+                    return;
+                }
+                const maybeNode = createNodeByInfo(nodeInfo);
+                const node = maybeNode && typeof maybeNode.then === "function"
+                    ? await maybeNode
+                    : maybeNode;
+                if (!node) {
+                    setHelpText?.(`Не удалось создать ноду: ${nodeInfo.display_name}`);
+                    return;
+                }
+                const added = await addNodeToCurrentGraph(node, app);
+                if (!added) {
+                    setHelpText?.(`Нода создана, но не добавлена в graph (Node 2.0 API не найден): ${nodeInfo.display_name}`);
+                    return;
+                }
+                app?.canvas?.selectNode?.(node, false);
+                markNodeCanvasDirty(app);
+            } catch (error) {
+                setHelpText?.(`Ошибка вставки ноды: ${nodeInfo.display_name}`);
+                console.error("[ALEXZ.ModulePicker] node insert failed", error);
             }
-            const node = createNodeByInfo(nodeInfo);
-            if (!node) {
-                setHelpText?.(`Не удалось создать ноду: ${nodeInfo.display_name}`);
-                return;
-            }
-            app?.graph?.add(node);
-            centerNode?.(node);
-            app?.canvas?.selectNode?.(node, false);
-            app?.graph?.setDirtyCanvas(true, true);
         };
 
         const nameEl = document.createElement("div");

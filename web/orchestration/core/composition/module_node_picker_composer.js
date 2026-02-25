@@ -413,7 +413,7 @@ export function renderModuleNodePicker(container, options = {}) {
         setHelpHintText,
         setHelpModuleCardHint,
         setHelpModuleSummary,
-        createNodeByInfo: (nodeInfo) => createNodeFromCatalogInfo(nodeInfo, LiteGraph),
+        createNodeByInfo: (nodeInfo) => createNodeFromCatalogInfo(nodeInfo, LiteGraph, { app: appInstance }),
         app: appInstance,
         centerNode: (node) => centerNodeInCanvas(node, appInstance),
         fmtDate,
