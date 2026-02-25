@@ -14,6 +14,7 @@ Purpose:
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 import torch
@@ -247,12 +248,128 @@ def _piecewise_linear_map(values: torch.Tensor, xk: torch.Tensor, yk: torch.Tens
     return out.reshape(values.shape).clamp(0.0, 1.0)
 
 
-def _soft_rolloff_unit(values: torch.Tensor, shoulder: float = 0.25) -> torch.Tensor:
-    """Apply smooth bounded roll-off to avoid hard clipping artifacts."""
-    sh = float(max(0.08, min(0.8, shoulder)))
-    den = torch.tanh(torch.tensor(0.5 / sh, device=values.device, dtype=values.dtype)).clamp_min(_EPS)
-    mapped = 0.5 + 0.5 * torch.tanh((values - 0.5) / sh) / den
-    return mapped.clamp(0.0, 1.0)
+def _gradient_energy(luma_hw: torch.Tensor) -> float:
+    """Estimate average local detail energy from luminance gradients."""
+    if luma_hw.shape[0] < 2 or luma_hw.shape[1] < 2:
+        return 0.0
+    gx = (luma_hw[:, 1:] - luma_hw[:, :-1]).abs().mean()
+    gy = (luma_hw[1:, :] - luma_hw[:-1, :]).abs().mean()
+    return float((gx + gy).item())
+
+
+def _look_distance_score(candidate_hwc: torch.Tensor, reference_hwc: torch.Tensor, source_hwc: torch.Tensor) -> float:
+    """Compute spatially-invariant look distance with source-structure regularization."""
+    q = torch.linspace(0.0, 1.0, 21, device=candidate_hwc.device, dtype=candidate_hwc.dtype)
+    cand_flat = candidate_hwc.reshape(-1, 3)
+    ref_flat = reference_hwc.reshape(-1, 3)
+    cand_l = _luma(candidate_hwc).reshape(-1)
+    ref_l = _luma(reference_hwc).reshape(-1)
+    src_l = _luma(source_hwc)
+    cand_l_hw = _luma(candidate_hwc)
+
+    cand_q = torch.quantile(cand_flat, q, dim=0)
+    ref_q = torch.quantile(ref_flat, q, dim=0)
+    cand_l_q = torch.quantile(cand_l, q)
+    ref_l_q = torch.quantile(ref_l, q)
+
+    cand_sat = (candidate_hwc.max(dim=-1).values - candidate_hwc.min(dim=-1).values).reshape(-1)
+    ref_sat = (reference_hwc.max(dim=-1).values - reference_hwc.min(dim=-1).values).reshape(-1)
+    cand_sat_q = torch.quantile(cand_sat, q)
+    ref_sat_q = torch.quantile(ref_sat, q)
+
+    dist_rgb_q = float((cand_q - ref_q).abs().mean().item())
+    dist_l_q = float((cand_l_q - ref_l_q).abs().mean().item())
+    dist_sat_q = float((cand_sat_q - ref_sat_q).abs().mean().item())
+
+    cand_mean = cand_flat.mean(dim=0)
+    ref_mean = ref_flat.mean(dim=0)
+    cand_std = cand_flat.std(dim=0, unbiased=False).clamp_min(_EPS)
+    ref_std = ref_flat.std(dim=0, unbiased=False).clamp_min(_EPS)
+    dist_mean = float((cand_mean - ref_mean).abs().mean().item())
+    dist_std = float((cand_std - ref_std).abs().mean().item())
+
+    src_l_std = float(src_l.std(unbiased=False).item())
+    cand_l_std = float(cand_l_hw.std(unbiased=False).item())
+    std_pen = abs(math.log((cand_l_std + _EPS) / (src_l_std + _EPS)))
+    src_g = _gradient_energy(src_l)
+    cand_g = _gradient_energy(cand_l_hw)
+    grad_pen = abs(math.log((cand_g + _EPS) / (src_g + _EPS)))
+
+    return (
+        dist_l_q * 0.80
+        + dist_rgb_q * 0.60
+        + dist_sat_q * 0.35
+        + dist_mean * 0.45
+        + dist_std * 0.35
+        + std_pen * 0.12
+        + grad_pen * 0.08
+    )
+
+
+def _clip_ratio(rgb_hwc: torch.Tensor, low: float = 0.005, high: float = 0.995) -> float:
+    """Estimate clipped pixel ratio in RGB domain."""
+    clipped = ((rgb_hwc <= low) | (rgb_hwc >= high)).to(dtype=rgb_hwc.dtype)
+    return float(clipped.mean().item())
+
+
+def _contrast_ratio_to_source(candidate_hwc: torch.Tensor, source_hwc: torch.Tensor) -> float:
+    """Return luma contrast ratio candidate/source."""
+    src_std = float(_luma(source_hwc).std(unbiased=False).item())
+    cand_std = float(_luma(candidate_hwc).std(unbiased=False).item())
+    return cand_std / max(src_std, _EPS)
+
+
+def _soften_candidate_tone(candidate_hwc: torch.Tensor, source_hwc: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+    """Normalize candidate tone toward source to reduce harsh/solarized look."""
+    src_l = _luma(source_hwc).clamp(0.0, 1.0)
+    cand_l = _luma(candidate_hwc).clamp(0.0, 1.0)
+    src_std = float(src_l.std(unbiased=False).item())
+    cand_std = float(cand_l.std(unbiased=False).item())
+    ratio = cand_std / max(src_std, _EPS)
+
+    target_ratio = ratio
+    if ratio > 1.08:
+        target_ratio = 1.00
+    elif ratio > 1.02:
+        target_ratio = 1.02
+    elif ratio < 0.78:
+        target_ratio = 0.90
+    elif ratio < 0.92:
+        target_ratio = 0.92
+
+    if abs(target_ratio - ratio) < 1e-6:
+        return candidate_hwc, {"contrast_ratio": float(ratio), "blend": 0.0}
+
+    target_std = src_std * target_ratio
+    gain = target_std / max(cand_std, _EPS)
+    cand_mean = float(cand_l.mean().item())
+    adjusted_l = ((cand_l - cand_mean) * gain + cand_mean).clamp(0.0, 1.0)
+    src_bias = float(max(0.0, min(0.45, (abs(math.log(max(ratio, _EPS))) - 0.03) / 0.20)))
+    if src_bias > 0.0:
+        adjusted_l = (adjusted_l * (1.0 - src_bias) + src_l * src_bias).clamp(0.0, 1.0)
+    adjusted_rgb = (candidate_hwc * (adjusted_l / cand_l.clamp_min(_EPS)).unsqueeze(-1)).clamp(0.0, 1.0)
+
+    # More aggressive when tone deviates strongly or has visible clipping.
+    dev = abs(math.log(max(ratio, _EPS)))
+    clip = _clip_ratio(candidate_hwc)
+    blend = float(max(0.0, min(0.92, (dev - 0.03) / 0.14)))
+    blend = max(blend, min(0.92, clip * 22.0))
+    if ratio > 1.15:
+        blend = max(blend, 0.85)
+    softened = (candidate_hwc * (1.0 - blend) + adjusted_rgb * blend).clamp(0.0, 1.0)
+    return softened, {"contrast_ratio": float(ratio), "blend": float(blend)}
+
+
+def _rank_candidate_for_look(candidate_hwc: torch.Tensor, reference_hwc: torch.Tensor, source_hwc: torch.Tensor) -> tuple[float, float, float, float]:
+    """Compute ranking score: look match + penalties for harshness/flatness/clipping."""
+    look = _look_distance_score(candidate_hwc, reference_hwc, source_hwc)
+    contrast_ratio = _contrast_ratio_to_source(candidate_hwc, source_hwc)
+    clip = _clip_ratio(candidate_hwc)
+    harsh_pen = max(0.0, contrast_ratio - 1.04) * 1.8
+    flat_pen = max(0.0, 0.84 - contrast_ratio) * 1.2
+    clip_pen = clip * 10.0
+    score = float(look + harsh_pen + flat_pen + clip_pen)
+    return score, float(look), float(contrast_ratio), float(clip)
 
 
 def _fit_tone_params(src_hwc: torch.Tensor, ref_hwc: torch.Tensor, tone_model: str) -> dict:
@@ -314,36 +431,7 @@ def _fit_palette_affine(src_hwc: torch.Tensor, ref_hwc: torch.Tensor, fit_mask_h
         scale, offset = color_match_utils.mean_std_fit_torch_batch(src_b, ref_b, mask_b)
     else:
         scale, offset = color_match_utils.linear_fit_torch_batch(src_b, ref_b, mask_b)
-    sc = scale[0]
-    of = offset[0]
-    model = str(palette_model)
-    # Regularize aggressive affine fits to keep tonal continuity.
-    if model == "rbf":
-        reg = 0.30
-        sc = torch.lerp(sc, torch.ones_like(sc), reg).clamp(0.55, 1.9)
-        of = torch.lerp(of, torch.zeros_like(of), reg).clamp(-0.25, 0.25)
-    else:
-        reg = 0.45
-        sc = torch.lerp(sc, torch.ones_like(sc), reg).clamp(0.45, 2.2)
-        of = torch.lerp(of, torch.zeros_like(of), reg).clamp(-0.35, 0.35)
-    return sc, of
-
-
-def _preserve_source_contrast(src_hwc: torch.Tensor, corrected_hwc: torch.Tensor, strength: float) -> torch.Tensor:
-    """Blend corrected luminance contrast back toward source softness."""
-    s = float(max(0.0, min(1.0, strength)))
-    if s <= 0.0:
-        return corrected_hwc
-    src_l = _luma(src_hwc).clamp(0.0, 1.0)
-    out_l = _luma(corrected_hwc).clamp(0.0, 1.0)
-    src_std = src_l.std(unbiased=False).clamp_min(_EPS)
-    out_std = out_l.std(unbiased=False).clamp_min(_EPS)
-    target_std = out_std + (src_std - out_std) * s
-    gain = (target_std / out_std).clamp(0.6, 1.8)
-    out_mean = out_l.mean()
-    target_l = ((out_l - out_mean) * gain + out_mean).clamp(0.0, 1.0)
-    ratio = (target_l / out_l.clamp_min(_EPS)).unsqueeze(-1)
-    return _soft_rolloff_unit(corrected_hwc * ratio)
+    return scale[0].clamp(0.2, 5.0), offset[0].clamp(-1.0, 1.0)
 
 
 def _estimate_skin_mask(rgb_hwc: torch.Tensor) -> torch.Tensor:
@@ -373,15 +461,15 @@ def _apply_resolve_pipeline_to_rgb(
     palette_alpha: float,
 ) -> torch.Tensor:
     """Apply resolve stages to one RGB image tensor."""
-    exp_stage = _soft_rolloff_unit(src_hwc * exposure_gain.view(1, 1, 3))
+    exp_stage = (src_hwc * exposure_gain.view(1, 1, 3)).clamp(0.0, 1.0)
     cur = _blend_stage(src_hwc, exp_stage, exposure_alpha).clamp(0.0, 1.0)
 
-    tone_stage = _soft_rolloff_unit(_apply_tone_model(cur, tone_params))
+    tone_stage = _apply_tone_model(cur, tone_params)
     cur = _blend_stage(cur, tone_stage, tone_alpha).clamp(0.0, 1.0)
 
-    pal_stage = _soft_rolloff_unit(cur * palette_scale.view(1, 1, 3) + palette_offset.view(1, 1, 3))
+    pal_stage = (cur * palette_scale.view(1, 1, 3) + palette_offset.view(1, 1, 3)).clamp(0.0, 1.0)
     cur = _blend_stage(cur, pal_stage, palette_alpha).clamp(0.0, 1.0)
-    return _soft_rolloff_unit(cur)
+    return cur
 
 
 def _build_resolve_cube_text(
@@ -482,19 +570,11 @@ def _build_resolve_input_types() -> dict:
                 "FLOAT",
                 {"default": 0.6, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила защиты skin-tones."},
             ),
-            "preserve_contrast": (
-                "BOOLEAN",
-                {"default": True, "tooltip": "Сохранять мягкость контраста исходника (уменьшает соляризацию)."},
-            ),
-            "contrast_preserve_strength": (
-                "FLOAT",
-                {"default": 0.45, "min": 0.0, "max": 1.0, "step": 0.05, "tooltip": "Сила сохранения контраста исходника."},
-            ),
             "auto_fallback_cdf": (
                 "BOOLEAN",
                 {
                     "default": True,
-                    "tooltip": "Авто-фоллбек: если Resolve-fit слабо улучшает MSE, пробовать CDF (oklab/lab) и выбирать лучший результат.",
+                    "tooltip": "Авто-фоллбек: пробовать CDF/linear (+soft) и выбирать лучший результат по look-метрике с учетом тональной жесткости.",
                 },
             ),
             "subject_mask": ("MASK", {"tooltip": "Опциональная маска объекта (Phase A: контракт)."}),
@@ -600,8 +680,6 @@ class ImageLookMatchResolve:
         w_chroma=1.0,
         skin_protection=True,
         skin_protection_strength=0.6,
-        preserve_contrast=True,
-        contrast_preserve_strength=0.45,
         auto_fallback_cdf=True,
         subject_mask=None,
         sky_mask=None,
@@ -667,8 +745,6 @@ class ImageLookMatchResolve:
                 palette_offset=palette_offset,
                 palette_alpha=palette_alpha,
             )
-            if bool(preserve_contrast):
-                corrected = _preserve_source_contrast(img_t, corrected, float(contrast_preserve_strength))
             if bool(skin_protection) and skin_alpha > 0.0:
                 skin_mask_soft = _estimate_skin_mask(img_t).unsqueeze(-1)
                 corrected = corrected * (1.0 - skin_mask_soft * skin_alpha) + img_t * (skin_mask_soft * skin_alpha)
@@ -681,47 +757,93 @@ class ImageLookMatchResolve:
                 ref_eval = _resize_hwc_to(ref_eval, img_t.shape[0], img_t.shape[1])
             mse_before = float((img_t - ref_eval).square().mean().item())
             mse_after = float((corrected - ref_eval).square().mean().item())
+            rank_before, look_before, contrast_before, clip_before = _rank_candidate_for_look(img_t, ref_eval, img_t)
+            rank_after, look_after, contrast_after, clip_after = _rank_candidate_for_look(corrected, ref_eval, img_t)
             fallback_used = False
             fallback_mode = ""
             fallback_mse = None
+            fallback_look = None
+            fallback_rank = None
+            fallback_contrast = None
+            fallback_clip = None
+            fallback_source = ""
             if bool(auto_fallback_cdf):
-                # If resolve-stage fit is weak, try robust global alternatives and pick best.
+                # If resolve-stage fit is weak, try robust alternatives and rank by look+tone quality.
                 improve_ratio = (mse_before - mse_after) / max(mse_before, 1e-8)
-                if improve_ratio < 0.05 or mse_after > 0.03:
+                look_improve_ratio = (look_before - look_after) / max(look_before, 1e-8)
+                if improve_ratio < 0.05 or mse_after > 0.03 or look_improve_ratio < 0.04 or rank_after > 0.22:
                     cdf_mode = "oklab_cdf" if str(working_space) == "oklab" else "lab_cdf"
                     candidates = [cdf_mode, "linear"]
+                    palette_tag = str(palette_model).lower()
+                    if palette_tag == "rbf":
+                        # RBF path: fallback from resolve base to keep its tonal character.
+                        fallback_sources = [("resolve_base", corrected, False)]
+                    else:
+                        # LUT/linear path: fallback from original image for stronger global transfer.
+                        fallback_sources = [("source", img_t, True)]
                     best_out = corrected
                     best_mse = mse_after
+                    best_look = look_after
+                    best_rank = rank_after
+                    best_contrast = contrast_after
+                    best_clip = clip_after
                     zero_mask = torch.zeros(
                         (1, img_t.shape[0], img_t.shape[1]),
                         device=img_t.device,
                         dtype=img_t.dtype,
                     )
-                    for cand_mode in candidates:
-                        cand_out = color_match_utils.apply_color_match(
-                            img_t.unsqueeze(0),
-                            ref_eval.unsqueeze(0),
-                            zero_mask,
-                            mode=cand_mode,
-                            mask_white_is_keep=False,
-                        )[0].to(device=img_t.device, dtype=img_t.dtype)
-                        if bool(skin_protection) and skin_alpha > 0.0:
-                            skin_mask_soft = _estimate_skin_mask(img_t).unsqueeze(-1)
-                            cand_out = cand_out * (1.0 - skin_mask_soft * skin_alpha) + img_t * (skin_mask_soft * skin_alpha)
-                        if s < 1.0:
-                            cand_out = img_t * (1.0 - s) + cand_out * s
-                        cand_out = cand_out.clamp(0.0, 1.0)
-                        cand_mse = float((cand_out - ref_eval).square().mean().item())
-                        if fallback_mse is None or cand_mse < fallback_mse:
-                            fallback_mse = cand_mse
-                        if cand_mse < best_mse:
-                            best_mse = cand_mse
-                            best_out = cand_out
-                            fallback_mode = cand_mode
-                    if best_mse < mse_after:
+                    for source_name, source_tensor, reapply_stages in fallback_sources:
+                        for cand_mode in candidates:
+                            cand_raw = color_match_utils.apply_color_match(
+                                source_tensor.unsqueeze(0),
+                                ref_eval.unsqueeze(0),
+                                zero_mask,
+                                mode=cand_mode,
+                                mask_white_is_keep=False,
+                            )[0].to(device=img_t.device, dtype=img_t.dtype)
+                            if reapply_stages and bool(skin_protection) and skin_alpha > 0.0:
+                                skin_mask_soft = _estimate_skin_mask(img_t).unsqueeze(-1)
+                                cand_raw = cand_raw * (1.0 - skin_mask_soft * skin_alpha) + img_t * (skin_mask_soft * skin_alpha)
+                            if reapply_stages and s < 1.0:
+                                cand_raw = img_t * (1.0 - s) + cand_raw * s
+                            cand_raw = cand_raw.clamp(0.0, 1.0)
+
+                            cand_soft, _soft_info = _soften_candidate_tone(cand_raw, img_t)
+                            for cand_label, cand_out in ((cand_mode, cand_raw), (f"{cand_mode}_soft", cand_soft)):
+                                cand_out = cand_out.clamp(0.0, 1.0)
+                                cand_mse = float((cand_out - ref_eval).square().mean().item())
+                                if cand_mse > (mse_before * 2.5 + 1e-8):
+                                    continue
+                                cand_rank, cand_look, cand_contrast, cand_clip = _rank_candidate_for_look(cand_out, ref_eval, img_t)
+                                better_rank = cand_rank < (best_rank - 1e-6)
+                                near_rank_better_mse = cand_rank <= (best_rank + 0.01) and cand_mse < best_mse
+                                if better_rank or near_rank_better_mse:
+                                    best_out = cand_out
+                                    best_mse = cand_mse
+                                    best_look = cand_look
+                                    best_rank = cand_rank
+                                    best_contrast = cand_contrast
+                                    best_clip = cand_clip
+                                    fallback_mode = cand_label
+                                    fallback_source = source_name
+                    if fallback_mode:
+                        rank_gain = best_rank < (rank_after - 0.01)
+                        mse_gain = best_mse < (mse_after * 0.9)
+                        if not (rank_gain or mse_gain):
+                            fallback_mode = ""
+                    if fallback_mode:
                         corrected = best_out
                         mse_after = best_mse
+                        look_after = best_look
+                        rank_after = best_rank
+                        contrast_after = best_contrast
+                        clip_after = best_clip
                         fallback_used = True
+                        fallback_mse = best_mse
+                        fallback_look = best_look
+                        fallback_rank = best_rank
+                        fallback_contrast = best_contrast
+                        fallback_clip = best_clip
 
             out_t = corrected.to(device=img_rgb.device)
             if img_alpha is not None:
@@ -756,8 +878,6 @@ class ImageLookMatchResolve:
                     "compute_device_effective": str(device),
                     "device_warning": warning,
                     "auto_fallback_cdf": bool(auto_fallback_cdf),
-                    "preserve_contrast": bool(preserve_contrast),
-                    "contrast_preserve_strength": float(contrast_preserve_strength),
                     "weights": {
                         "w_exposure": float(w_exposure),
                         "w_tone": float(w_tone),
@@ -774,13 +894,38 @@ class ImageLookMatchResolve:
                 "quality": {
                     "before": {"mse": round(mse_before, 8)},
                     "after": {"mse": round(mse_after, 8)},
+                    "look_score": {
+                        "before": round(float(look_before), 8),
+                        "after": round(float(look_after), 8),
+                    },
+                    "rank_score": {
+                        "before": round(float(rank_before), 8),
+                        "after": round(float(rank_after), 8),
+                    },
+                    "tone_profile": {
+                        "before": {
+                            "contrast_ratio_to_source": round(float(contrast_before), 8),
+                            "clip_ratio": round(float(clip_before), 8),
+                        },
+                        "after": {
+                            "contrast_ratio_to_source": round(float(contrast_after), 8),
+                            "clip_ratio": round(float(clip_after), 8),
+                        },
+                    },
                     "fallback": {
                         "used": bool(fallback_used),
                         "mode": str(fallback_mode),
                         "mse": round(float(fallback_mse), 8) if fallback_mse is not None else None,
+                        "look_score": round(float(fallback_look), 8) if fallback_look is not None else None,
+                        "rank_score": round(float(fallback_rank), 8) if fallback_rank is not None else None,
+                        "contrast_ratio_to_source": round(float(fallback_contrast), 8) if fallback_contrast is not None else None,
+                        "clip_ratio": round(float(fallback_clip), 8) if fallback_clip is not None else None,
+                        "source": str(fallback_source),
                     },
                     "improvement_pct": {
                         "mse": round((mse_before - mse_after) / max(mse_before, 1e-8) * 100.0, 3),
+                        "look_score": round((look_before - look_after) / max(look_before, 1e-8) * 100.0, 3),
+                        "rank_score": round((rank_before - rank_after) / max(rank_before, 1e-8) * 100.0, 3),
                     },
                 },
             }
