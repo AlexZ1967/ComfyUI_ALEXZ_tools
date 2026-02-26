@@ -14,6 +14,7 @@ Purpose:
 from __future__ import annotations
 
 import math
+import traceback
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from typing import Any
@@ -22,6 +23,27 @@ import numpy as np
 import requests
 import torch
 from PIL import Image
+try:
+    from tqdm.auto import tqdm
+except Exception:
+    class _NoopTqdm:
+        def __init__(self, iterable=None, **kwargs):
+            self.iterable = iterable
+
+        def update(self, n=1):
+            return None
+
+        def set_postfix_str(self, s, refresh=True):
+            return None
+
+        def close(self):
+            return None
+
+        def __iter__(self):
+            return iter(self.iterable if self.iterable is not None else ())
+
+    def tqdm(iterable=None, **kwargs):
+        return _NoopTqdm(iterable=iterable, **kwargs)
 
 
 _DEFAULT_UA = (
@@ -29,6 +51,11 @@ _DEFAULT_UA = (
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
 _DEFAULT_REFERER = "https://www.npg.org.uk/"
+
+
+def _log(message: str) -> None:
+    """Emit node logs to ComfyUI console."""
+    print(f"[DZI] {message}")
 
 
 def _build_zoom_base_url(base_url: str, mw: str) -> str:
@@ -72,11 +99,13 @@ def _tile_url(tiles_base: str, x: int, y: int) -> str:
 
 def _http_status(session: requests.Session, url: str, timeout: float) -> int:
     """Return HTTP status code with small retry for transient network errors."""
-    for _ in range(3):
+    for attempt in range(3):
         try:
             response = session.get(url, timeout=timeout)
             return int(response.status_code)
-        except requests.RequestException:
+        except requests.RequestException as exc:
+            if attempt >= 2:
+                _log(f"HTTP status check failed: {url} ({type(exc).__name__}: {exc})")
             continue
     return 0
 
@@ -86,11 +115,13 @@ def _download_tile(session: requests.Session, url: str, timeout: float) -> Image
     try:
         response = session.get(url, timeout=timeout)
         if response.status_code != 200:
+            _log(f"Tile unavailable: {url} (status={int(response.status_code)})")
             return None
         image = Image.open(BytesIO(response.content)).convert("RGB")
         image.load()
         return image
-    except Exception:
+    except Exception as exc:
+        _log(f"Tile download/decode error: {url} ({type(exc).__name__}: {exc})")
         return None
 
 
@@ -131,6 +162,7 @@ def _parse_dzi(session: requests.Session, dzi_url: str, timeout: float) -> dict[
     try:
         response = session.get(dzi_url, timeout=timeout)
         if response.status_code != 200:
+            _log(f"DZI metadata unavailable: {dzi_url} (status={int(response.status_code)})")
             return None
         root = ET.fromstring(response.text)
         tile_size = int(root.attrib.get("TileSize", "256"))
@@ -154,7 +186,8 @@ def _parse_dzi(session: requests.Session, dzi_url: str, timeout: float) -> dict[
             "width": width,
             "height": height,
         }
-    except Exception:
+    except Exception as exc:
+        _log(f"DZI parse error: {dzi_url} ({type(exc).__name__}: {exc})")
         return None
 
 
@@ -224,44 +257,80 @@ class ImageDownloadDZITiles:
 
     def download(self, base_url: str, mw: str, level: int):
         """Download DZI tiles for selected level and return assembled image tensor."""
-        zoom_base = _build_zoom_base_url(base_url, mw)
-        dzi_url = f"{zoom_base}/zoomXML.dzi"
-        tiles_base = f"{zoom_base}/zoomXML_files/{int(level)}"
-        timeout = 20.0
+        try:
+            zoom_base = _build_zoom_base_url(base_url, mw)
+            dzi_url = f"{zoom_base}/zoomXML.dzi"
+            tiles_base = f"{zoom_base}/zoomXML_files/{int(level)}"
+            timeout = 20.0
+            _log(f"Start download: mw={mw}, level={int(level)}")
+            _log(f"Base: {zoom_base}")
+            _log(f"DZI: {dzi_url}")
+            _log(f"Tiles: {tiles_base}")
 
-        session = _new_session()
-        first_tile = _download_tile(session, _tile_url(tiles_base, 0, 0), timeout)
-        if first_tile is None:
-            raise RuntimeError(
-                f"First tile is unavailable at `{_tile_url(tiles_base, 0, 0)}`. "
-                "Check `base_url`, `mw`, and `level`."
+            session = _new_session()
+            first_tile = _download_tile(session, _tile_url(tiles_base, 0, 0), timeout)
+            if first_tile is None:
+                raise RuntimeError(
+                    f"First tile is unavailable at `{_tile_url(tiles_base, 0, 0)}`. "
+                    "Check `base_url`, `mw`, and `level`."
+                )
+
+            dzi_info = _parse_dzi(session, dzi_url, timeout)
+            tile_size = int(dzi_info["tile_size"]) if isinstance(dzi_info, dict) else int(first_tile.size[0])
+            if isinstance(dzi_info, dict):
+                width, height, tiles_x, tiles_y = _compute_level_geometry_from_dzi(dzi_info, int(level))
+                _log(
+                    f"Geometry source=DZI, tile_size={tile_size}, "
+                    f"canvas={int(width)}x{int(height)}, grid={int(tiles_x)}x{int(tiles_y)}"
+                )
+            else:
+                tiles_x_probe = _probe_axis_count(session, tiles_base, axis="x", timeout=timeout)
+                tiles_y_probe = _probe_axis_count(session, tiles_base, axis="y", timeout=timeout)
+                if tiles_x_probe <= 0 or tiles_y_probe <= 0:
+                    raise RuntimeError("Could not probe tile grid (x/y tile counts are zero).")
+                tiles_x = int(tiles_x_probe)
+                tiles_y = int(tiles_y_probe)
+                last_x_tile = _download_tile(session, _tile_url(tiles_base, tiles_x - 1, 0), timeout)
+                last_y_tile = _download_tile(session, _tile_url(tiles_base, 0, tiles_y - 1), timeout)
+                width = (tiles_x - 1) * tile_size + (last_x_tile.size[0] if last_x_tile else tile_size)
+                height = (tiles_y - 1) * tile_size + (last_y_tile.size[1] if last_y_tile else tile_size)
+                _log(
+                    f"Geometry source=probe, tile_size={tile_size}, "
+                    f"canvas={int(width)}x{int(height)}, grid={int(tiles_x)}x{int(tiles_y)}"
+                )
+
+            canvas = Image.new("RGB", (int(width), int(height)))
+            canvas.paste(first_tile, (0, 0))
+
+            total_tiles = max(1, int(tiles_x) * int(tiles_y))
+            missing_tiles = 0
+            downloaded_tiles = 1
+            bar = tqdm(total=total_tiles, desc="DZI Tiles", unit="tile")
+            try:
+                bar.update(1)
+                for y in range(tiles_y):
+                    for x in range(tiles_x):
+                        if x == 0 and y == 0:
+                            continue
+                        tile = _download_tile(session, _tile_url(tiles_base, x, y), timeout)
+                        if tile is None:
+                            missing_tiles += 1
+                        else:
+                            canvas.paste(tile, (x * tile_size, y * tile_size))
+                            downloaded_tiles += 1
+                        bar.update(1)
+                        bar.set_postfix_str(
+                            f"ok={downloaded_tiles}/{total_tiles}, miss={missing_tiles}", refresh=False
+                        )
+            finally:
+                bar.close()
+
+            _log(
+                f"Done: canvas={int(width)}x{int(height)}, "
+                f"tiles_total={total_tiles}, tiles_ok={downloaded_tiles}, tiles_missing={missing_tiles}"
             )
-
-        dzi_info = _parse_dzi(session, dzi_url, timeout)
-        tile_size = int(dzi_info["tile_size"]) if isinstance(dzi_info, dict) else int(first_tile.size[0])
-        if isinstance(dzi_info, dict):
-            width, height, tiles_x, tiles_y = _compute_level_geometry_from_dzi(dzi_info, int(level))
-        else:
-            tiles_x_probe = _probe_axis_count(session, tiles_base, axis="x", timeout=timeout)
-            tiles_y_probe = _probe_axis_count(session, tiles_base, axis="y", timeout=timeout)
-            if tiles_x_probe <= 0 or tiles_y_probe <= 0:
-                raise RuntimeError("Could not probe tile grid (x/y tile counts are zero).")
-            tiles_x = int(tiles_x_probe)
-            tiles_y = int(tiles_y_probe)
-            last_x_tile = _download_tile(session, _tile_url(tiles_base, tiles_x - 1, 0), timeout)
-            last_y_tile = _download_tile(session, _tile_url(tiles_base, 0, tiles_y - 1), timeout)
-            width = (tiles_x - 1) * tile_size + (last_x_tile.size[0] if last_x_tile else tile_size)
-            height = (tiles_y - 1) * tile_size + (last_y_tile.size[1] if last_y_tile else tile_size)
-
-        canvas = Image.new("RGB", (int(width), int(height)))
-        canvas.paste(first_tile, (0, 0))
-        for y in range(tiles_y):
-            for x in range(tiles_x):
-                if x == 0 and y == 0:
-                    continue
-                tile = _download_tile(session, _tile_url(tiles_base, x, y), timeout)
-                if tile is None:
-                    continue
-                canvas.paste(tile, (x * tile_size, y * tile_size))
-
-        return (_image_to_tensor(canvas),)
+            return (_image_to_tensor(canvas),)
+        except Exception as exc:
+            _log(f"Node failed: {type(exc).__name__}: {exc}")
+            _log(traceback.format_exc().rstrip())
+            raise

@@ -1,5 +1,16 @@
 # Changelog — ALEXZ_tools
 
+## 0.23.2 — 2026-02-26
+- DZI node runtime logging/diagnostics update (`ImageDownloadDZITiles`):
+  - added structured console logs with `DZI` prefix for start/URLs/geometry/result;
+  - added tile download progress bar (`DZI Tiles`) in ComfyUI console;
+  - added explicit error logging for:
+    tile HTTP failures, tile decode exceptions, DZI metadata fetch/parse errors;
+  - added full traceback logging on node failure for faster debugging.
+- Docs:
+  - updated DZI guide with note about console progress and error logs.
+- Version updated to `0.23.2` in `pyproject.toml` and `README.md`.
+
 ## 0.23.1 — 2026-02-26
 - DZI node URL contract update (`ImageDownloadDZITiles`):
   - `base_url` now expects site root without `/zoom`
