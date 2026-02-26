@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.23.1 — 2026-02-26
+- DZI node URL contract update (`ImageDownloadDZITiles`):
+  - `base_url` now expects site root without `/zoom`
+    (e.g. `https://collectionimages.npg.org.uk`);
+  - node now appends `/zoom` internally for all requests.
+- DZI assembly correctness fix:
+  - fixed duplicated/wide output on NPG-like endpoints by prioritizing
+    level geometry derived from `.dzi` metadata (when available);
+  - probe-based axis scan is now used as fallback path only when `.dzi`
+    metadata is unavailable.
+- UX/docs/tests:
+  - updated Russian tooltips for `base_url`, `mw`, `level`;
+  - updated DZI guide examples for new `base_url` format;
+  - added smoke coverage for URL normalization and DZI-priority geometry.
+- Version updated to `0.23.1` in `pyproject.toml` and `README.md`.
+
 ## 0.23.0 — 2026-02-26
 - New node: `Download DZI Tiles Image` (`ImageDownloadDZITiles`):
   - added DZI tile download/assembly node with inputs `base_url`, `mw`, `level`;

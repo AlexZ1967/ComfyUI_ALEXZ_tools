@@ -804,6 +804,79 @@ class SmokeTests(unittest.TestCase):
         self.assertAlmostEqual(float(out[0, 1, tile_size + 1, 1].item()), 1.0, places=4)  # top-right green
         self.assertAlmostEqual(float(out[0, tile_size + 1, 1, 2].item()), 1.0, places=4)  # bottom-left blue
 
+    def test_dzi_tiles_build_zoom_base_url(self):
+        """Verify base URL normalization auto-adds /zoom and keeps backward compatibility."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        self.assertEqual(
+            dzi_mod._build_zoom_base_url("https://collectionimages.npg.org.uk", "mw207134"),
+            "https://collectionimages.npg.org.uk/zoom/mw207134",
+        )
+        self.assertEqual(
+            dzi_mod._build_zoom_base_url("https://collectionimages.npg.org.uk/zoom", "mw207134"),
+            "https://collectionimages.npg.org.uk/zoom/mw207134",
+        )
+        self.assertEqual(
+            dzi_mod._build_zoom_base_url("https://collectionimages.npg.org.uk/zoom/mw207134", "mw207134"),
+            "https://collectionimages.npg.org.uk/zoom/mw207134",
+        )
+
+    def test_dzi_tiles_download_prefers_dzi_level_geometry(self):
+        """Verify DZI metadata controls grid/size when probe reports misleading larger axes."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        node = dzi_mod.ImageDownloadDZITiles()
+
+        tile_size = 8
+        requested = []
+
+        class _DummySession:
+            pass
+
+        old_new_session = dzi_mod._new_session
+        old_parse_dzi = dzi_mod._parse_dzi
+        old_probe_axis = dzi_mod._probe_axis_count
+        old_download_tile = dzi_mod._download_tile
+
+        def _parse_xy(url: str):
+            match = re.search(r"/(\d+)_(\d+)\.jpg$", str(url))
+            if not match:
+                return None
+            return (int(match.group(1)), int(match.group(2)))
+
+        try:
+            from PIL import Image
+            import numpy as np
+
+            def _fake_download_tile(_session, url: str, _timeout: float):
+                coords = _parse_xy(url)
+                if coords is not None:
+                    requested.append(coords)
+                canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
+                canvas[:, :, 0] = 255
+                return Image.fromarray(canvas, mode="RGB")
+
+            dzi_mod._new_session = lambda: _DummySession()
+            # Full size 10x16, level 3 => 5x8, grid must be 1x1 (max_level=4).
+            dzi_mod._parse_dzi = lambda *_args, **_kwargs: {
+                "tile_size": tile_size,
+                "overlap": 0,
+                "format": "jpg",
+                "width": 10,
+                "height": 16,
+            }
+            # Intentionally misleading probe to ensure DZI path is used.
+            dzi_mod._probe_axis_count = lambda *_args, **_kwargs: 6
+            dzi_mod._download_tile = _fake_download_tile
+
+            out, = node.download("https://example.test/zoom", "mwX", 3)
+        finally:
+            dzi_mod._new_session = old_new_session
+            dzi_mod._parse_dzi = old_parse_dzi
+            dzi_mod._probe_axis_count = old_probe_axis
+            dzi_mod._download_tile = old_download_tile
+
+        self.assertEqual(tuple(out.shape), (1, 8, 5, 3))
+        self.assertEqual(set(requested), {(0, 0)})
+
     def test_node_ui_metadata_compat(self):
         """Ensure loaded nodes expose metadata used by newer node-card UI."""
         nodes_pkg = importlib.import_module("ComfyUI_ALEXZ_tools.nodes")

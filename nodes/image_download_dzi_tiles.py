@@ -32,18 +32,25 @@ _DEFAULT_REFERER = "https://www.npg.org.uk/"
 
 
 def _build_zoom_base_url(base_url: str, mw: str) -> str:
-    """Compose normalized zoom base URL from user input and image id."""
+    """Compose normalized zoom base URL from site root and image id."""
     base = str(base_url or "").strip().rstrip("/")
     module_id = str(mw or "").strip()
     if not base:
         raise ValueError("`base_url` must not be empty.")
     if not module_id:
         raise ValueError("`mw` must not be empty.")
-    if "{mw}" in base:
-        return base.format(mw=module_id)
-    if base.lower().endswith(f"/{module_id.lower()}"):
+    lower_base = base.lower()
+    lower_mw = module_id.lower()
+    if lower_base.endswith(f"/zoom/{lower_mw}"):
         return base
-    return f"{base}/{module_id}"
+    if lower_base.endswith("/zoom"):
+        return f"{base}/{module_id}"
+    if lower_base.endswith(f"/{lower_mw}"):
+        prefix = base[: -(len(module_id) + 1)].rstrip("/")
+        if prefix.lower().endswith("/zoom"):
+            return base
+        return f"{prefix}/zoom/{module_id}" if prefix else f"{base}/zoom/{module_id}"
+    return f"{base}/zoom/{module_id}"
 
 
 def _new_session() -> requests.Session:
@@ -151,6 +158,22 @@ def _parse_dzi(session: requests.Session, dzi_url: str, timeout: float) -> dict[
         return None
 
 
+def _compute_level_geometry_from_dzi(dzi_info: dict[str, Any], level: int) -> tuple[int, int, int, int]:
+    """Compute level-specific output size and tile grid from DeepZoom metadata."""
+    tile_size = max(1, int(dzi_info["tile_size"]))
+    full_width = max(1, int(dzi_info["width"]))
+    full_height = max(1, int(dzi_info["height"]))
+    max_dim = max(full_width, full_height)
+    max_level = int(math.ceil(math.log2(float(max_dim)))) if max_dim > 1 else 0
+    level_i = int(level)
+    scale_div = float(2 ** max(0, max_level - level_i))
+    level_width = max(1, int(math.ceil(float(full_width) / scale_div)))
+    level_height = max(1, int(math.ceil(float(full_height) / scale_div)))
+    tiles_x = max(1, int(math.ceil(float(level_width) / float(tile_size))))
+    tiles_y = max(1, int(math.ceil(float(level_height) / float(tile_size))))
+    return level_width, level_height, tiles_x, tiles_y
+
+
 def _image_to_tensor(image: Image.Image) -> torch.Tensor:
     """Convert PIL RGB image to Comfy IMAGE tensor format [1,H,W,3], float32."""
     np_image = np.asarray(image, dtype=np.float32) / 255.0
@@ -168,9 +191,9 @@ class ImageDownloadDZITiles:
                 "base_url": (
                     "STRING",
                     {
-                        "default": "https://collectionimages.npg.org.uk/zoom",
+                        "default": "https://collectionimages.npg.org.uk",
                         "multiline": False,
-                        "tooltip": "Базовый URL DeepZoom (например https://.../zoom).",
+                        "tooltip": "Базовый URL сайта без /zoom (например https://collectionimages.npg.org.uk). Суффикс /zoom добавляется автоматически.",
                     },
                 ),
                 "mw": (
@@ -178,7 +201,7 @@ class ImageDownloadDZITiles:
                     {
                         "default": "mw207134",
                         "multiline": False,
-                        "tooltip": "Идентификатор изображения (добавляется к base_url, если не указан в URL).",
+                        "tooltip": "Идентификатор изображения (например mw207134). Полный путь формируется как <base_url>/zoom/<mw>/...",
                     },
                 ),
                 "level": (
@@ -187,7 +210,7 @@ class ImageDownloadDZITiles:
                         "default": 11,
                         "min": 0,
                         "max": 32,
-                        "tooltip": "Уровень тайлов (папка .../zoomXML_files/<level>/).",
+                        "tooltip": "Уровень DZI-тайлов (папка .../zoomXML_files/<level>/). Чем выше уровень, тем выше итоговое разрешение.",
                     },
                 ),
             },
@@ -216,28 +239,15 @@ class ImageDownloadDZITiles:
 
         dzi_info = _parse_dzi(session, dzi_url, timeout)
         tile_size = int(dzi_info["tile_size"]) if isinstance(dzi_info, dict) else int(first_tile.size[0])
-        tiles_x_probe = _probe_axis_count(session, tiles_base, axis="x", timeout=timeout)
-        tiles_y_probe = _probe_axis_count(session, tiles_base, axis="y", timeout=timeout)
-        if tiles_x_probe <= 0 or tiles_y_probe <= 0:
-            raise RuntimeError("Could not probe tile grid (x/y tile counts are zero).")
-
-        tiles_x = int(tiles_x_probe)
-        tiles_y = int(tiles_y_probe)
-
         if isinstance(dzi_info, dict):
-            tiles_x_dzi = max(1, int(math.ceil(float(dzi_info["width"]) / float(tile_size))))
-            tiles_y_dzi = max(1, int(math.ceil(float(dzi_info["height"]) / float(tile_size))))
-            # Prefer probed grid for level-specific endpoints where DZI nominal size
-            # does not match actual tile availability for the selected level.
-            if tiles_x_dzi == tiles_x_probe and tiles_y_dzi == tiles_y_probe:
-                width = int(dzi_info["width"])
-                height = int(dzi_info["height"])
-            else:
-                last_x_tile = _download_tile(session, _tile_url(tiles_base, tiles_x - 1, 0), timeout)
-                last_y_tile = _download_tile(session, _tile_url(tiles_base, 0, tiles_y - 1), timeout)
-                width = (tiles_x - 1) * tile_size + (last_x_tile.size[0] if last_x_tile else tile_size)
-                height = (tiles_y - 1) * tile_size + (last_y_tile.size[1] if last_y_tile else tile_size)
+            width, height, tiles_x, tiles_y = _compute_level_geometry_from_dzi(dzi_info, int(level))
         else:
+            tiles_x_probe = _probe_axis_count(session, tiles_base, axis="x", timeout=timeout)
+            tiles_y_probe = _probe_axis_count(session, tiles_base, axis="y", timeout=timeout)
+            if tiles_x_probe <= 0 or tiles_y_probe <= 0:
+                raise RuntimeError("Could not probe tile grid (x/y tile counts are zero).")
+            tiles_x = int(tiles_x_probe)
+            tiles_y = int(tiles_y_probe)
             last_x_tile = _download_tile(session, _tile_url(tiles_base, tiles_x - 1, 0), timeout)
             last_y_tile = _download_tile(session, _tile_url(tiles_base, 0, tiles_y - 1), timeout)
             width = (tiles_x - 1) * tile_size + (last_x_tile.size[0] if last_x_tile else tile_size)
