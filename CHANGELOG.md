@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.23.0 — 2026-02-26
+- New node: `Download DZI Tiles Image` (`ImageDownloadDZITiles`):
+  - added DZI tile download/assembly node with inputs `base_url`, `mw`, `level`;
+  - outputs assembled ComfyUI `IMAGE` tensor (`[1,H,W,3]`, float32, `0..1`);
+  - added registration and UI metadata in central node registry.
+- DZI probe/network robustness:
+  - replaced probe status checks that used `stream=True` (caused transient
+    `ConnectionError` on some endpoints) with standard request status checks;
+  - added small retry logic and robust axis probing to avoid false `1x1`
+    assembly on unstable responses.
+- Docs/tests:
+  - added guide: `guides/GUIDE_DZI_TILES_DOWNLOAD.md`;
+  - updated README node index/details for DZI node;
+  - added smoke test for deterministic mocked `2x2` DZI assembly;
+  - docs consistency check mapping extended (`utils/docs_check.py`).
+- Version updated to `0.23.0` in `pyproject.toml` and `README.md`.
+
 ## 0.22.1 — 2026-02-26
 - Module Node Picker (Nodes 2.0 placement fix):
   - fixed node insertion anchor mismatch where top Node 2.0 menu was centered,
