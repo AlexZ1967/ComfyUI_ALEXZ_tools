@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.22.1 — 2026-02-26
+- Module Node Picker (Nodes 2.0 placement fix):
+  - fixed node insertion anchor mismatch where top Node 2.0 menu was centered,
+    but node body was shifted up-left;
+  - switched picker insertion flow to native-style positioning at creation time
+    (`createNode(..., { pos })`) and removed post-insert recenter shift;
+  - stabilized graph insertion across Node 1.x/2.0 APIs.
+- Custom Nodes refresh/update status alignment improvements:
+  - added ComfyUI-Manager based update overrides during refresh
+    (`/customnode/installed` + `/customnode/getlist`) to reduce undercount of
+    modules requiring update versus Manager;
+  - extended refresh diagnostics with manager-override counters in backend logs;
+  - improved UI status text/cards to show both counters together when relevant:
+    `need_update` and `unknown_update`.
+- Version updated to `0.22.1` in `pyproject.toml` and `README.md`.
+
 ## 0.22.0 — 2026-02-18
 - Opened new minor line `0.22.x` for advanced Look Match development.
 - Added formal implementation roadmap:

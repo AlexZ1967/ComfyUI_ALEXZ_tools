@@ -221,6 +221,7 @@ def announce_tracked_module_updates(
     module_git_state: Callable[[str], dict[str, Any]],
     manager_meta_for_module: Callable[[str, str | None], dict[str, Any] | None],
     infer_update_from_manager_stats: Callable[[str | None, str | None], tuple[bool | None, str | None]],
+    manager_update_overrides: Callable[[], dict[str, bool]] | None = None,
     module_worktree_signature: Callable[[str], str],
     build_node_snapshots: Callable[[], dict[str, dict[str, dict[str, dict[str, str]]]]],
 ) -> dict[str, Any]:
@@ -238,6 +239,19 @@ def announce_tracked_module_updates(
     unknown_update_modules: list[str] = []
     local_change_modules: list[str] = []
     commit_change_modules: list[str] = []
+    manager_override_modules: list[str] = []
+
+    manager_overrides: dict[str, bool] = {}
+    if not local_only and callable(manager_update_overrides):
+        try:
+            raw_overrides = manager_update_overrides() or {}
+        except Exception:  # pragma: no cover - defensive path
+            raw_overrides = {}
+        if isinstance(raw_overrides, dict):
+            for key, value in raw_overrides.items():
+                if not isinstance(value, bool):
+                    continue
+                manager_overrides[str(key)] = value
 
     known_modules = set(discover_custom_modules())
     for key in list(state.keys()):
@@ -327,6 +341,11 @@ def announce_tracked_module_updates(
                 entry["remote_updated_at"] = inferred_remote_updated_at
             if not isinstance(needs_update, bool) and isinstance(inferred_update, bool):
                 needs_update = inferred_update
+
+        manager_override = manager_overrides.get(module_name)
+        if manager_override is True:
+            needs_update = True
+            manager_override_modules.append(module_name)
 
         if isinstance(needs_update, bool):
             entry["update_available"] = needs_update
@@ -482,6 +501,7 @@ def announce_tracked_module_updates(
         "unknown_update_modules": sorted(unknown_update_modules, key=str.lower),
         "local_change_modules": sorted(set(local_change_modules), key=str.lower),
         "commit_change_modules": sorted(set(commit_change_modules), key=str.lower),
+        "manager_override_modules": sorted(set(manager_override_modules), key=str.lower),
         "node_changed_modules": node_changed_modules,
         "new_modules_between_runs": startup_new_modules,
     }

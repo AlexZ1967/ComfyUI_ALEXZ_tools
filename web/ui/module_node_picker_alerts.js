@@ -104,7 +104,13 @@ export function renderCustomAlertCard(context) {
     customAlert.style.display = "block";
     if (customModulesNeedUpdate > 0) {
         customAlert.classList.add("alexz-mod-picker-status-card--warn");
-        customAlertText.textContent = `${customModulesNeedUpdate} custom modules require update.`;
+        if (customModulesUnknownUpdate > 0) {
+            customAlertText.textContent =
+                `${customModulesNeedUpdate} custom modules require update, ` +
+                `${customModulesUnknownUpdate} modules could not be checked.`;
+        } else {
+            customAlertText.textContent = `${customModulesNeedUpdate} custom modules require update.`;
+        }
         return;
     }
     if (customModulesUnknownUpdate > 0) {

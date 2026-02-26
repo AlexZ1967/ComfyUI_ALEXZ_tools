@@ -83,6 +83,7 @@ def refresh_module_runtime_state(
     commit_changed = list((announce_summary or {}).get("commit_change_modules") or [])
     local_changed = list((announce_summary or {}).get("local_change_modules") or [])
     node_changed = list((announce_summary or {}).get("node_changed_modules") or [])
+    manager_override_modules = list((announce_summary or {}).get("manager_override_modules") or [])
     new_modules_map = (announce_summary or {}).get("new_modules_between_runs") or {}
     new_modules_count = 0
     if isinstance(new_modules_map, dict):
@@ -92,7 +93,7 @@ def refresh_module_runtime_state(
     scan_elapsed = perf_counter() - scan_started
     refresh_console_log(
         "phase 2/3 done in {elapsed:.2f}s: checked={checked}, need_update={need}, unknown_update={unknown}, "
-        "commit_changed={commit}, local_changed={local}, node_changed={node}, new_modules={new}".format(
+        "commit_changed={commit}, local_changed={local}, node_changed={node}, manager_override={manager_override}, new_modules={new}".format(
             elapsed=scan_elapsed,
             checked=modules_checked,
             need=modules_need_update,
@@ -100,6 +101,7 @@ def refresh_module_runtime_state(
             commit=len(commit_changed),
             local=len(local_changed),
             node=len(node_changed),
+            manager_override=len(manager_override_modules),
             new=new_modules_count,
         ),
         "summary",
@@ -110,6 +112,11 @@ def refresh_module_runtime_state(
         refresh_console_log(f"locally changed modules: {', '.join(local_changed)}", "verbose")
     if node_changed:
         refresh_console_log(f"node changed modules: {', '.join(node_changed)}", "verbose")
+    if manager_override_modules:
+        refresh_console_log(
+            f"manager-reported update modules: {', '.join(manager_override_modules)}",
+            "verbose",
+        )
     update_available_modules = list((announce_summary or {}).get("update_available_modules") or [])
     if update_available_modules:
         refresh_console_log(f"update available modules: {', '.join(update_available_modules)}", "verbose")

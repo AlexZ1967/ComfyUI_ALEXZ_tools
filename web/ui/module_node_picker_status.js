@@ -37,6 +37,12 @@ export function formatRefreshLine(refresh) {
         const count = Number.isFinite(modulesNeedUpdate) ? Math.max(0, modulesNeedUpdate) : 0;
         const unknown = Number.isFinite(modulesUnknownUpdate) ? Math.max(0, modulesUnknownUpdate) : 0;
         if (count > 0) {
+            if (unknown > 0) {
+                return {
+                    text: `${count} custom modules require update, ${unknown} could not be checked`,
+                    tone: "warn",
+                };
+            }
             return { text: `${count} custom modules require update`, tone: "warn" };
         }
         if (unknown > 0) {

@@ -15,12 +15,15 @@ from __future__ import annotations
 
 
 import importlib
+import json
 import logging
 import re
 import subprocess
 import sys
 import threading
 import time
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -228,10 +231,12 @@ _MODULE_INFO_CACHE: dict[tuple[str, str, bool], tuple[float, dict[str, Any]]] = 
 _MODULE_INFO_TTL_SEC = 30.0
 _MANAGER_INDEX_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
 _MANAGER_GITHUB_STATS_CACHE: dict[str, dict[str, dict[str, Any]]] | None = None
+_MANAGER_UPDATE_OVERRIDE_CACHE: tuple[float, dict[str, bool]] | None = None
 _MODULE_STATE_CACHE: dict[str, dict[str, Any]] | None = None
 _CUSTOM_MODULE_ALIAS_CACHE: dict[str, str] | None = None
 _COMFYUI_STATUS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _COMFYUI_STATUS_TTL_SEC = 120.0
+_MANAGER_UPDATE_OVERRIDE_TTL_SEC = 20.0
 _LAZY_REFRESH_DONE = False
 _RUNTIME_WARMUP_LOCK = threading.Lock()
 _RUNTIME_WARMUP_THREAD: threading.Thread | None = None
@@ -680,6 +685,121 @@ def _infer_update_from_manager_stats(
         manager_stats_last_update_fn=_manager_stats_last_update,
         parse_datetime=_parse_datetime,
     )
+
+
+def _promptserver_base_url() -> str | None:
+    """Resolve PromptServer base URL for local in-process API probing."""
+    if PromptServer is None or getattr(PromptServer, "instance", None) is None:
+        return None
+    server = PromptServer.instance
+    address = str(getattr(server, "address", "127.0.0.1") or "127.0.0.1").strip()
+    if address in {"", "0.0.0.0", "::"}:
+        address = "127.0.0.1"
+    if ":" in address and not address.startswith("["):
+        address = f"[{address}]"
+    port = int(getattr(server, "port", 8188) or 8188)
+    return f"http://{address}:{port}"
+
+
+def _http_json_get(url: str, timeout: float = 20.0) -> dict[str, Any]:
+    """Load JSON payload from local HTTP endpoint with strict timeouts."""
+    with urlopen(url, timeout=max(1.0, float(timeout))) as response:
+        raw = response.read().decode("utf-8", errors="replace")
+    payload = json.loads(raw)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _manager_installed_update_overrides(force_refresh: bool = False) -> dict[str, bool]:
+    """Return installed-module update overrides derived from ComfyUI-Manager."""
+    global _MANAGER_UPDATE_OVERRIDE_CACHE
+    now_ts = time.time()
+    if not force_refresh and _MANAGER_UPDATE_OVERRIDE_CACHE is not None:
+        cached_ts, cached_payload = _MANAGER_UPDATE_OVERRIDE_CACHE
+        if (now_ts - cached_ts) < _MANAGER_UPDATE_OVERRIDE_TTL_SEC:
+            return dict(cached_payload)
+
+    base_url = _promptserver_base_url()
+    if not base_url:
+        return {}
+
+    try:
+        installed_payload = _http_json_get(f"{base_url}/customnode/installed?mode=default", timeout=20.0)
+        list_payload = _http_json_get(f"{base_url}/customnode/getlist?mode=local&skip_update=false", timeout=90.0)
+    except (TimeoutError, URLError, HTTPError, ValueError, json.JSONDecodeError) as exc:
+        _LOGGER.debug("ComfyUI-Manager update override probe failed: %s", exc)
+        _MANAGER_UPDATE_OVERRIDE_CACHE = (now_ts, {})
+        return {}
+
+    installed = installed_payload if isinstance(installed_payload, dict) else {}
+    node_packs = list_payload.get("node_packs") if isinstance(list_payload, dict) else {}
+    node_packs = node_packs if isinstance(node_packs, dict) else {}
+
+    by_id: dict[str, dict[str, Any]] = {}
+    by_github: dict[str, dict[str, Any]] = {}
+    by_repo_name: dict[str, dict[str, Any]] = {}
+    for pack_key, raw_meta in node_packs.items():
+        if not isinstance(raw_meta, dict):
+            continue
+        meta = raw_meta
+        id_candidates = {
+            str(meta.get("id") or "").strip().lower(),
+            str(pack_key or "").strip().lower(),
+        }
+        for candidate in id_candidates:
+            if candidate:
+                by_id[candidate] = meta
+
+        repo_sources = [
+            str(meta.get("repository") or "").strip(),
+            str(meta.get("reference") or "").strip(),
+        ]
+        files = meta.get("files")
+        if isinstance(files, list):
+            for item in files:
+                text = str(item or "").strip()
+                if text:
+                    repo_sources.append(text)
+        for source in repo_sources:
+            repo_norm = _normalize_repo_url(source)
+            if not repo_norm:
+                continue
+            gid = _github_id(repo_norm).lower()
+            if gid:
+                by_github[gid] = meta
+            repo_short = _repo_name(repo_norm).lower()
+            if repo_short:
+                by_repo_name[repo_short] = meta
+
+    overrides: dict[str, bool] = {}
+    for module_name, raw_meta in installed.items():
+        if not isinstance(raw_meta, dict):
+            continue
+        if not bool(raw_meta.get("enabled")):
+            continue
+        cnr_id = str(raw_meta.get("cnr_id") or "").strip().lower()
+        aux_id = str(raw_meta.get("aux_id") or "").strip().lower().strip("/")
+        module_l = str(module_name or "").strip().lower()
+
+        matched_meta = None
+        for candidate in (cnr_id, aux_id, module_l):
+            if candidate and candidate in by_id:
+                matched_meta = by_id[candidate]
+                break
+        if matched_meta is None and "/" in aux_id and aux_id in by_github:
+            matched_meta = by_github[aux_id]
+        if matched_meta is None and "/" in aux_id:
+            aux_repo = aux_id.split("/", 1)[1].strip().lower()
+            if aux_repo and aux_repo in by_repo_name:
+                matched_meta = by_repo_name[aux_repo]
+
+        if not isinstance(matched_meta, dict):
+            continue
+        update_state = str(matched_meta.get("update-state") or "").strip().lower()
+        if update_state == "true":
+            overrides[str(module_name)] = True
+
+    _MANAGER_UPDATE_OVERRIDE_CACHE = (now_ts, dict(overrides))
+    return overrides
 
 
 def _run_git(args: list[str], timeout: float = 2.0) -> str | None:
@@ -1140,6 +1260,7 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
         module_git_state=_module_git_state,
         manager_meta_for_module=_manager_meta_for_module,
         infer_update_from_manager_stats=_infer_update_from_manager_stats,
+        manager_update_overrides=lambda: _manager_installed_update_overrides(force_refresh=not local_only),
         module_worktree_signature=_module_worktree_signature,
         build_node_snapshots=_build_node_snapshots,
     )
@@ -1317,7 +1438,9 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
     def _reset_custom_alias_cache() -> None:
         """Reset custom module alias cache before recomputing runtime state."""
         global _CUSTOM_MODULE_ALIAS_CACHE
+        global _MANAGER_UPDATE_OVERRIDE_CACHE
         _CUSTOM_MODULE_ALIAS_CACHE = None
+        _MANAGER_UPDATE_OVERRIDE_CACHE = None
 
     if progress_cb is None:
         progress_cb = _refresh_progress
