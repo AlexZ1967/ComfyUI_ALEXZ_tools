@@ -13,6 +13,7 @@ Purpose:
 import importlib
 import json
 import os
+import re
 import sys
 import tempfile
 import types
@@ -740,11 +741,75 @@ class SmokeTests(unittest.TestCase):
         out, = node.generate("https://example.com", 256, "M")
         self.assertEqual(tuple(out.shape), (1, 256, 256, 3))
 
+    def test_dzi_tiles_download_assembly_mocked(self):
+        """Verify DZI tiles node assembles a simple 2x2 tile grid without network."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        node = dzi_mod.ImageDownloadDZITiles()
+
+        tile_size = 8
+        colors = {
+            (0, 0): (255, 0, 0),
+            (1, 0): (0, 255, 0),
+            (0, 1): (0, 0, 255),
+            (1, 1): (255, 255, 0),
+        }
+
+        class _DummySession:
+            pass
+
+        old_new_session = dzi_mod._new_session
+        old_parse_dzi = dzi_mod._parse_dzi
+        old_probe_axis = dzi_mod._probe_axis_count
+        old_download_tile = dzi_mod._download_tile
+
+        def _parse_xy(url: str):
+            match = re.search(r"/(\d+)_(\d+)\.jpg$", str(url))
+            if not match:
+                return None
+            return (int(match.group(1)), int(match.group(2)))
+
+        try:
+            from PIL import Image
+            import numpy as np
+
+            def _fake_download_tile(_session, url: str, _timeout: float):
+                coords = _parse_xy(url)
+                if coords is None or coords not in colors:
+                    return None
+                canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
+                canvas[:, :, 0] = colors[coords][0]
+                canvas[:, :, 1] = colors[coords][1]
+                canvas[:, :, 2] = colors[coords][2]
+                return Image.fromarray(canvas, mode="RGB")
+
+            dzi_mod._new_session = lambda: _DummySession()
+            dzi_mod._parse_dzi = lambda *_args, **_kwargs: None
+            dzi_mod._probe_axis_count = (
+                lambda _session, _base, *, axis, timeout, max_tiles=4096: 2
+                if axis in {"x", "y"}
+                else 0
+            )
+            dzi_mod._download_tile = _fake_download_tile
+
+            out, = node.download("https://example.test/zoom", "mwX", 11)
+        finally:
+            dzi_mod._new_session = old_new_session
+            dzi_mod._parse_dzi = old_parse_dzi
+            dzi_mod._probe_axis_count = old_probe_axis
+            dzi_mod._download_tile = old_download_tile
+
+        self.assertEqual(tuple(out.shape), (1, tile_size * 2, tile_size * 2, 3))
+        self.assertAlmostEqual(float(out[0, 1, 1, 0].item()), 1.0, places=4)  # top-left red
+        self.assertAlmostEqual(float(out[0, 1, 1, 1].item()), 0.0, places=4)
+        self.assertAlmostEqual(float(out[0, 1, tile_size + 1, 1].item()), 1.0, places=4)  # top-right green
+        self.assertAlmostEqual(float(out[0, tile_size + 1, 1, 2].item()), 1.0, places=4)  # bottom-left blue
+
     def test_node_ui_metadata_compat(self):
         """Ensure loaded nodes expose metadata used by newer node-card UI."""
         nodes_pkg = importlib.import_module("ComfyUI_ALEXZ_tools.nodes")
         class_map = getattr(nodes_pkg, "NODE_CLASS_MAPPINGS", {})
         self.assertIn("GenerateQRCode", class_map)
+        self.assertIn("ImageDownloadDZITiles", class_map)
         qr_cls = class_map["GenerateQRCode"]
         self.assertTrue(bool(getattr(qr_cls, "DESCRIPTION", "")))
         self.assertTrue(hasattr(qr_cls, "OUTPUT_TOOLTIPS"))

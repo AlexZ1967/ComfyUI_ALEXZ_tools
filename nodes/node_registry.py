@@ -46,6 +46,7 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
     NodeSpec("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
     NodeSpec("GenerateQRCode", "Generate QR Code", ".qr_code_generate", "GenerateQRCode"),
+    NodeSpec("ImageDownloadDZITiles", "Download DZI Tiles Image", ".image_download_dzi_tiles", "ImageDownloadDZITiles"),
     NodeSpec("ALEXZTestNode", "ALEXZ Test Node", ".test_node", "ALEXZTestNode"),
 )
 
@@ -145,6 +146,11 @@ NODE_UI_METADATA = {
         "description": "Генерирует QR-код из ссылки или текста.",
         "output_tooltips": ["Сгенерированный QR-код."],
         "search_aliases": ["qr", "qrcode", "link"],
+    },
+    "ImageDownloadDZITiles": {
+        "description": "Скачивает DZI-тайлы и собирает итоговое изображение.",
+        "output_tooltips": ["Собранное изображение из тайлов DZI."],
+        "search_aliases": ["dzi", "tiles", "download", "zoom"],
     },
     "ALEXZTestNode": {
         "description": "Тестовая нода для проверки загрузки пакета и Module Nodes.",

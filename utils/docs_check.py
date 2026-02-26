@@ -87,6 +87,12 @@ NODE_DOCS = [
         "readme_heading": "## Generate QR Code",
     },
     {
+        "file": "nodes/image_download_dzi_tiles.py",
+        "class": "ImageDownloadDZITiles",
+        "guide": "guides/GUIDE_DZI_TILES_DOWNLOAD.md",
+        "readme_heading": "## Download DZI Tiles Image",
+    },
+    {
         "file": "nodes/image_scopes.py",
         "class": "ImageWaveformScope",
         "guide": "guides/GUIDE_IMAGE_WAVEFORM.md",

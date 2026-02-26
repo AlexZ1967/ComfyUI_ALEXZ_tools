@@ -52,6 +52,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Match Video Cut Point](#match-video-cut-point)
 - [Image Difference](#image-difference)
 - [Generate QR Code](#generate-qr-code)
+- [Download DZI Tiles Image](#download-dzi-tiles-image)
 - [Image Waveform Scope](#image-waveform-scope)
 - [Image Histogram Scope](#image-histogram-scope)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
@@ -232,6 +233,18 @@ Guide: [GUIDE_IMAGE_DIFFERENCE.md](guides/GUIDE_IMAGE_DIFFERENCE.md)
 Входы: `url`, `resolution`, `error_correction` (L/M/Q/H).  
 Выходы: `image`.  
 Guide: [GUIDE_QR_CODE.md](guides/GUIDE_QR_CODE.md)
+
+---
+
+## Download DZI Tiles Image
+Скачивает тайлы DeepZoom (DZI) и склеивает их в одну итоговую картинку.
+
+- Display name: Download DZI Tiles Image  
+- Type name: ImageDownloadDZITiles  
+- Category: image/io  
+Входы: `base_url`, `mw`, `level`.  
+Выходы: `image`.  
+Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 
 ---
 
