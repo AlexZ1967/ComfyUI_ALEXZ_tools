@@ -51,9 +51,6 @@ def module_needs_update_now(
             return inferred
         return bool(cached_update)
 
-    if bool(git_state.get("manager_cnr_nightly")):
-        return False
-
     behind = git_state.get("behind")
     if isinstance(behind, int):
         return behind > 0

@@ -1,5 +1,20 @@
 # Changelog — ALEXZ_tools
 
+## 0.23.3 — 2026-03-04
+- Module refresh update-detection fix for custom nodes:
+  - removed forced `up_to_date` suppression for modules with ComfyUI-Manager
+    `.git/.cnr-id` marker in refresh/update evaluation;
+  - `modules_need_update` now uses git/remote comparison for CNR-marked modules
+    as well (no blanket exclusion).
+- Affected backend paths:
+  - `utils/module_browser/module/module_update_state_ops.py`
+  - `utils/module_browser/tracking/tracker_ops.py`
+  - `utils/module_browser/module/module_info.py`
+- Result:
+  - reduces undercount cases where `Refresh Custom Nodes Info` could report too
+    few updatable custom modules versus actual manager-driven updates.
+- Version updated to `0.23.3` in `pyproject.toml` and `README.md`.
+
 ## 0.23.2 — 2026-02-26
 - DZI node runtime logging/diagnostics update (`ImageDownloadDZITiles`):
   - added structured console logs with `DZI` prefix for start/URLs/geometry/result;

@@ -321,15 +321,12 @@ def announce_tracked_module_updates(
             entry["installed_updated_at"] = git_state.get("installed_updated_at") or entry.get("installed_updated_at")
             if not local_only:
                 entry["remote_updated_at"] = git_state.get("remote_updated_at") or entry.get("remote_updated_at")
-                if bool(git_state.get("manager_cnr_nightly")):
-                    needs_update = False
-                else:
-                    behind = git_state.get("behind")
-                    remote_head = (git_state.get("remote_head") or "").strip()
-                    if isinstance(behind, int):
-                        needs_update = behind > 0
-                    elif git_state.get("has_upstream") and remote_head and current_commit:
-                        needs_update = remote_head != current_commit
+                behind = git_state.get("behind")
+                remote_head = (git_state.get("remote_head") or "").strip()
+                if isinstance(behind, int):
+                    needs_update = behind > 0
+                elif git_state.get("has_upstream") and remote_head and current_commit:
+                    needs_update = remote_head != current_commit
         if manager_repo and not entry.get("repository"):
             entry["repository"] = manager_repo
         if not local_only:
