@@ -340,6 +340,155 @@ def _oklab_cdf_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[
     return _oklab_to_rgb_torch(matched)
 
 
+def _hist_match_rgb_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Per-channel RGB histogram matching in torch."""
+    bsz, h, w, _ = img.shape
+    out = img.clone()
+    keep_all = torch.ones((h, w), dtype=torch.bool, device=img.device)
+    for b in range(bsz):
+        keep = keep_all if mask is None else (mask[b] > 0.5)
+        if keep.sum() < 10:
+            continue
+        for c in range(3):
+            out[b, :, :, c] = _hist_match_channel_torch(
+                img[b, :, :, c], ref[b, :, :, c], keep, bins=256, value_range=(0.0, 1.0)
+            )
+    return torch.clamp(out, 0.0, 1.0)
+
+
+def _reinhard_lab_fast_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Fast Reinhard-like transfer: mean/std alignment in Lab space."""
+    lab_img = _rgb_to_lab_torch(img)
+    lab_ref = _rgb_to_lab_torch(ref)
+    if mask is None:
+        weights = torch.ones(
+            (img.shape[0], img.shape[1], img.shape[2], 1),
+            dtype=img.dtype,
+            device=img.device,
+        )
+    else:
+        weights = (mask > 0.5).to(dtype=img.dtype, device=img.device).unsqueeze(-1)
+    counts = weights.sum(dim=(1, 2), keepdim=True)
+    empty = counts <= 0.5
+    if torch.any(empty):
+        weights = torch.where(empty, torch.ones_like(weights), weights)
+        counts = weights.sum(dim=(1, 2), keepdim=True)
+    counts = counts.clamp_min(1.0)
+    mean_img = (lab_img * weights).sum(dim=(1, 2), keepdim=True) / counts
+    mean_ref = (lab_ref * weights).sum(dim=(1, 2), keepdim=True) / counts
+    var_img = (((lab_img - mean_img) ** 2) * weights).sum(dim=(1, 2), keepdim=True) / counts
+    var_ref = (((lab_ref - mean_ref) ** 2) * weights).sum(dim=(1, 2), keepdim=True) / counts
+    std_img = torch.sqrt(torch.clamp(var_img, min=1e-6))
+    std_ref = torch.sqrt(torch.clamp(var_ref, min=0.0))
+    matched = (lab_img - mean_img) * (std_ref / std_img) + mean_ref
+    matched[..., 0] = torch.clamp(matched[..., 0], 0.0, 100.0)
+    matched[..., 1] = torch.clamp(matched[..., 1], -127.0, 127.0)
+    matched[..., 2] = torch.clamp(matched[..., 2], -127.0, 127.0)
+    return _lab_to_rgb_torch(matched)
+
+
+def _matrix_sqrt_psd(mat: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """Stable square-root for a symmetric positive-semidefinite matrix."""
+    evals, evecs = torch.linalg.eigh(mat)
+    evals = torch.clamp(evals, min=eps)
+    return evecs @ torch.diag(torch.sqrt(evals)) @ evecs.t()
+
+
+def _matrix_invsqrt_psd(mat: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """Stable inverse square-root for a symmetric positive-semidefinite matrix."""
+    evals, evecs = torch.linalg.eigh(mat)
+    evals = torch.clamp(evals, min=eps)
+    return evecs @ torch.diag(torch.rsqrt(evals)) @ evecs.t()
+
+
+def _mkl_transfer_matrix(src_cov: torch.Tensor, ref_cov: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """Compute MKL-like covariance transfer matrix."""
+    src_sqrt = _matrix_sqrt_psd(src_cov, eps=eps)
+    src_invsqrt = _matrix_invsqrt_psd(src_cov, eps=eps)
+    middle = src_sqrt @ ref_cov @ src_sqrt
+    middle_sqrt = _matrix_sqrt_psd(middle, eps=eps)
+    return src_invsqrt @ middle_sqrt @ src_invsqrt
+
+
+def _fit_mvgd_affine(src_vals: torch.Tensor, ref_vals: torch.Tensor, ridge: float = 1e-4) -> tuple[torch.Tensor, torch.Tensor]:
+    """Fit a full 3x3+bias affine map from source to reference samples."""
+    ones = torch.ones((src_vals.shape[0], 1), device=src_vals.device, dtype=src_vals.dtype)
+    x_aug = torch.cat([src_vals, ones], dim=1)
+    xtx = x_aug.t() @ x_aug
+    xty = x_aug.t() @ ref_vals
+    reg = torch.eye(4, device=src_vals.device, dtype=src_vals.dtype) * ridge
+    reg[-1, -1] = ridge * 0.1
+    w = torch.linalg.solve(xtx + reg, xty)  # [4, 3]
+    a = w[:3, :].t().contiguous()
+    b = w[3, :].contiguous()
+    return a, b
+
+
+def _covariance_transfer_batch(
+    img: torch.Tensor,
+    ref: torch.Tensor,
+    mask: Optional[torch.Tensor],
+    solver: str,
+) -> torch.Tensor:
+    """Apply MKL/MVGD-like 3x3 color transfer in batch mode."""
+    bsz, h, w, _ = img.shape
+    out = img.clone()
+    keep_all = torch.ones((h, w), dtype=torch.bool, device=img.device)
+    eye = torch.eye(3, device=img.device, dtype=torch.float32)
+    for b in range(bsz):
+        keep = keep_all if mask is None else (mask[b] > 0.5)
+        if keep.sum() < 16:
+            continue
+        src_vals = img[b][keep].float()
+        ref_vals = ref[b][keep].float()
+        if src_vals.shape[0] < 16 or ref_vals.shape[0] < 16:
+            continue
+        flat = img[b].reshape(-1, 3).float()
+        try:
+            if solver == "mkl":
+                src_mean = src_vals.mean(dim=0)
+                ref_mean = ref_vals.mean(dim=0)
+                src_centered = src_vals - src_mean
+                ref_centered = ref_vals - ref_mean
+                denom_src = float(max(int(src_vals.shape[0]) - 1, 1))
+                denom_ref = float(max(int(ref_vals.shape[0]) - 1, 1))
+                src_cov = (src_centered.t() @ src_centered) / denom_src + 1e-6 * eye
+                ref_cov = (ref_centered.t() @ ref_centered) / denom_ref + 1e-6 * eye
+                a = _mkl_transfer_matrix(src_cov, ref_cov, eps=1e-6)
+                b_vec = ref_mean - torch.matmul(a, src_mean)
+            else:
+                a, b_vec = _fit_mvgd_affine(src_vals, ref_vals, ridge=1e-4)
+            mapped = torch.matmul(flat, a.t()) + b_vec[None, :]
+            out[b] = mapped.view(h, w, 3).to(dtype=img.dtype)
+        except RuntimeError:
+            continue
+    return torch.clamp(out, 0.0, 1.0)
+
+
+def _mkl_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """MKL-like multivariate covariance transfer."""
+    return _covariance_transfer_batch(img, ref, mask, solver="mkl")
+
+
+def _mvgd_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """MVGD-like affine fit in RGB space."""
+    return _covariance_transfer_batch(img, ref, mask, solver="mvgd")
+
+
+def _hm_mkl_hm_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Compound transfer: histogram -> MKL -> histogram."""
+    stage1 = _hist_match_rgb_batch(img, ref, mask)
+    stage2 = _mkl_match_batch(stage1, ref, mask)
+    return _hist_match_rgb_batch(stage2, ref, mask)
+
+
+def _hm_mvgd_hm_match_batch(img: torch.Tensor, ref: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+    """Compound transfer: histogram -> MVGD -> histogram."""
+    stage1 = _hist_match_rgb_batch(img, ref, mask)
+    stage2 = _mvgd_match_batch(stage1, ref, mask)
+    return _hist_match_rgb_batch(stage2, ref, mask)
+
+
 def _grid_match_batch(
     img: torch.Tensor,
     ref: torch.Tensor,
@@ -792,10 +941,26 @@ class ImageColorMatchToReference:
                 "reference": ("IMAGE", {"tooltip": "Базовое изображение (образец)."}),
                 "image": ("IMAGE", {"tooltip": "Изображение, которое нужно подогнать по цвету."}),
                 "preset": (
-                    ["mean_std", "linear", "tone_curve", "adain", "optimal_transport", "lab_cdf", "oklab_cdf", "auto_optimal", "perceptual_vgg_fast"],
+                    [
+                        "mean_std",
+                        "linear",
+                        "tone_curve",
+                        "adain",
+                        "optimal_transport",
+                        "lab_cdf",
+                        "oklab_cdf",
+                        "auto_optimal",
+                        "perceptual_vgg_fast",
+                        "reinhard_lab_fast",
+                        "hm",
+                        "mkl",
+                        "mvgd",
+                        "hm-mkl-hm",
+                        "hm-mvgd-hm",
+                    ],
                     {
                         "default": "linear",
-                        "tooltip": "Метод: mean_std/linear/tone_curve/adain=быстрые CPU-friendly; optimal_transport/lab_cdf/oklab_cdf=точнее, но тяжелее; auto_optimal=автовыбор; perceptual_vgg_fast=VGG (требует torchvision, предпочтителен GPU).",
+                        "tooltip": "Метод: mean_std/linear/tone_curve/adain=быстрые CPU-friendly; optimal_transport/lab_cdf/oklab_cdf=точнее, но тяжелее; auto_optimal=автовыбор; perceptual_vgg_fast=VGG (требует torchvision, предпочтителен GPU); reinhard_lab_fast/hm/mkl/mvgd/hm-mkl-hm/hm-mvgd-hm=экспериментальные режимы палитрового переноса.",
                     },
                 ),
                 "strength": (
@@ -987,6 +1152,18 @@ class ImageColorMatchToReference:
             corrected_batch = _lab_cdf_match_batch(image_rgb, reference_rgb, match_mask_batch)
         elif preset == "oklab_cdf":
             corrected_batch = _oklab_cdf_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "reinhard_lab_fast":
+            corrected_batch = _reinhard_lab_fast_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "hm":
+            corrected_batch = _hist_match_rgb_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "mkl":
+            corrected_batch = _mkl_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "mvgd":
+            corrected_batch = _mvgd_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "hm-mkl-hm":
+            corrected_batch = _hm_mkl_hm_match_batch(image_rgb, reference_rgb, match_mask_batch)
+        elif preset == "hm-mvgd-hm":
+            corrected_batch = _hm_mvgd_hm_match_batch(image_rgb, reference_rgb, match_mask_batch)
         elif preset == "auto_optimal":
             if spatial_grid_applied:
                 auto_linear_batch = _grid_match_batch(

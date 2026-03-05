@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.23.5 — 2026-03-05
+- Color Match To Reference: added experimental palette-transfer presets inspired
+  by KJNodes/ColorMatchV2 method family, integrated into existing safe pipeline:
+  - `reinhard_lab_fast` (fast Lab mean/std transfer),
+  - `hm` (RGB histogram match),
+  - `mkl` (MKL-like covariance transfer),
+  - `mvgd` (MVGD-like affine fit),
+  - `hm-mkl-hm` and `hm-mvgd-hm` (compound palette-transfer chains).
+- Implementation details:
+  - kept existing defaults and prior presets unchanged;
+  - preserved existing behavior for masks/strength/apply-mask/JSON payload flow;
+  - added stable torch implementations with numeric guards and fallback-safe paths.
+- Tests:
+  - added smoke coverage for new experimental presets in
+    `tests/test_smoke_nodes.py`.
+- Version updated to `0.23.5` in `pyproject.toml` and `README.md`.
+
 ## 0.23.4 — 2026-03-05
 - Module Node Picker: unknown-update module names are now visible in UI status.
   - backend now returns explicit unknown-name list:

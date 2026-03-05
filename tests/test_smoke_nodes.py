@@ -150,6 +150,37 @@ class SmokeTests(unittest.TestCase):
 
         self.assertEqual(tuple(out.shape), (2, 16, 16, 3))
 
+    def test_color_match_experimental_presets_run(self):
+        """Ensure new experimental color-transfer presets run without breaking output contract."""
+        image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
+        old_lpips = image_color_match._lpips_alex_distance
+        image_color_match._lpips_alex_distance = lambda a, b: None
+        try:
+            node = image_color_match.ImageColorMatchToReference()
+            ref = torch.rand(1, 20, 20, 3)
+            img = torch.rand(1, 20, 20, 3)
+            presets = (
+                "reinhard_lab_fast",
+                "hm",
+                "mkl",
+                "mvgd",
+                "hm-mkl-hm",
+                "hm-mvgd-hm",
+            )
+            for preset in presets:
+                out, payload = node.match(
+                    ref,
+                    img,
+                    preset,
+                    compute_quality_metrics=False,
+                    strength=1.0,
+                )
+                self.assertEqual(tuple(out.shape), (1, 20, 20, 3))
+                data = json.loads(payload[0])
+                self.assertEqual(str(data.get("preset", "")), preset)
+        finally:
+            image_color_match._lpips_alex_distance = old_lpips
+
     def test_color_match_auto_optimal_runs(self):
         """Ensure auto_optimal preset selects a valid internal mode and returns JSON."""
         image_color_match = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_color_match")
