@@ -65,6 +65,7 @@ export function createModuleNodePickerFlowWiring(context = {}) {
         setCatalogControlsLoading: context?.setCatalogControlsLoading,
         setCustomModulesNeedUpdate: context?.setCustomModulesNeedUpdate,
         setCustomModulesUnknownUpdate: context?.setCustomModulesUnknownUpdate,
+        setCustomModulesUnknownUpdateModules: context?.setCustomModulesUnknownUpdateModules,
         setWarmupIndicator: context?.setWarmupIndicator,
         renderComfyAlert: context?.renderComfyAlert,
         fillGroupSelect: (...args) => context?.selectionController?.fillGroupSelect?.(...args),

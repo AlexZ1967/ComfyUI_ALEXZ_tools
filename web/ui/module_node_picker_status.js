@@ -20,6 +20,9 @@ export function formatRefreshLine(refresh) {
     const remaining = Number(refresh?.remaining || 0);
     const modulesNeedUpdate = Number(refresh?.modules_need_update || 0);
     const modulesUnknownUpdate = Number(refresh?.modules_unknown_update || 0);
+    const unknownUpdateModules = Array.isArray(refresh?.unknown_update_modules)
+        ? refresh.unknown_update_modules.map((name) => String(name || "").trim()).filter(Boolean)
+        : [];
     const moduleName = String(refresh?.module || "");
     const error = String(refresh?.error || "");
 
@@ -36,10 +39,17 @@ export function formatRefreshLine(refresh) {
     if (phase === "done") {
         const count = Number.isFinite(modulesNeedUpdate) ? Math.max(0, modulesNeedUpdate) : 0;
         const unknown = Number.isFinite(modulesUnknownUpdate) ? Math.max(0, modulesUnknownUpdate) : 0;
+        const unknownPreview = unknownUpdateModules.slice(0, 3).join(", ");
+        const unknownTail = unknownUpdateModules.length > 3
+            ? `, +${unknownUpdateModules.length - 3} more`
+            : "";
+        const unknownNamesPart = unknownPreview
+            ? ` (${unknownPreview}${unknownTail})`
+            : "";
         if (count > 0) {
             if (unknown > 0) {
                 return {
-                    text: `${count} custom modules require update, ${unknown} could not be checked`,
+                    text: `${count} custom modules require update, ${unknown} could not be checked${unknownNamesPart}`,
                     tone: "warn",
                 };
             }
@@ -47,7 +57,7 @@ export function formatRefreshLine(refresh) {
         }
         if (unknown > 0) {
             return {
-                text: `${unknown} custom modules could not be checked (missing git remote/upstream)`,
+                text: `${unknown} custom modules could not be checked${unknownNamesPart}`,
                 tone: "warn",
             };
         }

@@ -124,6 +124,11 @@ export async function loadCatalogFlow(options, context) {
         );
         context?.setCustomModulesNeedUpdate?.(Number(payload?.custom_modules_need_update || 0));
         context?.setCustomModulesUnknownUpdate?.(Number(payload?.custom_modules_unknown_update || 0));
+        context?.setCustomModulesUnknownUpdateModules?.(
+            Array.isArray(payload?.custom_modules_unknown_update_modules)
+                ? payload.custom_modules_unknown_update_modules
+                : []
+        );
         context?.fillGroupSelect?.(groups, { preferredGroup, preferredModule, autoExpandModule });
         context?.syncUpdateAllButton?.();
         const runtimeWarmup = payload?.runtime_warmup || null;
@@ -145,6 +150,7 @@ export async function loadCatalogFlow(options, context) {
         }
         context?.setCustomModulesNeedUpdate?.(0);
         context?.setCustomModulesUnknownUpdate?.(0);
+        context?.setCustomModulesUnknownUpdateModules?.([]);
         if (context?.groupSelect) {
             context.groupSelect.innerHTML = "";
         }

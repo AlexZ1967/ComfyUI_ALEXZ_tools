@@ -84,6 +84,9 @@ export function renderComfyAlertCard(context) {
 export function renderCustomAlertCard(context) {
     const customModulesNeedUpdate = Number(context?.customModulesNeedUpdate || 0);
     const customModulesUnknownUpdate = Number(context?.customModulesUnknownUpdate || 0);
+    const customModulesUnknownUpdateModules = Array.isArray(context?.customModulesUnknownUpdateModules)
+        ? context.customModulesUnknownUpdateModules.map((name) => String(name || "").trim()).filter(Boolean)
+        : [];
     const customStatusChecked = Boolean(context?.customStatusChecked);
     const customAlert = context?.customAlert;
     const customAlertText = context?.customAlertText;
@@ -102,12 +105,19 @@ export function renderCustomAlertCard(context) {
         "alexz-mod-picker-status-card--neutral"
     );
     customAlert.style.display = "block";
+    const unknownPreview = customModulesUnknownUpdateModules.slice(0, 3).join(", ");
+    const unknownTail = customModulesUnknownUpdateModules.length > 3
+        ? `, +${customModulesUnknownUpdateModules.length - 3} more`
+        : "";
+    const unknownNamesPart = unknownPreview
+        ? ` (${unknownPreview}${unknownTail})`
+        : "";
     if (customModulesNeedUpdate > 0) {
         customAlert.classList.add("alexz-mod-picker-status-card--warn");
         if (customModulesUnknownUpdate > 0) {
             customAlertText.textContent =
                 `${customModulesNeedUpdate} custom modules require update, ` +
-                `${customModulesUnknownUpdate} modules could not be checked.`;
+                `${customModulesUnknownUpdate} modules could not be checked${unknownNamesPart}.`;
         } else {
             customAlertText.textContent = `${customModulesNeedUpdate} custom modules require update.`;
         }
@@ -116,7 +126,7 @@ export function renderCustomAlertCard(context) {
     if (customModulesUnknownUpdate > 0) {
         customAlert.classList.add("alexz-mod-picker-status-card--warn");
         customAlertText.textContent =
-            `${customModulesUnknownUpdate} custom modules could not be checked for updates (missing git remote/upstream).`;
+            `${customModulesUnknownUpdate} custom modules could not be checked${unknownNamesPart}.`;
         return;
     }
     customAlert.classList.add("alexz-mod-picker-status-card--neutral");

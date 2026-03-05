@@ -203,6 +203,7 @@ from .module_browser.module.module_update_state_ops import (
     comfyui_needs_update_now as mb_comfyui_needs_update_now,
     count_custom_modules_need_update as mb_count_custom_modules_need_update,
     count_custom_modules_unknown_update as mb_count_custom_modules_unknown_update,
+    list_custom_modules_unknown_update as mb_list_custom_modules_unknown_update,
     module_needs_update_now as mb_module_needs_update_now,
 )
 from .module_browser.bootstrap.repo_bootstrap_ops import (
@@ -252,6 +253,7 @@ _REFRESH_STATUS: dict[str, Any] = {
     "remaining": 0,
     "modules_need_update": 0,
     "modules_unknown_update": 0,
+    "unknown_update_modules": [],
     "module": "",
     "message": "",
     "error": "",
@@ -911,6 +913,15 @@ def _count_custom_modules_unknown_update() -> int:
     )
 
 
+def _list_custom_modules_unknown_update() -> list[str]:
+    """List custom modules whose remote update status is unknown/uncheckable."""
+    return mb_list_custom_modules_unknown_update(
+        load_module_state=_load_module_state,
+        discover_custom_modules=_discover_custom_modules,
+        canonical_custom_module_name=_canonical_custom_module_name,
+    )
+
+
 def _cached_module_flags(group: str, module_name: str) -> dict[str, Any]:
     """Return lightweight cached update flags for module dropdown badges."""
     return mb_cached_module_flags(
@@ -1408,6 +1419,7 @@ def _refresh_progress(
     remaining: int = 0,
     modules_need_update: int = 0,
     modules_unknown_update: int = 0,
+    unknown_update_modules: list[str] | None = None,
     module: str = "",
     message: str = "",
 ) -> None:
@@ -1423,6 +1435,7 @@ def _refresh_progress(
         remaining=remaining,
         modules_need_update=modules_need_update,
         modules_unknown_update=modules_unknown_update,
+        unknown_update_modules=unknown_update_modules,
         module=module,
         message=message,
         last_line=_REFRESH_LOG_LAST,
@@ -1543,6 +1556,7 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
                 "remaining": 0,
                 "modules_need_update": 0,
                 "modules_unknown_update": 0,
+                "unknown_update_modules": [],
                 "module": "",
                 "message": "starting",
                 "error": "",
@@ -1848,6 +1862,9 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
             show_custom_update_status = _custom_update_checked_flag()
             custom_modules_need_update = _count_custom_modules_need_update() if show_custom_update_status else 0
             custom_modules_unknown_update = _count_custom_modules_unknown_update() if show_custom_update_status else 0
+            custom_modules_unknown_update_modules = (
+                _list_custom_modules_unknown_update() if show_custom_update_status else []
+            )
             runtime_warmup = _runtime_warmup_status()
             groups = _build_group_payload(grouped, modules_by_group)
             return web.json_response(
@@ -1856,6 +1873,7 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
                     "comfyui": comfyui,
                     "custom_modules_need_update": custom_modules_need_update,
                     "custom_modules_unknown_update": custom_modules_unknown_update,
+                    "custom_modules_unknown_update_modules": custom_modules_unknown_update_modules,
                     "runtime_warmup": runtime_warmup,
                 }
             )

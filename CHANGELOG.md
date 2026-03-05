@@ -1,5 +1,19 @@
 # Changelog — ALEXZ_tools
 
+## 0.23.4 — 2026-03-05
+- Module Node Picker: unknown-update module names are now visible in UI status.
+  - backend now returns explicit unknown-name list:
+    `unknown_update_modules` in refresh status and
+    `custom_modules_unknown_update_modules` in node catalog;
+  - refresh progress and top Custom Nodes alert card now show module name preview
+    for `could not be checked` state (first 3 names + `+N more`);
+  - flow/composer wiring extended with dedicated state setter/getter for unknown
+    module-name list.
+- Result:
+  - users can immediately see which specific modules failed update-status checks
+    without opening logs.
+- Version updated to `0.23.4` in `pyproject.toml` and `README.md`.
+
 ## 0.23.3 — 2026-03-04
 - Module refresh update-detection fix for custom nodes:
   - removed forced `up_to_date` suppression for modules with ComfyUI-Manager

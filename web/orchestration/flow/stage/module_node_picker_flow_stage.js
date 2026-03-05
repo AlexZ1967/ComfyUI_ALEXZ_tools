@@ -44,6 +44,7 @@ export function createModuleNodePickerFlowStage(context = {}) {
         setCatalogControlsLoading: context?.setCatalogControlsLoading,
         setCustomModulesNeedUpdate: context?.setCustomModulesNeedUpdate,
         setCustomModulesUnknownUpdate: context?.setCustomModulesUnknownUpdate,
+        setCustomModulesUnknownUpdateModules: context?.setCustomModulesUnknownUpdateModules,
         setWarmupIndicator: context?.setWarmupIndicator,
         renderComfyAlert: context?.renderComfyAlert,
         selectionController: context?.selectionController,

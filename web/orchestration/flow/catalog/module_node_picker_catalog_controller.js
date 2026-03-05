@@ -64,6 +64,9 @@ export function createModuleNodePickerCatalogController(context = {}) {
     const setCustomModulesUnknownUpdate = typeof context?.setCustomModulesUnknownUpdate === "function"
         ? context.setCustomModulesUnknownUpdate
         : () => {};
+    const setCustomModulesUnknownUpdateModules = typeof context?.setCustomModulesUnknownUpdateModules === "function"
+        ? context.setCustomModulesUnknownUpdateModules
+        : () => {};
     const setWarmupIndicator = typeof context?.setWarmupIndicator === "function"
         ? context.setWarmupIndicator
         : () => {};
@@ -178,6 +181,9 @@ export function createModuleNodePickerCatalogController(context = {}) {
                 },
                 setCustomModulesUnknownUpdate: (value) => {
                     setCustomModulesUnknownUpdate(value);
+                },
+                setCustomModulesUnknownUpdateModules: (value) => {
+                    setCustomModulesUnknownUpdateModules(value);
                 },
                 renderComfyAlert,
                 fillGroupSelect,

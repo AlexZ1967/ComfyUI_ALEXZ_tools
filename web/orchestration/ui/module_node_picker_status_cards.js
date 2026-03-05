@@ -37,6 +37,9 @@ export function createModuleNodePickerStatusCards(context = {}) {
     const getCustomModulesUnknownUpdate = typeof context?.getCustomModulesUnknownUpdate === "function"
         ? context.getCustomModulesUnknownUpdate
         : () => 0;
+    const getCustomModulesUnknownUpdateModules = typeof context?.getCustomModulesUnknownUpdateModules === "function"
+        ? context.getCustomModulesUnknownUpdateModules
+        : () => [];
     const saveCustomStatusChecked = typeof context?.saveCustomStatusChecked === "function"
         ? context.saveCustomStatusChecked
         : () => {};
@@ -75,6 +78,7 @@ export function createModuleNodePickerStatusCards(context = {}) {
         renderCustomAlertCard({
             customModulesNeedUpdate: Number(getCustomModulesNeedUpdate() || 0),
             customModulesUnknownUpdate: Number(getCustomModulesUnknownUpdate() || 0),
+            customModulesUnknownUpdateModules: getCustomModulesUnknownUpdateModules(),
             customStatusChecked,
             customAlert,
             customAlertText,

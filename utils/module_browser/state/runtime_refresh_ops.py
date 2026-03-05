@@ -147,6 +147,7 @@ def refresh_module_runtime_state(
         remaining=0,
         modules_need_update=modules_need_update,
         modules_unknown_update=modules_unknown_update,
+        unknown_update_modules=unknown_update_modules,
         message="done",
     )
     total_elapsed = perf_counter() - refresh_started
@@ -166,4 +167,5 @@ def refresh_module_runtime_state(
         "sync_upstreams": sync_upstreams,
         "modules_need_update": modules_need_update,
         "modules_unknown_update": modules_unknown_update,
+        "unknown_update_modules": unknown_update_modules,
     }

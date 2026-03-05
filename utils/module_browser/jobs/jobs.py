@@ -48,6 +48,7 @@ def emit_refresh_progress(
     remaining: int = 0,
     modules_need_update: int = 0,
     modules_unknown_update: int = 0,
+    unknown_update_modules: list[str] | None = None,
     module: str = "",
     message: str = "",
     last_line: str = "",
@@ -55,6 +56,8 @@ def emit_refresh_progress(
     console_log: Callable[[str, str], None] | None = None,
 ) -> str:
     """Apply refresh progress counters and return last emitted line."""
+    unknown_modules = unknown_update_modules if isinstance(unknown_update_modules, list) else []
+    unknown_modules = [str(name).strip() for name in unknown_modules if str(name).strip()]
     set_refresh_status(
         lock=lock,
         status=status,
@@ -65,6 +68,7 @@ def emit_refresh_progress(
         remaining=max(0, int(remaining)),
         modules_need_update=max(0, int(modules_need_update)),
         modules_unknown_update=max(0, int(modules_unknown_update)),
+        unknown_update_modules=sorted(set(unknown_modules), key=str.lower),
         module=module,
         message=message,
     )

@@ -41,6 +41,7 @@ def run_refresh_job(
         refreshed_at=result.get("refreshed_at", ""),
         modules_need_update=max(0, int(result.get("modules_need_update", 0))),
         modules_unknown_update=max(0, int(result.get("modules_unknown_update", 0))),
+        unknown_update_modules=list(result.get("unknown_update_modules") or []),
     )
     refresh_console_log(
         "job finished: modules_need_update={need}, modules_unknown_update={unknown}".format(

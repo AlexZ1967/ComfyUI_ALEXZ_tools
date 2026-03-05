@@ -25,6 +25,7 @@ from .module_update_state_ops import (
     comfyui_needs_update_now,
     count_custom_modules_need_update,
     count_custom_modules_unknown_update,
+    list_custom_modules_unknown_update,
     module_needs_update_now,
 )
 from .node_classification_ops import (
@@ -52,6 +53,7 @@ __all__ = [
     "module_needs_update_now",
     "count_custom_modules_need_update",
     "count_custom_modules_unknown_update",
+    "list_custom_modules_unknown_update",
     "comfyui_needs_update_now",
     "classify_by_source_path",
     "classify_by_relative_module",

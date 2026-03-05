@@ -130,6 +130,7 @@ export function renderModuleNodePicker(container, options = {}) {
     let pollingController = null;
     let customModulesNeedUpdate = 0;
     let customModulesUnknownUpdate = 0;
+    let customModulesUnknownUpdateModules = [];
     let modulePanelController = null;
     let catalogController = null;
     let selectionController = null;
@@ -295,6 +296,7 @@ export function renderModuleNodePicker(container, options = {}) {
         updateAllBtn,
         getCustomModulesNeedUpdate: () => customModulesNeedUpdate,
         getCustomModulesUnknownUpdate: () => customModulesUnknownUpdate,
+        getCustomModulesUnknownUpdateModules: () => customModulesUnknownUpdateModules,
         saveCustomStatusChecked,
         saveComfyStatusChecked,
         saveComfyInfoSnapshot,
@@ -369,6 +371,11 @@ export function renderModuleNodePicker(container, options = {}) {
         },
         setCustomModulesUnknownUpdate: (value) => {
             customModulesUnknownUpdate = Number(value || 0);
+        },
+        setCustomModulesUnknownUpdateModules: (value) => {
+            customModulesUnknownUpdateModules = Array.isArray(value)
+                ? value.map((name) => String(name || "").trim()).filter(Boolean)
+                : [];
         },
         setWarmupIndicator,
         renderComfyAlert,

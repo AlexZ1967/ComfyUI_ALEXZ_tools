@@ -114,6 +114,25 @@ def count_custom_modules_unknown_update(
     return count
 
 
+def list_custom_modules_unknown_update(
+    *,
+    load_module_state: Callable[[], dict[str, Any]],
+    discover_custom_modules: Callable[[], list[str]],
+    canonical_custom_module_name: Callable[[str], str],
+) -> list[str]:
+    """Return sorted custom-module names whose remote update status is unknown."""
+    state = load_module_state()
+    if not isinstance(state, dict):
+        return []
+    unknown_modules: list[str] = []
+    for module_name in discover_custom_modules():
+        canonical = canonical_custom_module_name(module_name)
+        entry = state.get(canonical)
+        if not isinstance(entry, dict) or not isinstance(entry.get("update_available"), bool):
+            unknown_modules.append(canonical)
+    return sorted(set(unknown_modules), key=str.lower)
+
+
 def comfyui_needs_update_now(*, comfyui_git_status_fn: Callable[..., dict[str, Any]]) -> bool:
     """Check whether local ComfyUI commit is behind remote tracking commit."""
     status = comfyui_git_status_fn(force_refresh=True, mode="releases")
