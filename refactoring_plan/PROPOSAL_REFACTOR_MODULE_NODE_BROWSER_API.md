@@ -23,11 +23,11 @@ This creates a large "god module" that is hard to test, hard to change safely, a
 - No migration to async job execution model (threads remain as-is).
 
 ## Phase Status
-- Phase 0: Planned
-- Phase 1: Done (state/logging extraction completed in release `0.24.0`)
-- Phase 2: Done (refresh/update handler extraction completed in release `0.25.0`)
-- Phase 3: Planned
-- Phase 4: Planned
+- Phase 0: ✅ Done (baseline/freeze guardrails established in releases `0.16.1`-`0.16.3`)
+- Phase 1: ✅ Done (state/logging extraction completed in release `0.24.0`)
+- Phase 2: ✅ Done (refresh/update handler extraction completed in release `0.25.0`)
+- Phase 3: ⏳ Planned
+- Phase 4: ⏳ Planned
 
 ## Proposed Target Structure
 Create a dedicated package:
@@ -59,6 +59,8 @@ Keep `utils/module_node_browser_api.py` as a thin compatibility shim:
 ## Phased Plan (Safe, Reviewable Steps)
 
 ### Phase 0: Inventory and Freeze
+Status: ✅ completed (2026-02-10 to 2026-02-11, releases `0.16.1`-`0.16.3`)
+
 - Add a short developer note documenting:
   - existing routes and their payload keys
   - existing global state keys for refresh/update statuses
@@ -70,6 +72,8 @@ Exit criteria:
 - No runtime behavior change.
 
 ### Phase 1: Extract State and Console Logging
+Status: ✅ completed (2026-03-05, release `0.24.0`)
+
 - Move all globals, locks, TTLs, and status templates into `utils/module_browser_api/state.py`.
 - Move console logging helpers and log-mode normalization into `logging_ops.py`.
 - Update existing code to reference `state.<...>` instead of module globals.
@@ -81,6 +85,8 @@ Exit criteria:
 - `conda run -n p313 pytest -q tests/test_module_browser_runtime_refresh_ops.py` passes.
 
 ### Phase 2: Extract Route Handlers (Refresh/Update)
+Status: ✅ completed (2026-03-05, release `0.25.0`)
+
 - Split refresh/update job handlers into `handlers_refresh.py` and `handlers_update.py`.
 - Keep internal helper names stable where tests patch them (or provide aliases).
 - Keep threading semantics identical (same locks, same thread names, same progress callbacks).
@@ -90,6 +96,8 @@ Exit criteria:
 - `conda run -n p313 pytest -q tests/test_module_browser_update_job_ops.py` passes.
 
 ### Phase 3: Extract Catalog and Introspection
+Status: ⏳ planned
+
 - Move node mapping and snapshot helpers into `node_introspection.py`.
 - Move node-catalog route into `handlers_catalog.py`.
 - Ensure any caching behavior stays identical (TTL, invalidation points).
@@ -99,6 +107,8 @@ Exit criteria:
 - `conda run -n p313 pytest -q tests/test_module_browser_catalog_payload_ops.py` passes.
 
 ### Phase 4: Routes Module and Compatibility Shim
+Status: ⏳ planned
+
 - Add `routes.py` that registers all PromptServer routes.
 - Convert `utils/module_node_browser_api.py` to a thin shim.
 - Verify that import side effects remain acceptable (or explicitly minimal).

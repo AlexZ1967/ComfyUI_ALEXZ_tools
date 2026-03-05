@@ -23,11 +23,11 @@
 - Не менять модель исполнения job на async (threads остаются).
 
 ## Статус фаз
-- Фаза 0: Запланировано
-- Фаза 1: Выполнено (вынос state/logging завершен в релизе `0.24.0`)
-- Фаза 2: Выполнено (вынос refresh/update handlers завершен в релизе `0.25.0`)
-- Фаза 3: Запланировано
-- Фаза 4: Запланировано
+- Фаза 0: ✅ Выполнено (guardrails baseline/freeze оформлены в релизах `0.16.1`-`0.16.3`)
+- Фаза 1: ✅ Выполнено (вынос state/logging завершен в релизе `0.24.0`)
+- Фаза 2: ✅ Выполнено (вынос refresh/update handlers завершен в релизе `0.25.0`)
+- Фаза 3: ⏳ Запланировано
+- Фаза 4: ⏳ Запланировано
 
 ## Целевая структура после рефакторинга
 Выделить отдельный пакет:
@@ -59,6 +59,8 @@
 ## План по фазам (безопасно, небольшими шагами)
 
 ### Фаза 0: Инвентаризация и "freeze"
+Status: ✅ completed (2026-02-10 to 2026-02-11, релизы `0.16.1`-`0.16.3`)
+
 - Короткая заметка для разработчика:
   - список роутов и ключей payload
   - текущие ключи статуса refresh/update
@@ -70,6 +72,8 @@
 - Runtime-поведение не меняется.
 
 ### Фаза 1: Вынос состояния и консольного логирования
+Status: ✅ completed (2026-03-05, релиз `0.24.0`)
+
 - Перенести все глобалы/locks/TTL/шаблоны статуса в `state.py`.
 - Вынести `_update_console_log`/`_refresh_console_log` и log-mode в `logging_ops.py`.
 - В текущем коде заменить прямой доступ к глобалам на `state.<...>`.
@@ -82,6 +86,8 @@
   - `conda run -n p313 pytest -q tests/test_module_browser_runtime_refresh_ops.py`
 
 ### Фаза 2: Вынос refresh/update handler-ов
+Status: ✅ completed (2026-03-05, релиз `0.25.0`)
+
 - Разделить refresh/update в `handlers_refresh.py` и `handlers_update.py`.
 - Сохранить внутренние имена функций там, где тесты делают monkeypatch (или дать алиасы).
 - Никаких изменений в threading-семантике (locks, имена потоков, callback-и).
@@ -92,6 +98,8 @@
   - `conda run -n p313 pytest -q tests/test_module_browser_update_job_ops.py`
 
 ### Фаза 3: Вынос каталога и node introspection
+Status: ⏳ planned
+
 - Перенести snapshot/node mapping в `node_introspection.py`.
 - Перенести `/alexz_tools/node_catalog` в `handlers_catalog.py`.
 - Не менять кэширование и invalidation (TTL, очистка кэшей).
@@ -102,6 +110,8 @@
   - `conda run -n p313 pytest -q tests/test_module_browser_catalog_payload_ops.py`
 
 ### Фаза 4: `routes.py` и compatibility shim
+Status: ⏳ planned
+
 - Добавить `routes.py` с явной функцией `register_routes()`.
 - `utils/module_node_browser_api.py` превратить в thin shim.
 - Проверить, что import-time side effects минимальны и предсказуемы.
