@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.3 — 2026-03-06
+- `Download DZI Tiles Image`: changed probe order to avoid hard dependency on
+  `.dzi` metadata availability.
+- Fix in `nodes/image_download_dzi_tiles.py`:
+  - first tile probe is now performed before DZI metadata request;
+  - tile extension candidates are probed directly (`jpg/jpeg/png/webp`) even if
+    `zoomXML.dzi` is blocked;
+  - DZI metadata is parsed only after working tile transport/extension is found,
+    with existing transport fallbacks preserved.
+- Why:
+  - some hosts may return `403` for `zoomXML.dzi` while still serving tile
+    images; previous order could fail too early in that scenario.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.3` in `pyproject.toml` and `README.md`.
+
 ## 0.27.2 — 2026-03-06
 - `Download DZI Tiles Image`: added multi-transport HTTP fallback for strict
   network environments where `requests` gets `403`.

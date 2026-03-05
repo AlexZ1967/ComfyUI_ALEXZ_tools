@@ -434,8 +434,9 @@ class ImageDownloadDZITiles:
             _log(f"Tiles: {tiles_base}")
 
             session = _new_session(referer=f"{referer_root}/", origin=referer_root, trust_env=True)
-            dzi_info_requests = _parse_dzi(session, dzi_url, timeout, transport="requests")
-            tile_ext_candidates = _candidate_tile_exts(dzi_info_requests)
+            # Do not query DZI metadata before first tile probe: some hosts can
+            # deny `.dzi` while still allowing tile JPEGs.
+            tile_ext_candidates = _candidate_tile_exts(None)
             transport_candidates = ["requests", "urllib", "curl"]
             first_tile = None
             tile_ext = ""
