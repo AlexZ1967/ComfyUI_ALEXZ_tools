@@ -96,7 +96,14 @@ def _origin_from_url(url_text: str) -> str:
         return ""
 
 
-def _new_session(*, referer: str | None = None, origin: str | None = None, trust_env: bool = True) -> requests.Session:
+def _new_session(
+    *,
+    referer: str | None = None,
+    origin: str | None = None,
+    trust_env: bool = True,
+    cookie: str | None = None,
+    proxy_url: str | None = None,
+) -> requests.Session:
     """Create HTTP session with browser-like headers."""
     session = requests.Session()
     session.trust_env = bool(trust_env)
@@ -114,13 +121,33 @@ def _new_session(*, referer: str | None = None, origin: str | None = None, trust
             "Sec-Fetch-Site": "same-site",
         }
     )
+    cookie_text = str(cookie or "").strip()
+    if cookie_text:
+        session.headers["Cookie"] = cookie_text
+    proxy_text = str(proxy_url or "").strip()
+    if proxy_text:
+        session.proxies.update({"http": proxy_text, "https": proxy_text})
+    setattr(session, "_alexz_proxy_url", proxy_text)
     return session
 
 
-def _make_session(*, referer: str | None, origin: str | None, trust_env: bool) -> requests.Session:
+def _make_session(
+    *,
+    referer: str | None,
+    origin: str | None,
+    trust_env: bool,
+    cookie: str | None = None,
+    proxy_url: str | None = None,
+) -> requests.Session:
     """Create session with backward-compatible fallback for monkeypatched test stubs."""
     try:
-        return _new_session(referer=referer, origin=origin, trust_env=trust_env)
+        return _new_session(
+            referer=referer,
+            origin=origin,
+            trust_env=trust_env,
+            cookie=cookie,
+            proxy_url=proxy_url,
+        )
     except TypeError:
         # Compatibility with older tests that monkeypatch `_new_session` as `lambda: ...`.
         session = _new_session()  # type: ignore[call-arg]
@@ -144,6 +171,19 @@ def _make_session(*, referer: str | None, origin: str | None, trust_env: bool) -
                         "Sec-Fetch-Site": "same-site",
                     }
                 )
+        except Exception:
+            pass
+        try:
+            cookie_text = str(cookie or "").strip()
+            if cookie_text and hasattr(session, "headers") and isinstance(getattr(session, "headers"), dict):
+                session.headers["Cookie"] = cookie_text
+        except Exception:
+            pass
+        try:
+            proxy_text = str(proxy_url or "").strip()
+            if proxy_text and hasattr(session, "proxies") and isinstance(getattr(session, "proxies"), dict):
+                session.proxies.update({"http": proxy_text, "https": proxy_text})
+            setattr(session, "_alexz_proxy_url", proxy_text)
         except Exception:
             pass
         return session
@@ -233,6 +273,14 @@ def _fetch_bytes_curl(session: requests.Session, url: str, timeout: float) -> tu
         "-",
         url,
     ]
+    proxy_url = str(getattr(session, "_alexz_proxy_url", "") or "").strip()
+    if not proxy_url:
+        try:
+            proxy_url = str((getattr(session, "proxies", {}) or {}).get("https") or "").strip()
+        except Exception:
+            proxy_url = ""
+    if proxy_url:
+        cmd[1:1] = ["--proxy", proxy_url]
     try:
         proc = subprocess.run(cmd, capture_output=True, check=False)
         out = bytes(proc.stdout or b"")
@@ -518,7 +566,46 @@ class ImageDownloadDZITiles:
                     },
                 ),
             },
-            "optional": {},
+            "optional": {
+                "transport": (
+                    ["auto", "requests", "cloudscraper", "urllib", "curl"],
+                    {
+                        "default": "auto",
+                        "tooltip": "Транспорт HTTP. auto = перебор requests/cloudscraper/urllib/curl.",
+                    },
+                ),
+                "proxy_url": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Явный HTTP(S) proxy (например http://127.0.0.1:7890). Пусто = системные env-прокси.",
+                    },
+                ),
+                "cookie": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Дополнительный Cookie заголовок (например cf_clearance=...; other=...).",
+                    },
+                ),
+                "disable_env_proxy": (
+                    "BOOLEAN",
+                    {
+                        "default": False,
+                        "tooltip": "Игнорировать HTTP(S)_PROXY из окружения для requests/cloudscraper.",
+                    },
+                ),
+                "referer": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Явный Referer (пусто = авто-перебор).",
+                    },
+                ),
+            },
         }
 
     RETURN_TYPES = ("IMAGE",)
@@ -526,7 +613,17 @@ class ImageDownloadDZITiles:
     FUNCTION = "download"
     CATEGORY = "image/io"
 
-    def download(self, base_url: str, mw: str, level: int):
+    def download(
+        self,
+        base_url: str,
+        mw: str,
+        level: int,
+        transport: str = "auto",
+        proxy_url: str = "",
+        cookie: str = "",
+        disable_env_proxy: bool = False,
+        referer: str = "",
+    ):
         """Download DZI tiles for selected level and return assembled image tensor."""
         try:
             zoom_base = _build_zoom_base_url(base_url, mw)
@@ -538,6 +635,9 @@ class ImageDownloadDZITiles:
                 f"{referer_root.rstrip('/')}/",
                 _DEFAULT_REFERER,
             ]
+            referer_override = str(referer or "").strip()
+            if referer_override:
+                referer_candidates.insert(0, referer_override)
             dedup_referers = []
             seen_refs = set()
             for ref in referer_candidates:
@@ -556,14 +656,27 @@ class ImageDownloadDZITiles:
             # Do not query DZI metadata before first tile probe: some hosts can
             # deny `.dzi` while still allowing tile JPEGs.
             tile_ext_candidates = _candidate_tile_exts(None)
-            transport_candidates = ["requests", "cloudscraper", "urllib", "curl"]
+            selected_transport = str(transport or "auto").strip().lower()
+            if selected_transport in {"requests", "cloudscraper", "urllib", "curl"}:
+                transport_candidates = [selected_transport]
+            else:
+                transport_candidates = ["requests", "cloudscraper", "urllib", "curl"]
+            proxy_text = str(proxy_url or "").strip()
+            cookie_text = str(cookie or "").strip()
+            trust_env_primary = not bool(disable_env_proxy)
             first_tile = None
             tile_ext = ""
             chosen_transport = ""
             first_tile_statuses: dict[str, int] = {}
             session = None
             for ref_idx, ref in enumerate(referer_candidates):
-                trial_session = _make_session(referer=ref, origin=referer_root, trust_env=True)
+                trial_session = _make_session(
+                    referer=ref,
+                    origin=referer_root,
+                    trust_env=trust_env_primary,
+                    cookie=cookie_text,
+                    proxy_url=proxy_text,
+                )
                 for ext in tile_ext_candidates:
                     probe_url = _tile_url(tiles_base, 0, 0, ext)
                     for transport in transport_candidates:
@@ -596,7 +709,13 @@ class ImageDownloadDZITiles:
                 _log("First tile returned 403; retrying with proxy-bypass session.")
                 first_tile_statuses.clear()
                 for ref_idx, ref in enumerate(referer_candidates):
-                    trial_session = _make_session(referer=ref, origin=referer_root, trust_env=False)
+                    trial_session = _make_session(
+                        referer=ref,
+                        origin=referer_root,
+                        trust_env=False,
+                        cookie=cookie_text,
+                        proxy_url=proxy_text,
+                    )
                     for ext in tile_ext_candidates:
                         probe_url = _tile_url(tiles_base, 0, 0, ext)
                         for transport in transport_candidates:

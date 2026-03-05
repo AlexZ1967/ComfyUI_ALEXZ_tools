@@ -1,5 +1,24 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.5 — 2026-03-06
+- `Download DZI Tiles Image`: added explicit network-control inputs for VPN/proxy
+  environments where browser works but backend HTTP gets `403`.
+- New optional node inputs in `nodes/image_download_dzi_tiles.py`:
+  - `transport`: `auto|requests|cloudscraper|urllib|curl`
+  - `proxy_url`: explicit proxy URL
+  - `cookie`: raw Cookie header (e.g. `cf_clearance=...`)
+  - `disable_env_proxy`: ignore env HTTP(S)_PROXY for session
+  - `referer`: explicit Referer override
+- Behavior updates:
+  - retry matrix now supports referer variants + selected transport strategy;
+  - preserves prior transport/proxy fallbacks and adds explicit user control;
+  - compatibility wrappers keep smoke tests stable when helpers are monkeypatched.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k dzi_tiles`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.5` in `pyproject.toml` and `README.md`.
+
 ## 0.27.4 — 2026-03-06
 - `Download DZI Tiles Image`: additional anti-403 hardening for environments
   where tile requests behave differently than browser.
