@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.4 — 2026-03-06
+- `Download DZI Tiles Image`: additional anti-403 hardening for environments
+  where tile requests behave differently than browser.
+- `nodes/image_download_dzi_tiles.py`:
+  - added `cloudscraper` transport fallback in first-tile probing chain;
+  - first-tile probing now tries multiple referers
+    (`.../zoom/<mw>/`, origin root, NPG fallback);
+  - improved compatibility wrappers for monkeypatched helper signatures used by
+    smoke tests (`_new_session`, `_download_tile`, `_probe_axis_count`);
+  - keeps previously added `requests/urllib/curl` fallback and proxy-bypass
+    retry path.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k dzi_tiles`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.4` in `pyproject.toml` and `README.md`.
+
 ## 0.27.3 — 2026-03-06
 - `Download DZI Tiles Image`: changed probe order to avoid hard dependency on
   `.dzi` metadata availability.
