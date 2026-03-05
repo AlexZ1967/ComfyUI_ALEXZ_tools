@@ -1,5 +1,32 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.0 — 2026-03-05
+- Refactoring roadmap execution: completed Phase 4 for Module Node Picker backend.
+- Extracted PromptServer route wiring from `utils/module_node_browser_api.py`
+  into dedicated module:
+  - `utils/module_browser_api/routes.py`
+- Converted backend facade to thin route-registration shim:
+  - `utils/module_node_browser_api.py` now delegates route registration via
+    `register_routes(...)` and preserves route constants/helper surface for
+    compatibility.
+- Added idempotent route-registration guard in route module:
+  - duplicate imports/reloads no longer re-register identical endpoints.
+- Planning/docs:
+  - marked Phase 4 as completed in:
+    `refactoring_plan/PROPOSAL_REFACTOR_MODULE_NODE_BROWSER_API.md`,
+    `refactoring_plan/PROPOSAL_REFACTOR_MODULE_NODE_BROWSER_API_RU.md`.
+- Validation:
+  - `conda run -n p313 python -m py_compile utils/module_browser_api/routes.py utils/module_node_browser_api.py`;
+  - `conda run -n p313 python utils/docs_check.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_jobs.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_tracker.py -k "module_update_job_supports_comfyui_scope or resolve_update_targets_all_filters_modules"`;
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py -k "refresh_status_contract or update_status_contract or runtime_warmup_status_contract or node_catalog_group_payload_contract or module_list_payload_filter_contract or module_nodes_payload_contract"`.
+- Note:
+  - full `tests/test_phase0_baseline.py` currently contains an unrelated frontend
+    marker assertion mismatch in `test_frontend_tab_relay_contract_markers_exist`
+    (`createNodeFromCatalogInfo` signature string check).
+- Version updated to `0.27.0` in `pyproject.toml` and `README.md`.
+
 ## 0.26.0 — 2026-03-05
 - Refactoring roadmap execution: completed Phase 3 for Module Node Picker backend.
 - Extracted catalog/introspection API glue from `utils/module_node_browser_api.py`

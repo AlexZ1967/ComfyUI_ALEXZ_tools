@@ -27,7 +27,7 @@
 - Фаза 1: ✅ Выполнено (вынос state/logging завершен в релизе `0.24.0`)
 - Фаза 2: ✅ Выполнено (вынос refresh/update handlers завершен в релизе `0.25.0`)
 - Фаза 3: ✅ Выполнено (вынос catalog/introspection завершен в релизе `0.26.0`)
-- Фаза 4: ⏳ Запланировано
+- Фаза 4: ✅ Выполнено (вынос routes-модуля и завершение shim в релизе `0.27.0`)
 
 ## Целевая структура после рефакторинга
 Выделить отдельный пакет:
@@ -110,7 +110,7 @@ Status: ✅ completed (2026-03-05, релиз `0.26.0`)
   - `conda run -n p313 pytest -q tests/test_module_browser_catalog_payload_ops.py`
 
 ### Фаза 4: `routes.py` и compatibility shim
-Status: ⏳ planned
+Status: ✅ completed (2026-03-05, релиз `0.27.0`)
 
 - Добавить `routes.py` с явной функцией `register_routes()`.
 - `utils/module_node_browser_api.py` превратить в thin shim.

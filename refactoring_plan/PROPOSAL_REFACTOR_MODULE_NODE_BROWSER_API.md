@@ -27,7 +27,7 @@ This creates a large "god module" that is hard to test, hard to change safely, a
 - Phase 1: ✅ Done (state/logging extraction completed in release `0.24.0`)
 - Phase 2: ✅ Done (refresh/update handler extraction completed in release `0.25.0`)
 - Phase 3: ✅ Done (catalog/introspection extraction completed in release `0.26.0`)
-- Phase 4: ⏳ Planned
+- Phase 4: ✅ Done (routes-module extraction and shim completion in release `0.27.0`)
 
 ## Proposed Target Structure
 Create a dedicated package:
@@ -107,7 +107,7 @@ Exit criteria:
 - `conda run -n p313 pytest -q tests/test_module_browser_catalog_payload_ops.py` passes.
 
 ### Phase 4: Routes Module and Compatibility Shim
-Status: ⏳ planned
+Status: ✅ completed (2026-03-05, release `0.27.0`)
 
 - Add `routes.py` that registers all PromptServer routes.
 - Convert `utils/module_node_browser_api.py` to a thin shim.
