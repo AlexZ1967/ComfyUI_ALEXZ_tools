@@ -1,5 +1,24 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.1 — 2026-03-06
+- `Download DZI Tiles Image` robustness fix for false `403`/first-tile failures.
+- Node improvements in `nodes/image_download_dzi_tiles.py`:
+  - tile extension is now selected dynamically (DZI `Format` first, then
+    fallback candidates `jpg/jpeg/png/webp`);
+  - first tile probe now logs per-extension status and includes detailed status
+    hints in the error message;
+  - browser-like request headers were expanded (`Accept`, `Accept-Language`,
+    `Origin`, `Sec-Fetch-*`) and `Referer` is now host-aware;
+  - added retry path with proxy bypass (`session.trust_env = False`) when first
+    tile returns `403`, to avoid environment-proxy false denials.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`;
+  - manual probe against
+    `https://collectionimages.npg.org.uk/zoom/mw251004/zoomXML_files/11/0_0.jpg`
+    confirms `200` on primary extension candidates.
+- Version updated to `0.27.1` in `pyproject.toml` and `README.md`.
+
 ## 0.27.0 — 2026-03-05
 - Refactoring roadmap execution: completed Phase 4 for Module Node Picker backend.
 - Extracted PromptServer route wiring from `utils/module_node_browser_api.py`

@@ -18,6 +18,7 @@ import traceback
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from typing import Any
+from urllib.parse import urlsplit
 
 import numpy as np
 import requests
@@ -80,21 +81,55 @@ def _build_zoom_base_url(base_url: str, mw: str) -> str:
     return f"{base}/zoom/{module_id}"
 
 
-def _new_session() -> requests.Session:
+def _origin_from_url(url_text: str) -> str:
+    """Extract URL origin (`scheme://host[:port]`) for request headers."""
+    try:
+        parsed = urlsplit(str(url_text or "").strip())
+        if not parsed.scheme or not parsed.netloc:
+            return ""
+        return f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        return ""
+
+
+def _new_session(*, referer: str | None = None, origin: str | None = None, trust_env: bool = True) -> requests.Session:
     """Create HTTP session with browser-like headers."""
     session = requests.Session()
+    session.trust_env = bool(trust_env)
+    ref = str(referer or _DEFAULT_REFERER).strip() or _DEFAULT_REFERER
+    org = str(origin or _origin_from_url(ref)).strip()
     session.headers.update(
         {
             "User-Agent": _DEFAULT_UA,
-            "Referer": _DEFAULT_REFERER,
+            "Referer": ref,
+            "Origin": org,
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Dest": "image",
+            "Sec-Fetch-Mode": "no-cors",
+            "Sec-Fetch-Site": "same-site",
         }
     )
     return session
 
 
-def _tile_url(tiles_base: str, x: int, y: int) -> str:
+def _tile_url(tiles_base: str, x: int, y: int, tile_ext: str = "jpg") -> str:
     """Build tile URL for one tile coordinate."""
-    return f"{tiles_base}/{int(x)}_{int(y)}.jpg"
+    ext = str(tile_ext or "jpg").strip().lower().lstrip(".") or "jpg"
+    return f"{tiles_base}/{int(x)}_{int(y)}.{ext}"
+
+
+def _candidate_tile_exts(dzi_info: dict[str, Any] | None) -> list[str]:
+    """Return ordered candidate tile extensions with DZI format priority."""
+    candidates: list[str] = []
+    if isinstance(dzi_info, dict):
+        fmt = str(dzi_info.get("format") or "").strip().lower().lstrip(".")
+        if fmt:
+            candidates.append("jpg" if fmt == "jpeg" else fmt)
+    for fallback in ("jpg", "jpeg", "png", "webp"):
+        if fallback not in candidates:
+            candidates.append(fallback)
+    return candidates
 
 
 def _http_status(session: requests.Session, url: str, timeout: float) -> int:
@@ -128,6 +163,7 @@ def _download_tile(session: requests.Session, url: str, timeout: float) -> Image
 def _probe_axis_count(
     session: requests.Session,
     tiles_base: str,
+    tile_ext: str,
     *,
     axis: str,
     timeout: float,
@@ -141,7 +177,7 @@ def _probe_axis_count(
     for i in range(max_tiles):
         x = i if axis == "x" else 0
         y = i if axis == "y" else 0
-        status = _http_status(session, _tile_url(tiles_base, x, y), timeout)
+        status = _http_status(session, _tile_url(tiles_base, x, y, tile_ext), timeout)
         if status == 200:
             last_success = i
             misses_after_success = 0
@@ -261,21 +297,54 @@ class ImageDownloadDZITiles:
             zoom_base = _build_zoom_base_url(base_url, mw)
             dzi_url = f"{zoom_base}/zoomXML.dzi"
             tiles_base = f"{zoom_base}/zoomXML_files/{int(level)}"
+            referer_root = _origin_from_url(zoom_base) or _DEFAULT_REFERER.rstrip("/")
             timeout = 20.0
             _log(f"Start download: mw={mw}, level={int(level)}")
             _log(f"Base: {zoom_base}")
             _log(f"DZI: {dzi_url}")
             _log(f"Tiles: {tiles_base}")
 
-            session = _new_session()
-            first_tile = _download_tile(session, _tile_url(tiles_base, 0, 0), timeout)
+            session = _new_session(referer=f"{referer_root}/", origin=referer_root, trust_env=True)
+            dzi_info = _parse_dzi(session, dzi_url, timeout)
+            tile_ext_candidates = _candidate_tile_exts(dzi_info)
+            first_tile = None
+            tile_ext = ""
+            first_tile_statuses: dict[str, int] = {}
+            for ext in tile_ext_candidates:
+                probe_url = _tile_url(tiles_base, 0, 0, ext)
+                status = _http_status(session, probe_url, timeout)
+                first_tile_statuses[ext] = int(status)
+                if status != 200:
+                    continue
+                first_tile = _download_tile(session, probe_url, timeout)
+                if first_tile is not None:
+                    tile_ext = ext
+                    break
+
+            if first_tile is None and any(code == 403 for code in first_tile_statuses.values()):
+                # Some environments inject HTTP(S)_PROXY rules that can return 403 for CDN image hosts.
+                _log("First tile returned 403; retrying with proxy-bypass session.")
+                session = _new_session(referer=f"{referer_root}/", origin=referer_root, trust_env=False)
+                first_tile_statuses.clear()
+                for ext in tile_ext_candidates:
+                    probe_url = _tile_url(tiles_base, 0, 0, ext)
+                    status = _http_status(session, probe_url, timeout)
+                    first_tile_statuses[ext] = int(status)
+                    if status != 200:
+                        continue
+                    first_tile = _download_tile(session, probe_url, timeout)
+                    if first_tile is not None:
+                        tile_ext = ext
+                        break
+
             if first_tile is None:
+                status_hint = ", ".join(f"{ext}:{code}" for ext, code in first_tile_statuses.items()) or "n/a"
                 raise RuntimeError(
-                    f"First tile is unavailable at `{_tile_url(tiles_base, 0, 0)}`. "
+                    f"First tile is unavailable at `{tiles_base}`. "
+                    f"Tried extensions [{', '.join(tile_ext_candidates)}], statuses [{status_hint}]. "
                     "Check `base_url`, `mw`, and `level`."
                 )
-
-            dzi_info = _parse_dzi(session, dzi_url, timeout)
+            _log(f"Tile extension selected: .{tile_ext}")
             tile_size = int(dzi_info["tile_size"]) if isinstance(dzi_info, dict) else int(first_tile.size[0])
             if isinstance(dzi_info, dict):
                 width, height, tiles_x, tiles_y = _compute_level_geometry_from_dzi(dzi_info, int(level))
@@ -284,14 +353,14 @@ class ImageDownloadDZITiles:
                     f"canvas={int(width)}x{int(height)}, grid={int(tiles_x)}x{int(tiles_y)}"
                 )
             else:
-                tiles_x_probe = _probe_axis_count(session, tiles_base, axis="x", timeout=timeout)
-                tiles_y_probe = _probe_axis_count(session, tiles_base, axis="y", timeout=timeout)
+                tiles_x_probe = _probe_axis_count(session, tiles_base, tile_ext=tile_ext, axis="x", timeout=timeout)
+                tiles_y_probe = _probe_axis_count(session, tiles_base, tile_ext=tile_ext, axis="y", timeout=timeout)
                 if tiles_x_probe <= 0 or tiles_y_probe <= 0:
                     raise RuntimeError("Could not probe tile grid (x/y tile counts are zero).")
                 tiles_x = int(tiles_x_probe)
                 tiles_y = int(tiles_y_probe)
-                last_x_tile = _download_tile(session, _tile_url(tiles_base, tiles_x - 1, 0), timeout)
-                last_y_tile = _download_tile(session, _tile_url(tiles_base, 0, tiles_y - 1), timeout)
+                last_x_tile = _download_tile(session, _tile_url(tiles_base, tiles_x - 1, 0, tile_ext), timeout)
+                last_y_tile = _download_tile(session, _tile_url(tiles_base, 0, tiles_y - 1, tile_ext), timeout)
                 width = (tiles_x - 1) * tile_size + (last_x_tile.size[0] if last_x_tile else tile_size)
                 height = (tiles_y - 1) * tile_size + (last_y_tile.size[1] if last_y_tile else tile_size)
                 _log(
@@ -312,7 +381,7 @@ class ImageDownloadDZITiles:
                     for x in range(tiles_x):
                         if x == 0 and y == 0:
                             continue
-                        tile = _download_tile(session, _tile_url(tiles_base, x, y), timeout)
+                        tile = _download_tile(session, _tile_url(tiles_base, x, y, tile_ext), timeout)
                         if tile is None:
                             missing_tiles += 1
                         else:
