@@ -1,0 +1,21 @@
+{
+  "running": false,
+  "phase": "idle",
+  "scope": "single",
+  "current": 0,
+  "total": 0,
+  "remaining": 0,
+  "module": "",
+  "message": "idle",
+  "error": "",
+  "updated": 0,
+  "up_to_date": 0,
+  "failed": 0,
+  "requirements_changed": false,
+  "requirements_modules": [],
+  "results": [],
+  "log_mode": "summary",
+  "started_at": "",
+  "updated_at": "",
+  "finished_at": ""
+}

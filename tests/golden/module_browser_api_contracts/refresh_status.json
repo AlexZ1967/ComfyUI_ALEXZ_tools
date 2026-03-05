@@ -1,0 +1,17 @@
+{
+  "running": false,
+  "phase": "idle",
+  "current": 0,
+  "total": 0,
+  "remaining": 0,
+  "modules_need_update": 0,
+  "modules_unknown_update": 0,
+  "unknown_update_modules": [],
+  "module": "",
+  "message": "idle",
+  "error": "",
+  "sync_upstreams": false,
+  "started_at": "",
+  "updated_at": "",
+  "refreshed_at": ""
+}

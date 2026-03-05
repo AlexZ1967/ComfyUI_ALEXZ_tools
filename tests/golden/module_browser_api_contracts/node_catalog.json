@@ -1,0 +1,60 @@
+{
+  "groups": [
+    {
+      "id": "core",
+      "title": "Core_Nodes",
+      "count": 1,
+      "nodes": [
+        {
+          "node_name": "CoreNode",
+          "display_name": "Core Node",
+          "module": "nodes",
+          "group": "core",
+          "category": "image/utils",
+          "annotation": "builtin"
+        }
+      ],
+      "module_count": 1,
+      "modules": [
+        {
+          "module": "nodes",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "id": "custom",
+      "title": "Custom_Nodes",
+      "count": 1,
+      "nodes": [
+        {
+          "node_name": "CustomNode",
+          "display_name": "Custom Node",
+          "module": "ComfyUI_ALEXZ_tools",
+          "group": "custom",
+          "category": "ALEXZ/test",
+          "annotation": "custom"
+        }
+      ],
+      "module_count": 1,
+      "modules": [
+        {
+          "module": "ComfyUI_ALEXZ_tools",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "comfyui": {
+    "check_mode": "releases",
+    "update_status": "up_to_date",
+    "update_available": false
+  },
+  "custom_modules_need_update": 1,
+  "custom_modules_unknown_update": 0,
+  "custom_modules_unknown_update_modules": [],
+  "runtime_warmup": {
+    "running": false,
+    "done": true
+  }
+}
