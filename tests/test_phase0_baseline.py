@@ -517,8 +517,11 @@ class Phase0BaselineContractsTests(unittest.TestCase):
         self.assertIn("export const GROUP_LABELS", constants_text)
         self.assertIn("export const MODULE_MARK_UPDATED", constants_text)
         self.assertIn("export function centerNodeInCanvas", node_factory_text)
-        self.assertIn("export function createNodeFromCatalogInfo", node_factory_text)
-        self.assertIn("createNodeFromCatalogInfo(nodeInfo, LiteGraph)", picker_runtime_text)
+        self.assertTrue(
+            ("export function createNodeFromCatalogInfo" in node_factory_text)
+            or ("export async function createNodeFromCatalogInfo" in node_factory_text)
+        )
+        self.assertIn("createNodeFromCatalogInfo(nodeInfo, LiteGraph", picker_runtime_text)
         self.assertTrue(
             ("centerNodeInCanvas(node, app)" in picker_runtime_text)
             or ("centerNodeInCanvas(node, appInstance)" in picker_runtime_text)
