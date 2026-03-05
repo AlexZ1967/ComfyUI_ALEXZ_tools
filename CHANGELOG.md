@@ -1,5 +1,30 @@
 # Changelog — ALEXZ_tools
 
+## 0.24.0 — 2026-03-05
+- Refactoring roadmap execution: completed Phase 1 for Module Node Picker backend.
+- Extracted backend runtime state into dedicated module:
+  - added `utils/module_browser_api/state.py`;
+  - moved refresh/update locks, status payload templates, and runtime flags into
+    `ModuleBrowserApiState` singleton.
+- Extracted refresh/update console logging helpers:
+  - added `utils/module_browser_api/logging_ops.py`;
+  - moved update/refresh console-log mode handling and de-duplicated refresh log
+    output into shared helpers.
+- Rewired `utils/module_node_browser_api.py` to use extracted state/logging
+  modules while preserving existing route contracts and behavior.
+- Compatibility:
+  - kept legacy warmup mirrors (`_LAZY_REFRESH_DONE`,
+    `_RUNTIME_WARMUP_THREAD`) synchronized for baseline test compatibility.
+- Planning/docs:
+  - updated refactoring plan status in:
+    `refactoring_plan/PROPOSAL_REFACTOR_MODULE_NODE_BROWSER_API.md`,
+    `refactoring_plan/PROPOSAL_REFACTOR_MODULE_NODE_BROWSER_API_RU.md`.
+- Validation:
+  - `conda run -n p313 python utils/docs_check.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_jobs.py tests/test_module_browser_tracker.py`;
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py -k "runtime_warmup_status_contract or start_runtime_warmup_noop_when_already_ready"`.
+- Version updated to `0.24.0` in `pyproject.toml` and `README.md`.
+
 ## 0.23.5 — 2026-03-05
 - Color Match To Reference: added experimental palette-transfer presets inspired
   by KJNodes/ColorMatchV2 method family, integrated into existing safe pipeline:

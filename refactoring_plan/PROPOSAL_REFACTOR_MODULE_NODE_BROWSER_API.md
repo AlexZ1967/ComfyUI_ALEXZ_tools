@@ -22,6 +22,13 @@ This creates a large "god module" that is hard to test, hard to change safely, a
 - No large renaming of existing public functions inside `utils/module_browser/*`.
 - No migration to async job execution model (threads remain as-is).
 
+## Phase Status
+- Phase 0: Planned
+- Phase 1: Done (state/logging extraction completed in release `0.24.0`)
+- Phase 2: In Progress
+- Phase 3: Planned
+- Phase 4: Planned
+
 ## Proposed Target Structure
 Create a dedicated package:
 - `utils/module_browser_api/`
@@ -125,4 +132,3 @@ Exit criteria:
 - `conda run -n p313 pytest -q tests/test_module_browser_refresh_job_ops.py`
 - `conda run -n p313 pytest -q tests/test_module_browser_update_job_ops.py`
 - `conda run -n p313 pytest -q`
-

@@ -22,6 +22,13 @@
 - Не делать "большое переименование" публичных функций внутри `utils/module_browser/*`.
 - Не менять модель исполнения job на async (threads остаются).
 
+## Статус фаз
+- Фаза 0: Запланировано
+- Фаза 1: Выполнено (вынос state/logging завершен в релизе `0.24.0`)
+- Фаза 2: В работе
+- Фаза 3: Запланировано
+- Фаза 4: Запланировано
+
 ## Целевая структура после рефакторинга
 Выделить отдельный пакет:
 - `utils/module_browser_api/`
@@ -128,4 +135,3 @@
 - `conda run -n p313 pytest -q tests/test_module_browser_refresh_job_ops.py`
 - `conda run -n p313 pytest -q tests/test_module_browser_update_job_ops.py`
 - `conda run -n p313 pytest -q`
-

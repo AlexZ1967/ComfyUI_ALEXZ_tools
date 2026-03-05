@@ -216,6 +216,15 @@ from .module_browser.module.node_classification_ops import (
     fallback_annotation as mb_fallback_annotation,
     module_root as mb_module_root,
 )
+from .module_browser_api.logging_ops import (
+    get_update_console_log_mode as mb_api_get_update_console_log_mode,
+    refresh_console_log as mb_api_refresh_console_log,
+    set_update_console_log_mode as mb_api_set_update_console_log_mode,
+    update_console_log as mb_api_update_console_log,
+)
+from .module_browser_api.state import (
+    get_state as mb_api_get_state,
+)
 
 try:
     import folder_paths
@@ -238,54 +247,10 @@ _CUSTOM_MODULE_ALIAS_CACHE: dict[str, str] | None = None
 _COMFYUI_STATUS_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _COMFYUI_STATUS_TTL_SEC = 120.0
 _MANAGER_UPDATE_OVERRIDE_TTL_SEC = 20.0
-_LAZY_REFRESH_DONE = False
-_RUNTIME_WARMUP_LOCK = threading.Lock()
-_RUNTIME_WARMUP_THREAD: threading.Thread | None = None
-_REFRESH_LOCK = threading.Lock()
-_REFRESH_THREAD: threading.Thread | None = None
-_REFRESH_LOG_LAST = ""
-_REFRESH_CONSOLE_LOG_LAST = ""
-_REFRESH_STATUS: dict[str, Any] = {
-    "running": False,
-    "phase": "idle",
-    "current": 0,
-    "total": 0,
-    "remaining": 0,
-    "modules_need_update": 0,
-    "modules_unknown_update": 0,
-    "unknown_update_modules": [],
-    "module": "",
-    "message": "",
-    "error": "",
-    "sync_upstreams": False,
-    "started_at": "",
-    "updated_at": "",
-    "refreshed_at": "",
-}
-_UPDATE_LOCK = threading.Lock()
-_UPDATE_THREAD: threading.Thread | None = None
-_UPDATE_LOG_LAST = ""
-_UPDATE_CONSOLE_LOG_MODE = "summary"
-_UPDATE_STATUS: dict[str, Any] = {
-    "running": False,
-    "phase": "idle",
-    "scope": "",
-    "current": 0,
-    "total": 0,
-    "remaining": 0,
-    "module": "",
-    "message": "",
-    "error": "",
-    "updated": 0,
-    "up_to_date": 0,
-    "failed": 0,
-    "requirements_changed": False,
-    "requirements_modules": [],
-    "results": [],
-    "started_at": "",
-    "updated_at": "",
-    "finished_at": "",
-}
+_API_STATE = mb_api_get_state()
+# Legacy compatibility mirrors kept for phase0 baseline tests.
+_LAZY_REFRESH_DONE = _API_STATE.lazy_refresh_done
+_RUNTIME_WARMUP_THREAD: threading.Thread | None = _API_STATE.runtime_warmup_thread
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/([^/]+)/([^/]+)", re.IGNORECASE)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _MODULE_STATE_PATH = Path(__file__).resolve().parents[1] / "module_state_cache.json"
@@ -299,6 +264,20 @@ _UPDATE_TARGET_SCAN_WORKERS = 4
 _COMPONENT_REGISTRY_PAYLOAD_CACHE: tuple[float, dict[str, Any]] | None = None
 _COMPONENT_REGISTRY_TTL_SEC = 15.0
 _INFO_ONLY_WIDGET_MODE = True
+
+
+def _sync_runtime_warmup_from_legacy() -> None:
+    """Apply legacy runtime warmup globals to extracted state container."""
+    _API_STATE.lazy_refresh_done = bool(_LAZY_REFRESH_DONE)
+    _API_STATE.runtime_warmup_thread = _RUNTIME_WARMUP_THREAD
+
+
+def _sync_runtime_warmup_to_legacy() -> None:
+    """Mirror extracted runtime warmup state back to legacy globals."""
+    global _LAZY_REFRESH_DONE
+    global _RUNTIME_WARMUP_THREAD
+    _LAZY_REFRESH_DONE = bool(_API_STATE.lazy_refresh_done)
+    _RUNTIME_WARMUP_THREAD = _API_STATE.runtime_warmup_thread
 
 
 def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
@@ -330,47 +309,36 @@ def _normalize_log_mode(value: str | None) -> str:
 
 def _set_update_console_log_mode(mode: str | None) -> str:
     """Set active console log mode for update jobs and return normalized value."""
-    global _UPDATE_CONSOLE_LOG_MODE
-    normalized = _normalize_log_mode(mode)
-    with _UPDATE_LOCK:
-        _UPDATE_CONSOLE_LOG_MODE = normalized
-    return normalized
+    return mb_api_set_update_console_log_mode(
+        state=_API_STATE,
+        mode=mode,
+        normalize_log_mode=_normalize_log_mode,
+    )
 
 
 def _get_update_console_log_mode() -> str:
     """Read active console log mode for update jobs."""
-    with _UPDATE_LOCK:
-        return _UPDATE_CONSOLE_LOG_MODE
+    return mb_api_get_update_console_log_mode(_API_STATE)
 
 
 def _update_console_log(message: str, level: str = "summary") -> None:
     """Print update-progress line to ComfyUI console according to selected log mode."""
-    if _normalize_log_mode(level) == "verbose" and _get_update_console_log_mode() != "verbose":
-        return
-    text = str(message or "").strip()
-    if not text:
-        return
-    try:
-        print(f"ALEXZ_tools Module update: {text}", flush=True)
-    except Exception:
-        pass
+    mb_api_update_console_log(
+        state=_API_STATE,
+        message=message,
+        level=level,
+        normalize_log_mode=_normalize_log_mode,
+    )
 
 
 def _refresh_console_log(message: str, level: str = "summary") -> None:
     """Print refresh-progress line to ComfyUI console according to selected log mode."""
-    global _REFRESH_CONSOLE_LOG_LAST
-    if _normalize_log_mode(level) == "verbose" and _get_update_console_log_mode() != "verbose":
-        return
-    text = str(message or "").strip()
-    if not text:
-        return
-    if text == _REFRESH_CONSOLE_LOG_LAST:
-        return
-    _REFRESH_CONSOLE_LOG_LAST = text
-    try:
-        print(f"ALEXZ_tools Module refresh: {text}", flush=True)
-    except Exception:
-        pass
+    mb_api_refresh_console_log(
+        state=_API_STATE,
+        message=message,
+        level=level,
+        normalize_log_mode=_normalize_log_mode,
+    )
 
 
 _ALEXZ_ANNOTATIONS = {
@@ -1399,8 +1367,8 @@ def _build_module_nodes_payload(catalog: dict[str, list[dict[str, Any]]], query:
 def _set_refresh_status(**kwargs: Any) -> None:
     """Set shared refresh job status fields in a thread-safe way."""
     set_refresh_status(
-        lock=_REFRESH_LOCK,
-        status=_REFRESH_STATUS,
+        lock=_API_STATE.refresh_lock,
+        status=_API_STATE.refresh_status,
         now_iso=_now_iso,
         **kwargs,
     )
@@ -1408,7 +1376,7 @@ def _set_refresh_status(**kwargs: Any) -> None:
 
 def _refresh_status_snapshot() -> dict[str, Any]:
     """Return thread-safe snapshot of refresh-job status."""
-    return refresh_status_snapshot(lock=_REFRESH_LOCK, status=_REFRESH_STATUS)
+    return refresh_status_snapshot(lock=_API_STATE.refresh_lock, status=_API_STATE.refresh_status)
 
 
 def _refresh_progress(
@@ -1424,10 +1392,9 @@ def _refresh_progress(
     message: str = "",
 ) -> None:
     """Update refresh-job progress counters and status text."""
-    global _REFRESH_LOG_LAST
-    _REFRESH_LOG_LAST = emit_refresh_progress(
-        lock=_REFRESH_LOCK,
-        status=_REFRESH_STATUS,
+    _API_STATE.refresh_log_last = emit_refresh_progress(
+        lock=_API_STATE.refresh_lock,
+        status=_API_STATE.refresh_status,
         now_iso=_now_iso,
         phase=phase,
         current=current,
@@ -1438,7 +1405,7 @@ def _refresh_progress(
         unknown_update_modules=unknown_update_modules,
         module=module,
         message=message,
-        last_line=_REFRESH_LOG_LAST,
+        last_line=_API_STATE.refresh_log_last,
         logger_debug=lambda line: _LOGGER.debug("Module refresh: %s", line),
         console_log=lambda text, level="summary": _refresh_console_log(text, level=level),
     )
@@ -1446,7 +1413,7 @@ def _refresh_progress(
 
 def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any | None = None) -> dict[str, Any]:
     """Recompute module snapshots and update persisted runtime tracking state."""
-    global _LAZY_REFRESH_DONE
+    _sync_runtime_warmup_from_legacy()
 
     def _reset_custom_alias_cache() -> None:
         """Reset custom module alias cache before recomputing runtime state."""
@@ -1474,33 +1441,36 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
         now_iso=_now_iso,
         perf_counter=time.perf_counter,
     )
-    _LAZY_REFRESH_DONE = True
+    _API_STATE.lazy_refresh_done = True
+    _sync_runtime_warmup_to_legacy()
     return result
 
 
 def _ensure_runtime_state_ready() -> None:
     """Ensure runtime snapshot cache is initialized before serving API requests."""
-    global _LAZY_REFRESH_DONE
-    if _LAZY_REFRESH_DONE:
+    _sync_runtime_warmup_from_legacy()
+    if _API_STATE.lazy_refresh_done:
         return
     _load_module_state()
     # On process start, hide stale remote-update status until user runs explicit refresh.
     _set_custom_update_checked(False)
     _announce_tracked_module_updates(local_only=True)
     _track_comfyui_local_update()
-    _LAZY_REFRESH_DONE = True
+    _API_STATE.lazy_refresh_done = True
+    _sync_runtime_warmup_to_legacy()
 
 
 def _start_runtime_state_warmup() -> bool:
     """Start non-blocking runtime-state warmup once and return start status."""
-    global _RUNTIME_WARMUP_THREAD
-    if _LAZY_REFRESH_DONE:
+    _sync_runtime_warmup_from_legacy()
+    if _API_STATE.lazy_refresh_done:
         return False
 
-    with _RUNTIME_WARMUP_LOCK:
-        if _LAZY_REFRESH_DONE:
+    with _API_STATE.runtime_warmup_lock:
+        _sync_runtime_warmup_from_legacy()
+        if _API_STATE.lazy_refresh_done:
             return False
-        existing = _RUNTIME_WARMUP_THREAD
+        existing = _API_STATE.runtime_warmup_thread
         if existing is not None and existing.is_alive():
             return False
         # Reset stale remote-update visibility immediately on first access.
@@ -1508,30 +1478,32 @@ def _start_runtime_state_warmup() -> bool:
 
         def _runner() -> None:
             """Warmup worker for runtime state cache used by first-open UI paths."""
-            global _RUNTIME_WARMUP_THREAD
             try:
                 _ensure_runtime_state_ready()
             except Exception as exc:  # pragma: no cover - diagnostic
                 _LOGGER.warning("Runtime warmup failed: %s", exc, exc_info=True)
             finally:
-                with _RUNTIME_WARMUP_LOCK:
-                    _RUNTIME_WARMUP_THREAD = None
+                with _API_STATE.runtime_warmup_lock:
+                    _API_STATE.runtime_warmup_thread = None
+                    _sync_runtime_warmup_to_legacy()
 
-        _RUNTIME_WARMUP_THREAD = threading.Thread(
+        _API_STATE.runtime_warmup_thread = threading.Thread(
             target=_runner,
             name="ALEXZ_tools_RuntimeWarmup",
             daemon=True,
         )
-        _RUNTIME_WARMUP_THREAD.start()
+        _sync_runtime_warmup_to_legacy()
+        _API_STATE.runtime_warmup_thread.start()
         return True
 
 
 def _runtime_warmup_status() -> dict[str, Any]:
     """Return lightweight runtime warmup state for frontend polling hints."""
-    with _RUNTIME_WARMUP_LOCK:
-        thread = _RUNTIME_WARMUP_THREAD
+    _sync_runtime_warmup_from_legacy()
+    with _API_STATE.runtime_warmup_lock:
+        thread = _API_STATE.runtime_warmup_thread
         running = bool(thread is not None and thread.is_alive())
-    done = bool(_LAZY_REFRESH_DONE)
+    done = bool(_API_STATE.lazy_refresh_done)
     return {
         "running": running,
         "done": done,
@@ -1540,14 +1512,12 @@ def _runtime_warmup_status() -> dict[str, Any]:
 
 def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
     """Start background module refresh job if one is not already running."""
-    global _REFRESH_THREAD
-    global _REFRESH_CONSOLE_LOG_LAST
-    with _REFRESH_LOCK:
-        thread = _REFRESH_THREAD
+    with _API_STATE.refresh_lock:
+        thread = _API_STATE.refresh_thread
         if thread is not None and thread.is_alive():
-            return {"status": "running", "refresh": dict(_REFRESH_STATUS)}
-        _REFRESH_CONSOLE_LOG_LAST = ""
-        _REFRESH_STATUS.update(
+            return {"status": "running", "refresh": dict(_API_STATE.refresh_status)}
+        _API_STATE.refresh_console_log_last = ""
+        _API_STATE.refresh_status.update(
             {
                 "running": True,
                 "phase": "starting",
@@ -1569,7 +1539,6 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
 
     def _runner() -> None:
         """Background job worker that runs long update/refresh operations."""
-        global _REFRESH_THREAD
         try:
             mb_run_refresh_job(
                 sync_upstreams=sync_upstreams,
@@ -1585,34 +1554,33 @@ def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
             _refresh_console_log(f"job error: {exc}")
             _set_refresh_status(running=False, phase="error", message="error", error=str(exc), module="")
         finally:
-            with _REFRESH_LOCK:
-                _REFRESH_THREAD = None
+            with _API_STATE.refresh_lock:
+                _API_STATE.refresh_thread = None
 
     thread = threading.Thread(target=_runner, name="alexz-module-refresh", daemon=True)
-    with _REFRESH_LOCK:
-        _REFRESH_THREAD = thread
+    with _API_STATE.refresh_lock:
+        _API_STATE.refresh_thread = thread
     thread.start()
     return {"status": "started", "refresh": _refresh_status_snapshot()}
 
 
 def _set_update_status(**kwargs: Any) -> None:
     """Set shared module-update job status fields in a thread-safe way."""
-    global _UPDATE_LOG_LAST
     set_update_status(
-        lock=_UPDATE_LOCK,
-        status=_UPDATE_STATUS,
+        lock=_API_STATE.update_lock,
+        status=_API_STATE.update_status,
         now_iso=_now_iso,
         **kwargs,
     )
-    line = format_update_status_line(_UPDATE_STATUS)
-    if line != _UPDATE_LOG_LAST:
-        _UPDATE_LOG_LAST = line
+    line = format_update_status_line(_API_STATE.update_status)
+    if line != _API_STATE.update_log_last:
+        _API_STATE.update_log_last = line
         _LOGGER.info("Module update: %s", line)
 
 
 def _update_status_snapshot() -> dict[str, Any]:
     """Return thread-safe snapshot of module-update job status."""
-    return update_status_snapshot(lock=_UPDATE_LOCK, status=_UPDATE_STATUS)
+    return update_status_snapshot(lock=_API_STATE.update_lock, status=_API_STATE.update_status)
 
 
 def _resolve_update_targets(scope: str, module_name: str) -> list[str]:
@@ -1632,7 +1600,6 @@ def _resolve_update_targets(scope: str, module_name: str) -> list[str]:
 
 def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summary") -> dict[str, Any]:
     """Start background module update job for selected custom modules."""
-    global _UPDATE_THREAD
     scope_norm = (scope or "").strip().lower()
     normalized_log_mode = _set_update_console_log_mode(log_mode)
     if scope_norm not in {"single", "all", "comfyui"}:
@@ -1646,15 +1613,15 @@ def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summ
         if _comfyui_root() is None:
             return {"status": "error", "error": "ComfyUI root not found"}
 
-    with _REFRESH_LOCK:
-        if _REFRESH_THREAD is not None and _REFRESH_THREAD.is_alive():
+    with _API_STATE.refresh_lock:
+        if _API_STATE.refresh_thread is not None and _API_STATE.refresh_thread.is_alive():
             return {"status": "error", "error": "module refresh is running"}
 
-    with _UPDATE_LOCK:
-        thread = _UPDATE_THREAD
+    with _API_STATE.update_lock:
+        thread = _API_STATE.update_thread
         if thread is not None and thread.is_alive():
-            return {"status": "running", "update": dict(_UPDATE_STATUS)}
-        _UPDATE_STATUS.update(
+            return {"status": "running", "update": dict(_API_STATE.update_status)}
+        _API_STATE.update_status.update(
             {
                 "running": True,
                 "phase": "starting",
@@ -1680,7 +1647,6 @@ def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summ
 
     def _runner() -> None:
         """Background job worker that runs long update/refresh operations."""
-        global _UPDATE_THREAD
         try:
             mb_run_module_update_job(
                 scope_norm=scope_norm,
@@ -1702,12 +1668,12 @@ def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summ
             _update_console_log(f"job error: {exc}")
             _set_update_status(running=False, phase="error", message="error", error=str(exc), module="", finished_at=_now_iso())
         finally:
-            with _UPDATE_LOCK:
-                _UPDATE_THREAD = None
+            with _API_STATE.update_lock:
+                _API_STATE.update_thread = None
 
     thread = threading.Thread(target=_runner, name="alexz-module-update", daemon=True)
-    with _UPDATE_LOCK:
-        _UPDATE_THREAD = thread
+    with _API_STATE.update_lock:
+        _API_STATE.update_thread = thread
     thread.start()
     return {"status": "started", "update": _update_status_snapshot()}
 
