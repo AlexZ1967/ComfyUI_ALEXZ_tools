@@ -222,6 +222,12 @@ from .module_browser_api.logging_ops import (
     set_update_console_log_mode as mb_api_set_update_console_log_mode,
     update_console_log as mb_api_update_console_log,
 )
+from .module_browser_api.handlers_refresh import (
+    start_refresh_job as mb_api_start_refresh_job,
+)
+from .module_browser_api.handlers_update import (
+    start_module_update_job as mb_api_start_module_update_job,
+)
 from .module_browser_api.state import (
     get_state as mb_api_get_state,
 )
@@ -1512,56 +1518,19 @@ def _runtime_warmup_status() -> dict[str, Any]:
 
 def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
     """Start background module refresh job if one is not already running."""
-    with _API_STATE.refresh_lock:
-        thread = _API_STATE.refresh_thread
-        if thread is not None and thread.is_alive():
-            return {"status": "running", "refresh": dict(_API_STATE.refresh_status)}
-        _API_STATE.refresh_console_log_last = ""
-        _API_STATE.refresh_status.update(
-            {
-                "running": True,
-                "phase": "starting",
-                "current": 0,
-                "total": 0,
-                "remaining": 0,
-                "modules_need_update": 0,
-                "modules_unknown_update": 0,
-                "unknown_update_modules": [],
-                "module": "",
-                "message": "starting",
-                "error": "",
-                "sync_upstreams": bool(sync_upstreams),
-                "started_at": _now_iso(),
-                "updated_at": _now_iso(),
-                "refreshed_at": "",
-            }
-        )
-
-    def _runner() -> None:
-        """Background job worker that runs long update/refresh operations."""
-        try:
-            mb_run_refresh_job(
-                sync_upstreams=sync_upstreams,
-                get_update_console_log_mode=_get_update_console_log_mode,
-                refresh_console_log=lambda text, level="summary": _refresh_console_log(text, level=level),
-                refresh_module_runtime_state=lambda do_sync: _refresh_module_runtime_state(
-                    sync_upstreams=do_sync,
-                    progress_cb=_refresh_progress,
-                ),
-                set_refresh_status=_set_refresh_status,
-            )
-        except Exception as exc:
-            _refresh_console_log(f"job error: {exc}")
-            _set_refresh_status(running=False, phase="error", message="error", error=str(exc), module="")
-        finally:
-            with _API_STATE.refresh_lock:
-                _API_STATE.refresh_thread = None
-
-    thread = threading.Thread(target=_runner, name="alexz-module-refresh", daemon=True)
-    with _API_STATE.refresh_lock:
-        _API_STATE.refresh_thread = thread
-    thread.start()
-    return {"status": "started", "refresh": _refresh_status_snapshot()}
+    return mb_api_start_refresh_job(
+        state=_API_STATE,
+        sync_upstreams=bool(sync_upstreams),
+        now_iso=_now_iso,
+        get_update_console_log_mode=_get_update_console_log_mode,
+        refresh_console_log=lambda text, level="summary": _refresh_console_log(text, level=level),
+        refresh_module_runtime_state=lambda do_sync: _refresh_module_runtime_state(
+            sync_upstreams=do_sync,
+            progress_cb=_refresh_progress,
+        ),
+        set_refresh_status=_set_refresh_status,
+        refresh_status_snapshot=_refresh_status_snapshot,
+    )
 
 
 def _set_update_status(**kwargs: Any) -> None:
@@ -1602,80 +1571,39 @@ def _start_module_update_job(scope: str, module_name: str, log_mode: str = "summ
     """Start background module update job for selected custom modules."""
     scope_norm = (scope or "").strip().lower()
     normalized_log_mode = _set_update_console_log_mode(log_mode)
-    if scope_norm not in {"single", "all", "comfyui"}:
-        return {"status": "error", "error": "scope must be 'single', 'all' or 'comfyui'"}
-
+    module_exists = True
     if scope_norm == "single":
         canonical = _canonical_custom_module_name(module_name)
-        if _module_dir(canonical) is None:
-            return {"status": "error", "error": "module not found"}
-    if scope_norm == "comfyui":
-        if _comfyui_root() is None:
-            return {"status": "error", "error": "ComfyUI root not found"}
-
+        module_exists = _module_dir(canonical) is not None
+    comfyui_root_exists = _comfyui_root() is not None
     with _API_STATE.refresh_lock:
-        if _API_STATE.refresh_thread is not None and _API_STATE.refresh_thread.is_alive():
-            return {"status": "error", "error": "module refresh is running"}
-
-    with _API_STATE.update_lock:
-        thread = _API_STATE.update_thread
-        if thread is not None and thread.is_alive():
-            return {"status": "running", "update": dict(_API_STATE.update_status)}
-        _API_STATE.update_status.update(
-            {
-                "running": True,
-                "phase": "starting",
-                "scope": scope_norm,
-                "current": 0,
-                "total": 0,
-                "remaining": 0,
-                "module": "",
-                "message": "starting",
-                "error": "",
-                "updated": 0,
-                "up_to_date": 0,
-                "failed": 0,
-                "requirements_changed": False,
-                "requirements_modules": [],
-                "results": [],
-                "log_mode": normalized_log_mode,
-                "started_at": _now_iso(),
-                "updated_at": _now_iso(),
-                "finished_at": "",
-            }
+        refresh_running = bool(
+            _API_STATE.refresh_thread is not None and _API_STATE.refresh_thread.is_alive()
         )
-
-    def _runner() -> None:
-        """Background job worker that runs long update/refresh operations."""
-        try:
-            mb_run_module_update_job(
-                scope_norm=scope_norm,
-                module_name=module_name,
-                normalized_log_mode=normalized_log_mode,
-                update_console_log=lambda text, level="summary": _update_console_log(text, level=level),
-                set_update_status=_set_update_status,
-                pull_comfyui=_pull_comfyui,
-                pull_custom_module=_pull_custom_module,
-                resolve_update_targets=_resolve_update_targets,
-                refresh_module_runtime_state=lambda: _refresh_module_runtime_state(
-                    sync_upstreams=False,
-                    progress_cb=lambda **kwargs: None,
-                ),
-                now_iso=_now_iso,
-                perf_counter=time.perf_counter,
-            )
-        except Exception as exc:
-            _update_console_log(f"job error: {exc}")
-            _set_update_status(running=False, phase="error", message="error", error=str(exc), module="", finished_at=_now_iso())
-        finally:
-            with _API_STATE.update_lock:
-                _API_STATE.update_thread = None
-
-    thread = threading.Thread(target=_runner, name="alexz-module-update", daemon=True)
-    with _API_STATE.update_lock:
-        _API_STATE.update_thread = thread
-    thread.start()
-    return {"status": "started", "update": _update_status_snapshot()}
+    return mb_api_start_module_update_job(
+        state=_API_STATE,
+        scope_norm=scope_norm,
+        module_name=module_name,
+        normalized_log_mode=normalized_log_mode,
+        now_iso=_now_iso,
+        comfyui_root_exists=comfyui_root_exists,
+        single_module_exists=module_exists,
+        refresh_running=refresh_running,
+        update_status_snapshot=_update_status_snapshot,
+        update_console_log=lambda text, level="summary": _update_console_log(text, level=level),
+        run_module_update_job=lambda **kwargs: mb_run_module_update_job(
+            **kwargs,
+            perf_counter=time.perf_counter,
+        ),
+        resolve_update_targets=_resolve_update_targets,
+        pull_comfyui=_pull_comfyui,
+        pull_custom_module=_pull_custom_module,
+        refresh_module_runtime_state=lambda: _refresh_module_runtime_state(
+            sync_upstreams=False,
+            progress_cb=lambda **kwargs: None,
+        ),
+        set_update_status=_set_update_status,
+    )
 
 
 def _install_requirements_for_modules(modules: list[str]) -> dict[str, Any]:

@@ -25,7 +25,7 @@ This creates a large "god module" that is hard to test, hard to change safely, a
 ## Phase Status
 - Phase 0: Planned
 - Phase 1: Done (state/logging extraction completed in release `0.24.0`)
-- Phase 2: In Progress
+- Phase 2: Done (refresh/update handler extraction completed in release `0.25.0`)
 - Phase 3: Planned
 - Phase 4: Planned
 

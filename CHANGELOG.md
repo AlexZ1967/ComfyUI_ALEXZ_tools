@@ -1,5 +1,30 @@
 # Changelog — ALEXZ_tools
 
+## 0.25.0 — 2026-03-05
+- Refactoring roadmap execution: completed Phase 2 for Module Node Picker backend.
+- Extracted refresh/update handler orchestration from
+  `utils/module_node_browser_api.py` into dedicated modules:
+  - `utils/module_browser_api/handlers_refresh.py`
+  - `utils/module_browser_api/handlers_update.py`
+- Rewired API facade wrappers to delegate refresh/update job startup logic to
+  extracted handlers while keeping private wrapper API names stable:
+  - `_start_refresh_job(...)`
+  - `_start_module_update_job(...)`
+- Preserved existing behavior:
+  - route payload contracts unchanged;
+  - thread names/locking semantics preserved;
+  - compatibility wrappers for tests and internal callers remain in place.
+- Planning/docs:
+  - Phase status updated in:
+    `refactoring_plan/PROPOSAL_REFACTOR_MODULE_NODE_BROWSER_API.md`,
+    `refactoring_plan/PROPOSAL_REFACTOR_MODULE_NODE_BROWSER_API_RU.md`.
+- Validation:
+  - `conda run -n p313 python utils/docs_check.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_jobs.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_tracker.py -k "module_update_job_supports_comfyui_scope or resolve_update_targets_all_filters_modules"`;
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py -k "refresh_status_contract or update_status_contract or runtime_warmup_status_contract or start_runtime_warmup_noop_when_already_ready"`.
+- Version updated to `0.25.0` in `pyproject.toml` and `README.md`.
+
 ## 0.24.0 — 2026-03-05
 - Refactoring roadmap execution: completed Phase 1 for Module Node Picker backend.
 - Extracted backend runtime state into dedicated module:
