@@ -1,5 +1,19 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.7 — 2026-03-06
+- `Download DZI Tiles Image`: added explicit transport error diagnostics for
+  `status=0` cases (network/proxy failures without HTTP response).
+- `nodes/image_download_dzi_tiles.py`:
+  - deduplicated console logging for fetch exceptions by transport
+    (`requests/urllib/curl/cloudscraper`);
+  - first-tile error now includes proxy hint when `proxy_url` is set and all
+    attempts return status `0`.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k dzi_tiles`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.7` in `pyproject.toml` and `README.md`.
+
 ## 0.27.6 — 2026-03-06
 - `Download DZI Tiles Image`: fixed proxy propagation for `cloudscraper` transport.
 - `nodes/image_download_dzi_tiles.py`:

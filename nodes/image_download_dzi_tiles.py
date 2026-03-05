@@ -56,11 +56,21 @@ _DEFAULT_UA = (
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
 _DEFAULT_REFERER = "https://www.npg.org.uk/"
+_FETCH_ERROR_SEEN: set[str] = set()
 
 
 def _log(message: str) -> None:
     """Emit node logs to ComfyUI console."""
     print(f"[DZI] {message}")
+
+
+def _log_fetch_error(transport: str, url: str, exc: Exception) -> None:
+    """Emit deduplicated transport error details for network diagnostics."""
+    key = f"{transport}:{type(exc).__name__}:{str(exc)}"
+    if key in _FETCH_ERROR_SEEN:
+        return
+    _FETCH_ERROR_SEEN.add(key)
+    _log(f"Fetch error [{transport}]: {url} ({type(exc).__name__}: {exc})")
 
 
 def _build_zoom_base_url(base_url: str, mw: str) -> str:
@@ -213,7 +223,8 @@ def _fetch_bytes_requests(session: requests.Session, url: str, timeout: float) -
     try:
         response = session.get(url, timeout=timeout)
         return int(response.status_code), bytes(response.content or b"")
-    except Exception:
+    except Exception as exc:
+        _log_fetch_error("requests", url, exc)
         return 0, None
 
 
@@ -232,9 +243,12 @@ def _fetch_bytes_urllib(session: requests.Session, url: str, timeout: float) -> 
         except Exception:
             body = None
         return int(exc.code or 0), (bytes(body) if body is not None else None)
-    except URLError:
+    except URLError as exc:
+        # Keep concise but visible diagnostics for proxy/DNS/connectivity failures.
+        _log_fetch_error("urllib", url, exc)
         return 0, None
-    except Exception:
+    except Exception as exc:
+        _log_fetch_error("urllib", url, exc)
         return 0, None
 
 
@@ -294,7 +308,8 @@ def _fetch_bytes_curl(session: requests.Session, url: str, timeout: float) -> tu
             status = 0
         body = out[:idx]
         return status, body
-    except Exception:
+    except Exception as exc:
+        _log_fetch_error("curl", url, exc)
         return 0, None
 
 
@@ -302,7 +317,8 @@ def _fetch_bytes_cloudscraper(session: requests.Session, url: str, timeout: floa
     """Fetch URL bytes via cloudscraper transport when available."""
     try:
         import cloudscraper  # type: ignore
-    except Exception:
+    except Exception as exc:
+        _log_fetch_error("cloudscraper", url, exc)
         return 0, None
 
     try:
@@ -751,10 +767,17 @@ class ImageDownloadDZITiles:
 
             if first_tile is None:
                 status_hint = ", ".join(f"{ext}:{code}" for ext, code in first_tile_statuses.items()) or "n/a"
+                proxy_hint = ""
+                if proxy_text:
+                    proxy_hint = (
+                        f" Proxy configured: `{proxy_text}`."
+                        " If statuses are 0, check proxy reachability from Comfy runtime"
+                        " (e.g. docker/local namespace mismatch)."
+                    )
                 raise RuntimeError(
                     f"First tile is unavailable at `{tiles_base}`. "
                     f"Tried extensions [{', '.join(tile_ext_candidates)}], statuses [{status_hint}]. "
-                    "Check `base_url`, `mw`, and `level`."
+                    f"Check `base_url`, `mw`, and `level`.{proxy_hint}"
                 )
             _log(f"Transport selected: {chosen_transport}")
             _log(f"Tile extension selected: .{tile_ext}")
