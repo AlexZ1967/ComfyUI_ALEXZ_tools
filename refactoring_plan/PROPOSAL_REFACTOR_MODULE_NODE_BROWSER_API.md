@@ -26,7 +26,7 @@ This creates a large "god module" that is hard to test, hard to change safely, a
 - Phase 0: ✅ Done (baseline/freeze guardrails established in releases `0.16.1`-`0.16.3`)
 - Phase 1: ✅ Done (state/logging extraction completed in release `0.24.0`)
 - Phase 2: ✅ Done (refresh/update handler extraction completed in release `0.25.0`)
-- Phase 3: ⏳ Planned
+- Phase 3: ✅ Done (catalog/introspection extraction completed in release `0.26.0`)
 - Phase 4: ⏳ Planned
 
 ## Proposed Target Structure
@@ -96,7 +96,7 @@ Exit criteria:
 - `conda run -n p313 pytest -q tests/test_module_browser_update_job_ops.py` passes.
 
 ### Phase 3: Extract Catalog and Introspection
-Status: ⏳ planned
+Status: ✅ completed (2026-03-05, release `0.26.0`)
 
 - Move node mapping and snapshot helpers into `node_introspection.py`.
 - Move node-catalog route into `handlers_catalog.py`.

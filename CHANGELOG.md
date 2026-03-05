@@ -1,5 +1,35 @@
 # Changelog — ALEXZ_tools
 
+## 0.26.0 — 2026-03-05
+- Refactoring roadmap execution: completed Phase 3 for Module Node Picker backend.
+- Extracted catalog/introspection API glue from `utils/module_node_browser_api.py`
+  into dedicated modules:
+  - `utils/module_browser_api/node_introspection.py`
+  - `utils/module_browser_api/handlers_catalog.py`
+- Rewired facade wrappers/routes to delegate while preserving existing contracts:
+  - `_node_mappings(...)`
+  - `_build_node_snapshots(...)`
+  - `/alexz_tools/node_catalog`
+  - `/alexz_tools/module_list`
+  - `/alexz_tools/module_nodes`
+- Compatibility:
+  - restored legacy module-level aliases in `utils/module_browser/__init__.py`
+    for direct imports used by tests/tooling:
+    - `catalog_payload_ops`
+    - `node_snapshot_ops`
+- Planning/docs:
+  - marked Phase 3 as completed in:
+    `refactoring_plan/PROPOSAL_REFACTOR_MODULE_NODE_BROWSER_API.md`,
+    `refactoring_plan/PROPOSAL_REFACTOR_MODULE_NODE_BROWSER_API_RU.md`.
+- Validation:
+  - `conda run -n p313 python utils/docs_check.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_catalog.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_catalog_payload_ops.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_node_snapshot_ops.py`;
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py -k "node_catalog_group_payload_contract or module_list_payload_filter_contract or module_nodes_payload_contract"`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_tracker.py -k "module_update_job_supports_comfyui_scope or resolve_update_targets_all_filters_modules"`.
+- Version updated to `0.26.0` in `pyproject.toml` and `README.md`.
+
 ## 0.25.0 — 2026-03-05
 - Refactoring roadmap execution: completed Phase 2 for Module Node Picker backend.
 - Extracted refresh/update handler orchestration from

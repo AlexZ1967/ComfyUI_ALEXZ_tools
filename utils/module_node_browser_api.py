@@ -14,7 +14,6 @@ Purpose:
 from __future__ import annotations
 
 
-import importlib
 import json
 import logging
 import re
@@ -111,7 +110,6 @@ from .module_browser.comfyui.comfyui_tracking_ops import (
     track_comfyui_local_update as mb_track_comfyui_local_update,
 )
 from .module_browser.module.node_snapshot_ops import (
-    build_node_snapshots as mb_build_node_snapshots,
     file_digest as mb_file_digest,
     node_source_file as mb_node_source_file,
     relative_to_custom_roots as mb_relative_to_custom_roots,
@@ -227,6 +225,15 @@ from .module_browser_api.handlers_refresh import (
 )
 from .module_browser_api.handlers_update import (
     start_module_update_job as mb_api_start_module_update_job,
+)
+from .module_browser_api.handlers_catalog import (
+    build_module_list_response as mb_api_build_module_list_response,
+    build_module_nodes_response as mb_api_build_module_nodes_response,
+    build_node_catalog_payload as mb_api_build_node_catalog_payload,
+)
+from .module_browser_api.node_introspection import (
+    build_node_snapshots as mb_api_build_node_snapshots,
+    node_mappings as mb_api_node_mappings,
 )
 from .module_browser_api.state import (
     get_state as mb_api_get_state,
@@ -406,10 +413,7 @@ def _component_registry_payload(force_refresh: bool = False) -> dict[str, Any]:
 
 def _node_mappings() -> tuple[dict[str, Any], dict[str, str]]:
     """Return NODE_CLASS_MAPPINGS from loaded extension modules."""
-    comfy_nodes = importlib.import_module("nodes")
-    class_map = getattr(comfy_nodes, "NODE_CLASS_MAPPINGS", {}) or {}
-    display_map = getattr(comfy_nodes, "NODE_DISPLAY_NAME_MAPPINGS", {}) or {}
-    return class_map, display_map
+    return mb_api_node_mappings()
 
 
 def _node_source_file(node_cls: Any) -> str:
@@ -429,11 +433,10 @@ def _file_digest(path_text: str) -> str:
 
 def _build_node_snapshots() -> dict[str, dict[str, dict[str, dict[str, str]]]]:
     """Build stable per-node file snapshots used to detect node additions/changes."""
-    class_map, _ = _node_mappings()
-    return mb_build_node_snapshots(
-        class_map=class_map,
+    return mb_api_build_node_snapshots(
         classifier=_classify_by_relative_module,
         custom_nodes_roots=_custom_nodes_roots,
+        node_mappings_fn=_node_mappings,
     )
 
 
@@ -1749,28 +1752,20 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         """API route that returns grouped module and node catalog data."""
         try:
             mode = _normalize_comfyui_mode(request.query.get("comfyui_mode", "") or request.query.get("mode", ""))
-            _start_runtime_state_warmup()
-            grouped = _build_group_catalog()
-            modules_by_group = _build_group_modules(grouped)
-            comfyui = _comfyui_git_status(mode=mode)
-            show_custom_update_status = _custom_update_checked_flag()
-            custom_modules_need_update = _count_custom_modules_need_update() if show_custom_update_status else 0
-            custom_modules_unknown_update = _count_custom_modules_unknown_update() if show_custom_update_status else 0
-            custom_modules_unknown_update_modules = (
-                _list_custom_modules_unknown_update() if show_custom_update_status else []
+            payload = mb_api_build_node_catalog_payload(
+                mode=mode,
+                start_runtime_state_warmup=_start_runtime_state_warmup,
+                build_group_catalog=_build_group_catalog,
+                build_group_modules=_build_group_modules,
+                comfyui_git_status=_comfyui_git_status,
+                custom_update_checked_flag=_custom_update_checked_flag,
+                count_custom_modules_need_update=_count_custom_modules_need_update,
+                count_custom_modules_unknown_update=_count_custom_modules_unknown_update,
+                list_custom_modules_unknown_update=_list_custom_modules_unknown_update,
+                runtime_warmup_status=_runtime_warmup_status,
+                build_group_payload=_build_group_payload,
             )
-            runtime_warmup = _runtime_warmup_status()
-            groups = _build_group_payload(grouped, modules_by_group)
-            return web.json_response(
-                {
-                    "groups": groups,
-                    "comfyui": comfyui,
-                    "custom_modules_need_update": custom_modules_need_update,
-                    "custom_modules_unknown_update": custom_modules_unknown_update,
-                    "custom_modules_unknown_update_modules": custom_modules_unknown_update_modules,
-                    "runtime_warmup": runtime_warmup,
-                }
-            )
+            return web.json_response(payload)
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Node catalog API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
@@ -1884,8 +1879,12 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         """API route that returns module list for the selected group."""
         query = (request.query.get("q", "") or "").strip().lower()
         try:
-            catalog = _build_catalog()
-            return web.json_response(_build_module_list_payload(catalog, query))
+            payload = mb_api_build_module_list_response(
+                query=query,
+                build_catalog=_build_catalog,
+                build_module_list_payload=_build_module_list_payload,
+            )
+            return web.json_response(payload)
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module list API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
@@ -1895,8 +1894,12 @@ if PromptServer is not None and web is not None and getattr(PromptServer, "insta
         """API route that returns node list for the selected module."""
         query = (request.query.get("module", "") or request.query.get("q", "")).strip()
         try:
-            catalog = _build_catalog()
-            return web.json_response(_build_module_nodes_payload(catalog, query))
+            payload = mb_api_build_module_nodes_response(
+                query=query,
+                build_catalog=_build_catalog,
+                build_module_nodes_payload=_build_module_nodes_payload,
+            )
+            return web.json_response(payload)
         except Exception as exc:  # pragma: no cover - diagnostic
             _LOGGER.error("Module browser API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)

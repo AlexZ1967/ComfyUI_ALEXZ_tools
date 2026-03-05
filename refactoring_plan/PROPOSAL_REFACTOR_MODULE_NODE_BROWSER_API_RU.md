@@ -26,7 +26,7 @@
 - Фаза 0: ✅ Выполнено (guardrails baseline/freeze оформлены в релизах `0.16.1`-`0.16.3`)
 - Фаза 1: ✅ Выполнено (вынос state/logging завершен в релизе `0.24.0`)
 - Фаза 2: ✅ Выполнено (вынос refresh/update handlers завершен в релизе `0.25.0`)
-- Фаза 3: ⏳ Запланировано
+- Фаза 3: ✅ Выполнено (вынос catalog/introspection завершен в релизе `0.26.0`)
 - Фаза 4: ⏳ Запланировано
 
 ## Целевая структура после рефакторинга
@@ -98,7 +98,7 @@ Status: ✅ completed (2026-03-05, релиз `0.25.0`)
   - `conda run -n p313 pytest -q tests/test_module_browser_update_job_ops.py`
 
 ### Фаза 3: Вынос каталога и node introspection
-Status: ⏳ planned
+Status: ✅ completed (2026-03-05, релиз `0.26.0`)
 
 - Перенести snapshot/node mapping в `node_introspection.py`.
 - Перенести `/alexz_tools/node_catalog` в `handlers_catalog.py`.

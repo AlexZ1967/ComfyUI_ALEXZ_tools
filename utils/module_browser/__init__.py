@@ -21,6 +21,8 @@ from .contracts import (
     ensure_module_state_schema,
 )
 from .health import build_component_health_report
+from .catalog import catalog_payload_ops
+from .module import node_snapshot_ops
 
 # Catalog operations (catalog/, core/)
 from .catalog import (
@@ -245,6 +247,7 @@ __all__ = [
     "build_group_payload",
     "build_module_list_payload",
     "build_module_nodes_payload",
+    "catalog_payload_ops",
     "custom_update_checked_flag",
     "info_only_rejection_payload",
     "set_custom_update_checked",
@@ -277,6 +280,7 @@ __all__ = [
     "classify_by_source_path",
     "classify_by_relative_module",
     "fallback_annotation",
+    "node_snapshot_ops",
     "ensure_module_state_schema",
     "build_registry_snapshot",
     "compute_snapshot_signature",
