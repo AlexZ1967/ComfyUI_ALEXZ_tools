@@ -1,5 +1,16 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.6 — 2026-03-06
+- `Download DZI Tiles Image`: fixed proxy propagation for `cloudscraper` transport.
+- `nodes/image_download_dzi_tiles.py`:
+  - `proxy_url` from session is now explicitly applied to cloudscraper client
+    (`scraper.proxies`), so `transport=cloudscraper` respects node proxy input.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k dzi_tiles`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.6` in `pyproject.toml` and `README.md`.
+
 ## 0.27.5 — 2026-03-06
 - `Download DZI Tiles Image`: added explicit network-control inputs for VPN/proxy
   environments where browser works but backend HTTP gets `403`.

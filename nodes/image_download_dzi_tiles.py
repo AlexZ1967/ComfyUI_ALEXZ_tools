@@ -319,6 +319,14 @@ def _fetch_bytes_cloudscraper(session: requests.Session, url: str, timeout: floa
                 scraper.headers.update({k: str(v) for k, v in headers_obj.items()})
         except Exception:
             pass
+        try:
+            proxy_url = str(getattr(session, "_alexz_proxy_url", "") or "").strip()
+            if not proxy_url:
+                proxy_url = str((getattr(session, "proxies", {}) or {}).get("https") or "").strip()
+            if proxy_url and hasattr(scraper, "proxies"):
+                scraper.proxies.update({"http": proxy_url, "https": proxy_url})
+        except Exception:
+            pass
         response = scraper.get(url, timeout=timeout)
         return int(response.status_code), bytes(response.content or b"")
     except Exception:
