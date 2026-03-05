@@ -1,5 +1,24 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.2 — 2026-03-06
+- `Download DZI Tiles Image`: added multi-transport HTTP fallback for strict
+  network environments where `requests` gets `403`.
+- `nodes/image_download_dzi_tiles.py` changes:
+  - added transport backends: `requests`, `urllib`, `curl`;
+  - first-tile probe now tries extension+transport matrix
+    (`jpg/jpeg/png/webp` x transport);
+  - selected working transport is reused for tile downloads and DZI metadata;
+  - DZI parsing also has transport fallback path;
+  - improved diagnostics in first-tile error message
+    (`<ext>@<transport>:<status>`).
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`;
+  - manual transport probe for
+    `https://collectionimages.npg.org.uk/zoom/mw251004/zoomXML_files/11/0_0.jpg`
+    confirms `200` for `requests/urllib/curl`.
+- Version updated to `0.27.2` in `pyproject.toml` and `README.md`.
+
 ## 0.27.1 — 2026-03-06
 - `Download DZI Tiles Image` robustness fix for false `403`/first-tile failures.
 - Node improvements in `nodes/image_download_dzi_tiles.py`:

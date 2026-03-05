@@ -14,11 +14,15 @@ Purpose:
 from __future__ import annotations
 
 import math
+import shutil
+import subprocess
 import traceback
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 import numpy as np
 import requests
@@ -132,29 +136,146 @@ def _candidate_tile_exts(dzi_info: dict[str, Any] | None) -> list[str]:
     return candidates
 
 
-def _http_status(session: requests.Session, url: str, timeout: float) -> int:
+def _fetch_bytes_requests(session: requests.Session, url: str, timeout: float) -> tuple[int, bytes | None]:
+    """Fetch URL bytes via requests transport."""
+    try:
+        response = session.get(url, timeout=timeout)
+        return int(response.status_code), bytes(response.content or b"")
+    except requests.RequestException:
+        return 0, None
+
+
+def _fetch_bytes_urllib(session: requests.Session, url: str, timeout: float) -> tuple[int, bytes | None]:
+    """Fetch URL bytes via urllib transport."""
+    req = Request(url, headers={k: str(v) for k, v in session.headers.items()})
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            status = int(getattr(resp, "status", 0) or resp.getcode() or 0)
+            body = resp.read()
+            return status, bytes(body or b"")
+    except HTTPError as exc:
+        body = None
+        try:
+            body = exc.read()
+        except Exception:
+            body = None
+        return int(exc.code or 0), (bytes(body) if body is not None else None)
+    except URLError:
+        return 0, None
+    except Exception:
+        return 0, None
+
+
+def _fetch_bytes_curl(session: requests.Session, url: str, timeout: float) -> tuple[int, bytes | None]:
+    """Fetch URL bytes via curl transport if available."""
+    if not shutil.which("curl"):
+        return 0, None
+
+    marker = b"\n__ALEXZ_HTTP_STATUS__:"
+    timeout_s = str(max(1, int(math.ceil(float(timeout)))))
+    cmd = [
+        "curl",
+        "-sS",
+        "-L",
+        "--max-time",
+        timeout_s,
+        "-A",
+        str(session.headers.get("User-Agent") or _DEFAULT_UA),
+        "-e",
+        str(session.headers.get("Referer") or _DEFAULT_REFERER),
+        "-H",
+        f"Origin: {str(session.headers.get('Origin') or _origin_from_url(url))}",
+        "-H",
+        "Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "-H",
+        "Accept-Language: en-US,en;q=0.9",
+        "-H",
+        "Sec-Fetch-Dest: image",
+        "-H",
+        "Sec-Fetch-Mode: no-cors",
+        "-H",
+        "Sec-Fetch-Site: same-site",
+        "-w",
+        "__ALEXZ_HTTP_STATUS__:%{http_code}",
+        "-o",
+        "-",
+        url,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, check=False)
+        out = bytes(proc.stdout or b"")
+        idx = out.rfind(b"__ALEXZ_HTTP_STATUS__:")
+        if idx < 0:
+            return 0, out if out else None
+        status_raw = out[idx + len(b"__ALEXZ_HTTP_STATUS__:") : idx + len(b"__ALEXZ_HTTP_STATUS__:") + 3]
+        try:
+            status = int(status_raw.decode("ascii", errors="ignore"))
+        except Exception:
+            status = 0
+        body = out[:idx]
+        return status, body
+    except Exception:
+        return 0, None
+
+
+def _fetch_bytes(
+    session: requests.Session,
+    url: str,
+    timeout: float,
+    *,
+    transport: str = "requests",
+) -> tuple[int, bytes | None]:
+    """Fetch URL bytes with selected transport backend."""
+    mode = str(transport or "requests").strip().lower()
+    if mode == "requests":
+        return _fetch_bytes_requests(session, url, timeout)
+    if mode == "urllib":
+        return _fetch_bytes_urllib(session, url, timeout)
+    if mode == "curl":
+        return _fetch_bytes_curl(session, url, timeout)
+    return 0, None
+
+
+def _http_status(session: requests.Session, url: str, timeout: float, *, transport: str = "requests") -> int:
     """Return HTTP status code with small retry for transient network errors."""
     for attempt in range(3):
         try:
-            response = session.get(url, timeout=timeout)
-            return int(response.status_code)
-        except requests.RequestException as exc:
+            status, _ = _fetch_bytes(session, url, timeout, transport=transport)
+            return int(status)
+        except Exception as exc:
             if attempt >= 2:
                 _log(f"HTTP status check failed: {url} ({type(exc).__name__}: {exc})")
             continue
     return 0
 
 
-def _download_tile(session: requests.Session, url: str, timeout: float) -> Image.Image | None:
-    """Download one JPEG tile and decode it as PIL image."""
+def _decode_tile_image(content: bytes | None, url: str) -> Image.Image | None:
+    """Decode image bytes to RGB PIL image."""
     try:
-        response = session.get(url, timeout=timeout)
-        if response.status_code != 200:
-            _log(f"Tile unavailable: {url} (status={int(response.status_code)})")
+        if not content:
             return None
-        image = Image.open(BytesIO(response.content)).convert("RGB")
+        image = Image.open(BytesIO(content)).convert("RGB")
         image.load()
         return image
+    except Exception as exc:
+        _log(f"Tile decode error: {url} ({type(exc).__name__}: {exc})")
+        return None
+
+
+def _download_tile(
+    session: requests.Session,
+    url: str,
+    timeout: float,
+    *,
+    transport: str = "requests",
+) -> Image.Image | None:
+    """Download one JPEG tile and decode it as PIL image."""
+    try:
+        status, content = _fetch_bytes(session, url, timeout, transport=transport)
+        if int(status) != 200:
+            _log(f"Tile unavailable: {url} (status={int(status)})")
+            return None
+        return _decode_tile_image(content, url)
     except Exception as exc:
         _log(f"Tile download/decode error: {url} ({type(exc).__name__}: {exc})")
         return None
@@ -164,6 +285,7 @@ def _probe_axis_count(
     session: requests.Session,
     tiles_base: str,
     tile_ext: str,
+    transport: str,
     *,
     axis: str,
     timeout: float,
@@ -177,7 +299,7 @@ def _probe_axis_count(
     for i in range(max_tiles):
         x = i if axis == "x" else 0
         y = i if axis == "y" else 0
-        status = _http_status(session, _tile_url(tiles_base, x, y, tile_ext), timeout)
+        status = _http_status(session, _tile_url(tiles_base, x, y, tile_ext), timeout, transport=transport)
         if status == 200:
             last_success = i
             misses_after_success = 0
@@ -193,14 +315,21 @@ def _probe_axis_count(
     return (last_success + 1) if last_success >= 0 else 0
 
 
-def _parse_dzi(session: requests.Session, dzi_url: str, timeout: float) -> dict[str, Any] | None:
+def _parse_dzi(
+    session: requests.Session,
+    dzi_url: str,
+    timeout: float,
+    *,
+    transport: str = "requests",
+) -> dict[str, Any] | None:
     """Try to parse DZI metadata (tile size and nominal dimensions)."""
     try:
-        response = session.get(dzi_url, timeout=timeout)
-        if response.status_code != 200:
-            _log(f"DZI metadata unavailable: {dzi_url} (status={int(response.status_code)})")
+        status, content = _fetch_bytes(session, dzi_url, timeout, transport=transport)
+        if int(status) != 200:
+            _log(f"DZI metadata unavailable: {dzi_url} (status={int(status)})")
             return None
-        root = ET.fromstring(response.text)
+        text = (content or b"").decode("utf-8", errors="replace")
+        root = ET.fromstring(text)
         tile_size = int(root.attrib.get("TileSize", "256"))
         overlap = int(root.attrib.get("Overlap", "0"))
         image_format = str(root.attrib.get("Format", "jpg"))
@@ -305,20 +434,26 @@ class ImageDownloadDZITiles:
             _log(f"Tiles: {tiles_base}")
 
             session = _new_session(referer=f"{referer_root}/", origin=referer_root, trust_env=True)
-            dzi_info = _parse_dzi(session, dzi_url, timeout)
-            tile_ext_candidates = _candidate_tile_exts(dzi_info)
+            dzi_info_requests = _parse_dzi(session, dzi_url, timeout, transport="requests")
+            tile_ext_candidates = _candidate_tile_exts(dzi_info_requests)
+            transport_candidates = ["requests", "urllib", "curl"]
             first_tile = None
             tile_ext = ""
+            chosen_transport = ""
             first_tile_statuses: dict[str, int] = {}
             for ext in tile_ext_candidates:
                 probe_url = _tile_url(tiles_base, 0, 0, ext)
-                status = _http_status(session, probe_url, timeout)
-                first_tile_statuses[ext] = int(status)
-                if status != 200:
-                    continue
-                first_tile = _download_tile(session, probe_url, timeout)
+                for transport in transport_candidates:
+                    status, content = _fetch_bytes(session, probe_url, timeout, transport=transport)
+                    first_tile_statuses[f"{ext}@{transport}"] = int(status)
+                    if int(status) != 200:
+                        continue
+                    first_tile = _decode_tile_image(content, probe_url)
+                    if first_tile is not None:
+                        tile_ext = ext
+                        chosen_transport = transport
+                        break
                 if first_tile is not None:
-                    tile_ext = ext
                     break
 
             if first_tile is None and any(code == 403 for code in first_tile_statuses.values()):
@@ -328,13 +463,17 @@ class ImageDownloadDZITiles:
                 first_tile_statuses.clear()
                 for ext in tile_ext_candidates:
                     probe_url = _tile_url(tiles_base, 0, 0, ext)
-                    status = _http_status(session, probe_url, timeout)
-                    first_tile_statuses[ext] = int(status)
-                    if status != 200:
-                        continue
-                    first_tile = _download_tile(session, probe_url, timeout)
+                    for transport in transport_candidates:
+                        status, content = _fetch_bytes(session, probe_url, timeout, transport=transport)
+                        first_tile_statuses[f"{ext}@{transport}"] = int(status)
+                        if int(status) != 200:
+                            continue
+                        first_tile = _decode_tile_image(content, probe_url)
+                        if first_tile is not None:
+                            tile_ext = ext
+                            chosen_transport = transport
+                            break
                     if first_tile is not None:
-                        tile_ext = ext
                         break
 
             if first_tile is None:
@@ -344,7 +483,18 @@ class ImageDownloadDZITiles:
                     f"Tried extensions [{', '.join(tile_ext_candidates)}], statuses [{status_hint}]. "
                     "Check `base_url`, `mw`, and `level`."
                 )
+            _log(f"Transport selected: {chosen_transport}")
             _log(f"Tile extension selected: .{tile_ext}")
+            dzi_info = _parse_dzi(session, dzi_url, timeout, transport=chosen_transport)
+            if dzi_info is None:
+                for alt_transport in transport_candidates:
+                    if alt_transport == chosen_transport:
+                        continue
+                    dzi_info = _parse_dzi(session, dzi_url, timeout, transport=alt_transport)
+                    if isinstance(dzi_info, dict):
+                        _log(f"DZI transport fallback selected: {alt_transport}")
+                        break
+
             tile_size = int(dzi_info["tile_size"]) if isinstance(dzi_info, dict) else int(first_tile.size[0])
             if isinstance(dzi_info, dict):
                 width, height, tiles_x, tiles_y = _compute_level_geometry_from_dzi(dzi_info, int(level))
@@ -353,14 +503,38 @@ class ImageDownloadDZITiles:
                     f"canvas={int(width)}x{int(height)}, grid={int(tiles_x)}x{int(tiles_y)}"
                 )
             else:
-                tiles_x_probe = _probe_axis_count(session, tiles_base, tile_ext=tile_ext, axis="x", timeout=timeout)
-                tiles_y_probe = _probe_axis_count(session, tiles_base, tile_ext=tile_ext, axis="y", timeout=timeout)
+                tiles_x_probe = _probe_axis_count(
+                    session,
+                    tiles_base,
+                    tile_ext=tile_ext,
+                    transport=chosen_transport,
+                    axis="x",
+                    timeout=timeout,
+                )
+                tiles_y_probe = _probe_axis_count(
+                    session,
+                    tiles_base,
+                    tile_ext=tile_ext,
+                    transport=chosen_transport,
+                    axis="y",
+                    timeout=timeout,
+                )
                 if tiles_x_probe <= 0 or tiles_y_probe <= 0:
                     raise RuntimeError("Could not probe tile grid (x/y tile counts are zero).")
                 tiles_x = int(tiles_x_probe)
                 tiles_y = int(tiles_y_probe)
-                last_x_tile = _download_tile(session, _tile_url(tiles_base, tiles_x - 1, 0, tile_ext), timeout)
-                last_y_tile = _download_tile(session, _tile_url(tiles_base, 0, tiles_y - 1, tile_ext), timeout)
+                last_x_tile = _download_tile(
+                    session,
+                    _tile_url(tiles_base, tiles_x - 1, 0, tile_ext),
+                    timeout,
+                    transport=chosen_transport,
+                )
+                last_y_tile = _download_tile(
+                    session,
+                    _tile_url(tiles_base, 0, tiles_y - 1, tile_ext),
+                    timeout,
+                    transport=chosen_transport,
+                )
                 width = (tiles_x - 1) * tile_size + (last_x_tile.size[0] if last_x_tile else tile_size)
                 height = (tiles_y - 1) * tile_size + (last_y_tile.size[1] if last_y_tile else tile_size)
                 _log(
@@ -381,7 +555,12 @@ class ImageDownloadDZITiles:
                     for x in range(tiles_x):
                         if x == 0 and y == 0:
                             continue
-                        tile = _download_tile(session, _tile_url(tiles_base, x, y, tile_ext), timeout)
+                        tile = _download_tile(
+                            session,
+                            _tile_url(tiles_base, x, y, tile_ext),
+                            timeout,
+                            transport=chosen_transport,
+                        )
                         if tile is None:
                             missing_tiles += 1
                         else:
