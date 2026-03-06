@@ -14,15 +14,19 @@ Purpose:
 from __future__ import annotations
 
 import math
+import os
+import re
+import socket
 import shutil
 import subprocess
+import sys
 import traceback
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener, urlopen
 
 import numpy as np
 import requests
@@ -57,6 +61,14 @@ _DEFAULT_UA = (
 )
 _DEFAULT_REFERER = "https://www.npg.org.uk/"
 _FETCH_ERROR_SEEN: set[str] = set()
+_PAC_WARNED_ONCE = False
+_COMMON_LOCAL_PROXY_URLS = (
+    "http://127.0.0.1:10808",
+    "http://127.0.0.1:7890",
+    "http://127.0.0.1:7897",
+    "http://127.0.0.1:20170",
+    "http://127.0.0.1:8889",
+)
 
 
 def _log(message: str) -> None:
@@ -205,17 +217,340 @@ def _tile_url(tiles_base: str, x: int, y: int, tile_ext: str = "jpg") -> str:
     return f"{tiles_base}/{int(x)}_{int(y)}.{ext}"
 
 
-def _candidate_tile_exts(dzi_info: dict[str, Any] | None) -> list[str]:
-    """Return ordered candidate tile extensions with DZI format priority."""
+def _normalize_proxy_url(proxy_url: str) -> str:
+    """Normalize proxy URL into scheme://host:port form when possible."""
+    text = str(proxy_url or "").strip()
+    if not text:
+        return ""
+    if text.upper() == "DIRECT":
+        return ""
+    if "://" not in text:
+        text = f"http://{text}"
+    return text
+
+
+def _proxy_host_port(proxy_url: str) -> tuple[str, int] | None:
+    """Extract host/port from proxy URL."""
+    proxy_text = _normalize_proxy_url(proxy_url)
+    if not proxy_text:
+        return None
+    try:
+        parsed = urlsplit(proxy_text)
+        host = str(parsed.hostname or "").strip()
+        port = int(parsed.port or 0)
+        if not host or port <= 0:
+            return None
+        return host, port
+    except Exception:
+        return None
+
+
+def _is_proxy_reachable(proxy_url: str, timeout: float = 0.2) -> bool:
+    """Check that proxy endpoint is reachable from current runtime."""
+    host_port = _proxy_host_port(proxy_url)
+    if host_port is None:
+        return False
+    host, port = host_port
+    try:
+        with socket.create_connection((host, int(port)), timeout=float(timeout)):
+            return True
+    except Exception:
+        return False
+
+
+def _env_proxy_urls(*, include_env: bool) -> list[str]:
+    """Collect proxy URLs from common environment variables."""
+    if not include_env:
+        return []
+    keys = ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")
+    found: list[str] = []
+    for key in keys:
+        value = str(os.environ.get(key, "")).strip()
+        if value:
+            found.append(_normalize_proxy_url(value))
+    dedup: list[str] = []
+    seen: set[str] = set()
+    for value in found:
+        if value in seen:
+            continue
+        seen.add(value)
+        dedup.append(value)
+    return dedup
+
+
+def _read_cmd_stdout(cmd: list[str], timeout: float = 1.5) -> str:
+    """Run command and return stdout text, suppressing errors/timeouts."""
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=float(timeout),
+        )
+        return str(proc.stdout or "")
+    except Exception:
+        return ""
+
+
+def _parse_windows_proxy_server(value: str) -> list[str]:
+    """Parse WinINET ProxyServer string into proxy URLs."""
+    text = str(value or "").strip()
+    if not text:
+        return []
+    out: list[str] = []
+    chunks = [part.strip() for part in text.split(";") if str(part).strip()]
+    if not chunks:
+        return []
+    for chunk in chunks:
+        if "=" in chunk:
+            proto, addr = [p.strip() for p in chunk.split("=", 1)]
+        else:
+            proto, addr = "http", chunk.strip()
+        proto_l = str(proto).lower()
+        addr = str(addr).strip()
+        if not addr:
+            continue
+        if proto_l in {"socks", "socks4", "socks5"}:
+            out.append(f"socks5h://{addr}")
+        else:
+            out.append(_normalize_proxy_url(addr))
+    return out
+
+
+def _linux_system_proxy() -> tuple[list[str], list[str]]:
+    """Read Linux desktop proxy configuration (GNOME gsettings)."""
+    if not sys.platform.startswith("linux"):
+        return [], []
+    if not shutil.which("gsettings"):
+        return [], []
+    mode_raw = _read_cmd_stdout(["gsettings", "get", "org.gnome.system.proxy", "mode"])
+    mode = str(mode_raw or "").strip().strip("'\"").lower()
+    proxies: list[str] = []
+    pac_urls: list[str] = []
+    if mode == "manual":
+        for proto in ("https", "http"):
+            host_raw = _read_cmd_stdout(["gsettings", "get", f"org.gnome.system.proxy.{proto}", "host"])
+            port_raw = _read_cmd_stdout(["gsettings", "get", f"org.gnome.system.proxy.{proto}", "port"])
+            host = str(host_raw or "").strip().strip("'\"")
+            try:
+                port = int(str(port_raw or "").strip().strip("'\"") or "0")
+            except Exception:
+                port = 0
+            if host and port > 0:
+                proxies.append(_normalize_proxy_url(f"{host}:{port}"))
+    elif mode == "auto":
+        pac_raw = _read_cmd_stdout(["gsettings", "get", "org.gnome.system.proxy", "autoconfig-url"])
+        pac_url = str(pac_raw or "").strip().strip("'\"")
+        if pac_url:
+            pac_urls.append(pac_url)
+    return proxies, pac_urls
+
+
+def _windows_system_proxy() -> tuple[list[str], list[str]]:
+    """Read Windows proxy settings (WinINET + WinHTTP)."""
+    if os.name != "nt":
+        return [], []
+    proxies: list[str] = []
+    pac_urls: list[str] = []
+    try:
+        import winreg  # type: ignore
+
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+            proxy_enable = int(winreg.QueryValueEx(key, "ProxyEnable")[0] or 0)
+            if proxy_enable:
+                proxy_server = str(winreg.QueryValueEx(key, "ProxyServer")[0] or "")
+                proxies.extend(_parse_windows_proxy_server(proxy_server))
+            try:
+                pac_url = str(winreg.QueryValueEx(key, "AutoConfigURL")[0] or "").strip()
+                if pac_url:
+                    pac_urls.append(pac_url)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    netsh_out = _read_cmd_stdout(["netsh", "winhttp", "show", "proxy"])
+    for line in str(netsh_out or "").splitlines():
+        if ":" not in line:
+            continue
+        key, value = [part.strip() for part in line.split(":", 1)]
+        key_l = key.lower()
+        if "proxy server" in key_l:
+            proxies.extend(_parse_windows_proxy_server(value))
+        elif "auto-config url" in key_l:
+            pac_url = str(value or "").strip()
+            if pac_url:
+                pac_urls.append(pac_url)
+    return proxies, pac_urls
+
+
+def _mac_system_proxy() -> tuple[list[str], list[str]]:
+    """Read macOS proxy settings (scutil --proxy)."""
+    if sys.platform != "darwin":
+        return [], []
+    out = _read_cmd_stdout(["scutil", "--proxy"])
+    fields: dict[str, str] = {}
+    for line in str(out or "").splitlines():
+        if ":" not in line:
+            continue
+        k, v = [part.strip() for part in line.split(":", 1)]
+        fields[k] = v
+    proxies: list[str] = []
+    pac_urls: list[str] = []
+    if fields.get("HTTPEnable") == "1":
+        host = str(fields.get("HTTPProxy", "")).strip()
+        port = str(fields.get("HTTPPort", "")).strip()
+        if host and port:
+            proxies.append(_normalize_proxy_url(f"{host}:{port}"))
+    if fields.get("HTTPSEnable") == "1":
+        host = str(fields.get("HTTPSProxy", "")).strip()
+        port = str(fields.get("HTTPSPort", "")).strip()
+        if host and port:
+            proxies.append(_normalize_proxy_url(f"{host}:{port}"))
+    pac_url = str(fields.get("ProxyAutoConfigURLString", "")).strip()
+    if pac_url:
+        pac_urls.append(pac_url)
+    return proxies, pac_urls
+
+
+def _system_proxy_urls_and_pac() -> tuple[list[str], list[str]]:
+    """Collect system proxy URLs and PAC URLs across supported OSes."""
+    proxies: list[str] = []
+    pac_urls: list[str] = []
+    for proxy_list, pac_list in (_linux_system_proxy(), _windows_system_proxy(), _mac_system_proxy()):
+        proxies.extend(proxy_list)
+        pac_urls.extend(pac_list)
+    return proxies, pac_urls
+
+
+def _pac_proxy_urls_for_target(*, pac_url: str, target_url: str, timeout: float = 4.0) -> list[str]:
+    """Resolve proxies for target URL via PAC script if pacparser is available."""
+    global _PAC_WARNED_ONCE
+    pac = str(pac_url or "").strip()
+    target = str(target_url or "").strip()
+    if not pac or not target:
+        return []
+    try:
+        import pacparser  # type: ignore
+    except Exception:
+        if not _PAC_WARNED_ONCE:
+            _PAC_WARNED_ONCE = True
+            _log("PAC URL detected, but `pacparser` is not installed. PAC will be skipped.")
+        return []
+    try:
+        pac_script = ""
+        if pac.lower().startswith(("http://", "https://")):
+            response = requests.get(pac, timeout=float(timeout))
+            if int(response.status_code) != 200:
+                return []
+            pac_script = str(response.text or "")
+        else:
+            # File path or file:// URL.
+            if pac.lower().startswith("file://"):
+                pac = pac[7:]
+            with open(pac, "r", encoding="utf-8", errors="ignore") as f:
+                pac_script = f.read()
+        if not pac_script:
+            return []
+        pacparser.init()
+        try:
+            pacparser.parse_pac_string(pac_script)
+            found = str(pacparser.find_proxy(target) or "")
+        finally:
+            pacparser.cleanup()
+        out: list[str] = []
+        for chunk in [part.strip() for part in found.split(";") if str(part).strip()]:
+            chunk_u = chunk.upper()
+            if chunk_u == "DIRECT":
+                continue
+            if re.match(r"^(PROXY|HTTP|HTTPS)\s+", chunk_u):
+                addr = chunk.split(None, 1)[1].strip() if " " in chunk else ""
+                if addr:
+                    out.append(_normalize_proxy_url(addr))
+                continue
+            if re.match(r"^(SOCKS|SOCKS4|SOCKS5)\s+", chunk_u):
+                addr = chunk.split(None, 1)[1].strip() if " " in chunk else ""
+                if addr:
+                    out.append(f"socks5h://{addr}")
+        return out
+    except Exception:
+        return []
+
+
+def _auto_proxy_candidates(*, include_env: bool, target_url: str) -> list[str]:
+    """Return proxy candidates for automatic fallback."""
     candidates: list[str] = []
-    if isinstance(dzi_info, dict):
-        fmt = str(dzi_info.get("format") or "").strip().lower().lstrip(".")
-        if fmt:
-            candidates.append("jpg" if fmt == "jpeg" else fmt)
-    for fallback in ("jpg", "jpeg", "png", "webp"):
-        if fallback not in candidates:
-            candidates.append(fallback)
-    return candidates
+    candidates.extend(_env_proxy_urls(include_env=include_env))
+    system_urls, pac_urls = _system_proxy_urls_and_pac()
+    candidates.extend([_normalize_proxy_url(p) for p in system_urls if str(p or "").strip()])
+    if include_env:
+        for key in ("PROXY_PAC_URL", "proxy_pac_url", "AUTO_PROXY_URL", "auto_proxy_url"):
+            pac_env = str(os.environ.get(key, "")).strip()
+            if pac_env:
+                pac_urls.append(pac_env)
+    pac_seen: set[str] = set()
+    for pac_url in pac_urls:
+        pac = str(pac_url or "").strip()
+        if not pac or pac in pac_seen:
+            continue
+        pac_seen.add(pac)
+        candidates.extend(_pac_proxy_urls_for_target(pac_url=pac, target_url=target_url))
+    for proxy_url in _COMMON_LOCAL_PROXY_URLS:
+        if _is_proxy_reachable(proxy_url):
+            candidates.append(_normalize_proxy_url(proxy_url))
+    dedup: list[str] = []
+    seen: set[str] = set()
+    for value in candidates:
+        text = _normalize_proxy_url(str(value or "").strip())
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        dedup.append(text)
+    return dedup
+
+
+def _build_proxy_profiles(
+    *,
+    explicit_proxy: str,
+    trust_env_primary: bool,
+    target_url: str,
+) -> list[dict[str, Any]]:
+    """Build ordered connection profiles for proxy/direct attempts."""
+    proxy_text = _normalize_proxy_url(explicit_proxy)
+    profiles: list[dict[str, Any]] = []
+    if proxy_text:
+        profiles.append({"name": "explicit_proxy", "proxy_url": proxy_text, "trust_env": trust_env_primary})
+        if trust_env_primary:
+            profiles.append({"name": "explicit_proxy_no_env", "proxy_url": proxy_text, "trust_env": False})
+    else:
+        # Prefer explicit env/direct first, then concrete auto-proxy candidates, then strict direct.
+        if trust_env_primary:
+            profiles.append({"name": "env_or_direct", "proxy_url": "", "trust_env": True})
+        auto_proxy_candidates = _auto_proxy_candidates(
+            include_env=trust_env_primary,
+            target_url=target_url,
+        )
+        for idx, detected_proxy in enumerate(auto_proxy_candidates, start=1):
+            profiles.append(
+                {
+                    "name": f"auto_proxy_{idx}",
+                    "proxy_url": str(detected_proxy),
+                    "trust_env": False,
+                }
+            )
+        profiles.append({"name": "direct_no_env", "proxy_url": "", "trust_env": False})
+
+    dedup: list[dict[str, Any]] = []
+    seen: set[tuple[str, bool]] = set()
+    for profile in profiles:
+        key = (str(profile.get("proxy_url") or "").strip(), bool(profile.get("trust_env")))
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append(profile)
+    return dedup
 
 
 def _fetch_bytes_requests(session: requests.Session, url: str, timeout: float) -> tuple[int, bytes | None]:
@@ -231,8 +566,14 @@ def _fetch_bytes_requests(session: requests.Session, url: str, timeout: float) -
 def _fetch_bytes_urllib(session: requests.Session, url: str, timeout: float) -> tuple[int, bytes | None]:
     """Fetch URL bytes via urllib transport."""
     req = Request(url, headers={k: str(v) for k, v in session.headers.items()})
+    proxy_url = str(getattr(session, "_alexz_proxy_url", "") or "").strip()
     try:
-        with urlopen(req, timeout=timeout) as resp:
+        if proxy_url:
+            opener = build_opener(ProxyHandler({"http": proxy_url, "https": proxy_url}))
+            resp_obj = opener.open(req, timeout=timeout)
+        else:
+            resp_obj = urlopen(req, timeout=timeout)
+        with resp_obj as resp:
             status = int(getattr(resp, "status", 0) or resp.getcode() or 0)
             body = resp.read()
             return status, bytes(body or b"")
@@ -603,30 +944,14 @@ class ImageDownloadDZITiles:
                     {
                         "default": "",
                         "multiline": False,
-                        "tooltip": "Явный HTTP(S) proxy (например http://127.0.0.1:7890). Пусто = системные env-прокси.",
+                        "tooltip": "Явный HTTP(S) proxy (например http://127.0.0.1:7890). Пусто = автоопределение (env + локальные порты).",
                     },
                 ),
-                "cookie": (
-                    "STRING",
+                "tile_extension": (
+                    ["jpg", "jpeg", "png", "webp"],
                     {
-                        "default": "",
-                        "multiline": False,
-                        "tooltip": "Дополнительный Cookie заголовок (например cf_clearance=...; other=...).",
-                    },
-                ),
-                "disable_env_proxy": (
-                    "BOOLEAN",
-                    {
-                        "default": False,
-                        "tooltip": "Игнорировать HTTP(S)_PROXY из окружения для requests/cloudscraper.",
-                    },
-                ),
-                "referer": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "multiline": False,
-                        "tooltip": "Явный Referer (пусто = авто-перебор).",
+                        "default": "jpg",
+                        "tooltip": "Расширение тайлов на сервере. Используется только выбранный формат, без перебора остальных.",
                     },
                 ),
             },
@@ -644,9 +969,7 @@ class ImageDownloadDZITiles:
         level: int,
         transport: str = "auto",
         proxy_url: str = "",
-        cookie: str = "",
-        disable_env_proxy: bool = False,
-        referer: str = "",
+        tile_extension: str = "jpg",
     ):
         """Download DZI tiles for selected level and return assembled image tensor."""
         try:
@@ -659,9 +982,6 @@ class ImageDownloadDZITiles:
                 f"{referer_root.rstrip('/')}/",
                 _DEFAULT_REFERER,
             ]
-            referer_override = str(referer or "").strip()
-            if referer_override:
-                referer_candidates.insert(0, referer_override)
             dedup_referers = []
             seen_refs = set()
             for ref in referer_candidates:
@@ -676,94 +996,144 @@ class ImageDownloadDZITiles:
             _log(f"Base: {zoom_base}")
             _log(f"DZI: {dzi_url}")
             _log(f"Tiles: {tiles_base}")
-
+            selected_tile_ext = str(tile_extension or "jpg").strip().lower().lstrip(".")
+            if selected_tile_ext not in {"jpg", "jpeg", "png", "webp"}:
+                raise ValueError(
+                    f"Unsupported tile_extension `{tile_extension}`. "
+                    "Allowed: jpg, jpeg, png, webp."
+                )
             # Do not query DZI metadata before first tile probe: some hosts can
-            # deny `.dzi` while still allowing tile JPEGs.
-            tile_ext_candidates = _candidate_tile_exts(None)
+            # deny `.dzi` while still allowing tile images.
             selected_transport = str(transport or "auto").strip().lower()
             if selected_transport in {"requests", "cloudscraper", "urllib", "curl"}:
                 transport_candidates = [selected_transport]
             else:
                 transport_candidates = ["requests", "cloudscraper", "urllib", "curl"]
             proxy_text = str(proxy_url or "").strip()
-            cookie_text = str(cookie or "").strip()
-            trust_env_primary = not bool(disable_env_proxy)
+            trust_env_primary = True
             first_tile = None
             tile_ext = ""
             chosen_transport = ""
             first_tile_statuses: dict[str, int] = {}
             session = None
-            for ref_idx, ref in enumerate(referer_candidates):
+            preflight_timeout = min(8.0, float(timeout))
+            preflight_url = _tile_url(tiles_base, 0, 0, selected_tile_ext)
+            proxy_profiles = _build_proxy_profiles(
+                explicit_proxy=proxy_text,
+                trust_env_primary=trust_env_primary,
+                target_url=preflight_url,
+            )
+
+            chosen_proxy_url = ""
+            chosen_profile_name = ""
+            # Fast proxy preflight: detect working network route on canonical tile
+            # and avoid costly ext/transport/profile cartesian probing.
+            preflight_referer = referer_candidates[0] if referer_candidates else _DEFAULT_REFERER
+            preflight_attempts: list[dict[str, Any]] = []
+            for profile in proxy_profiles:
+                preflight_attempts.append(profile)
+            # If auto-proxy is requested, try local reachable proxies first to avoid
+            # long 403 loops in env/direct profile.
+            if not proxy_text:
+                local_first = [
+                    p
+                    for p in preflight_attempts
+                    if str(p.get("proxy_url") or "").strip().startswith("http://127.0.0.1:")
+                ]
+                if local_first:
+                    remaining = [p for p in preflight_attempts if p not in local_first]
+                    preflight_attempts = local_first + remaining
+            for profile in preflight_attempts:
+                profile_proxy = str(profile.get("proxy_url") or "").strip()
+                profile_trust_env = bool(profile.get("trust_env"))
+                profile_name = str(profile.get("name") or "profile")
                 trial_session = _make_session(
-                    referer=ref,
+                    referer=preflight_referer,
                     origin=referer_root,
-                    trust_env=trust_env_primary,
-                    cookie=cookie_text,
-                    proxy_url=proxy_text,
+                    trust_env=profile_trust_env,
+                    proxy_url=profile_proxy,
                 )
-                for ext in tile_ext_candidates:
-                    probe_url = _tile_url(tiles_base, 0, 0, ext)
-                    for transport in transport_candidates:
-                        status, content = _fetch_bytes(trial_session, probe_url, timeout, transport=transport)
-                        first_tile_statuses[f"{ext}@{transport}#r{ref_idx+1}"] = int(status)
-                        if int(status) == 200:
-                            first_tile = _decode_tile_image(content, probe_url)
-                        else:
-                            # Compatibility fallback for mocked/legacy paths where
-                            # status probes are stubbed but `_download_tile` returns data.
-                            first_tile = _download_tile_compat(
+                for candidate_transport in transport_candidates:
+                    status, content = _fetch_bytes(
+                        trial_session,
+                        preflight_url,
+                        preflight_timeout,
+                        transport=candidate_transport,
+                    )
+                    first_tile_statuses[
+                        f"preflight:{selected_tile_ext}@{candidate_transport}|{profile_name}:{profile_proxy or '-'}"
+                    ] = int(status)
+                    if int(status) == 200:
+                        maybe_tile = _decode_tile_image(content, preflight_url)
+                    else:
+                        maybe_tile = None
+                        # Compatibility fallback for mocked tests where status path is stubbed.
+                        if int(status) <= 0:
+                            maybe_tile = _download_tile_compat(
                                 trial_session,
-                                probe_url,
-                                timeout,
-                                transport=transport,
+                                preflight_url,
+                                preflight_timeout,
+                                transport=candidate_transport,
                             )
-                        if first_tile is not None:
-                            tile_ext = ext
-                            chosen_transport = transport
-                            session = trial_session
-                            break
-                    if first_tile is not None:
-                        break
+                    if maybe_tile is None:
+                        continue
+                    first_tile = maybe_tile
+                    tile_ext = selected_tile_ext
+                    chosen_transport = candidate_transport
+                    session = trial_session
+                    chosen_proxy_url = profile_proxy
+                    chosen_profile_name = profile_name
+                    _log(f"Referer selected: {preflight_referer}")
+                    _log(f"Proxy preflight selected: {profile_name} ({profile_proxy or 'direct'})")
+                    break
                 if first_tile is not None:
-                    _log(f"Referer selected: {ref}")
                     break
 
-            if first_tile is None and any(code == 403 for code in first_tile_statuses.values()):
-                # Some environments inject HTTP(S)_PROXY rules that can return 403 for CDN image hosts.
-                _log("First tile returned 403; retrying with proxy-bypass session.")
-                first_tile_statuses.clear()
+            # Full fallback probing only if preflight failed.
+            for profile in proxy_profiles:
+                if first_tile is not None:
+                    break
+                profile_proxy = str(profile.get("proxy_url") or "").strip()
+                profile_trust_env = bool(profile.get("trust_env"))
+                profile_name = str(profile.get("name") or "profile")
                 for ref_idx, ref in enumerate(referer_candidates):
                     trial_session = _make_session(
                         referer=ref,
                         origin=referer_root,
-                        trust_env=False,
-                        cookie=cookie_text,
-                        proxy_url=proxy_text,
+                        trust_env=profile_trust_env,
+                        proxy_url=profile_proxy,
                     )
-                    for ext in tile_ext_candidates:
-                        probe_url = _tile_url(tiles_base, 0, 0, ext)
-                        for transport in transport_candidates:
-                            status, content = _fetch_bytes(trial_session, probe_url, timeout, transport=transport)
-                            first_tile_statuses[f"{ext}@{transport}#r{ref_idx+1}"] = int(status)
-                            if int(status) == 200:
-                                first_tile = _decode_tile_image(content, probe_url)
-                            else:
+                    probe_url = _tile_url(tiles_base, 0, 0, selected_tile_ext)
+                    for transport in transport_candidates:
+                        status, content = _fetch_bytes(trial_session, probe_url, timeout, transport=transport)
+                        first_tile_statuses[
+                            f"{selected_tile_ext}@{transport}#r{ref_idx+1}|{profile_name}:{profile_proxy or '-'}"
+                        ] = int(status)
+                        if int(status) == 200:
+                            first_tile = _decode_tile_image(content, probe_url)
+                        else:
+                            first_tile = None
+                            # Compatibility fallback for mocked/legacy paths where
+                            # status probes are stubbed but `_download_tile` returns data.
+                            if int(status) <= 0:
                                 first_tile = _download_tile_compat(
                                     trial_session,
                                     probe_url,
                                     timeout,
                                     transport=transport,
                                 )
-                            if first_tile is not None:
-                                tile_ext = ext
-                                chosen_transport = transport
-                                session = trial_session
-                                break
                         if first_tile is not None:
+                            tile_ext = selected_tile_ext
+                            chosen_transport = transport
+                            session = trial_session
+                            chosen_proxy_url = profile_proxy
+                            chosen_profile_name = profile_name
+                            _log(f"Referer selected: {ref}")
                             break
                     if first_tile is not None:
-                        _log(f"Referer selected (proxy-bypass): {ref}")
                         break
+                if first_tile is not None:
+                    break
 
             if first_tile is None:
                 status_hint = ", ".join(f"{ext}:{code}" for ext, code in first_tile_statuses.items()) or "n/a"
@@ -776,10 +1146,14 @@ class ImageDownloadDZITiles:
                     )
                 raise RuntimeError(
                     f"First tile is unavailable at `{tiles_base}`. "
-                    f"Tried extensions [{', '.join(tile_ext_candidates)}], statuses [{status_hint}]. "
-                    f"Check `base_url`, `mw`, and `level`.{proxy_hint}"
+                    f"Tried extension [{selected_tile_ext}], statuses [{status_hint}]. "
+                    f"Check `base_url`, `mw`, `level`, and `tile_extension`.{proxy_hint}"
                 )
             _log(f"Transport selected: {chosen_transport}")
+            if chosen_proxy_url:
+                _log(f"Proxy selected: {chosen_proxy_url} ({chosen_profile_name})")
+            else:
+                _log(f"Proxy selected: direct ({chosen_profile_name or 'direct'})")
             _log(f"Tile extension selected: .{tile_ext}")
             dzi_info = _parse_dzi(session, dzi_url, timeout, transport=chosen_transport)
             if dzi_info is None:

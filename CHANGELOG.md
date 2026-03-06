@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.8 — 2026-03-06
+- `Download DZI Tiles Image`: UI simplified for everyday use.
+- `nodes/image_download_dzi_tiles.py`:
+  - removed optional UI inputs `pac_url`, `cookie`, `disable_env_proxy`, `referer`;
+  - added explicit `tile_extension` selector (`jpg|jpeg|png|webp`);
+  - first-tile probing now uses selected extension only (no full extension sweep);
+  - kept automatic route/proxy discovery when `proxy_url` is empty
+    (env + system proxy settings + PAC/env PAC + common local proxy endpoints).
+- Documentation updated:
+  - `README.md` section for `Download DZI Tiles Image`;
+  - `guides/GUIDE_DZI_TILES_DOWNLOAD.md`.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k dzi_tiles`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.8` in `pyproject.toml` and `README.md`.
+
 ## 0.27.7 — 2026-03-06
 - `Download DZI Tiles Image`: added explicit transport error diagnostics for
   `status=0` cases (network/proxy failures without HTTP response).
