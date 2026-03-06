@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.10 — 2026-03-06
+- Refactoring continuity: progressed `Phase 4 Remaining` quality coverage.
+- Added critical-route integration tests for extracted routes module:
+  - `tests/test_module_browser_api_routes.py`
+  - validates idempotent route registration and critical endpoint behavior:
+    `module_refresh`, `module_update` (info-only rejection), `module_info`,
+    `comfyui_info`.
+- Updated refactoring status docs:
+  - `refactoring_plan/PLAN_REFACTORING_ADOPTED.md`
+  - `refactoring_plan/PLAN_REFACTORING_ADOPTED_RU.md`
+  - marked "integration tests for critical routes" as completed.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_module_browser_api_routes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.10` in `pyproject.toml` and `README.md`.
+
 ## 0.27.9 — 2026-03-06
 - Refactoring continuity: Phase 4 Remaining quality task progressed.
 - Added lightweight CI workflow:

@@ -397,7 +397,8 @@ Exit criteria:
 ## Phase 4 Remaining — Quality and Coverage
 
 Deliverables:
-- Add integration tests for critical routes.
+- ✅ Add integration tests for critical routes.
+  Completed: 2026-03-06 (`0.27.10`), `tests/test_module_browser_api_routes.py`.
 - Add frontend behavioral checks for tab transitions and refresh/update progress state.
 - ✅ Add lightweight CI test workflow for Python tests and docs check.
   Completed: 2026-03-06 (`0.27.8`), `.github/workflows/ci-lite.yml`.
