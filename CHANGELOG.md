@@ -1,5 +1,26 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.11 — 2026-03-06
+- Refactoring continuity: completed the last `Phase 4 Remaining` deliverable
+  for frontend behavioral checks.
+- Added lightweight frontend behavior smoke test:
+  - `tests/js/test_module_node_picker_frontend_behavior.mjs`
+  - covers tab-relay runtime state transitions and refresh/update progress
+    polling behavior in pure JS modules.
+- CI update:
+  - `.github/workflows/ci-lite.yml` now runs frontend behavioral check via
+    `conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs`.
+- Updated refactoring status docs:
+  - `refactoring_plan/PLAN_REFACTORING_ADOPTED.md`
+  - `refactoring_plan/PLAN_REFACTORING_ADOPTED_RU.md`
+  - marked "frontend behavioral checks" as completed and
+    `Phase 4 Remaining` status as completed.
+- Validation:
+  - `conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_api_routes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.11` in `pyproject.toml` and `README.md`.
+
 ## 0.27.10 — 2026-03-06
 - Refactoring continuity: progressed `Phase 4 Remaining` quality coverage.
 - Added critical-route integration tests for extracted routes module:

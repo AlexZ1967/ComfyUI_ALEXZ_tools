@@ -396,10 +396,13 @@
 
 ### Фаза 4 — остальное (ниже)
 
+Статус: ✅ выполнено (2026-03-06)
+
 Результат:
 - ✅ Добавляем integration-тесты критичных роутов.
   Выполнено: 2026-03-06 (`0.27.10`), `tests/test_module_browser_api_routes.py`.
-- Добавляем frontend-проверки для tab transitions и progress state.
+- ✅ Добавляем frontend-проверки для tab transitions и progress state.
+  Выполнено: 2026-03-06 (`0.27.11`), `tests/js/test_module_node_picker_frontend_behavior.mjs`.
 - ✅ Добавляем облегченный CI workflow для Python-тестов и docs check.
   Выполнено: 2026-03-06 (`0.27.8`), `.github/workflows/ci-lite.yml`.
 

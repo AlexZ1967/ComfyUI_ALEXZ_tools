@@ -44,3 +44,8 @@ jobs:
           conda run -n p313 pytest -q tests/test_module_browser_jobs.py
           conda run -n p313 pytest -q tests/test_module_browser_tracker.py -k "module_update_job_supports_comfyui_scope or resolve_update_targets_all_filters_modules"
           conda run -n p313 pytest -q tests/test_phase0_baseline.py -k "refresh_status_contract or update_status_contract or runtime_warmup_status_contract or node_catalog_group_payload_contract or module_list_payload_filter_contract or module_nodes_payload_contract"
+
+      - name: Frontend Behavioral Checks
+        shell: bash -l {0}
+        run: |
+          conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs
