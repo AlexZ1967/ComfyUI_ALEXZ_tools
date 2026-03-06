@@ -399,7 +399,8 @@ Exit criteria:
 Deliverables:
 - Add integration tests for critical routes.
 - Add frontend behavioral checks for tab transitions and refresh/update progress state.
-- Add lightweight CI test workflow for Python tests and docs check.
+- ✅ Add lightweight CI test workflow for Python tests and docs check.
+  Completed: 2026-03-06 (`0.27.8`), `.github/workflows/ci-lite.yml`.
 
 Exit criteria:
 - Coverage meaningfully improved on changed modules.

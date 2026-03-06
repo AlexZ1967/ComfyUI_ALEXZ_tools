@@ -1,0 +1,46 @@
+name: CI Lite
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  python-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Conda (p313)
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          auto-activate-base: false
+          activate-environment: p313
+          python-version: "3.13"
+
+      - name: Install Test Dependencies
+        shell: bash -l {0}
+        run: |
+          conda run -n p313 python -m pip install --upgrade pip
+          conda run -n p313 python -m pip install pytest
+
+      - name: Syntax Check
+        shell: bash -l {0}
+        run: |
+          conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py
+          conda run -n p313 python -m py_compile utils/module_node_browser_api.py
+
+      - name: Docs Check
+        shell: bash -l {0}
+        run: |
+          conda run -n p313 python utils/docs_check.py
+
+      - name: Module Browser Contract Tests
+        shell: bash -l {0}
+        run: |
+          conda run -n p313 pytest -q tests/test_module_browser_jobs.py
+          conda run -n p313 pytest -q tests/test_module_browser_tracker.py -k "module_update_job_supports_comfyui_scope or resolve_update_targets_all_filters_modules"
+          conda run -n p313 pytest -q tests/test_phase0_baseline.py -k "refresh_status_contract or update_status_contract or runtime_warmup_status_contract or node_catalog_group_payload_contract or module_list_payload_filter_contract or module_nodes_payload_contract"

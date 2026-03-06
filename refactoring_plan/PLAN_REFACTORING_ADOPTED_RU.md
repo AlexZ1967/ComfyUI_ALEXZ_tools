@@ -399,7 +399,8 @@
 Результат:
 - Добавляем integration-тесты критичных роутов.
 - Добавляем frontend-проверки для tab transitions и progress state.
-- Добавляем облегченный CI workflow для Python-тестов и docs check.
+- ✅ Добавляем облегченный CI workflow для Python-тестов и docs check.
+  Выполнено: 2026-03-06 (`0.27.8`), `.github/workflows/ci-lite.yml`.
 
 Критерии выхода:
 - Покрытие заметно улучшено на затронутых модулях.

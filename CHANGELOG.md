@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.9 — 2026-03-06
+- Refactoring continuity: Phase 4 Remaining quality task progressed.
+- Added lightweight CI workflow:
+  - `.github/workflows/ci-lite.yml`
+  - Conda `p313` setup + syntax checks + docs check + module-browser contract tests.
+- Updated refactoring plan status:
+  - `refactoring_plan/PLAN_REFACTORING_ADOPTED.md`
+  - `refactoring_plan/PLAN_REFACTORING_ADOPTED_RU.md`
+  - marked CI deliverable in "Phase 4 Remaining — Quality and Coverage" as completed.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py utils/module_node_browser_api.py`;
+  - `conda run -n p313 python utils/docs_check.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_jobs.py`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_tracker.py -k "module_update_job_supports_comfyui_scope or resolve_update_targets_all_filters_modules"`;
+  - `conda run -n p313 pytest -q tests/test_phase0_baseline.py -k "refresh_status_contract or update_status_contract or runtime_warmup_status_contract or node_catalog_group_payload_contract or module_list_payload_filter_contract or module_nodes_payload_contract"`.
+- Version updated to `0.27.9` in `pyproject.toml` and `README.md`.
+
 ## 0.27.8 — 2026-03-06
 - `Download DZI Tiles Image`: UI simplified for everyday use.
 - `nodes/image_download_dzi_tiles.py`:
