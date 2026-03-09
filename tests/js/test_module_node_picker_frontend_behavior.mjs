@@ -14,6 +14,10 @@
 import assert from "node:assert/strict";
 
 import {
+    centerNodeInCanvas,
+    getCanvasCenterInsertPos,
+} from "../../web/ui/module_node_picker_node_factory.js";
+import {
     clearLegacyPersistentFlags,
     createRuntimeStatusAccessors,
     getRuntimePickerState,
@@ -171,6 +175,24 @@ async function testPollingControllerInvalidation() {
     assert.equal(result, false, "invalidate must stop active polling loop");
 }
 
+async function testCanvasCenterPlacement() {
+    const app = {
+        canvas: {
+            ds: {
+                visible_area: [100, 200, 400, 300],
+            },
+        },
+    };
+    const center = getCanvasCenterInsertPos(app);
+    assert.deepEqual(center, [300, 350]);
+
+    const node = {
+        size: [120, 80],
+    };
+    centerNodeInCanvas(node, app);
+    assert.deepEqual(node.pos, [240, 310]);
+}
+
 async function main() {
     const tests = [
         ["runtime state accessors", testRuntimeStateAccessors],
@@ -178,6 +200,7 @@ async function main() {
         ["refresh progress loop behavior", testRefreshProgressLoopBehavior],
         ["update progress loop behavior", testUpdateProgressLoopBehavior],
         ["polling invalidation", testPollingControllerInvalidation],
+        ["canvas center placement", testCanvasCenterPlacement],
     ];
 
     for (const [name, fn] of tests) {

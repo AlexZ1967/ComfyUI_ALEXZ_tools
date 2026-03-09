@@ -1,5 +1,25 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.12 — 2026-03-09
+- `Node Picker`: fixed node insertion position so selected nodes land in the
+  center of the visible canvas instead of an offset graph position.
+- `web/ui/module_node_picker_node_factory.js`:
+  - normalized visible-area center calculation in graph space;
+  - removed incorrect `devicePixelRatio` adjustment from `ds.visible_area`
+    center computation.
+- `web/ui/module_node_picker_renderers.js`:
+  - after successful insertion, selected node is now explicitly centered and
+    focused in canvas.
+- Frontend regression coverage updated:
+  - `tests/js/test_module_node_picker_frontend_behavior.mjs`
+  - added center-placement assertion for visible canvas insertion.
+- Validation:
+  - `conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs`;
+  - `conda run -n p313 node --check web/ui/module_node_picker_node_factory.js`;
+  - `conda run -n p313 node --check web/ui/module_node_picker_renderers.js`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.12` in `pyproject.toml` and `README.md`.
+
 ## 0.27.11 — 2026-03-06
 - Refactoring continuity: completed the last `Phase 4 Remaining` deliverable
   for frontend behavioral checks.

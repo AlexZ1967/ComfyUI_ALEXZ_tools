@@ -33,17 +33,10 @@ export function centerNodeInCanvas(node, app) {
     const width = Number.isFinite(rawSize?.[0]) ? Number(rawSize[0]) : 220;
     const height = Number.isFinite(rawSize?.[1]) ? Number(rawSize[1]) : 120;
 
-    const area = app?.canvas?.visible_area;
-    if (area && area.length >= 4) {
-        let isNewMenuMode = false;
-        try {
-            const mode = app?.ui?.settings?.getSettingValue?.("Comfy.UseNewMenu", "Disabled");
-            isNewMenuMode = mode !== "Disabled" && mode !== false && mode !== null;
-        } catch (_err) {
-            isNewMenuMode = false;
-        }
-        const x = Number(area[0]) + Number(area[2]) * 0.5 - (isNewMenuMode ? 0 : width * 0.5);
-        const y = Number(area[1]) + Number(area[3]) * 0.5 - (isNewMenuMode ? 0 : height * 0.5);
+    const center = getCanvasCenterInsertPos(app);
+    if (Array.isArray(center) && center.length >= 2) {
+        const x = safeNumber(center[0], 200) - width * 0.5;
+        const y = safeNumber(center[1], 120) - height * 0.5;
         node.pos = [
             Number.isFinite(x) ? x : 200,
             Number.isFinite(y) ? y : 120,
@@ -64,14 +57,13 @@ function safeNumber(value, fallback = 0) {
 export function getCanvasCenterInsertPos(app) {
     const dsArea = app?.canvas?.ds?.visible_area;
     if (Array.isArray(dsArea) && dsArea.length >= 4) {
-        const dpi = Math.max(Number(globalThis?.devicePixelRatio || 1), 1);
         const x = safeNumber(dsArea[0]);
         const y = safeNumber(dsArea[1]);
         const w = safeNumber(dsArea[2]);
         const h = safeNumber(dsArea[3]);
         return [
-            x + (w / dpi) * 0.5,
-            y + (h / dpi) * 0.5,
+            x + w * 0.5,
+            y + h * 0.5,
         ];
     }
     const area = app?.canvas?.visible_area;

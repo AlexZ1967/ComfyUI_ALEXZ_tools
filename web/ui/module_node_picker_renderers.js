@@ -11,6 +11,8 @@
  */
 import {
     addNodeToCurrentGraph,
+    centerNodeInCanvas,
+    focusNodeInCanvas,
     markNodeCanvasDirty,
 } from "./module_node_picker_node_factory.js";
 
@@ -29,6 +31,7 @@ export function renderNodeListPanel(context) {
     const moduleNodeDiffs = context?.moduleNodeDiffs;
     const createNodeByInfo = context?.createNodeByInfo;
     const app = context?.app;
+    const centerNode = context?.centerNode;
     const marks = context?.marks || {};
 
     if (!nodeListEl) {
@@ -122,8 +125,14 @@ export function renderNodeListPanel(context) {
                     setHelpText?.(`Нода создана, но не добавлена в graph (Node 2.0 API не найден): ${nodeInfo.display_name}`);
                     return;
                 }
+                if (typeof centerNode === "function") {
+                    centerNode(node);
+                } else {
+                    centerNodeInCanvas(node, app);
+                }
                 app?.canvas?.selectNode?.(node, false);
                 markNodeCanvasDirty(app);
+                focusNodeInCanvas(node, app);
             } catch (error) {
                 setHelpText?.(`Ошибка вставки ноды: ${nodeInfo.display_name}`);
                 console.error("[ALEXZ.ModulePicker] node insert failed", error);
