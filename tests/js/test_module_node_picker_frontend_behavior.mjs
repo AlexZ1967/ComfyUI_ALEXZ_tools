@@ -178,7 +178,13 @@ async function testPollingControllerInvalidation() {
 async function testCanvasCenterPlacement() {
     const app = {
         canvas: {
+            canvas: {
+                width: 800,
+                height: 600,
+            },
             ds: {
+                scale: 2,
+                offset: [-100, -200],
                 visible_area: [100, 200, 400, 300],
             },
         },

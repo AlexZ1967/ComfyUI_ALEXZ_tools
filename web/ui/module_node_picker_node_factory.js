@@ -55,6 +55,17 @@ function safeNumber(value, fallback = 0) {
  * Mirrors native/manager placement approach for Node 2.0 compatibility.
  */
 export function getCanvasCenterInsertPos(app) {
+    const scale = safeNumber(app?.canvas?.ds?.scale, 0);
+    const offsetX = safeNumber(app?.canvas?.ds?.offset?.[0], 0);
+    const offsetY = safeNumber(app?.canvas?.ds?.offset?.[1], 0);
+    const canvasWidth = safeNumber(app?.canvas?.canvas?.width, 0);
+    const canvasHeight = safeNumber(app?.canvas?.canvas?.height, 0);
+    if (scale > 0 && canvasWidth > 0 && canvasHeight > 0) {
+        return [
+            -offsetX + (canvasWidth * 0.5) / scale,
+            -offsetY + (canvasHeight * 0.5) / scale,
+        ];
+    }
     const dsArea = app?.canvas?.ds?.visible_area;
     if (Array.isArray(dsArea) && dsArea.length >= 4) {
         const x = safeNumber(dsArea[0]);
