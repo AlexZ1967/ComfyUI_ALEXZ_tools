@@ -72,6 +72,17 @@ def start_refresh_job(
                 ),
                 "summary",
             )
+            set_refresh_status(
+                running=False,
+                phase="done",
+                message="done",
+                error="",
+                module="",
+                refreshed_at=str((result or {}).get("refreshed_at") or ""),
+                modules_need_update=max(0, int((result or {}).get("modules_need_update") or 0)),
+                modules_unknown_update=max(0, int((result or {}).get("modules_unknown_update") or 0)),
+                unknown_update_modules=list((result or {}).get("unknown_update_modules") or []),
+            )
         except Exception as exc:
             refresh_console_log(f"job error: {exc}", "summary")
             set_refresh_status(running=False, phase="error", message="error", error=str(exc), module="")
@@ -84,4 +95,3 @@ def start_refresh_job(
         state.refresh_thread = thread
     thread.start()
     return {"status": "started", "refresh": refresh_status_snapshot()}
-

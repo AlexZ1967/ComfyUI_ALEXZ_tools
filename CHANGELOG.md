@@ -1,5 +1,34 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.14 — 2026-03-10
+- `Node Picker`: fixed widget freeze after `Refresh Custom Nodes Info`.
+- Root cause:
+  - backend refresh job could finish with `phase="done"` while leaving
+    `refresh.running=true`, so frontend polling never observed terminal state
+    and kept the widget locked until full page reload.
+- Backend fix:
+  - `utils/module_browser_api/handlers_refresh.py`
+  - successful refresh completion now explicitly stores:
+    - `running=false`
+    - `phase="done"`
+    - `message="done"`
+    - final refresh counters and `refreshed_at`
+- Frontend hardening kept in place:
+  - busy-state reset path for manual custom refresh now force-clears stale UI
+    locks even if picker lifecycle changes during async completion;
+  - successful global refresh now also clears frontend
+    `updatedModulesSession` markers so stale green check marks do not persist.
+- Tests:
+  - added `tests/test_module_browser_refresh_handler.py` to verify refresh job
+    transitions into terminal `running=false` state;
+  - updated `tests/js/test_module_node_picker_frontend_behavior.mjs` for
+    forced busy reset and custom refresh finalization behavior.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_module_browser_refresh_handler.py`;
+  - `conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.14` in `pyproject.toml` and `README.md`.
+
 ## 0.27.13 — 2026-03-09
 - `Node Picker`: corrected visible-canvas center insertion logic.
 - `web/ui/module_node_picker_node_factory.js`:

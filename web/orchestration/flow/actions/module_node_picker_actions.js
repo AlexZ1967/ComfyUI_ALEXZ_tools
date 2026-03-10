@@ -169,6 +169,20 @@ export async function runRefreshComfyUIInfoAction(context) {
  * Refresh custom modules runtime state and reload catalog.
  */
 export async function runRefreshCustomNodesInfoAction(context) {
+    const finalizeUiState = () => {
+        if (typeof context?.resetBusyState === "function") {
+            context.resetBusyState(true);
+        } else {
+            if (!shouldContinueContext(context)) {
+                return;
+            }
+            context?.setActionBusy?.(false);
+            context?.setCatalogControlsLoading?.(false);
+            context?.syncBusyUiState?.();
+        }
+        context?.syncUpdateAllButton?.();
+    };
+
     if (!shouldContinueContext(context)) {
         return;
     }
@@ -209,6 +223,7 @@ export async function runRefreshCustomNodesInfoAction(context) {
                 if (!shouldContinueContext(context)) {
                     return;
                 }
+                context?.clearUpdatedModulesSession?.();
             } catch (err) {
                 if (!shouldContinueContext(context)) {
                     return;
@@ -222,10 +237,7 @@ export async function runRefreshCustomNodesInfoAction(context) {
         }
         context?.setRefreshLine?.(`Custom Nodes refresh error: ${String(err)}`, "warn");
     } finally {
-        if (!shouldContinueContext(context)) {
-            return;
-        }
-        context?.setActionBusy?.(false);
+        finalizeUiState();
     }
     if (!shouldContinueContext(context)) {
         return;
@@ -234,5 +246,6 @@ export async function runRefreshCustomNodesInfoAction(context) {
         await context?.loadCatalog?.();
     } finally {
         context?.clearPendingCustomRefresh?.();
+        finalizeUiState();
     }
 }

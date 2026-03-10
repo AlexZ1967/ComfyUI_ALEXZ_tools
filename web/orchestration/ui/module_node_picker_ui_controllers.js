@@ -121,6 +121,7 @@ export function createModuleNodePickerUiControllers(context = {}) {
         setCatalogControlsLoading: (loading) => busyUi.setCatalogControlsLoading(loading),
         setActionBusy: (busy) => busyUi.setActionBusy(busy),
         setStartupBusy: (busy) => busyUi.setStartupBusy(busy),
+        resetBusyState: () => busyUi.resetBusyState(),
         renderComfyAlert: (info) => statusCards.renderComfyAlert(info),
         renderCustomAlert: () => statusCards.renderCustomAlert(),
         syncUpdateAllButton: () => statusCards.syncUpdateAllButton(),

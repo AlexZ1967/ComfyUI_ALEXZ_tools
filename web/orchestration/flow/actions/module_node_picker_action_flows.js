@@ -40,6 +40,9 @@ export function createModuleNodePickerActionFlows(context = {}) {
     const setProcessAction = context?.setProcessAction || (() => {});
     const setRefreshLine = context?.setRefreshLine || (() => {});
     const setCustomRefreshCardLine = context?.setCustomRefreshCardLine || (() => {});
+    const setCatalogControlsLoading = context?.setCatalogControlsLoading || (() => {});
+    const syncBusyUiState = context?.syncBusyUiState || (() => {});
+    const resetBusyState = context?.resetBusyState || (() => {});
     const pollRefreshProgress = context?.pollRefreshProgress || (async () => null);
     const pollUpdateProgress = context?.pollUpdateProgress || (async () => null);
     const startModuleUpdate = context?.startModuleUpdate || (async () => ({}));
@@ -79,6 +82,7 @@ export function createModuleNodePickerActionFlows(context = {}) {
     const clearPendingCustomRefresh = context?.clearPendingCustomRefresh || (() => {});
     const setPendingComfyInfoRefresh = context?.setPendingComfyInfoRefresh || (() => {});
     const clearPendingComfyInfoRefresh = context?.clearPendingComfyInfoRefresh || (() => {});
+    const clearUpdatedModulesSession = context?.clearUpdatedModulesSession || (() => {});
     const hasPendingCustomRefresh = context?.hasPendingCustomRefresh || (() => false);
     const hasPendingUpdate = context?.hasPendingUpdate || (() => false);
     const hasPendingComfyInfoRefresh = context?.hasPendingComfyInfoRefresh || (() => false);
@@ -201,10 +205,15 @@ export function createModuleNodePickerActionFlows(context = {}) {
             getLogMode,
             pollRefreshProgress,
             acknowledgeAllModuleNovelty,
+            clearUpdatedModulesSession,
             loadCatalog: getLoadCatalog(),
             setCustomStatusChecked,
             setPendingCustomRefresh,
             clearPendingCustomRefresh,
+            setCatalogControlsLoading,
+            syncBusyUiState,
+            resetBusyState,
+            syncUpdateAllButton,
         });
     };
 

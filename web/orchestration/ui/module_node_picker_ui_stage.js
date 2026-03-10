@@ -80,6 +80,7 @@ export function createModuleNodePickerUiStage(context = {}) {
         setCatalogControlsLoading: uiControllers.setCatalogControlsLoading,
         setActionBusy: uiControllers.setActionBusy,
         setStartupBusy: uiControllers.setStartupBusy,
+        resetBusyState: uiControllers.resetBusyState,
         renderComfyAlert: uiControllers.renderComfyAlert,
         renderCustomAlert: uiControllers.renderCustomAlert,
         syncUpdateAllButton: uiControllers.syncUpdateAllButton,

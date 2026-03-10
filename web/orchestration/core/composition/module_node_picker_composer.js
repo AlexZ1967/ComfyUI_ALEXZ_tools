@@ -313,6 +313,7 @@ export function renderModuleNodePicker(container, options = {}) {
     const setCatalogControlsLoading = uiStage.setCatalogControlsLoading;
     const setActionBusy = uiStage.setActionBusy;
     const setStartupBusy = uiStage.setStartupBusy;
+    const resetBusyState = uiStage.resetBusyState;
     const {
         setProcessAction,
         setRefreshLine,
@@ -391,6 +392,8 @@ export function renderModuleNodePicker(container, options = {}) {
         moduleInfo,
         nodeList,
         setActionBusy,
+        syncBusyUiState: () => busyUi.syncBusyUiState(),
+        resetBusyState,
         setProcessTarget,
         setProcessAction,
         setCustomRefreshCardLine,
@@ -401,6 +404,7 @@ export function renderModuleNodePicker(container, options = {}) {
         getCurrentLogMode,
         refreshModuleRuntimeStateApi,
         acknowledgeAllModuleNoveltyApi,
+        clearUpdatedModulesSession: () => updatedModulesSession.clear(),
         setModuleInlineStatus,
         setCustomStatusChecked,
         setComfyStatusChecked,

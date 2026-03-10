@@ -17,6 +17,7 @@ import {
     centerNodeInCanvas,
     getCanvasCenterInsertPos,
 } from "../../web/ui/module_node_picker_node_factory.js";
+import { createBusyUiController } from "../../web/orchestration/ui/module_node_picker_busy_ui.js";
 import {
     clearLegacyPersistentFlags,
     createRuntimeStatusAccessors,
@@ -30,6 +31,7 @@ import {
     setModuleNodePickerRelayState,
 } from "../../web/orchestration/relay/module_node_picker_tab_relay_state.js";
 import { createModuleNodePickerPollingController } from "../../web/orchestration/flow/progress/module_node_picker_polling_controller.js";
+import { runRefreshCustomNodesInfoAction } from "../../web/orchestration/flow/actions/module_node_picker_actions.js";
 import {
     pollRefreshProgressLoop,
     pollUpdateProgressLoop,
@@ -199,6 +201,84 @@ async function testCanvasCenterPlacement() {
     assert.deepEqual(node.pos, [240, 310]);
 }
 
+async function testCustomRefreshFlowFinalizesBusyState() {
+    let busySetCalls = 0;
+    let resetBusyCalls = 0;
+    let syncUpdateCalls = 0;
+    let clearPendingCalls = 0;
+    let clearUpdatedSessionCalls = 0;
+
+    await runRefreshCustomNodesInfoAction({
+        shouldContinue: () => true,
+        setCustomStatusChecked: () => {},
+        setPendingCustomRefresh: () => {},
+        clearPendingCustomRefresh: () => {
+            clearPendingCalls += 1;
+        },
+        setActionBusy: () => {
+            busySetCalls += 1;
+        },
+        resetBusyState: () => {
+            resetBusyCalls += 1;
+        },
+        syncUpdateAllButton: () => {
+            syncUpdateCalls += 1;
+        },
+        clearUpdatedModulesSession: () => {
+            clearUpdatedSessionCalls += 1;
+        },
+        setProcessTarget: () => {},
+        setProcessAction: () => {},
+        setRefreshLine: () => {},
+        refreshModuleRuntimeState: async () => ({}),
+        pollRefreshProgress: async () => true,
+        acknowledgeAllModuleNovelty: async () => ({}),
+        loadCatalog: async () => ({ ok: true }),
+    });
+
+    assert.equal(busySetCalls, 1);
+    assert.equal(resetBusyCalls, 2);
+    assert.equal(syncUpdateCalls, 2);
+    assert.equal(clearPendingCalls, 1);
+    assert.equal(clearUpdatedSessionCalls, 1);
+}
+
+async function testBusyUiForceResetBypassesLifecycleGuard() {
+    const controls = {
+        refreshBtn: { disabled: false },
+        comfyInfoBtn: { disabled: false },
+        comfyModeSelect: { disabled: false },
+        categorySelect: { disabled: false },
+        groupSelect: { disabled: false, options: [] },
+        nodeSelect: { disabled: false, options: [] },
+        moduleFilter: { disabled: false },
+        moduleInfo: {
+            style: {},
+            querySelectorAll: () => [],
+        },
+        nodeList: {
+            style: {},
+        },
+    };
+    let alive = true;
+    const busyUi = createBusyUiController({
+        shouldContinue: () => alive,
+        controls,
+        getProcessUi: () => null,
+    });
+
+    busyUi.setActionBusy(true);
+    assert.equal(controls.refreshBtn.disabled, true);
+    alive = false;
+    busyUi.resetBusyState(true);
+
+    assert.equal(controls.refreshBtn.disabled, false);
+    assert.equal(controls.comfyInfoBtn.disabled, false);
+    assert.equal(controls.categorySelect.disabled, false);
+    assert.equal(controls.moduleInfo.style.pointerEvents, "");
+    assert.equal(controls.nodeList.style.pointerEvents, "");
+}
+
 async function main() {
     const tests = [
         ["runtime state accessors", testRuntimeStateAccessors],
@@ -207,6 +287,8 @@ async function main() {
         ["update progress loop behavior", testUpdateProgressLoopBehavior],
         ["polling invalidation", testPollingControllerInvalidation],
         ["canvas center placement", testCanvasCenterPlacement],
+        ["custom refresh finalizes busy state", testCustomRefreshFlowFinalizesBusyState],
+        ["busy ui force reset bypasses lifecycle guard", testBusyUiForceResetBypassesLifecycleGuard],
     ];
 
     for (const [name, fn] of tests) {

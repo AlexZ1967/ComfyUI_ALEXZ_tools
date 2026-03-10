@@ -27,8 +27,8 @@ export function createBusyUiController(context) {
     let startupBusy = false;
     let catalogControlsLoading = false;
 
-    const syncBusyUiState = () => {
-        if (!shouldContinue()) {
+    const syncBusyUiState = (force = false) => {
+        if (!force && !shouldContinue()) {
             return;
         }
         const busy = Boolean(actionBusy || startupBusy);
@@ -120,11 +120,22 @@ export function createBusyUiController(context) {
         syncBusyUiState();
     };
 
+    const resetBusyState = (force = false) => {
+        if (!force && !shouldContinue()) {
+            return;
+        }
+        actionBusy = false;
+        startupBusy = false;
+        catalogControlsLoading = false;
+        syncBusyUiState(force);
+    };
+
     return {
         syncBusyUiState,
         setActionBusy,
         setStartupBusy,
         setCatalogControlsLoading,
+        resetBusyState,
         getActionBusy: () => Boolean(actionBusy),
         getStartupBusy: () => Boolean(startupBusy),
         isActionBusy: () => Boolean(actionBusy || startupBusy),
