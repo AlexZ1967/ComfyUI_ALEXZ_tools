@@ -2,6 +2,9 @@
 
 ## Назначение
 Нода `Download DZI Tiles Image` скачивает DZI-тайлы по HTTP и собирает их в одно изображение `IMAGE` для дальнейшей обработки в ComfyUI.
+Сейчас поддерживаются как минимум две схемы:
+- `npg`: `collectionimages.npg.org.uk`
+- `nla`: `nla.gov.au`
 
 ## Когда использовать
 - Когда исходник доступен только через DeepZoom/тайлы.
@@ -10,15 +13,18 @@
 
 ## Минимальный сценарий (3 шага)
 1. Добавьте ноду `Download DZI Tiles Image`.
-2. Укажите `base_url`, `mw`, `level`.
+2. Укажите `base_url`, `mw`, `level` и при необходимости `provider`.
 3. Подключите выход `image` к `Preview Image` или следующей ноде.
 
 ## Параметры
 - `base_url` (`STRING`): базовый URL сайта (без `/zoom`).  
   Пример: `https://collectionimages.npg.org.uk`
 - `mw` (`STRING`): идентификатор изображения.  
-  Пример: `mw207134`
+  Пример для NPG: `mw207134`  
+  Пример для NLA: `nla.obj-138204672`
 - `level` (`INT`): уровень тайлов, папка `.../zoomXML_files/<level>/`.
+- `provider` (`auto|npg|nla`): схема URL провайдера.  
+  Обычно достаточно `auto`.
 - `transport` (`auto|requests|cloudscraper|urllib|curl`): HTTP-транспорт.
 - `proxy_url` (`STRING`): явный прокси URL (опционально).  
   Если пусто, нода использует автоопределение маршрута (env/system proxy + локальные прокси).
@@ -26,6 +32,8 @@
   Нода использует только выбранный формат, без перебора остальных.
 
 ## Decision helper
+- Для `collectionimages.npg.org.uk` используйте `base_url=https://collectionimages.npg.org.uk`, `mw=mw...`, `provider=auto` или `npg`.
+- Для `nla.gov.au` используйте `base_url=https://nla.gov.au`, `mw=nla.obj-...`, `provider=auto` или `nla`.
 - Если не уверены в уровне, начните с уровня, который точно существует у источника.
 - Если при запуске ошибка `First tile is unavailable`, проверьте корректность `base_url`, `mw`, `level` и `tile_extension`.
 - Если хотите полный размер из конкретного уровня, используйте probe-режим (встроен автоматически).

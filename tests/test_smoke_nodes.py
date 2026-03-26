@@ -851,6 +851,95 @@ class SmokeTests(unittest.TestCase):
             "https://collectionimages.npg.org.uk/zoom/mw207134",
         )
 
+    def test_dzi_tiles_build_source_urls_nla(self):
+        """Verify NLA provider uses query-based DZI/tile URLs."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        source = dzi_mod._build_dzi_source_urls(
+            "https://nla.gov.au",
+            "nla.obj-138204672",
+            11,
+            "auto",
+        )
+        self.assertEqual(source["provider"], "nla")
+        self.assertEqual(source["dzi_url"], "https://nla.gov.au/nla.obj-138204672/dzi?tile=")
+        self.assertEqual(source["tiles_base"], "https://nla.gov.au/nla.obj-138204672/dzi?tile=")
+        self.assertEqual(
+            dzi_mod._tile_url(
+                source["tiles_base"],
+                3,
+                4,
+                "jpg",
+                level=11,
+                mode=source["tile_url_mode"],
+            ),
+            "https://nla.gov.au/nla.obj-138204672/dzi?tile=11/3_4.jpg",
+        )
+
+    def test_dzi_tiles_download_assembly_mocked_nla_provider(self):
+        """Verify DZI node supports NLA query tile scheme without network."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        node = dzi_mod.ImageDownloadDZITiles()
+
+        tile_size = 8
+        requested_urls = []
+
+        class _DummySession:
+            pass
+
+        old_new_session = dzi_mod._new_session
+        old_fetch_bytes = dzi_mod._fetch_bytes
+        old_parse_dzi = dzi_mod._parse_dzi
+        old_download_tile = dzi_mod._download_tile
+
+        try:
+            from PIL import Image
+            import numpy as np
+
+            canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
+            canvas[:, :, 1] = 255
+            image = Image.fromarray(canvas, mode="RGB")
+            import io
+            encoded = io.BytesIO()
+            image.save(encoded, format="JPEG")
+            jpeg_bytes = encoded.getvalue()
+
+            def _fake_fetch_bytes(_session, url: str, _timeout: float, *, transport: str = "requests"):
+                if "tile=11/0_0.jpg" in str(url):
+                    return 200, jpeg_bytes
+                return 404, None
+
+            def _fake_download_tile(_session, url: str, _timeout: float):
+                requested_urls.append(str(url))
+                if "tile=11/0_0.jpg" not in str(url):
+                    return None
+                return image.copy()
+
+            dzi_mod._new_session = lambda: _DummySession()
+            dzi_mod._fetch_bytes = _fake_fetch_bytes
+            dzi_mod._parse_dzi = lambda *_args, **_kwargs: {
+                "tile_size": tile_size,
+                "overlap": 0,
+                "format": "jpg",
+                "width": tile_size,
+                "height": tile_size,
+            }
+            dzi_mod._download_tile = _fake_download_tile
+
+            out, = node.download(
+                "https://nla.gov.au",
+                "nla.obj-138204672",
+                11,
+                provider="auto",
+            )
+        finally:
+            dzi_mod._new_session = old_new_session
+            dzi_mod._fetch_bytes = old_fetch_bytes
+            dzi_mod._parse_dzi = old_parse_dzi
+            dzi_mod._download_tile = old_download_tile
+
+        self.assertEqual(tuple(out.shape), (1, tile_size, tile_size, 3))
+        self.assertAlmostEqual(float(out[0, 1, 1, 1].item()), 1.0, places=4)
+
     def test_dzi_tiles_download_prefers_dzi_level_geometry(self):
         """Verify DZI metadata controls grid/size when probe reports misleading larger axes."""
         dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")

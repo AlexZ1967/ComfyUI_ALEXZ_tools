@@ -71,6 +71,14 @@ _COMMON_LOCAL_PROXY_URLS = (
 )
 
 
+def _normalize_provider(provider: str | None) -> str:
+    """Normalize provider selector into supported values."""
+    value = str(provider or "auto").strip().lower()
+    if value in {"npg", "nla"}:
+        return value
+    return "auto"
+
+
 def _log(message: str) -> None:
     """Emit node logs to ComfyUI console."""
     print(f"[DZI] {message}")
@@ -105,6 +113,55 @@ def _build_zoom_base_url(base_url: str, mw: str) -> str:
             return base
         return f"{prefix}/zoom/{module_id}" if prefix else f"{base}/zoom/{module_id}"
     return f"{base}/zoom/{module_id}"
+
+
+def _detect_dzi_provider(base_url: str, mw: str, provider: str | None = None) -> str:
+    """Detect supported DZI provider from explicit selection or URL/identifier hints."""
+    normalized = _normalize_provider(provider)
+    if normalized != "auto":
+        return normalized
+    base = str(base_url or "").strip().lower()
+    module_id = str(mw or "").strip().lower()
+    if "nla.gov.au" in base or module_id.startswith("nla.obj-"):
+        return "nla"
+    return "npg"
+
+
+def _build_dzi_source_urls(
+    base_url: str,
+    mw: str,
+    level: int,
+    provider: str | None = None,
+) -> dict[str, Any]:
+    """Build normalized DZI/tile URL scheme for supported providers."""
+    provider_name = _detect_dzi_provider(base_url, mw, provider)
+    module_id = str(mw or "").strip()
+    if not module_id:
+        raise ValueError("`mw` must not be empty.")
+
+    if provider_name == "nla":
+        base = str(base_url or "").strip().rstrip("/")
+        if not base:
+            raise ValueError("`base_url` must not be empty.")
+        dzi_base = f"{base}/{module_id}/dzi?tile="
+        return {
+            "provider": "nla",
+            "zoom_base": f"{base}/{module_id}",
+            "dzi_url": dzi_base,
+            "tiles_base": dzi_base,
+            "tile_url_mode": "query",
+            "referer_root": _origin_from_url(base) or _DEFAULT_REFERER.rstrip("/"),
+        }
+
+    zoom_base = _build_zoom_base_url(base_url, module_id)
+    return {
+        "provider": "npg",
+        "zoom_base": zoom_base,
+        "dzi_url": f"{zoom_base}/zoomXML.dzi",
+        "tiles_base": f"{zoom_base}/zoomXML_files/{int(level)}",
+        "tile_url_mode": "path",
+        "referer_root": _origin_from_url(zoom_base) or _DEFAULT_REFERER.rstrip("/"),
+    }
 
 
 def _origin_from_url(url_text: str) -> str:
@@ -211,9 +268,21 @@ def _make_session(
         return session
 
 
-def _tile_url(tiles_base: str, x: int, y: int, tile_ext: str = "jpg") -> str:
+def _tile_url(
+    tiles_base: str,
+    x: int,
+    y: int,
+    tile_ext: str = "jpg",
+    *,
+    level: int | None = None,
+    mode: str = "path",
+) -> str:
     """Build tile URL for one tile coordinate."""
     ext = str(tile_ext or "jpg").strip().lower().lstrip(".") or "jpg"
+    if str(mode or "path").strip().lower() == "query":
+        if level is None:
+            raise ValueError("`level` is required for query tile mode.")
+        return f"{tiles_base}{int(level)}/{int(x)}_{int(y)}.{ext}"
     return f"{tiles_base}/{int(x)}_{int(y)}.{ext}"
 
 
@@ -778,6 +847,8 @@ def _probe_axis_count(
     axis: str,
     timeout: float,
     max_tiles: int = 4096,
+    level: int | None = None,
+    tile_url_mode: str = "path",
 ) -> int:
     """Probe tile count on one axis using robust status checks."""
     if axis not in {"x", "y"}:
@@ -787,7 +858,12 @@ def _probe_axis_count(
     for i in range(max_tiles):
         x = i if axis == "x" else 0
         y = i if axis == "y" else 0
-        status = _http_status(session, _tile_url(tiles_base, x, y, tile_ext), timeout, transport=transport)
+        status = _http_status(
+            session,
+            _tile_url(tiles_base, x, y, tile_ext, level=level, mode=tile_url_mode),
+            timeout,
+            transport=transport,
+        )
         if status == 200:
             last_success = i
             misses_after_success = 0
@@ -812,6 +888,8 @@ def _probe_axis_count_compat(
     axis: str,
     timeout: float,
     max_tiles: int = 4096,
+    level: int | None = None,
+    tile_url_mode: str = "path",
 ) -> int:
     """Call probe helper with new kwargs and keep compatibility with legacy monkeypatch signatures."""
     try:
@@ -823,6 +901,8 @@ def _probe_axis_count_compat(
             axis=axis,
             timeout=timeout,
             max_tiles=max_tiles,
+            level=level,
+            tile_url_mode=tile_url_mode,
         )
     except TypeError:
         return _probe_axis_count(  # type: ignore[call-arg]
@@ -932,6 +1012,13 @@ class ImageDownloadDZITiles:
                 ),
             },
             "optional": {
+                "provider": (
+                    ["auto", "npg", "nla"],
+                    {
+                        "default": "auto",
+                        "tooltip": "Источник DZI. auto = определить по base_url/mw. npg = National Portrait Gallery UK, nla = National Library of Australia.",
+                    },
+                ),
                 "transport": (
                     ["auto", "requests", "cloudscraper", "urllib", "curl"],
                     {
@@ -967,16 +1054,20 @@ class ImageDownloadDZITiles:
         base_url: str,
         mw: str,
         level: int,
+        provider: str = "auto",
         transport: str = "auto",
         proxy_url: str = "",
         tile_extension: str = "jpg",
     ):
         """Download DZI tiles for selected level and return assembled image tensor."""
         try:
-            zoom_base = _build_zoom_base_url(base_url, mw)
-            dzi_url = f"{zoom_base}/zoomXML.dzi"
-            tiles_base = f"{zoom_base}/zoomXML_files/{int(level)}"
-            referer_root = _origin_from_url(zoom_base) or _DEFAULT_REFERER.rstrip("/")
+            source_urls = _build_dzi_source_urls(base_url, mw, int(level), provider)
+            provider_name = str(source_urls["provider"])
+            zoom_base = str(source_urls["zoom_base"])
+            dzi_url = str(source_urls["dzi_url"])
+            tiles_base = str(source_urls["tiles_base"])
+            tile_url_mode = str(source_urls.get("tile_url_mode") or "path")
+            referer_root = str(source_urls.get("referer_root") or _origin_from_url(zoom_base) or _DEFAULT_REFERER.rstrip("/"))
             referer_candidates = [
                 f"{zoom_base.rstrip('/')}/",
                 f"{referer_root.rstrip('/')}/",
@@ -993,6 +1084,7 @@ class ImageDownloadDZITiles:
             referer_candidates = dedup_referers
             timeout = 20.0
             _log(f"Start download: mw={mw}, level={int(level)}")
+            _log(f"Provider: {provider_name}")
             _log(f"Base: {zoom_base}")
             _log(f"DZI: {dzi_url}")
             _log(f"Tiles: {tiles_base}")
@@ -1017,7 +1109,14 @@ class ImageDownloadDZITiles:
             first_tile_statuses: dict[str, int] = {}
             session = None
             preflight_timeout = min(8.0, float(timeout))
-            preflight_url = _tile_url(tiles_base, 0, 0, selected_tile_ext)
+            preflight_url = _tile_url(
+                tiles_base,
+                0,
+                0,
+                selected_tile_ext,
+                level=int(level),
+                mode=tile_url_mode,
+            )
             proxy_profiles = _build_proxy_profiles(
                 explicit_proxy=proxy_text,
                 trust_env_primary=trust_env_primary,
@@ -1103,7 +1202,14 @@ class ImageDownloadDZITiles:
                         trust_env=profile_trust_env,
                         proxy_url=profile_proxy,
                     )
-                    probe_url = _tile_url(tiles_base, 0, 0, selected_tile_ext)
+                    probe_url = _tile_url(
+                        tiles_base,
+                        0,
+                        0,
+                        selected_tile_ext,
+                        level=int(level),
+                        mode=tile_url_mode,
+                    )
                     for transport in transport_candidates:
                         status, content = _fetch_bytes(trial_session, probe_url, timeout, transport=transport)
                         first_tile_statuses[
@@ -1180,6 +1286,8 @@ class ImageDownloadDZITiles:
                     transport=chosen_transport,
                     axis="x",
                     timeout=timeout,
+                    level=int(level),
+                    tile_url_mode=tile_url_mode,
                 )
                 tiles_y_probe = _probe_axis_count_compat(
                     session,
@@ -1188,6 +1296,8 @@ class ImageDownloadDZITiles:
                     transport=chosen_transport,
                     axis="y",
                     timeout=timeout,
+                    level=int(level),
+                    tile_url_mode=tile_url_mode,
                 )
                 if tiles_x_probe <= 0 or tiles_y_probe <= 0:
                     raise RuntimeError("Could not probe tile grid (x/y tile counts are zero).")
@@ -1195,13 +1305,27 @@ class ImageDownloadDZITiles:
                 tiles_y = int(tiles_y_probe)
                 last_x_tile = _download_tile_compat(
                     session,
-                    _tile_url(tiles_base, tiles_x - 1, 0, tile_ext),
+                    _tile_url(
+                        tiles_base,
+                        tiles_x - 1,
+                        0,
+                        tile_ext,
+                        level=int(level),
+                        mode=tile_url_mode,
+                    ),
                     timeout,
                     transport=chosen_transport,
                 )
                 last_y_tile = _download_tile_compat(
                     session,
-                    _tile_url(tiles_base, 0, tiles_y - 1, tile_ext),
+                    _tile_url(
+                        tiles_base,
+                        0,
+                        tiles_y - 1,
+                        tile_ext,
+                        level=int(level),
+                        mode=tile_url_mode,
+                    ),
                     timeout,
                     transport=chosen_transport,
                 )
@@ -1227,7 +1351,14 @@ class ImageDownloadDZITiles:
                             continue
                         tile = _download_tile_compat(
                             session,
-                            _tile_url(tiles_base, x, y, tile_ext),
+                            _tile_url(
+                                tiles_base,
+                                x,
+                                y,
+                                tile_ext,
+                                level=int(level),
+                                mode=tile_url_mode,
+                            ),
                             timeout,
                             transport=chosen_transport,
                         )

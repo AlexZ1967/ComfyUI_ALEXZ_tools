@@ -1,5 +1,28 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.15 — 2026-03-26
+- `Download DZI Tiles Image`: added provider-aware DZI URL support for
+  `nla.gov.au` (National Library of Australia) in addition to existing
+  `collectionimages.npg.org.uk` support.
+- `nodes/image_download_dzi_tiles.py`:
+  - added `provider` input: `auto` / `npg` / `nla`;
+  - introduced provider-aware URL builder for DZI XML and tile endpoints;
+  - `auto` now detects NLA by `base_url`/`mw` (`nla.obj-...`) and uses
+    query-based tile URLs:
+    `https://nla.gov.au/<mw>/dzi?tile=<level>/<x>_<y>.<ext>`;
+  - existing NPG file-based URL scheme remains unchanged.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_DZI_TILES_DOWNLOAD.md`
+- Tests:
+  - added NLA URL builder and mocked NLA provider smoke coverage in
+    `tests/test_smoke_nodes.py`.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k dzi`;
+  - `conda run -n p313 python utils/docs_check.py`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`.
+- Version updated to `0.27.15` in `pyproject.toml` and `README.md`.
+
 ## 0.27.14 — 2026-03-10
 - `Node Picker`: fixed widget freeze after `Refresh Custom Nodes Info`.
 - Root cause:
