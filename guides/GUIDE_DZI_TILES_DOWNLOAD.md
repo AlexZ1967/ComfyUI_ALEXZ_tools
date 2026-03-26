@@ -8,34 +8,48 @@
 
 ## Когда использовать
 - Когда исходник доступен только через DeepZoom/тайлы.
-- Когда нужно быстро получить цельную картинку из `base_url + mw + level`.
+- Когда нужно быстро получить цельную картинку из `site + mw + level`.
 - Когда DZI-метаданные частично недоступны: нода умеет строить сетку тайлов probe-методом.
 
 ## Минимальный сценарий (3 шага)
 1. Добавьте ноду `Download DZI Tiles Image`.
-2. Укажите `base_url`, `mw`, `level` и при необходимости `provider`.
+2. Выберите `site`, затем укажите `mw` и `level`.
 3. Подключите выход `image` к `Preview Image` или следующей ноде.
 
 ## Параметры
-- `base_url` (`STRING`): базовый URL сайта (без `/zoom`).  
-  Пример: `https://collectionimages.npg.org.uk`
+- `site` (`LIST`): сайт-источник из `config/dzi_sites.json`.  
+  Примеры: `National Portrait Gallery UK`, `National Library of Australia`
 - `mw` (`STRING`): идентификатор изображения.  
-  Пример для NPG: `mw207134`  
-  Пример для NLA: `nla.obj-138204672`
-- `level` (`INT`): уровень тайлов, папка `.../zoomXML_files/<level>/`.
-- `provider` (`auto|npg|nla`): схема URL провайдера.  
-  Обычно достаточно `auto`.
+  Можно вводить только цифры, и нода сама добавит префикс выбранного сайта.  
+  Пример для NPG: `207134` или `mw207134`  
+  Пример для NLA: `138204672` или `nla.obj-138204672`  
+  Если поле пустое, используется `default_mw` выбранного сайта из `config/dzi_sites.json`.
+- `level` (`INT`): уровень тайлов.  
+  Если указать `-1`, используется `default_level` выбранного сайта из `config/dzi_sites.json`.
 - `transport` (`auto|requests|cloudscraper|urllib|curl`): HTTP-транспорт.
 - `proxy_url` (`STRING`): явный прокси URL (опционально).  
   Если пусто, нода использует автоопределение маршрута (env/system proxy + локальные прокси).
 - `tile_extension` (`jpg|jpeg|png|webp`): формат тайлов на стороне сервера.  
   Нода использует только выбранный формат, без перебора остальных.
 
+## Конфиг сайтов
+Файл: `config/dzi_sites.json`
+
+Для каждого сайта в конфиге задаются:
+- `name`: отображаемое имя в dropdown.
+- `base_url`: корневой URL сайта.
+- `provider`: схема сборки DZI URL (`npg` или `nla`).
+- `default_mw`: дефолтный идентификатор изображения.
+- `mw_prefix`: префикс, который нода автоматически добавляет, если в `mw` введены только цифры.
+- `default_level`: дефолтный DZI level.
+- `mw_format`: ожидаемый формат `mw`.
+- `url_scheme`: справочная строка, как формируется tile URL.
+
 ## Decision helper
-- Для `collectionimages.npg.org.uk` используйте `base_url=https://collectionimages.npg.org.uk`, `mw=mw...`, `provider=auto` или `npg`.
-- Для `nla.gov.au` используйте `base_url=https://nla.gov.au`, `mw=nla.obj-...`, `provider=auto` или `nla`.
+- Для `National Portrait Gallery UK` используйте `mw` вида `mw...`.
+- Для `National Library of Australia` используйте `mw` вида `nla.obj-...`.
 - Если не уверены в уровне, начните с уровня, который точно существует у источника.
-- Если при запуске ошибка `First tile is unavailable`, проверьте корректность `base_url`, `mw`, `level` и `tile_extension`.
+- Если при запуске ошибка `First tile is unavailable`, проверьте корректность `site`, `mw`, `level` и `tile_extension`.
 - Если хотите полный размер из конкретного уровня, используйте probe-режим (встроен автоматически).
 - Если в браузере URL открывается, а в ноде нет, оставьте `proxy_url` пустым (авто) или задайте явный рабочий прокси.
 

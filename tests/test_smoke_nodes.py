@@ -875,6 +875,29 @@ class SmokeTests(unittest.TestCase):
             "https://nla.gov.au/nla.obj-138204672/dzi?tile=11/3_4.jpg",
         )
 
+    def test_dzi_tiles_site_config_dropdown(self):
+        """Verify DZI site dropdown is populated from JSON config."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        input_types = dzi_mod.ImageDownloadDZITiles.INPUT_TYPES()
+        site_choices = input_types["required"]["site"][0]
+        self.assertIn("National Portrait Gallery UK", site_choices)
+        self.assertIn("National Library of Australia", site_choices)
+        resolved = dzi_mod._resolve_dzi_site("National Library of Australia", "")
+        self.assertEqual(resolved["base_url"], "https://nla.gov.au")
+        self.assertEqual(resolved["provider"], "nla")
+        self.assertEqual(dzi_mod._normalize_site_mw("138204672", resolved), "nla.obj-138204672")
+        self.assertEqual(
+            dzi_mod._normalize_site_mw("nla.obj-138204672", resolved),
+            "nla.obj-138204672",
+        )
+
+    def test_dzi_tiles_normalize_numeric_mw_for_npg(self):
+        """Verify digits-only mw input is expanded with site prefix."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        resolved = dzi_mod._resolve_dzi_site("National Portrait Gallery UK", "")
+        self.assertEqual(dzi_mod._normalize_site_mw("207134", resolved), "mw207134")
+        self.assertEqual(dzi_mod._normalize_site_mw("mw207134", resolved), "mw207134")
+
     def test_dzi_tiles_download_assembly_mocked_nla_provider(self):
         """Verify DZI node supports NLA query tile scheme without network."""
         dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
@@ -926,10 +949,9 @@ class SmokeTests(unittest.TestCase):
             dzi_mod._download_tile = _fake_download_tile
 
             out, = node.download(
-                "https://nla.gov.au",
-                "nla.obj-138204672",
+                "National Library of Australia",
+                "138204672",
                 11,
-                provider="auto",
             )
         finally:
             dzi_mod._new_session = old_new_session

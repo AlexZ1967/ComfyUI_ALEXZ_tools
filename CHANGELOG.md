@@ -1,5 +1,37 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.16 — 2026-03-26
+- `Download DZI Tiles Image`: switched site selection to JSON-backed catalog.
+- Added `config/dzi_sites.json` with site metadata:
+  - display name;
+  - base URL;
+  - provider;
+  - `default_mw`;
+  - `default_level`;
+  - `mw_prefix`;
+  - reference `url_scheme`.
+- `nodes/image_download_dzi_tiles.py`:
+  - replaced manual `base_url` UI input with `site` dropdown populated from
+    `config/dzi_sites.json`;
+  - `mw=""` now falls back to site `default_mw`;
+  - `level=-1` now falls back to site `default_level`;
+  - digits-only `mw` input is now normalized per site prefix:
+    - NPG: `207134` -> `mw207134`
+    - NLA: `138204672` -> `nla.obj-138204672`
+  - full object ids are still accepted unchanged;
+  - preserved compatibility for legacy direct-URL callers in tests/code paths.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_DZI_TILES_DOWNLOAD.md`
+- Tests:
+  - extended DZI smoke coverage for JSON dropdown config and numeric `mw`
+    normalization in `tests/test_smoke_nodes.py`.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k dzi`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.16` in `pyproject.toml` and `README.md`.
+
 ## 0.27.15 — 2026-03-26
 - `Download DZI Tiles Image`: added provider-aware DZI URL support for
   `nla.gov.au` (National Library of Australia) in addition to existing

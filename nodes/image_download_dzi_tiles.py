@@ -13,6 +13,7 @@ Purpose:
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -23,6 +24,7 @@ import sys
 import traceback
 import xml.etree.ElementTree as ET
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -69,6 +71,39 @@ _COMMON_LOCAL_PROXY_URLS = (
     "http://127.0.0.1:20170",
     "http://127.0.0.1:8889",
 )
+_DZI_SITE_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "dzi_sites.json"
+_DZI_SITE_CONFIG_CACHE: dict[str, Any] | None = None
+
+
+def _fallback_dzi_site_config() -> dict[str, Any]:
+    """Return built-in DZI site config when external JSON is unavailable."""
+    return {
+        "default_site": "National Portrait Gallery UK",
+        "sites": [
+            {
+                "key": "npg",
+                "name": "National Portrait Gallery UK",
+                "base_url": "https://collectionimages.npg.org.uk",
+                "provider": "npg",
+                "mw_prefix": "mw",
+                "default_mw": "mw207134",
+                "default_level": 11,
+                "mw_format": "mw<digits>",
+                "url_scheme": "{base_url}/zoom/{mw}/zoomXML_files/{level}/{x}_{y}.{ext}",
+            },
+            {
+                "key": "nla",
+                "name": "National Library of Australia",
+                "base_url": "https://nla.gov.au",
+                "provider": "nla",
+                "mw_prefix": "nla.obj-",
+                "default_mw": "nla.obj-138204672",
+                "default_level": 11,
+                "mw_format": "nla.obj-<digits>",
+                "url_scheme": "{base_url}/{mw}/dzi?tile={level}/{x}_{y}.{ext}",
+            },
+        ],
+    }
 
 
 def _normalize_provider(provider: str | None) -> str:
@@ -84,6 +119,115 @@ def _log(message: str) -> None:
     print(f"[DZI] {message}")
 
 
+def _load_dzi_site_config() -> dict[str, Any]:
+    """Load DZI site catalog from JSON config with fallback defaults."""
+    global _DZI_SITE_CONFIG_CACHE
+    if _DZI_SITE_CONFIG_CACHE is not None:
+        return _DZI_SITE_CONFIG_CACHE
+
+    fallback = _fallback_dzi_site_config()
+    try:
+        payload = json.loads(_DZI_SITE_CONFIG_PATH.read_text(encoding="utf-8"))
+        sites = payload.get("sites")
+        if not isinstance(sites, list) or not sites:
+            raise ValueError("`sites` must be a non-empty list")
+        normalized_sites = []
+        for raw_site in sites:
+            if not isinstance(raw_site, dict):
+                continue
+            name = str(raw_site.get("name") or "").strip()
+            base_url = str(raw_site.get("base_url") or "").strip().rstrip("/")
+            provider = _normalize_provider(raw_site.get("provider"))
+            if not name or not base_url or provider == "auto":
+                continue
+            normalized_sites.append(
+                {
+                    "key": str(raw_site.get("key") or provider).strip().lower(),
+                    "name": name,
+                    "base_url": base_url,
+                    "provider": provider,
+                    "mw_prefix": str(raw_site.get("mw_prefix") or "").strip(),
+                    "default_mw": str(raw_site.get("default_mw") or "").strip(),
+                    "default_level": int(raw_site.get("default_level") or 11),
+                    "mw_format": str(raw_site.get("mw_format") or "").strip(),
+                    "url_scheme": str(raw_site.get("url_scheme") or "").strip(),
+                }
+            )
+        if not normalized_sites:
+            raise ValueError("no valid site entries found")
+        default_site = str(payload.get("default_site") or normalized_sites[0]["name"]).strip()
+        _DZI_SITE_CONFIG_CACHE = {
+            "default_site": default_site,
+            "sites": normalized_sites,
+        }
+    except Exception as exc:
+        _log(
+            f"Site config fallback: {_DZI_SITE_CONFIG_PATH} "
+            f"({type(exc).__name__}: {exc})"
+        )
+        _DZI_SITE_CONFIG_CACHE = fallback
+    return _DZI_SITE_CONFIG_CACHE
+
+
+def _get_dzi_sites() -> list[dict[str, Any]]:
+    """Return normalized list of configured DZI sites."""
+    return list(_load_dzi_site_config().get("sites") or [])
+
+
+def _get_dzi_site_choice_names() -> list[str]:
+    """Return UI dropdown labels for configured DZI sites."""
+    sites = _get_dzi_sites()
+    names = [str(site.get("name") or "").strip() for site in sites]
+    return [name for name in names if name] or ["National Portrait Gallery UK"]
+
+
+def _get_default_dzi_site_name() -> str:
+    """Return configured default site name for INPUT_TYPES."""
+    payload = _load_dzi_site_config()
+    default_name = str(payload.get("default_site") or "").strip()
+    names = _get_dzi_site_choice_names()
+    if default_name in names:
+        return default_name
+    return names[0]
+
+
+def _resolve_dzi_site(site: str | None, mw: str | None = None) -> dict[str, Any]:
+    """Resolve a configured DZI site from dropdown label, key, URL, or legacy base URL."""
+    site_text = str(site or "").strip()
+    mw_text = str(mw or "").strip()
+    sites = _get_dzi_sites()
+
+    if site_text:
+        lowered = site_text.lower()
+        for candidate in sites:
+            if lowered in {
+                str(candidate.get("name") or "").strip().lower(),
+                str(candidate.get("key") or "").strip().lower(),
+                str(candidate.get("base_url") or "").strip().rstrip("/").lower(),
+            }:
+                return dict(candidate)
+        if "://" in site_text:
+            detected_provider = _detect_dzi_provider(site_text, mw_text, None)
+            return {
+                "key": detected_provider,
+                "name": site_text,
+                "base_url": site_text.rstrip("/"),
+                "provider": detected_provider,
+                "mw_prefix": "",
+                "default_mw": mw_text,
+                "default_level": 11,
+                "mw_format": "",
+                "url_scheme": "",
+            }
+
+    detected_provider = _detect_dzi_provider(site_text, mw_text, None)
+    for candidate in sites:
+        if str(candidate.get("provider") or "").strip().lower() == detected_provider:
+            return dict(candidate)
+
+    return dict(sites[0]) if sites else dict(_fallback_dzi_site_config()["sites"][0])
+
+
 def _log_fetch_error(transport: str, url: str, exc: Exception) -> None:
     """Emit deduplicated transport error details for network diagnostics."""
     key = f"{transport}:{type(exc).__name__}:{str(exc)}"
@@ -91,6 +235,25 @@ def _log_fetch_error(transport: str, url: str, exc: Exception) -> None:
         return
     _FETCH_ERROR_SEEN.add(key)
     _log(f"Fetch error [{transport}]: {url} ({type(exc).__name__}: {exc})")
+
+
+def _normalize_site_mw(mw: str | None, site_config: dict[str, Any]) -> str:
+    """Normalize site object id: digits-only input gets site prefix, full ids pass through."""
+    raw_mw = str(mw or "").strip()
+    if not raw_mw:
+        return str(site_config.get("default_mw") or "").strip()
+    if not raw_mw.isdigit():
+        return raw_mw
+
+    prefix = str(site_config.get("mw_prefix") or "").strip()
+    if prefix:
+        return f"{prefix}{raw_mw}"
+
+    default_mw = str(site_config.get("default_mw") or "").strip()
+    match = re.match(r"^(.*?)(\d+)$", default_mw)
+    if match:
+        return f"{match.group(1)}{raw_mw}"
+    return raw_mw
 
 
 def _build_zoom_base_url(base_url: str, mw: str) -> str:
@@ -985,40 +1148,32 @@ class ImageDownloadDZITiles:
         """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
         return {
             "required": {
-                "base_url": (
-                    "STRING",
+                "site": (
+                    _get_dzi_site_choice_names(),
                     {
-                        "default": "https://collectionimages.npg.org.uk",
-                        "multiline": False,
-                        "tooltip": "Базовый URL сайта без /zoom (например https://collectionimages.npg.org.uk). Суффикс /zoom добавляется автоматически.",
+                        "default": _get_default_dzi_site_name(),
+                        "tooltip": "Сайт-источник DZI. Список и настройки сайтов берутся из config/dzi_sites.json.",
                     },
                 ),
                 "mw": (
                     "STRING",
                     {
-                        "default": "mw207134",
+                        "default": "",
                         "multiline": False,
-                        "tooltip": "Идентификатор изображения (например mw207134). Полный путь формируется как <base_url>/zoom/<mw>/...",
+                        "tooltip": "Идентификатор изображения. Можно ввести только цифры: нода сама добавит префикс сайта. Пусто = использовать default_mw выбранного сайта из config/dzi_sites.json.",
                     },
                 ),
                 "level": (
                     "INT",
                     {
                         "default": 11,
-                        "min": 0,
+                        "min": -1,
                         "max": 32,
-                        "tooltip": "Уровень DZI-тайлов (папка .../zoomXML_files/<level>/). Чем выше уровень, тем выше итоговое разрешение.",
+                        "tooltip": "Уровень DZI-тайлов. Значение -1 = использовать default_level выбранного сайта из config/dzi_sites.json.",
                     },
                 ),
             },
             "optional": {
-                "provider": (
-                    ["auto", "npg", "nla"],
-                    {
-                        "default": "auto",
-                        "tooltip": "Источник DZI. auto = определить по base_url/mw. npg = National Portrait Gallery UK, nla = National Library of Australia.",
-                    },
-                ),
                 "transport": (
                     ["auto", "requests", "cloudscraper", "urllib", "curl"],
                     {
@@ -1051,17 +1206,26 @@ class ImageDownloadDZITiles:
 
     def download(
         self,
-        base_url: str,
+        site: str,
         mw: str,
         level: int,
-        provider: str = "auto",
         transport: str = "auto",
         proxy_url: str = "",
         tile_extension: str = "jpg",
     ):
         """Download DZI tiles for selected level and return assembled image tensor."""
         try:
-            source_urls = _build_dzi_source_urls(base_url, mw, int(level), provider)
+            site_config = _resolve_dzi_site(site, mw)
+            base_url = str(site_config.get("base_url") or "").strip()
+            provider_name = str(site_config.get("provider") or "npg").strip().lower()
+            effective_mw = _normalize_site_mw(mw, site_config)
+            if not effective_mw:
+                raise ValueError("`mw` is empty and selected site has no `default_mw` in config/dzi_sites.json.")
+            effective_level = int(level)
+            if effective_level < 0:
+                effective_level = int(site_config.get("default_level") or 11)
+
+            source_urls = _build_dzi_source_urls(base_url, effective_mw, effective_level, provider_name)
             provider_name = str(source_urls["provider"])
             zoom_base = str(source_urls["zoom_base"])
             dzi_url = str(source_urls["dzi_url"])
@@ -1083,7 +1247,8 @@ class ImageDownloadDZITiles:
                 dedup_referers.append(ref_norm)
             referer_candidates = dedup_referers
             timeout = 20.0
-            _log(f"Start download: mw={mw}, level={int(level)}")
+            _log(f"Start download: mw={effective_mw}, level={effective_level}")
+            _log(f"Site: {site_config.get('name')}")
             _log(f"Provider: {provider_name}")
             _log(f"Base: {zoom_base}")
             _log(f"DZI: {dzi_url}")
@@ -1114,7 +1279,7 @@ class ImageDownloadDZITiles:
                 0,
                 0,
                 selected_tile_ext,
-                level=int(level),
+                level=effective_level,
                 mode=tile_url_mode,
             )
             proxy_profiles = _build_proxy_profiles(
@@ -1207,7 +1372,7 @@ class ImageDownloadDZITiles:
                         0,
                         0,
                         selected_tile_ext,
-                        level=int(level),
+                        level=effective_level,
                         mode=tile_url_mode,
                     )
                     for transport in transport_candidates:
@@ -1253,7 +1418,7 @@ class ImageDownloadDZITiles:
                 raise RuntimeError(
                     f"First tile is unavailable at `{tiles_base}`. "
                     f"Tried extension [{selected_tile_ext}], statuses [{status_hint}]. "
-                    f"Check `base_url`, `mw`, `level`, and `tile_extension`.{proxy_hint}"
+                    f"Check `site`, `mw`, `level`, and `tile_extension`.{proxy_hint}"
                 )
             _log(f"Transport selected: {chosen_transport}")
             if chosen_proxy_url:
@@ -1273,7 +1438,7 @@ class ImageDownloadDZITiles:
 
             tile_size = int(dzi_info["tile_size"]) if isinstance(dzi_info, dict) else int(first_tile.size[0])
             if isinstance(dzi_info, dict):
-                width, height, tiles_x, tiles_y = _compute_level_geometry_from_dzi(dzi_info, int(level))
+                width, height, tiles_x, tiles_y = _compute_level_geometry_from_dzi(dzi_info, effective_level)
                 _log(
                     f"Geometry source=DZI, tile_size={tile_size}, "
                     f"canvas={int(width)}x{int(height)}, grid={int(tiles_x)}x{int(tiles_y)}"
@@ -1286,7 +1451,7 @@ class ImageDownloadDZITiles:
                     transport=chosen_transport,
                     axis="x",
                     timeout=timeout,
-                    level=int(level),
+                    level=effective_level,
                     tile_url_mode=tile_url_mode,
                 )
                 tiles_y_probe = _probe_axis_count_compat(
@@ -1296,7 +1461,7 @@ class ImageDownloadDZITiles:
                     transport=chosen_transport,
                     axis="y",
                     timeout=timeout,
-                    level=int(level),
+                    level=effective_level,
                     tile_url_mode=tile_url_mode,
                 )
                 if tiles_x_probe <= 0 or tiles_y_probe <= 0:
@@ -1310,7 +1475,7 @@ class ImageDownloadDZITiles:
                         tiles_x - 1,
                         0,
                         tile_ext,
-                        level=int(level),
+                        level=effective_level,
                         mode=tile_url_mode,
                     ),
                     timeout,
@@ -1323,7 +1488,7 @@ class ImageDownloadDZITiles:
                         0,
                         tiles_y - 1,
                         tile_ext,
-                        level=int(level),
+                        level=effective_level,
                         mode=tile_url_mode,
                     ),
                     timeout,
@@ -1356,7 +1521,7 @@ class ImageDownloadDZITiles:
                                 x,
                                 y,
                                 tile_ext,
-                                level=int(level),
+                                level=effective_level,
                                 mode=tile_url_mode,
                             ),
                             timeout,

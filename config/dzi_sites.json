@@ -1,0 +1,27 @@
+{
+  "default_site": "National Portrait Gallery UK",
+  "sites": [
+    {
+      "key": "npg",
+      "name": "National Portrait Gallery UK",
+      "base_url": "https://collectionimages.npg.org.uk",
+      "provider": "npg",
+      "mw_prefix": "mw",
+      "default_mw": "mw207134",
+      "default_level": 11,
+      "mw_format": "mw<digits>",
+      "url_scheme": "{base_url}/zoom/{mw}/zoomXML_files/{level}/{x}_{y}.{ext}"
+    },
+    {
+      "key": "nla",
+      "name": "National Library of Australia",
+      "base_url": "https://nla.gov.au",
+      "provider": "nla",
+      "mw_prefix": "nla.obj-",
+      "default_mw": "nla.obj-138204672",
+      "default_level": 11,
+      "mw_format": "nla.obj-<digits>",
+      "url_scheme": "{base_url}/{mw}/dzi?tile={level}/{x}_{y}.{ext}"
+    }
+  ]
+}
