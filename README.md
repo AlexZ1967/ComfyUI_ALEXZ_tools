@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.27.17
+Version: 0.28.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -53,6 +53,8 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Image Difference](#image-difference)
 - [Generate QR Code](#generate-qr-code)
 - [Download DZI Tiles Image](#download-dzi-tiles-image)
+- [Download DZI Tiles Batch Save](#download-dzi-tiles-batch-save)
+- [Search Trove Image IDs](#search-trove-image-ids)
 - [Image Waveform Scope](#image-waveform-scope)
 - [Image Histogram Scope](#image-histogram-scope)
 - [Remove Static Watermark from Video](#remove-static-watermark-from-video)
@@ -252,6 +254,34 @@ Guide: [GUIDE_QR_CODE.md](guides/GUIDE_QR_CODE.md)
 Новые сайты можно добавлять через `config/dzi_sites.json`, если указать `object_url_template`, `dzi_url_template` и `tile_url_template`.  
 Выходы: `image`.  
 Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
+
+---
+
+## Download DZI Tiles Batch Save
+Батч-скачивание DZI изображений со сохранением на диск и manifest JSON.
+
+- Display name: Download DZI Tiles Batch Save  
+- Type name: ImageDownloadDZITilesBatchSave  
+- Category: image/io  
+Входы: `site`, `ids_text`, `output_dir`, `level`, `transport`, `proxy_url`, `tile_extension`, `output_extension`, `filename_template`, `overwrite_mode`, `continue_on_error`, `save_mode`.  
+`ids_text`: multiline список ID, поддерживаются также `,` и `;`, строки с `#` игнорируются.  
+`output_extension`: `png` / `jpg` / `jpeg` / `webp` для итоговых файлов на диске.  
+`filename_template` поддерживает: `{index}`, `{raw_id}`, `{mw}`, `{id}`, `{site}`, `{site_key}`, `{level}`.  
+Выходы: `manifest_json`, `saved_paths_json`, `count_ok`, `count_failed`.  
+Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
+
+---
+
+## Search Trove Image IDs
+Best-effort поиск `nla.obj-...` в Trove Images через headless Chrome render публичной search-страницы.
+
+- Display name: Search Trove Image IDs  
+- Type name: SearchTroveImageIDs  
+- Category: image/io  
+Входы: `query`, `category`, `max_results`, `virtual_time_budget_ms`.  
+Выходы: `ids_text`, `result_json`, `count`.  
+Ограничение: это не официальный API-режим; Trove anti-bot/UI flow может мешать стабильному поиску без API key.  
+Guide: [GUIDE_TROVE_SEARCH_IDS.md](guides/GUIDE_TROVE_SEARCH_IDS.md)
 
 ---
 

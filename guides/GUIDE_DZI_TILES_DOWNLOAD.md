@@ -1,7 +1,11 @@
-# GUIDE: Download DZI Tiles Image
+# GUIDE: Download DZI Tiles Image / Batch Save
 
 ## Назначение
-Нода `Download DZI Tiles Image` скачивает DZI-тайлы по HTTP и собирает их в одно изображение `IMAGE` для дальнейшей обработки в ComfyUI.
+Ноды `Download DZI Tiles Image` и `Download DZI Tiles Batch Save` работают с Deep Zoom Image (DZI) источниками.
+
+- `Download DZI Tiles Image`: скачивает один DZI-источник и возвращает `IMAGE`.
+- `Download DZI Tiles Batch Save`: скачивает список DZI-источников и сразу сохраняет результат на диск, возвращая manifest JSON и статистику.
+
 Сейчас поддерживаются как минимум две схемы:
 - `npg`: `collectionimages.npg.org.uk`
 - `nla`: `nla.gov.au`
@@ -10,11 +14,17 @@
 - Когда исходник доступен только через DeepZoom/тайлы.
 - Когда нужно быстро получить цельную картинку из `site + mw + level`.
 - Когда DZI-метаданные частично недоступны: нода умеет строить сетку тайлов probe-методом.
+- Когда нужно скачать сразу много изображений и сохранить их в папку без промежуточного выхода `IMAGE`.
 
 ## Минимальный сценарий (3 шага)
 1. Добавьте ноду `Download DZI Tiles Image`.
 2. Выберите `site`, затем укажите `mw` и `level`.
 3. Подключите выход `image` к `Preview Image` или следующей ноде.
+
+Для batch-варианта:
+1. Добавьте ноду `Download DZI Tiles Batch Save`.
+2. Вставьте список ID в `ids_text`, задайте `output_dir` и при необходимости `filename_template`.
+3. Запустите ноду и используйте `manifest_json` / `saved_paths_json` для контроля результата.
 
 ## Параметры
 - `site` (`LIST`): сайт-источник из `config/dzi_sites.json`.  
@@ -31,6 +41,15 @@
   Если пусто, нода использует автоопределение маршрута (env/system proxy + локальные прокси).
 - `tile_extension` (`jpg|jpeg|png|webp`): формат тайлов на стороне сервера.  
   Нода использует только выбранный формат, без перебора остальных.
+- `ids_text` (`STRING`, batch only): список ID, по одному на строку.  
+  Также поддерживаются разделители `,` и `;`. Пустые строки и строки/хвосты после `#` игнорируются.
+- `output_dir` (`STRING`, batch only): папка для сохранения итоговых изображений.
+- `output_extension` (`png|jpg|jpeg|webp`, batch only): формат сохранения итогового файла.
+- `filename_template` (`STRING`, batch only): шаблон имени файла без расширения.  
+  Поддерживаются плейсхолдеры: `{index}`, `{raw_id}`, `{mw}`, `{id}`, `{site}`, `{site_key}`, `{level}`.
+- `overwrite_mode` (`skip|overwrite|unique`, batch only): поведение при существующем файле.
+- `continue_on_error` (`true|false`, batch only): продолжать ли батч после ошибки отдельного элемента.
+- `save_mode` (`save_only|save_and_manifest`, batch only): сохранять только изображения или дополнительно записывать `dzi_batch_manifest*.json`.
 
 ## Конфиг сайтов
 Файл: `config/dzi_sites.json`
@@ -69,6 +88,9 @@
 
 ## Интерпретация выходов
 - `image`: собранное изображение в формате ComfyUI `IMAGE` (`[1, H, W, 3]`, float32, `0..1`).
+- `manifest_json` (batch): JSON с параметрами батча, статусом каждого элемента и итоговыми счётчиками.
+- `saved_paths_json` (batch): JSON-массив путей к успешно сохранённым файлам.
+- `count_ok` / `count_failed` (batch): агрегированная статистика батча.
 
 ## Типовые ошибки и решения
 - Ошибка доступа к первому тайлу:
@@ -77,6 +99,9 @@
 - Неполная картинка:
   - Причина: источник имеет нестандартную схему тайлов.
   - Решение: проверьте доступность тайлов по осям и корректность `level`.
+- Batch ничего не сохранил:
+  - Причина: пустой `ids_text`, неверный `output_dir` или все элементы были пропущены режимом `skip`.
+  - Решение: проверьте `ids_text`, права на запись в `output_dir` и `overwrite_mode`.
 
 ## Производительность
 - Основное время уходит на сетевые запросы и декодирование JPEG.

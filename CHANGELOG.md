@@ -1,5 +1,41 @@
 # Changelog — ALEXZ_tools
 
+## 0.28.0 — 2026-03-26
+- Added new node `Search Trove Image IDs` for best-effort discovery of
+  `nla.obj-...` identifiers from Trove public image search.
+- Added new node `Download DZI Tiles Batch Save` for multi-ID DZI downloads
+  with direct save-to-disk workflow and manifest output.
+- `nodes/trove_search_ids.py`:
+  - added headless Chrome-based Trove search flow;
+  - returns newline-separated ids, diagnostics JSON, and count;
+  - designed as a non-API best-effort mode because Trove search without an API
+    key is SPA/anti-bot constrained.
+- `nodes/image_download_dzi_tiles.py`:
+  - added batch helpers for parsing `ids_text`, filename templating, overwrite
+    policies, output path resolution, and image saving;
+  - added `ImageDownloadDZITilesBatchSave` with:
+    `output_dir`, `output_extension`, `filename_template`, `overwrite_mode`,
+    `continue_on_error`, and `save_mode`;
+  - batch mode now writes manifest JSON and saved-paths JSON outputs for
+    downstream automation.
+- `nodes/node_registry.py`:
+  - registered `SearchTroveImageIDs`;
+  - registered `ImageDownloadDZITilesBatchSave`;
+  - added node metadata, aliases, and output tooltips for both nodes.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_DZI_TILES_DOWNLOAD.md`
+  - `guides/GUIDE_TROVE_SEARCH_IDS.md`
+- Tests/docs contracts updated:
+  - added Trove search node contract smoke test;
+  - added batch DZI save smoke test;
+  - extended `utils/docs_check.py` for both new nodes.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "dzi or trove_search_ids_node_contract or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`;
+  - `conda run -n p313 python -m py_compile nodes/trove_search_ids.py nodes/node_registry.py utils/docs_check.py`.
+- Version updated to `0.28.0` in `pyproject.toml` and `README.md`.
+
 ## 0.27.17 — 2026-03-26
 - `Download DZI Tiles Image`: moved provider URL logic to config-driven
   templates so new archives can be added through JSON without Python changes.

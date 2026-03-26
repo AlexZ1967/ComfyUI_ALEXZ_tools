@@ -47,6 +47,8 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
     NodeSpec("GenerateQRCode", "Generate QR Code", ".qr_code_generate", "GenerateQRCode"),
     NodeSpec("ImageDownloadDZITiles", "Download DZI Tiles Image", ".image_download_dzi_tiles", "ImageDownloadDZITiles"),
+    NodeSpec("ImageDownloadDZITilesBatchSave", "Download DZI Tiles Batch Save", ".image_download_dzi_tiles", "ImageDownloadDZITilesBatchSave"),
+    NodeSpec("SearchTroveImageIDs", "Search Trove Image IDs", ".trove_search_ids", "SearchTroveImageIDs"),
     NodeSpec("ALEXZTestNode", "ALEXZ Test Node", ".test_node", "ALEXZTestNode"),
 )
 
@@ -151,6 +153,16 @@ NODE_UI_METADATA = {
         "description": "Скачивает DZI-тайлы и собирает итоговое изображение.",
         "output_tooltips": ["Собранное изображение из тайлов DZI."],
         "search_aliases": ["dzi", "tiles", "download", "zoom"],
+    },
+    "ImageDownloadDZITilesBatchSave": {
+        "description": "Батч-скачивание DZI изображений со сохранением на диск и manifest JSON.",
+        "output_tooltips": ["JSON manifest по всему батчу.", "JSON списка сохраненных путей.", "Количество успешно сохраненных изображений.", "Количество ошибок."],
+        "search_aliases": ["dzi", "tiles", "download", "batch", "save"],
+    },
+    "SearchTroveImageIDs": {
+        "description": "Ищет `nla.obj-...` id в Trove Images через best-effort headless Chrome search.",
+        "output_tooltips": ["IDs по одному на строку.", "JSON с URL поиска и диагностикой.", "Количество найденных ids."],
+        "search_aliases": ["trove", "search", "nla", "ids", "images"],
     },
     "ALEXZTestNode": {
         "description": "Тестовая нода для проверки загрузки пакета и Module Nodes.",

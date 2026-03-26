@@ -1058,10 +1058,90 @@ class SmokeTests(unittest.TestCase):
         class_map = getattr(nodes_pkg, "NODE_CLASS_MAPPINGS", {})
         self.assertIn("GenerateQRCode", class_map)
         self.assertIn("ImageDownloadDZITiles", class_map)
+        self.assertIn("ImageDownloadDZITilesBatchSave", class_map)
+        self.assertIn("SearchTroveImageIDs", class_map)
         qr_cls = class_map["GenerateQRCode"]
         self.assertTrue(bool(getattr(qr_cls, "DESCRIPTION", "")))
         self.assertTrue(hasattr(qr_cls, "OUTPUT_TOOLTIPS"))
         self.assertTrue(hasattr(qr_cls, "SEARCH_ALIASES"))
+
+    def test_trove_search_ids_node_contract(self):
+        """Verify Trove search node returns newline-separated ids and diagnostic JSON."""
+        trove_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.trove_search_ids")
+        node = trove_mod.SearchTroveImageIDs()
+        old_search = trove_mod._search_trove_ids_via_chrome
+        try:
+            trove_mod._search_trove_ids_via_chrome = lambda *args, **kwargs: {
+                "query": "Pavlova",
+                "category": "images",
+                "search_url": "https://trove.nla.gov.au/search/category/images?keyword=Pavlova",
+                "chrome_path": "/usr/bin/google-chrome",
+                "returncode": 0,
+                "count": 3,
+                "ids": [
+                    "nla.obj-138204672",
+                    "nla.obj-162204874",
+                    "nla.obj-150139367",
+                ],
+                "warning": "",
+                "stdout_excerpt": "",
+                "stderr_excerpt": "",
+            }
+            ids_text, result_json, count = node.search("Pavlova")
+        finally:
+            trove_mod._search_trove_ids_via_chrome = old_search
+
+        payload = json.loads(result_json)
+        self.assertEqual(count, 3)
+        self.assertIn("nla.obj-138204672", ids_text)
+        self.assertEqual(payload["count"], 3)
+        self.assertEqual(payload["category"], "images")
+
+    def test_dzi_tiles_batch_save_writes_files_and_manifest(self):
+        """Verify batch DZI saver writes output files and returns manifest JSON."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        node = dzi_mod.ImageDownloadDZITilesBatchSave()
+
+        old_download = dzi_mod.ImageDownloadDZITiles.download
+
+        try:
+            def _fake_download(_self, site, mw, level, transport="auto", proxy_url="", tile_extension="jpg"):
+                _ = (site, level, transport, proxy_url, tile_extension)
+                value = 0.25 if str(mw).endswith("134") else 0.75
+                image = torch.full((1, 4, 4, 3), float(value), dtype=torch.float32)
+                return (image,)
+
+            dzi_mod.ImageDownloadDZITiles.download = _fake_download
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                manifest_json, saved_paths_json, count_ok, count_failed = node.download_batch(
+                    "National Portrait Gallery UK",
+                    "207134\n207135",
+                    tmpdir,
+                    -1,
+                    output_extension="png",
+                    filename_template="{mw}",
+                    overwrite_mode="skip",
+                    continue_on_error="true",
+                    save_mode="save_and_manifest",
+                )
+
+                manifest = json.loads(manifest_json)
+                saved_paths = json.loads(saved_paths_json)
+                self.assertEqual(count_ok, 2)
+                self.assertEqual(count_failed, 0)
+                self.assertEqual(len(saved_paths), 2)
+                self.assertEqual(manifest["count_ok"], 2)
+                self.assertTrue(any(path.endswith("mw207134.png") for path in saved_paths))
+                self.assertTrue(any(path.endswith("mw207135.png") for path in saved_paths))
+                for path in saved_paths:
+                    self.assertTrue(os.path.exists(path))
+                manifest_path = os.path.join(tmpdir, "dzi_batch_manifest_001.json")
+                if not os.path.exists(manifest_path):
+                    manifest_path = os.path.join(tmpdir, "dzi_batch_manifest.json")
+                self.assertTrue(os.path.exists(manifest_path))
+        finally:
+            dzi_mod.ImageDownloadDZITiles.download = old_download
 
 
 if __name__ == "__main__":

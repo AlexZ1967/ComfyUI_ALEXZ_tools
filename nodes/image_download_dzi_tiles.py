@@ -1239,6 +1239,120 @@ def _image_to_tensor(image: Image.Image) -> torch.Tensor:
     return torch.from_numpy(np_image).unsqueeze(0)
 
 
+def _resolve_dzi_request_context(site: str, mw: str, level: int) -> dict[str, Any]:
+    """Resolve effective site/object request context for DZI download."""
+    site_config = _resolve_dzi_site(site, mw)
+    base_url = str(site_config.get("base_url") or "").strip()
+    provider_name = str(site_config.get("provider") or "npg").strip().lower()
+    effective_mw = _normalize_site_mw(mw, site_config)
+    if not effective_mw:
+        raise ValueError("`mw` is empty and selected site has no `default_mw` in config/dzi_sites.json.")
+    effective_level = int(level)
+    if effective_level < 0:
+        effective_level = int(site_config.get("default_level") or 11)
+    return {
+        "site_config": site_config,
+        "base_url": base_url,
+        "provider_name": provider_name,
+        "effective_mw": effective_mw,
+        "effective_level": effective_level,
+    }
+
+
+def _parse_dzi_ids_text(ids_text: str) -> list[str]:
+    """Parse multiline/comma-separated DZI ids, skipping blanks and comments."""
+    values: list[str] = []
+    for raw_line in str(ids_text or "").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        for part in re.split(r"[;,]+", line):
+            token = str(part or "").strip()
+            if token:
+                values.append(token)
+    return values
+
+
+def _sanitize_filename_component(text: str) -> str:
+    """Normalize user-facing filename fragment into safe portable text."""
+    cleaned = re.sub(r"[\\/:*?\"<>|]+", "_", str(text or "").strip())
+    cleaned = re.sub(r"\s+", "_", cleaned)
+    cleaned = re.sub(r"_+", "_", cleaned).strip("._")
+    return cleaned or "item"
+
+
+def _render_dzi_filename(
+    filename_template: str,
+    *,
+    index: int,
+    raw_id: str,
+    effective_mw: str,
+    site_config: dict[str, Any],
+    effective_level: int,
+) -> str:
+    """Render output filename stem for one batch item."""
+    template = str(filename_template or "{mw}").strip() or "{mw}"
+    site_name = str(site_config.get("name") or "").strip()
+    site_key = str(site_config.get("key") or site_name).strip()
+    data = {
+        "index": int(index),
+        "raw_id": _sanitize_filename_component(raw_id),
+        "mw": _sanitize_filename_component(effective_mw),
+        "id": _sanitize_filename_component(effective_mw),
+        "site": _sanitize_filename_component(site_name),
+        "site_key": _sanitize_filename_component(site_key),
+        "level": int(effective_level),
+    }
+    try:
+        rendered = template.format(**data)
+    except Exception:
+        rendered = data["mw"]
+    return _sanitize_filename_component(rendered)
+
+
+def _resolve_unique_output_path(output_dir: str, stem: str, ext: str, overwrite_mode: str) -> tuple[str, str]:
+    """Resolve final output path according to overwrite strategy."""
+    normalized_ext = str(ext or "png").strip().lower().lstrip(".") or "png"
+    base_path = os.path.join(output_dir, f"{stem}.{normalized_ext}")
+    mode = str(overwrite_mode or "skip").strip().lower()
+    if mode == "overwrite":
+        return base_path, "overwrite"
+    if mode == "unique":
+        if not os.path.exists(base_path):
+            return base_path, "unique_new"
+        index = 1
+        while True:
+            candidate = os.path.join(output_dir, f"{stem}_{index:03d}.{normalized_ext}")
+            if not os.path.exists(candidate):
+                return candidate, "unique_suffix"
+            index += 1
+    return base_path, "skip"
+
+
+def _tensor_image_to_pil(image_tensor: torch.Tensor) -> Image.Image:
+    """Convert Comfy IMAGE tensor [1,H,W,3] to PIL RGB image."""
+    if image_tensor.ndim != 4 or int(image_tensor.shape[0]) < 1:
+        raise ValueError("Expected IMAGE tensor with shape [1,H,W,3].")
+    image = image_tensor[0].detach().cpu().clamp(0.0, 1.0).numpy()
+    return Image.fromarray(np.clip(image * 255.0, 0.0, 255.0).astype(np.uint8), mode="RGB")
+
+
+def _save_pil_image(image: Image.Image, output_path: str, output_extension: str) -> None:
+    """Save PIL image to disk using requested output extension."""
+    ext = str(output_extension or "png").strip().lower().lstrip(".") or "png"
+    image_rgb = image.convert("RGB")
+    if ext == "png":
+        image_rgb.save(output_path, format="PNG", optimize=True)
+        return
+    if ext in {"jpg", "jpeg"}:
+        image_rgb.save(output_path, format="JPEG", quality=95, subsampling=0, optimize=True)
+        return
+    if ext == "webp":
+        image_rgb.save(output_path, format="WEBP", quality=95, method=6)
+        return
+    raise ValueError("Unsupported output_extension. Allowed: png, jpg, jpeg, webp.")
+
+
 class ImageDownloadDZITiles:
     """ComfyUI node that downloads and assembles DZI tile images."""
 
@@ -1314,15 +1428,12 @@ class ImageDownloadDZITiles:
     ):
         """Download DZI tiles for selected level and return assembled image tensor."""
         try:
-            site_config = _resolve_dzi_site(site, mw)
-            base_url = str(site_config.get("base_url") or "").strip()
-            provider_name = str(site_config.get("provider") or "npg").strip().lower()
-            effective_mw = _normalize_site_mw(mw, site_config)
-            if not effective_mw:
-                raise ValueError("`mw` is empty and selected site has no `default_mw` in config/dzi_sites.json.")
-            effective_level = int(level)
-            if effective_level < 0:
-                effective_level = int(site_config.get("default_level") or 11)
+            request_ctx = _resolve_dzi_request_context(site, mw, level)
+            site_config = dict(request_ctx["site_config"])
+            base_url = str(request_ctx["base_url"])
+            provider_name = str(request_ctx["provider_name"])
+            effective_mw = str(request_ctx["effective_mw"])
+            effective_level = int(request_ctx["effective_level"])
 
             source_urls = _build_dzi_source_urls(
                 base_url,
@@ -1668,3 +1779,237 @@ class ImageDownloadDZITiles:
             _log(f"Node failed: {type(exc).__name__}: {exc}")
             _log(traceback.format_exc().rstrip())
             raise
+
+
+class ImageDownloadDZITilesBatchSave:
+    """ComfyUI node that downloads multiple DZI images and saves them to disk."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        """Return ComfyUI INPUT_TYPES schema for batch DZI download/save."""
+        return {
+            "required": {
+                "site": (
+                    _get_dzi_site_choice_names(),
+                    {
+                        "default": _get_default_dzi_site_name(),
+                        "tooltip": "Сайт-источник DZI. Список и настройки сайтов берутся из config/dzi_sites.json.",
+                    },
+                ),
+                "ids_text": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "tooltip": "Список ID, по одному на строку. Допустимы также разделители ',' и ';'. Пустые строки и строки, начинающиеся с '#', игнорируются.",
+                    },
+                ),
+                "output_dir": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Папка для сохранения итоговых изображений.",
+                    },
+                ),
+                "level": (
+                    "INT",
+                    {
+                        "default": -1,
+                        "min": -1,
+                        "max": 32,
+                        "tooltip": "Уровень DZI-тайлов. Значение -1 = использовать default_level выбранного сайта.",
+                    },
+                ),
+            },
+            "optional": {
+                "transport": (
+                    ["auto", "requests", "cloudscraper", "urllib", "curl"],
+                    {
+                        "default": "auto",
+                        "tooltip": "Транспорт HTTP. auto = перебор requests/cloudscraper/urllib/curl.",
+                    },
+                ),
+                "proxy_url": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Явный HTTP(S) proxy. Пусто = автоопределение (env + локальные порты).",
+                    },
+                ),
+                "tile_extension": (
+                    ["jpg", "jpeg", "png", "webp"],
+                    {
+                        "default": "jpg",
+                        "tooltip": "Расширение тайлов на сервере.",
+                    },
+                ),
+                "output_extension": (
+                    ["png", "jpg", "jpeg", "webp"],
+                    {
+                        "default": "png",
+                        "tooltip": "Формат сохранения итоговой картинки на диск.",
+                    },
+                ),
+                "filename_template": (
+                    "STRING",
+                    {
+                        "default": "{mw}",
+                        "multiline": False,
+                        "tooltip": "Шаблон имени файла без расширения. Поддерживаются: {index}, {raw_id}, {mw}, {id}, {site}, {site_key}, {level}.",
+                    },
+                ),
+                "overwrite_mode": (
+                    ["skip", "overwrite", "unique"],
+                    {
+                        "default": "skip",
+                        "tooltip": "Поведение при существующем файле: skip / overwrite / unique.",
+                    },
+                ),
+                "continue_on_error": (
+                    ["true", "false"],
+                    {
+                        "default": "true",
+                        "tooltip": "Продолжать обработку после ошибки отдельного ID.",
+                    },
+                ),
+                "save_mode": (
+                    ["save_only", "save_and_manifest"],
+                    {
+                        "default": "save_and_manifest",
+                        "tooltip": "save_only = только изображения. save_and_manifest = дополнительно записать dzi_batch_manifest.json.",
+                    },
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "STRING", "INT", "INT")
+    RETURN_NAMES = ("manifest_json", "saved_paths_json", "count_ok", "count_failed")
+    FUNCTION = "download_batch"
+    CATEGORY = "image/io"
+    OUTPUT_NODE = True
+
+    def download_batch(
+        self,
+        site: str,
+        ids_text: str,
+        output_dir: str,
+        level: int,
+        transport: str = "auto",
+        proxy_url: str = "",
+        tile_extension: str = "jpg",
+        output_extension: str = "png",
+        filename_template: str = "{mw}",
+        overwrite_mode: str = "skip",
+        continue_on_error: str = "true",
+        save_mode: str = "save_and_manifest",
+    ):
+        """Download multiple DZI images, save them to disk, and return manifest data."""
+        output_dir_raw = str(output_dir or "").strip()
+        if not output_dir_raw:
+            raise ValueError("`output_dir` must not be empty.")
+        output_dir_text = os.path.abspath(os.path.expanduser(output_dir_raw))
+        os.makedirs(output_dir_text, exist_ok=True)
+
+        parsed_ids = _parse_dzi_ids_text(ids_text)
+        if not parsed_ids:
+            raise ValueError("`ids_text` does not contain any valid IDs.")
+
+        continue_flag = str(continue_on_error or "true").strip().lower() == "true"
+        batch_manifest: dict[str, Any] = {
+            "site": str(site or "").strip(),
+            "output_dir": output_dir_text,
+            "level": int(level),
+            "tile_extension": str(tile_extension or "jpg").strip().lower(),
+            "output_extension": str(output_extension or "png").strip().lower(),
+            "filename_template": str(filename_template or "{mw}"),
+            "overwrite_mode": str(overwrite_mode or "skip"),
+            "save_mode": str(save_mode or "save_only"),
+            "items": [],
+        }
+        saved_paths: list[str] = []
+        count_ok = 0
+        count_failed = 0
+        single_node = ImageDownloadDZITiles()
+
+        for index, raw_id in enumerate(parsed_ids, start=1):
+            request_ctx = _resolve_dzi_request_context(site, raw_id, level)
+            site_config = dict(request_ctx["site_config"])
+            effective_mw = str(request_ctx["effective_mw"])
+            effective_level = int(request_ctx["effective_level"])
+            filename_stem = _render_dzi_filename(
+                filename_template,
+                index=index,
+                raw_id=raw_id,
+                effective_mw=effective_mw,
+                site_config=site_config,
+                effective_level=effective_level,
+            )
+            output_path, output_policy = _resolve_unique_output_path(
+                output_dir_text,
+                filename_stem,
+                output_extension,
+                overwrite_mode,
+            )
+            item_record = {
+                "index": index,
+                "raw_id": raw_id,
+                "mw": effective_mw,
+                "level": effective_level,
+                "path": output_path,
+                "status": "pending",
+            }
+
+            try:
+                if output_policy == "skip" and os.path.exists(output_path):
+                    item_record["status"] = "skipped_existing"
+                    batch_manifest["items"].append(item_record)
+                    _log(f"Batch skip existing: {output_path}")
+                    continue
+
+                image_tensor, = single_node.download(
+                    site,
+                    raw_id,
+                    effective_level,
+                    transport=transport,
+                    proxy_url=proxy_url,
+                    tile_extension=tile_extension,
+                )
+                image = _tensor_image_to_pil(image_tensor)
+                _save_pil_image(image, output_path, output_extension)
+                saved_paths.append(output_path)
+                count_ok += 1
+                item_record["status"] = "saved"
+                batch_manifest["items"].append(item_record)
+                _log(f"Batch saved [{index}/{len(parsed_ids)}]: {output_path}")
+            except Exception as exc:
+                count_failed += 1
+                item_record["status"] = "failed"
+                item_record["error"] = f"{type(exc).__name__}: {exc}"
+                batch_manifest["items"].append(item_record)
+                _log(f"Batch failed [{index}/{len(parsed_ids)}]: {raw_id} ({type(exc).__name__}: {exc})")
+                if not continue_flag:
+                    batch_manifest["aborted"] = True
+                    batch_manifest["abort_reason"] = item_record["error"]
+                    break
+
+        batch_manifest["count_total"] = len(parsed_ids)
+        batch_manifest["count_ok"] = count_ok
+        batch_manifest["count_failed"] = count_failed
+        batch_manifest["count_skipped"] = sum(1 for item in batch_manifest["items"] if item["status"] == "skipped_existing")
+        manifest_json = json.dumps(batch_manifest, ensure_ascii=True, indent=2)
+        saved_paths_json = json.dumps(saved_paths, ensure_ascii=True, indent=2)
+
+        if str(save_mode or "save_only").strip().lower() == "save_and_manifest":
+            manifest_path, _manifest_policy = _resolve_unique_output_path(
+                output_dir_text,
+                "dzi_batch_manifest",
+                "json",
+                "overwrite" if str(overwrite_mode or "skip").strip().lower() == "overwrite" else "unique",
+            )
+            with open(manifest_path, "w", encoding="utf-8") as handle:
+                handle.write(manifest_json)
+            _log(f"Batch manifest saved: {manifest_path}")
+
+        return (manifest_json, saved_paths_json, int(count_ok), int(count_failed))

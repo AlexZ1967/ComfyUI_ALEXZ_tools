@@ -93,6 +93,18 @@ NODE_DOCS = [
         "readme_heading": "## Download DZI Tiles Image",
     },
     {
+        "file": "nodes/image_download_dzi_tiles.py",
+        "class": "ImageDownloadDZITilesBatchSave",
+        "guide": "guides/GUIDE_DZI_TILES_DOWNLOAD.md",
+        "readme_heading": "## Download DZI Tiles Batch Save",
+    },
+    {
+        "file": "nodes/trove_search_ids.py",
+        "class": "SearchTroveImageIDs",
+        "guide": "guides/GUIDE_TROVE_SEARCH_IDS.md",
+        "readme_heading": "## Search Trove Image IDs",
+    },
+    {
         "file": "nodes/image_scopes.py",
         "class": "ImageWaveformScope",
         "guide": "guides/GUIDE_IMAGE_WAVEFORM.md",
