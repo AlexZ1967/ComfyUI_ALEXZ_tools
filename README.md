@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.27.16
+Version: 0.27.17
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -249,6 +249,7 @@ Guide: [GUIDE_QR_CODE.md](guides/GUIDE_QR_CODE.md)
 Если `level = -1`, используется `default_level` выбранного сайта.  
 `tile_extension`: `jpg` / `jpeg` / `png` / `webp` (используется только выбранный формат, без перебора остальных).  
 Если `proxy_url` пустой, нода автоматически пытается подобрать рабочий маршрут через env/system proxy настройки.  
+Новые сайты можно добавлять через `config/dzi_sites.json`, если указать `object_url_template`, `dzi_url_template` и `tile_url_template`.  
 Выходы: `image`.  
 Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 

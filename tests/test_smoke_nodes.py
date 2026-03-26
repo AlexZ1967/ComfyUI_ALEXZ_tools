@@ -875,6 +875,39 @@ class SmokeTests(unittest.TestCase):
             "https://nla.gov.au/nla.obj-138204672/dzi?tile=11/3_4.jpg",
         )
 
+    def test_dzi_tiles_build_source_urls_from_templates(self):
+        """Verify config templates can define provider URLs without hardcoded branches."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        source = dzi_mod._build_dzi_source_urls(
+            "https://example.org",
+            "obj-42",
+            9,
+            "my_archive",
+            site_config={
+                "provider": "my_archive",
+                "base_url": "https://example.org",
+                "object_url_template": "{base_url}/viewer/{mw}",
+                "dzi_url_template": "{base_url}/iiif/{mw}/info.dzi",
+                "tile_url_template": "{base_url}/iiif/{mw}/{level}/{x}-{y}.{ext}",
+            },
+        )
+        self.assertEqual(source["provider"], "my_archive")
+        self.assertEqual(source["zoom_base"], "https://example.org/viewer/obj-42")
+        self.assertEqual(source["dzi_url"], "https://example.org/iiif/obj-42/info.dzi")
+        self.assertEqual(
+            dzi_mod._tile_url(
+                source["tiles_base"],
+                3,
+                4,
+                "png",
+                level=9,
+                mode=source["tile_url_mode"],
+                base_url="https://example.org",
+                mw="obj-42",
+            ),
+            "https://example.org/iiif/obj-42/9/3-4.png",
+        )
+
     def test_dzi_tiles_site_config_dropdown(self):
         """Verify DZI site dropdown is populated from JSON config."""
         dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")

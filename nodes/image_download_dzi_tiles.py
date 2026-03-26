@@ -89,6 +89,9 @@ def _fallback_dzi_site_config() -> dict[str, Any]:
                 "default_mw": "mw207134",
                 "default_level": 11,
                 "mw_format": "mw<digits>",
+                "object_url_template": "{base_url}/zoom/{mw}",
+                "dzi_url_template": "{base_url}/zoom/{mw}/zoomXML.dzi",
+                "tile_url_template": "{base_url}/zoom/{mw}/zoomXML_files/{level}/{x}_{y}.{ext}",
                 "url_scheme": "{base_url}/zoom/{mw}/zoomXML_files/{level}/{x}_{y}.{ext}",
             },
             {
@@ -100,6 +103,9 @@ def _fallback_dzi_site_config() -> dict[str, Any]:
                 "default_mw": "nla.obj-138204672",
                 "default_level": 11,
                 "mw_format": "nla.obj-<digits>",
+                "object_url_template": "{base_url}/{mw}",
+                "dzi_url_template": "{base_url}/{mw}/dzi?tile=",
+                "tile_url_template": "{base_url}/{mw}/dzi?tile={level}/{x}_{y}.{ext}",
                 "url_scheme": "{base_url}/{mw}/dzi?tile={level}/{x}_{y}.{ext}",
             },
         ],
@@ -137,8 +143,8 @@ def _load_dzi_site_config() -> dict[str, Any]:
                 continue
             name = str(raw_site.get("name") or "").strip()
             base_url = str(raw_site.get("base_url") or "").strip().rstrip("/")
-            provider = _normalize_provider(raw_site.get("provider"))
-            if not name or not base_url or provider == "auto":
+            provider = str(raw_site.get("provider") or "").strip().lower()
+            if not name or not base_url or not provider:
                 continue
             normalized_sites.append(
                 {
@@ -150,6 +156,9 @@ def _load_dzi_site_config() -> dict[str, Any]:
                     "default_mw": str(raw_site.get("default_mw") or "").strip(),
                     "default_level": int(raw_site.get("default_level") or 11),
                     "mw_format": str(raw_site.get("mw_format") or "").strip(),
+                    "object_url_template": str(raw_site.get("object_url_template") or "").strip(),
+                    "dzi_url_template": str(raw_site.get("dzi_url_template") or "").strip(),
+                    "tile_url_template": str(raw_site.get("tile_url_template") or "").strip(),
                     "url_scheme": str(raw_site.get("url_scheme") or "").strip(),
                 }
             )
@@ -217,6 +226,9 @@ def _resolve_dzi_site(site: str | None, mw: str | None = None) -> dict[str, Any]
                 "default_mw": mw_text,
                 "default_level": 11,
                 "mw_format": "",
+                "object_url_template": "",
+                "dzi_url_template": "",
+                "tile_url_template": "",
                 "url_scheme": "",
             }
 
@@ -278,6 +290,34 @@ def _build_zoom_base_url(base_url: str, mw: str) -> str:
     return f"{base}/zoom/{module_id}"
 
 
+def _format_dzi_template(
+    template: str,
+    *,
+    base_url: str,
+    mw: str,
+    level: int | None = None,
+    x: int | None = None,
+    y: int | None = None,
+    ext: str | None = None,
+) -> str:
+    """Render URL template for configured DZI site."""
+    text = str(template or "").strip()
+    if not text:
+        raise ValueError("DZI URL template must not be empty.")
+    data = {
+        "base_url": str(base_url or "").strip().rstrip("/"),
+        "mw": str(mw or "").strip(),
+        "level": "" if level is None else int(level),
+        "x": "" if x is None else int(x),
+        "y": "" if y is None else int(y),
+        "ext": str(ext or "").strip().lstrip("."),
+    }
+    try:
+        return text.format(**data)
+    except KeyError as exc:
+        raise ValueError(f"Unknown placeholder in DZI URL template: {exc}") from exc
+
+
 def _detect_dzi_provider(base_url: str, mw: str, provider: str | None = None) -> str:
     """Detect supported DZI provider from explicit selection or URL/identifier hints."""
     normalized = _normalize_provider(provider)
@@ -295,17 +335,48 @@ def _build_dzi_source_urls(
     mw: str,
     level: int,
     provider: str | None = None,
+    site_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build normalized DZI/tile URL scheme for supported providers."""
-    provider_name = _detect_dzi_provider(base_url, mw, provider)
+    """Build normalized DZI/tile URL scheme from config templates or legacy providers."""
     module_id = str(mw or "").strip()
     if not module_id:
         raise ValueError("`mw` must not be empty.")
+    cfg = dict(site_config or {})
+    base = str(base_url or cfg.get("base_url") or "").strip().rstrip("/")
+    if not base:
+        raise ValueError("`base_url` must not be empty.")
+
+    object_template = str(cfg.get("object_url_template") or "").strip()
+    dzi_template = str(cfg.get("dzi_url_template") or "").strip()
+    tile_template = str(cfg.get("tile_url_template") or "").strip()
+    provider_name = str(cfg.get("provider") or "").strip().lower() or _detect_dzi_provider(base, module_id, provider)
+
+    if dzi_template and tile_template:
+        zoom_base = _format_dzi_template(object_template or "{base_url}/{mw}", base_url=base, mw=module_id)
+        dzi_url = _format_dzi_template(dzi_template, base_url=base, mw=module_id, level=int(level))
+        first_tile_url = _format_dzi_template(
+            tile_template,
+            base_url=base,
+            mw=module_id,
+            level=int(level),
+            x=0,
+            y=0,
+            ext="jpg",
+        )
+        tiles_base = str(tile_template)
+        tile_url_mode = "template"
+        return {
+            "provider": provider_name or "custom",
+            "zoom_base": zoom_base,
+            "dzi_url": dzi_url,
+            "tiles_base": tiles_base,
+            "tile_url_mode": tile_url_mode,
+            "tile_url_template": tile_template,
+            "tile_example_url": first_tile_url,
+            "referer_root": _origin_from_url(base) or _DEFAULT_REFERER.rstrip("/"),
+        }
 
     if provider_name == "nla":
-        base = str(base_url or "").strip().rstrip("/")
-        if not base:
-            raise ValueError("`base_url` must not be empty.")
         dzi_base = f"{base}/{module_id}/dzi?tile="
         return {
             "provider": "nla",
@@ -316,7 +387,7 @@ def _build_dzi_source_urls(
             "referer_root": _origin_from_url(base) or _DEFAULT_REFERER.rstrip("/"),
         }
 
-    zoom_base = _build_zoom_base_url(base_url, module_id)
+    zoom_base = _build_zoom_base_url(base, module_id)
     return {
         "provider": "npg",
         "zoom_base": zoom_base,
@@ -439,10 +510,23 @@ def _tile_url(
     *,
     level: int | None = None,
     mode: str = "path",
+    base_url: str | None = None,
+    mw: str | None = None,
 ) -> str:
     """Build tile URL for one tile coordinate."""
     ext = str(tile_ext or "jpg").strip().lower().lstrip(".") or "jpg"
-    if str(mode or "path").strip().lower() == "query":
+    normalized_mode = str(mode or "path").strip().lower()
+    if normalized_mode == "template":
+        return _format_dzi_template(
+            tiles_base,
+            base_url=str(base_url or "").strip(),
+            mw=str(mw or "").strip(),
+            level=level,
+            x=int(x),
+            y=int(y),
+            ext=ext,
+        )
+    if normalized_mode == "query":
         if level is None:
             raise ValueError("`level` is required for query tile mode.")
         return f"{tiles_base}{int(level)}/{int(x)}_{int(y)}.{ext}"
@@ -1012,6 +1096,8 @@ def _probe_axis_count(
     max_tiles: int = 4096,
     level: int | None = None,
     tile_url_mode: str = "path",
+    base_url: str | None = None,
+    mw: str | None = None,
 ) -> int:
     """Probe tile count on one axis using robust status checks."""
     if axis not in {"x", "y"}:
@@ -1023,7 +1109,16 @@ def _probe_axis_count(
         y = i if axis == "y" else 0
         status = _http_status(
             session,
-            _tile_url(tiles_base, x, y, tile_ext, level=level, mode=tile_url_mode),
+            _tile_url(
+                tiles_base,
+                x,
+                y,
+                tile_ext,
+                level=level,
+                mode=tile_url_mode,
+                base_url=base_url,
+                mw=mw,
+            ),
             timeout,
             transport=transport,
         )
@@ -1053,6 +1148,8 @@ def _probe_axis_count_compat(
     max_tiles: int = 4096,
     level: int | None = None,
     tile_url_mode: str = "path",
+    base_url: str | None = None,
+    mw: str | None = None,
 ) -> int:
     """Call probe helper with new kwargs and keep compatibility with legacy monkeypatch signatures."""
     try:
@@ -1066,6 +1163,8 @@ def _probe_axis_count_compat(
             max_tiles=max_tiles,
             level=level,
             tile_url_mode=tile_url_mode,
+            base_url=base_url,
+            mw=mw,
         )
     except TypeError:
         return _probe_axis_count(  # type: ignore[call-arg]
@@ -1225,12 +1324,19 @@ class ImageDownloadDZITiles:
             if effective_level < 0:
                 effective_level = int(site_config.get("default_level") or 11)
 
-            source_urls = _build_dzi_source_urls(base_url, effective_mw, effective_level, provider_name)
+            source_urls = _build_dzi_source_urls(
+                base_url,
+                effective_mw,
+                effective_level,
+                provider_name,
+                site_config=site_config,
+            )
             provider_name = str(source_urls["provider"])
             zoom_base = str(source_urls["zoom_base"])
             dzi_url = str(source_urls["dzi_url"])
             tiles_base = str(source_urls["tiles_base"])
             tile_url_mode = str(source_urls.get("tile_url_mode") or "path")
+            tile_example_url = str(source_urls.get("tile_example_url") or "")
             referer_root = str(source_urls.get("referer_root") or _origin_from_url(zoom_base) or _DEFAULT_REFERER.rstrip("/"))
             referer_candidates = [
                 f"{zoom_base.rstrip('/')}/",
@@ -1252,7 +1358,7 @@ class ImageDownloadDZITiles:
             _log(f"Provider: {provider_name}")
             _log(f"Base: {zoom_base}")
             _log(f"DZI: {dzi_url}")
-            _log(f"Tiles: {tiles_base}")
+            _log(f"Tiles: {tile_example_url or tiles_base}")
             selected_tile_ext = str(tile_extension or "jpg").strip().lower().lstrip(".")
             if selected_tile_ext not in {"jpg", "jpeg", "png", "webp"}:
                 raise ValueError(
@@ -1281,6 +1387,8 @@ class ImageDownloadDZITiles:
                 selected_tile_ext,
                 level=effective_level,
                 mode=tile_url_mode,
+                base_url=base_url,
+                mw=effective_mw,
             )
             proxy_profiles = _build_proxy_profiles(
                 explicit_proxy=proxy_text,
@@ -1374,6 +1482,8 @@ class ImageDownloadDZITiles:
                         selected_tile_ext,
                         level=effective_level,
                         mode=tile_url_mode,
+                        base_url=base_url,
+                        mw=effective_mw,
                     )
                     for transport in transport_candidates:
                         status, content = _fetch_bytes(trial_session, probe_url, timeout, transport=transport)
@@ -1453,6 +1563,8 @@ class ImageDownloadDZITiles:
                     timeout=timeout,
                     level=effective_level,
                     tile_url_mode=tile_url_mode,
+                    base_url=base_url,
+                    mw=effective_mw,
                 )
                 tiles_y_probe = _probe_axis_count_compat(
                     session,
@@ -1463,6 +1575,8 @@ class ImageDownloadDZITiles:
                     timeout=timeout,
                     level=effective_level,
                     tile_url_mode=tile_url_mode,
+                    base_url=base_url,
+                    mw=effective_mw,
                 )
                 if tiles_x_probe <= 0 or tiles_y_probe <= 0:
                     raise RuntimeError("Could not probe tile grid (x/y tile counts are zero).")
@@ -1477,6 +1591,8 @@ class ImageDownloadDZITiles:
                         tile_ext,
                         level=effective_level,
                         mode=tile_url_mode,
+                        base_url=base_url,
+                        mw=effective_mw,
                     ),
                     timeout,
                     transport=chosen_transport,
@@ -1490,6 +1606,8 @@ class ImageDownloadDZITiles:
                         tile_ext,
                         level=effective_level,
                         mode=tile_url_mode,
+                        base_url=base_url,
+                        mw=effective_mw,
                     ),
                     timeout,
                     transport=chosen_transport,
@@ -1523,6 +1641,8 @@ class ImageDownloadDZITiles:
                                 tile_ext,
                                 level=effective_level,
                                 mode=tile_url_mode,
+                                base_url=base_url,
+                                mw=effective_mw,
                             ),
                             timeout,
                             transport=chosen_transport,

@@ -1,5 +1,34 @@
 # Changelog — ALEXZ_tools
 
+## 0.27.17 — 2026-03-26
+- `Download DZI Tiles Image`: moved provider URL logic to config-driven
+  templates so new archives can be added through JSON without Python changes.
+- `config/dzi_sites.json`:
+  - added `object_url_template`;
+  - added `dzi_url_template`;
+  - added `tile_url_template`;
+  - kept `mw_prefix`, `default_mw`, `default_level`, and `url_scheme`.
+- `nodes/image_download_dzi_tiles.py`:
+  - added generic DZI template renderer with placeholders:
+    `{base_url}`, `{mw}`, `{level}`, `{x}`, `{y}`, `{ext}`;
+  - `_build_dzi_source_urls(...)` now prefers config templates over hardcoded
+    provider branches;
+  - `_tile_url(...)` now supports `template` mode;
+  - probe/download paths now pass template context (`base_url`, `mw`) through
+    the full tile-fetch pipeline;
+  - config loader no longer restricts providers to only `npg` / `nla`.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_DZI_TILES_DOWNLOAD.md`
+- Tests:
+  - added smoke coverage for a fully template-driven custom provider in
+    `tests/test_smoke_nodes.py`.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k dzi`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.27.17` in `pyproject.toml` and `README.md`.
+
 ## 0.27.16 — 2026-03-26
 - `Download DZI Tiles Image`: switched site selection to JSON-backed catalog.
 - Added `config/dzi_sites.json` with site metadata:

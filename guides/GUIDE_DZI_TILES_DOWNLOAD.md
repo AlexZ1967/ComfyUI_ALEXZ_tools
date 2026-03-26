@@ -38,12 +38,26 @@
 Для каждого сайта в конфиге задаются:
 - `name`: отображаемое имя в dropdown.
 - `base_url`: корневой URL сайта.
-- `provider`: схема сборки DZI URL (`npg` или `nla`).
+- `provider`: идентификатор схемы/сайта.
 - `default_mw`: дефолтный идентификатор изображения.
 - `mw_prefix`: префикс, который нода автоматически добавляет, если в `mw` введены только цифры.
 - `default_level`: дефолтный DZI level.
 - `mw_format`: ожидаемый формат `mw`.
+- `object_url_template`: шаблон URL страницы/объекта.
+- `dzi_url_template`: шаблон URL DZI metadata.
+- `tile_url_template`: шаблон URL отдельного тайла.
 - `url_scheme`: справочная строка, как формируется tile URL.
+
+Шаблоны используют плейсхолдеры:
+- `{base_url}`
+- `{mw}`
+- `{level}`
+- `{x}`
+- `{y}`
+- `{ext}`
+
+Это значит, что для большинства новых сайтов достаточно добавить запись в
+`config/dzi_sites.json` без правок Python-кода.
 
 ## Decision helper
 - Для `National Portrait Gallery UK` используйте `mw` вида `mw...`.

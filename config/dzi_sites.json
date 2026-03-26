@@ -10,6 +10,9 @@
       "default_mw": "mw207134",
       "default_level": 11,
       "mw_format": "mw<digits>",
+      "object_url_template": "{base_url}/zoom/{mw}",
+      "dzi_url_template": "{base_url}/zoom/{mw}/zoomXML.dzi",
+      "tile_url_template": "{base_url}/zoom/{mw}/zoomXML_files/{level}/{x}_{y}.{ext}",
       "url_scheme": "{base_url}/zoom/{mw}/zoomXML_files/{level}/{x}_{y}.{ext}"
     },
     {
@@ -21,6 +24,9 @@
       "default_mw": "nla.obj-138204672",
       "default_level": 11,
       "mw_format": "nla.obj-<digits>",
+      "object_url_template": "{base_url}/{mw}",
+      "dzi_url_template": "{base_url}/{mw}/dzi?tile=",
+      "tile_url_template": "{base_url}/{mw}/dzi?tile={level}/{x}_{y}.{ext}",
       "url_scheme": "{base_url}/{mw}/dzi?tile={level}/{x}_{y}.{ext}"
     }
   ]
