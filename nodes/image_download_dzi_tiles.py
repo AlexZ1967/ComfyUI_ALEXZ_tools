@@ -34,6 +34,7 @@ import numpy as np
 import requests
 import torch
 from PIL import Image
+from ..utils.interrupt import check_interrupt, is_interrupt_exception
 try:
     from tqdm.auto import tqdm
 except Exception:
@@ -872,7 +873,9 @@ def _build_proxy_profiles(
 def _fetch_bytes_requests(session: requests.Session, url: str, timeout: float) -> tuple[int, bytes | None]:
     """Fetch URL bytes via requests transport."""
     try:
+        check_interrupt()
         response = session.get(url, timeout=timeout)
+        check_interrupt()
         return int(response.status_code), bytes(response.content or b"")
     except Exception as exc:
         _log_fetch_error("requests", url, exc)
@@ -884,6 +887,7 @@ def _fetch_bytes_urllib(session: requests.Session, url: str, timeout: float) -> 
     req = Request(url, headers={k: str(v) for k, v in session.headers.items()})
     proxy_url = str(getattr(session, "_alexz_proxy_url", "") or "").strip()
     try:
+        check_interrupt()
         if proxy_url:
             opener = build_opener(ProxyHandler({"http": proxy_url, "https": proxy_url}))
             resp_obj = opener.open(req, timeout=timeout)
@@ -892,6 +896,7 @@ def _fetch_bytes_urllib(session: requests.Session, url: str, timeout: float) -> 
         with resp_obj as resp:
             status = int(getattr(resp, "status", 0) or resp.getcode() or 0)
             body = resp.read()
+            check_interrupt()
             return status, bytes(body or b"")
     except HTTPError as exc:
         body = None
@@ -911,6 +916,7 @@ def _fetch_bytes_urllib(session: requests.Session, url: str, timeout: float) -> 
 
 def _fetch_bytes_curl(session: requests.Session, url: str, timeout: float) -> tuple[int, bytes | None]:
     """Fetch URL bytes via curl transport if available."""
+    check_interrupt()
     if not shutil.which("curl"):
         return 0, None
 
@@ -953,7 +959,9 @@ def _fetch_bytes_curl(session: requests.Session, url: str, timeout: float) -> tu
     if proxy_url:
         cmd[1:1] = ["--proxy", proxy_url]
     try:
+        check_interrupt()
         proc = subprocess.run(cmd, capture_output=True, check=False)
+        check_interrupt()
         out = bytes(proc.stdout or b"")
         idx = out.rfind(b"__ALEXZ_HTTP_STATUS__:")
         if idx < 0:
@@ -1000,7 +1008,9 @@ def _fetch_bytes_cloudscraper(session: requests.Session, url: str, timeout: floa
                 scraper.proxies.update({"http": proxy_url, "https": proxy_url})
         except Exception:
             pass
+        check_interrupt()
         response = scraper.get(url, timeout=timeout)
+        check_interrupt()
         return int(response.status_code), bytes(response.content or b"")
     except Exception:
         return 0, None
@@ -1030,9 +1040,12 @@ def _http_status(session: requests.Session, url: str, timeout: float, *, transpo
     """Return HTTP status code with small retry for transient network errors."""
     for attempt in range(3):
         try:
+            check_interrupt()
             status, _ = _fetch_bytes(session, url, timeout, transport=transport)
             return int(status)
         except Exception as exc:
+            if is_interrupt_exception(exc):
+                raise
             if attempt >= 2:
                 _log(f"HTTP status check failed: {url} ({type(exc).__name__}: {exc})")
             continue
@@ -1061,12 +1074,15 @@ def _download_tile(
 ) -> Image.Image | None:
     """Download one JPEG tile and decode it as PIL image."""
     try:
+        check_interrupt()
         status, content = _fetch_bytes(session, url, timeout, transport=transport)
         if int(status) != 200:
             _log(f"Tile unavailable: {url} (status={int(status)})")
             return None
         return _decode_tile_image(content, url)
     except Exception as exc:
+        if is_interrupt_exception(exc):
+            raise
         _log(f"Tile download/decode error: {url} ({type(exc).__name__}: {exc})")
         return None
 
@@ -1105,6 +1121,7 @@ def _probe_axis_count(
     last_success = -1
     misses_after_success = 0
     for i in range(max_tiles):
+        check_interrupt()
         x = i if axis == "x" else 0
         y = i if axis == "y" else 0
         status = _http_status(
@@ -1185,6 +1202,7 @@ def _parse_dzi(
 ) -> dict[str, Any] | None:
     """Try to parse DZI metadata (tile size and nominal dimensions)."""
     try:
+        check_interrupt()
         status, content = _fetch_bytes(session, dzi_url, timeout, transport=transport)
         if int(status) != 200:
             _log(f"DZI metadata unavailable: {dzi_url} (status={int(status)})")
@@ -1197,6 +1215,7 @@ def _parse_dzi(
 
         size_el = None
         for el in root.iter():
+            check_interrupt()
             if str(el.tag).lower().endswith("size"):
                 size_el = el
                 break
@@ -1428,6 +1447,7 @@ class ImageDownloadDZITiles:
     ):
         """Download DZI tiles for selected level and return assembled image tensor."""
         try:
+            check_interrupt()
             request_ctx = _resolve_dzi_request_context(site, mw, level)
             site_config = dict(request_ctx["site_config"])
             base_url = str(request_ctx["base_url"])
@@ -1527,6 +1547,7 @@ class ImageDownloadDZITiles:
                     remaining = [p for p in preflight_attempts if p not in local_first]
                     preflight_attempts = local_first + remaining
             for profile in preflight_attempts:
+                check_interrupt()
                 profile_proxy = str(profile.get("proxy_url") or "").strip()
                 profile_trust_env = bool(profile.get("trust_env"))
                 profile_name = str(profile.get("name") or "profile")
@@ -1537,6 +1558,7 @@ class ImageDownloadDZITiles:
                     proxy_url=profile_proxy,
                 )
                 for candidate_transport in transport_candidates:
+                    check_interrupt()
                     status, content = _fetch_bytes(
                         trial_session,
                         preflight_url,
@@ -1576,10 +1598,12 @@ class ImageDownloadDZITiles:
             for profile in proxy_profiles:
                 if first_tile is not None:
                     break
+                check_interrupt()
                 profile_proxy = str(profile.get("proxy_url") or "").strip()
                 profile_trust_env = bool(profile.get("trust_env"))
                 profile_name = str(profile.get("name") or "profile")
                 for ref_idx, ref in enumerate(referer_candidates):
+                    check_interrupt()
                     trial_session = _make_session(
                         referer=ref,
                         origin=referer_root,
@@ -1597,6 +1621,7 @@ class ImageDownloadDZITiles:
                         mw=effective_mw,
                     )
                     for transport in transport_candidates:
+                        check_interrupt()
                         status, content = _fetch_bytes(trial_session, probe_url, timeout, transport=transport)
                         first_tile_statuses[
                             f"{selected_tile_ext}@{transport}#r{ref_idx+1}|{profile_name}:{profile_proxy or '-'}"
@@ -1650,6 +1675,7 @@ class ImageDownloadDZITiles:
             dzi_info = _parse_dzi(session, dzi_url, timeout, transport=chosen_transport)
             if dzi_info is None:
                 for alt_transport in transport_candidates:
+                    check_interrupt()
                     if alt_transport == chosen_transport:
                         continue
                     dzi_info = _parse_dzi(session, dzi_url, timeout, transport=alt_transport)
@@ -1740,7 +1766,9 @@ class ImageDownloadDZITiles:
             try:
                 bar.update(1)
                 for y in range(tiles_y):
+                    check_interrupt()
                     for x in range(tiles_x):
+                        check_interrupt()
                         if x == 0 and y == 0:
                             continue
                         tile = _download_tile_compat(
@@ -1776,6 +1804,9 @@ class ImageDownloadDZITiles:
             )
             return (_image_to_tensor(canvas),)
         except Exception as exc:
+            if is_interrupt_exception(exc):
+                _log("Node interrupted by ComfyUI.")
+                raise
             _log(f"Node failed: {type(exc).__name__}: {exc}")
             _log(traceback.format_exc().rstrip())
             raise
@@ -1906,6 +1937,7 @@ class ImageDownloadDZITilesBatchSave:
         save_mode: str = "save_and_manifest",
     ):
         """Download multiple DZI images, save them to disk, and return manifest data."""
+        check_interrupt()
         output_dir_raw = str(output_dir or "").strip()
         if not output_dir_raw:
             raise ValueError("`output_dir` must not be empty.")
@@ -1934,6 +1966,7 @@ class ImageDownloadDZITilesBatchSave:
         single_node = ImageDownloadDZITiles()
 
         for index, raw_id in enumerate(parsed_ids, start=1):
+            check_interrupt()
             request_ctx = _resolve_dzi_request_context(site, raw_id, level)
             site_config = dict(request_ctx["site_config"])
             effective_mw = str(request_ctx["effective_mw"])
@@ -1962,6 +1995,7 @@ class ImageDownloadDZITilesBatchSave:
             }
 
             try:
+                check_interrupt()
                 if output_policy == "skip" and os.path.exists(output_path):
                     item_record["status"] = "skipped_existing"
                     batch_manifest["items"].append(item_record)
@@ -1976,7 +2010,9 @@ class ImageDownloadDZITilesBatchSave:
                     proxy_url=proxy_url,
                     tile_extension=tile_extension,
                 )
+                check_interrupt()
                 image = _tensor_image_to_pil(image_tensor)
+                check_interrupt()
                 _save_pil_image(image, output_path, output_extension)
                 saved_paths.append(output_path)
                 count_ok += 1
@@ -1984,6 +2020,9 @@ class ImageDownloadDZITilesBatchSave:
                 batch_manifest["items"].append(item_record)
                 _log(f"Batch saved [{index}/{len(parsed_ids)}]: {output_path}")
             except Exception as exc:
+                if is_interrupt_exception(exc):
+                    _log("Batch interrupted by ComfyUI.")
+                    raise
                 count_failed += 1
                 item_record["status"] = "failed"
                 item_record["error"] = f"{type(exc).__name__}: {exc}"
@@ -2002,6 +2041,7 @@ class ImageDownloadDZITilesBatchSave:
         saved_paths_json = json.dumps(saved_paths, ensure_ascii=True, indent=2)
 
         if str(save_mode or "save_only").strip().lower() == "save_and_manifest":
+            check_interrupt()
             manifest_path, _manifest_policy = _resolve_unique_output_path(
                 output_dir_text,
                 "dzi_batch_manifest",

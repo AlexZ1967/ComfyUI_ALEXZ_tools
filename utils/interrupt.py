@@ -24,3 +24,11 @@ def check_interrupt() -> None:
     if _model_management is not None:
         _model_management.throw_exception_if_processing_interrupted()
 
+
+def is_interrupt_exception(exc: BaseException) -> bool:
+    """Return True when exception represents a ComfyUI processing interrupt."""
+    if _model_management is not None:
+        interrupt_type = getattr(_model_management, "InterruptProcessingException", None)
+        if interrupt_type is not None and isinstance(exc, interrupt_type):
+            return True
+    return exc.__class__.__name__ == "InterruptProcessingException"

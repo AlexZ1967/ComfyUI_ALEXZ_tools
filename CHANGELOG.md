@@ -1,5 +1,26 @@
 # Changelog — ALEXZ_tools
 
+## 0.28.1 — 2026-03-26
+- `Download DZI Tiles Image` and `Download DZI Tiles Batch Save` now respect
+  `Cancel current run` in ComfyUI.
+- `nodes/image_download_dzi_tiles.py`:
+  - added interrupt checks at start, during proxy/transport preflight,
+    DZI probing, tile download loops, and batch save flow;
+  - batch mode no longer swallows `InterruptProcessingException` as a normal
+    per-item failure;
+  - interrupt events now log explicit cancellation messages for single and
+    batch runs.
+- `utils/interrupt.py`:
+  - added `is_interrupt_exception(...)` helper for safe interrupt propagation.
+- Tests:
+  - added smoke coverage for single-node interrupt propagation;
+  - added smoke coverage for batch interrupt propagation.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "dzi"`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py utils/interrupt.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.28.1` in `pyproject.toml` and `README.md`.
+
 ## 0.28.0 — 2026-03-26
 - Added new node `Search Trove Image IDs` for best-effort discovery of
   `nla.obj-...` identifiers from Trove public image search.

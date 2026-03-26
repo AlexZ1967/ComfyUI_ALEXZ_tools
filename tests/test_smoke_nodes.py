@@ -1143,6 +1143,48 @@ class SmokeTests(unittest.TestCase):
         finally:
             dzi_mod.ImageDownloadDZITiles.download = old_download
 
+    def test_dzi_tiles_single_respects_interrupt(self):
+        """Verify single DZI node propagates Comfy interrupt requests."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        node = dzi_mod.ImageDownloadDZITiles()
+        old_check_interrupt = dzi_mod.check_interrupt
+
+        class InterruptProcessingException(Exception):
+            pass
+
+        try:
+            dzi_mod.check_interrupt = lambda: (_ for _ in ()).throw(InterruptProcessingException())
+            with self.assertRaises(InterruptProcessingException):
+                node.download("National Portrait Gallery UK", "207134", -1)
+        finally:
+            dzi_mod.check_interrupt = old_check_interrupt
+
+    def test_dzi_tiles_batch_propagates_interrupt(self):
+        """Verify batch DZI node does not swallow Comfy interrupt as per-item failure."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        node = dzi_mod.ImageDownloadDZITilesBatchSave()
+        old_download = dzi_mod.ImageDownloadDZITiles.download
+
+        class InterruptProcessingException(Exception):
+            pass
+
+        try:
+            def _interrupt_download(_self, *args, **kwargs):
+                raise InterruptProcessingException()
+
+            dzi_mod.ImageDownloadDZITiles.download = _interrupt_download
+            with tempfile.TemporaryDirectory() as tmpdir:
+                with self.assertRaises(InterruptProcessingException):
+                    node.download_batch(
+                        "National Portrait Gallery UK",
+                        "207134\n207135",
+                        tmpdir,
+                        -1,
+                        continue_on_error="true",
+                    )
+        finally:
+            dzi_mod.ImageDownloadDZITiles.download = old_download
+
 
 if __name__ == "__main__":
     unittest.main()
