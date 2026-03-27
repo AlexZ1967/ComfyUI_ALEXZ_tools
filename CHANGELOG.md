@@ -1,5 +1,35 @@
 # Changelog — ALEXZ_tools
 
+## 0.29.2 — 2026-03-27
+- `Download DZI Tiles Image`:
+  - added optional `output_dir` and `output_extension` save-to-disk flow;
+  - when `output_dir` is empty, the node only returns `IMAGE`;
+  - when `output_dir` is set, the final assembled image is saved to disk;
+  - added `filename_mode = mw | title_or_mw`;
+  - `title_or_mw` tries to resolve a human-readable page title and falls back
+    to `mw` when the title is unavailable.
+- `Download DZI Tiles Batch Save`:
+  - `filename_template` now supports `{title}`;
+  - `{title}` tries to resolve a human-readable page title and falls back to
+    `mw`.
+- `Download IIIF Image`:
+  - added `filename_mode = source_url_slug | title_or_slug`;
+  - `title_or_slug` tries to resolve the page title from `source_url` and
+    falls back to the URL slug.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_DZI_TILES_DOWNLOAD.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+- Tests:
+  - added smoke coverage for DZI single save-to-disk, DZI title-derived
+    filenames, batch `{title}` template handling, and IIIF title-derived
+    filenames.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "dzi or iiif"`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.29.2` in `pyproject.toml` and `README.md`.
+
 ## 0.29.1 — 2026-03-27
 - `Download IIIF Image` now supports optional save-to-disk output via
   `output_dir`.

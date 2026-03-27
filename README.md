@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.29.1
+Version: 0.29.2
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -245,13 +245,16 @@ Guide: [GUIDE_QR_CODE.md](guides/GUIDE_QR_CODE.md)
 - Display name: Download DZI Tiles Image  
 - Type name: ImageDownloadDZITiles  
 - Category: image/io  
-Входы: `site`, `mw`, `level`, `transport`, `proxy_url`, `tile_extension`.  
+Входы: `site`, `mw`, `level`, `transport`, `proxy_url`, `tile_extension`, `output_dir`, `output_extension`, `filename_mode`.  
 `site`: выпадающий список сайтов из `config/dzi_sites.json`.  
 `mw`: можно вводить только цифры, тогда нода сама добавит префикс сайта; полный идентификатор тоже принимается.  
 Если `mw` пустой, используется `default_mw` выбранного сайта.  
 Если `level = -1`, используется `default_level` выбранного сайта.  
 `tile_extension`: `jpg` / `jpeg` / `png` / `webp` (используется только выбранный формат, без перебора остальных).  
 Если `proxy_url` пустой, нода автоматически пытается подобрать рабочий маршрут через env/system proxy настройки.  
+Если `output_dir` задан, нода сохраняет итоговую собранную картинку на диск.  
+`filename_mode`: `mw` или `title_or_mw`. Для `title_or_mw` нода пытается взять title страницы объекта и использует `mw` как fallback.  
+Если `output_dir` пустой, файл не записывается и картинка только отдается через выход `image`.  
 Новые сайты можно добавлять через `config/dzi_sites.json`, если указать `object_url_template`, `dzi_url_template` и `tile_url_template`.  
 Выходы: `image`.  
 Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
@@ -267,7 +270,7 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 Входы: `site`, `ids_text`, `output_dir`, `level`, `transport`, `proxy_url`, `tile_extension`, `output_extension`, `filename_template`, `overwrite_mode`, `continue_on_error`, `save_mode`.  
 `ids_text`: multiline список ID, поддерживаются также `,` и `;`, строки с `#` игнорируются.  
 `output_extension`: `png` / `jpg` / `jpeg` / `webp` для итоговых файлов на диске.  
-`filename_template` поддерживает: `{index}`, `{raw_id}`, `{mw}`, `{id}`, `{site}`, `{site_key}`, `{level}`.  
+`filename_template` поддерживает: `{index}`, `{raw_id}`, `{mw}`, `{id}`, `{title}`, `{site}`, `{site_key}`, `{level}`. `{title}` пытается взять title страницы объекта и использует `mw` как fallback.  
 Выходы: `manifest_json`, `saved_paths_json`, `count_ok`, `count_failed`.  
 Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 
@@ -279,10 +282,11 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 - Display name: Download IIIF Image  
 - Type name: ImageDownloadIIIFImage  
 - Category: image/io  
-Входы: `site`, `source_url`, `size_mode`, `requested_width`, `output_dir`, `delivery_mode`, `output_format`.  
+Входы: `site`, `source_url`, `size_mode`, `requested_width`, `output_dir`, `filename_mode`, `delivery_mode`, `output_format`.  
 `London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.  
 `Generic IIIF Service URL`: принимает direct service URL, `info.json` URL или HTML-страницу с встроенным IIIF viewer.  
 Если `output_dir` задан, нода сохраняет итоговую картинку на диск, а имя файла берет из последнего meaningful сегмента входного `source_url`.  
+`filename_mode`: `source_url_slug` или `title_or_slug`. Во втором режиме нода пытается взять title страницы `source_url`, а при неудаче использует slug из URL.  
 Выходы: `image`, `info_json`.  
 Guide: [GUIDE_IIIF_IMAGE_DOWNLOAD.md](guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md)
 

@@ -1054,6 +1054,107 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(tuple(out.shape), (1, 8, 5, 3))
         self.assertEqual(set(requested), {(0, 0)})
 
+    def test_dzi_tiles_single_writes_output_file_when_output_dir_is_set(self):
+        """Verify single DZI node optionally saves the assembled image to disk."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        node = dzi_mod.ImageDownloadDZITiles()
+
+        tile_size = 8
+
+        class _DummySession:
+            pass
+
+        old_new_session = dzi_mod._new_session
+        old_parse_dzi = dzi_mod._parse_dzi
+        old_download_tile = dzi_mod._download_tile
+
+        try:
+            from PIL import Image
+            import numpy as np
+
+            def _fake_download_tile(_session, _url: str, _timeout: float):
+                canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
+                canvas[:, :, 2] = 255
+                return Image.fromarray(canvas, mode="RGB")
+
+            dzi_mod._new_session = lambda: _DummySession()
+            dzi_mod._parse_dzi = lambda *_args, **_kwargs: {
+                "tile_size": tile_size,
+                "overlap": 0,
+                "format": "jpg",
+                "width": tile_size,
+                "height": tile_size,
+            }
+            dzi_mod._download_tile = _fake_download_tile
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                out, = node.download(
+                    "National Portrait Gallery UK",
+                    "207134",
+                    11,
+                    output_dir=tmpdir,
+                    output_extension="png",
+                )
+                saved_path = os.path.join(tmpdir, "mw207134.png")
+                self.assertTrue(os.path.exists(saved_path))
+                self.assertEqual(tuple(out.shape), (1, tile_size, tile_size, 3))
+        finally:
+            dzi_mod._new_session = old_new_session
+            dzi_mod._parse_dzi = old_parse_dzi
+            dzi_mod._download_tile = old_download_tile
+
+    def test_dzi_tiles_single_title_or_mw_uses_title_when_available(self):
+        """Verify single DZI saver can name output file from resolved object title."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        node = dzi_mod.ImageDownloadDZITiles()
+
+        tile_size = 8
+
+        class _DummySession:
+            pass
+
+        old_new_session = dzi_mod._new_session
+        old_parse_dzi = dzi_mod._parse_dzi
+        old_download_tile = dzi_mod._download_tile
+        old_fetch_title = dzi_mod._fetch_dzi_object_title
+
+        try:
+            from PIL import Image
+            import numpy as np
+
+            def _fake_download_tile(_session, _url: str, _timeout: float):
+                canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
+                canvas[:, :, 0] = 255
+                return Image.fromarray(canvas, mode="RGB")
+
+            dzi_mod._new_session = lambda: _DummySession()
+            dzi_mod._parse_dzi = lambda *_args, **_kwargs: {
+                "tile_size": tile_size,
+                "overlap": 0,
+                "format": "jpg",
+                "width": tile_size,
+                "height": tile_size,
+            }
+            dzi_mod._download_tile = _fake_download_tile
+            dzi_mod._fetch_dzi_object_title = lambda *_args, **_kwargs: "Anna_Pavlova_as_the_Dying_swan_Melbourne_1926"
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                _out, = node.download(
+                    "National Library of Australia",
+                    "138204672",
+                    11,
+                    output_dir=tmpdir,
+                    output_extension="png",
+                    filename_mode="title_or_mw",
+                )
+                saved_path = os.path.join(tmpdir, "Anna_Pavlova_as_the_Dying_swan_Melbourne_1926.png")
+                self.assertTrue(os.path.exists(saved_path))
+        finally:
+            dzi_mod._new_session = old_new_session
+            dzi_mod._parse_dzi = old_parse_dzi
+            dzi_mod._download_tile = old_download_tile
+            dzi_mod._fetch_dzi_object_title = old_fetch_title
+
     def test_node_ui_metadata_compat(self):
         """Ensure loaded nodes expose metadata used by newer node-card UI."""
         nodes_pkg = importlib.import_module("ComfyUI_ALEXZ_tools.nodes")
@@ -1106,6 +1207,7 @@ class SmokeTests(unittest.TestCase):
         node = dzi_mod.ImageDownloadDZITilesBatchSave()
 
         old_download = dzi_mod.ImageDownloadDZITiles.download
+        old_fetch_title = dzi_mod._fetch_dzi_object_title
 
         try:
             def _fake_download(_self, site, mw, level, transport="auto", proxy_url="", tile_extension="jpg"):
@@ -1115,6 +1217,7 @@ class SmokeTests(unittest.TestCase):
                 return (image,)
 
             dzi_mod.ImageDownloadDZITiles.download = _fake_download
+            dzi_mod._fetch_dzi_object_title = lambda *_args, **_kwargs: "Anna_Pavlova"
 
             with tempfile.TemporaryDirectory() as tmpdir:
                 manifest_json, saved_paths_json, count_ok, count_failed = node.download_batch(
@@ -1123,7 +1226,7 @@ class SmokeTests(unittest.TestCase):
                     tmpdir,
                     -1,
                     output_extension="png",
-                    filename_template="{mw}",
+                    filename_template="{title}_{mw}",
                     overwrite_mode="skip",
                     continue_on_error="true",
                     save_mode="save_and_manifest",
@@ -1135,8 +1238,8 @@ class SmokeTests(unittest.TestCase):
                 self.assertEqual(count_failed, 0)
                 self.assertEqual(len(saved_paths), 2)
                 self.assertEqual(manifest["count_ok"], 2)
-                self.assertTrue(any(path.endswith("mw207134.png") for path in saved_paths))
-                self.assertTrue(any(path.endswith("mw207135.png") for path in saved_paths))
+                self.assertTrue(any(path.endswith("Anna_Pavlova_mw207134.png") for path in saved_paths))
+                self.assertTrue(any(path.endswith("Anna_Pavlova_mw207135.png") for path in saved_paths))
                 for path in saved_paths:
                     self.assertTrue(os.path.exists(path))
                 manifest_path = os.path.join(tmpdir, "dzi_batch_manifest_001.json")
@@ -1145,6 +1248,7 @@ class SmokeTests(unittest.TestCase):
                 self.assertTrue(os.path.exists(manifest_path))
         finally:
             dzi_mod.ImageDownloadDZITiles.download = old_download
+            dzi_mod._fetch_dzi_object_title = old_fetch_title
 
     def test_dzi_tiles_single_respects_interrupt(self):
         """Verify single DZI node propagates Comfy interrupt requests."""
@@ -1353,6 +1457,64 @@ class SmokeTests(unittest.TestCase):
             iiif_mod._resolve_iiif_service_url = old_resolve
             iiif_mod._fetch_iiif_info = old_info
             iiif_mod._download_iiif_image_bytes = old_download
+
+    def test_iiif_download_title_or_slug_uses_page_title_when_available(self):
+        """Verify IIIF node can save using resolved page title instead of URL slug."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+        old_title_stem = iiif_mod._derive_output_stem_from_source_title_or_url
+
+        try:
+            iiif_mod._resolve_iiif_service_url = lambda *args, **kwargs: "https://collections.example.test/iiif/3/sample.ptif"
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://collections.example.test/iiif/3/sample.ptif",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 32,
+                "height": 24,
+                "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0):
+                _ = (service_url, size_spec, output_format, timeout)
+                image = Image.new("RGB", (32, 24), color=(64, 64, 160))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG")
+                return (
+                    "https://collections.example.test/iiif/3/sample.ptif/full/max/0/default.jpg",
+                    buffer.getvalue(),
+                    "jpg",
+                )
+
+            iiif_mod._download_iiif_image_bytes = _fake_download
+            iiif_mod._derive_output_stem_from_source_title_or_url = (
+                lambda _source_url, timeout=30.0: "Anna_Pavlova_posed_in_day_dress_by_urn_in_the_garden_of_Ivy_House"
+            )
+
+            source_url = "https://www.londonmuseum.org.uk/collections/v/object-443337/anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house/"
+            with tempfile.TemporaryDirectory() as tmpdir:
+                _out, info_json = node.download(
+                    "London Museum Object Page",
+                    source_url,
+                    output_dir=tmpdir,
+                    filename_mode="title_or_slug",
+                )
+                payload = json.loads(info_json)
+                expected_path = os.path.join(
+                    tmpdir,
+                    "Anna_Pavlova_posed_in_day_dress_by_urn_in_the_garden_of_Ivy_House.jpg",
+                )
+                self.assertEqual(payload["saved_path"], expected_path)
+                self.assertTrue(os.path.exists(expected_path))
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
+            iiif_mod._derive_output_stem_from_source_title_or_url = old_title_stem
 
 
 if __name__ == "__main__":

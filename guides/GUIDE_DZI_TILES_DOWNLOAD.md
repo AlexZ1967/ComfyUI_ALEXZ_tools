@@ -4,6 +4,7 @@
 Ноды `Download DZI Tiles Image` и `Download DZI Tiles Batch Save` работают с Deep Zoom Image (DZI) источниками.
 
 - `Download DZI Tiles Image`: скачивает один DZI-источник и возвращает `IMAGE`.
+- `Download DZI Tiles Image`: также может опционально сохранить итоговую картинку на диск и выбрать имя по `mw` или title страницы объекта.
 - `Download DZI Tiles Batch Save`: скачивает список DZI-источников и сразу сохраняет результат на диск, возвращая manifest JSON и статистику.
 
 Сейчас поддерживаются как минимум две схемы:
@@ -19,7 +20,8 @@
 ## Минимальный сценарий (3 шага)
 1. Добавьте ноду `Download DZI Tiles Image`.
 2. Выберите `site`, затем укажите `mw` и `level`.
-3. Подключите выход `image` к `Preview Image` или следующей ноде.
+3. При необходимости задайте `output_dir`, если нужно сразу сохранить файл на диск.
+4. Подключите выход `image` к `Preview Image` или следующей ноде.
 
 Для batch-варианта:
 1. Добавьте ноду `Download DZI Tiles Batch Save`.
@@ -41,12 +43,16 @@
   Если пусто, нода использует автоопределение маршрута (env/system proxy + локальные прокси).
 - `tile_extension` (`jpg|jpeg|png|webp`): формат тайлов на стороне сервера.  
   Нода использует только выбранный формат, без перебора остальных.
+- `output_dir` (`STRING`, single optional / batch required): папка для сохранения итоговых изображений.  
+  Для `Download DZI Tiles Image` пустое значение означает: не сохранять файл, только вернуть `IMAGE`.
+- `output_extension` (`png|jpg|jpeg|webp`, single optional / batch only previously): формат сохранения итогового файла.
+- `filename_mode` (`mw|title_or_mw`, single only): режим имени файла для `Download DZI Tiles Image`.  
+  `title_or_mw` пытается взять `og:title`/`title` со страницы объекта и использует `mw` как fallback.
 - `ids_text` (`STRING`, batch only): список ID, по одному на строку.  
   Также поддерживаются разделители `,` и `;`. Пустые строки и строки/хвосты после `#` игнорируются.
-- `output_dir` (`STRING`, batch only): папка для сохранения итоговых изображений.
-- `output_extension` (`png|jpg|jpeg|webp`, batch only): формат сохранения итогового файла.
 - `filename_template` (`STRING`, batch only): шаблон имени файла без расширения.  
-  Поддерживаются плейсхолдеры: `{index}`, `{raw_id}`, `{mw}`, `{id}`, `{site}`, `{site_key}`, `{level}`.
+  Поддерживаются плейсхолдеры: `{index}`, `{raw_id}`, `{mw}`, `{id}`, `{title}`, `{site}`, `{site_key}`, `{level}`.  
+  `{title}` пытается взять `og:title`/`title` со страницы объекта и использует `mw` как fallback.
 - `overwrite_mode` (`skip|overwrite|unique`, batch only): поведение при существующем файле.
 - `continue_on_error` (`true|false`, batch only): продолжать ли батч после ошибки отдельного элемента.
 - `save_mode` (`save_only|save_and_manifest`, batch only): сохранять только изображения или дополнительно записывать `dzi_batch_manifest*.json`.
@@ -88,6 +94,7 @@
 
 ## Интерпретация выходов
 - `image`: собранное изображение в формате ComfyUI `IMAGE` (`[1, H, W, 3]`, float32, `0..1`).
+- `Download DZI Tiles Image` при заданном `output_dir` сохраняет файл либо с именем из `mw`, либо с title страницы объекта, если выбран `filename_mode=title_or_mw`.
 - `manifest_json` (batch): JSON с параметрами батча, статусом каждого элемента и итоговыми счётчиками.
 - `saved_paths_json` (batch): JSON-массив путей к успешно сохранённым файлам.
 - `count_ok` / `count_failed` (batch): агрегированная статистика батча.

@@ -13,6 +13,7 @@ Purpose:
 
 from __future__ import annotations
 
+import html
 import json
 import math
 import os
@@ -1300,6 +1301,53 @@ def _sanitize_filename_component(text: str) -> str:
     return cleaned or "item"
 
 
+def _extract_html_title(html_text: str) -> str:
+    """Extract human-readable title from HTML metadata with safe fallback."""
+    text = str(html_text or "")
+    patterns = [
+        r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
+        r'<meta[^>]+name=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
+        r'<meta[^>]+property=["\']twitter:title["\'][^>]+content=["\'](.*?)["\']',
+        r'<meta[^>]+name=["\']twitter:title["\'][^>]+content=["\'](.*?)["\']',
+        r"<title[^>]*>(.*?)</title>",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        value = html.unescape(str(match.group(1) or "")).strip()
+        value = re.sub(r"\s+", " ", value).strip()
+        if value:
+            return value
+    return ""
+
+
+def _fetch_dzi_object_title(
+    session: requests.Session,
+    object_url: str,
+    *,
+    timeout: float,
+    transport: str,
+    fallback_stem: str,
+) -> str:
+    """Fetch object page and extract title for filename use, falling back silently."""
+    url = str(object_url or "").strip()
+    if not url:
+        return fallback_stem
+    try:
+        check_interrupt()
+        mode = str(transport or "requests").strip().lower()
+        if mode not in {"requests", "cloudscraper", "urllib", "curl"}:
+            mode = "requests"
+        status, content = _fetch_bytes(session, url, timeout, transport=mode)
+        if int(status) != 200 or not content:
+            return fallback_stem
+        title = _extract_html_title(content.decode("utf-8", errors="ignore"))
+        return _sanitize_filename_component(title) if title else fallback_stem
+    except Exception:
+        return fallback_stem
+
+
 def _render_dzi_filename(
     filename_template: str,
     *,
@@ -1308,16 +1356,19 @@ def _render_dzi_filename(
     effective_mw: str,
     site_config: dict[str, Any],
     effective_level: int,
+    title_stem: str | None = None,
 ) -> str:
     """Render output filename stem for one batch item."""
     template = str(filename_template or "{mw}").strip() or "{mw}"
     site_name = str(site_config.get("name") or "").strip()
     site_key = str(site_config.get("key") or site_name).strip()
+    title_value = _sanitize_filename_component(title_stem or effective_mw)
     data = {
         "index": int(index),
         "raw_id": _sanitize_filename_component(raw_id),
         "mw": _sanitize_filename_component(effective_mw),
         "id": _sanitize_filename_component(effective_mw),
+        "title": title_value,
         "site": _sanitize_filename_component(site_name),
         "site_key": _sanitize_filename_component(site_key),
         "level": int(effective_level),
@@ -1325,7 +1376,7 @@ def _render_dzi_filename(
     try:
         rendered = template.format(**data)
     except Exception:
-        rendered = data["mw"]
+        rendered = data["title"] if "{title" in template else data["mw"]
     return _sanitize_filename_component(rendered)
 
 
@@ -1428,6 +1479,28 @@ class ImageDownloadDZITiles:
                         "tooltip": "Расширение тайлов на сервере. Используется только выбранный формат, без перебора остальных.",
                     },
                 ),
+                "output_dir": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Папка для сохранения итоговой собранной картинки. Пусто = не сохранять на диск, только вернуть IMAGE.",
+                    },
+                ),
+                "output_extension": (
+                    ["png", "jpg", "jpeg", "webp"],
+                    {
+                        "default": "png",
+                        "tooltip": "Формат записи итоговой собранной картинки на диск. Используется только если output_dir не пустой.",
+                    },
+                ),
+                "filename_mode": (
+                    ["mw", "title_or_mw"],
+                    {
+                        "default": "mw",
+                        "tooltip": "mw = имя файла по идентификатору. title_or_mw = попытаться взять осмысленный title со страницы объекта, иначе fallback на mw.",
+                    },
+                ),
             },
         }
 
@@ -1444,6 +1517,9 @@ class ImageDownloadDZITiles:
         transport: str = "auto",
         proxy_url: str = "",
         tile_extension: str = "jpg",
+        output_dir: str = "",
+        output_extension: str = "png",
+        filename_mode: str = "mw",
     ):
         """Download DZI tiles for selected level and return assembled image tensor."""
         try:
@@ -1802,6 +1878,37 @@ class ImageDownloadDZITiles:
                 f"Done: canvas={int(width)}x{int(height)}, "
                 f"tiles_total={total_tiles}, tiles_ok={downloaded_tiles}, tiles_missing={missing_tiles}"
             )
+            output_dir_text = str(output_dir or "").strip()
+            if output_dir_text:
+                output_dir_path = os.path.abspath(os.path.expanduser(output_dir_text))
+                os.makedirs(output_dir_path, exist_ok=True)
+                filename_mode_text = str(filename_mode or "mw").strip().lower()
+                filename_stem = _sanitize_filename_component(effective_mw)
+                if filename_mode_text == "title_or_mw":
+                    filename_stem = _fetch_dzi_object_title(
+                        session,
+                        zoom_base,
+                        timeout=timeout,
+                        transport=chosen_transport,
+                        fallback_stem=filename_stem,
+                    )
+                filename_stem = _render_dzi_filename(
+                    "{title}" if filename_mode_text == "title_or_mw" else "{mw}",
+                    index=0,
+                    raw_id=effective_mw,
+                    effective_mw=effective_mw,
+                    site_config=site_config,
+                    effective_level=effective_level,
+                    title_stem=filename_stem,
+                )
+                output_path, _ = _resolve_unique_output_path(
+                    output_dir_path,
+                    filename_stem,
+                    output_extension,
+                    "overwrite",
+                )
+                _save_pil_image(canvas, output_path, output_extension)
+                _log(f"Saved assembled image: {output_path}")
             return (_image_to_tensor(canvas),)
         except Exception as exc:
             if is_interrupt_exception(exc):
@@ -1888,7 +1995,7 @@ class ImageDownloadDZITilesBatchSave:
                     {
                         "default": "{mw}",
                         "multiline": False,
-                        "tooltip": "Шаблон имени файла без расширения. Поддерживаются: {index}, {raw_id}, {mw}, {id}, {site}, {site_key}, {level}.",
+                        "tooltip": "Шаблон имени файла без расширения. Поддерживаются: {index}, {raw_id}, {mw}, {id}, {title}, {site}, {site_key}, {level}. {title} пытается взять title со страницы объекта, иначе fallback на mw.",
                     },
                 ),
                 "overwrite_mode": (
@@ -1969,8 +2076,34 @@ class ImageDownloadDZITilesBatchSave:
             check_interrupt()
             request_ctx = _resolve_dzi_request_context(site, raw_id, level)
             site_config = dict(request_ctx["site_config"])
+            base_url = str(request_ctx["base_url"])
+            provider_name = str(request_ctx["provider_name"])
             effective_mw = str(request_ctx["effective_mw"])
             effective_level = int(request_ctx["effective_level"])
+            title_stem = _sanitize_filename_component(effective_mw)
+            if "{title" in str(filename_template or ""):
+                source_urls = _build_dzi_source_urls(
+                    base_url,
+                    effective_mw,
+                    effective_level,
+                    provider_name,
+                    site_config=site_config,
+                )
+                zoom_base = str(source_urls["zoom_base"])
+                referer_root = str(source_urls.get("referer_root") or _origin_from_url(zoom_base) or _DEFAULT_REFERER.rstrip("/"))
+                title_session = _make_session(
+                    referer=f"{zoom_base.rstrip('/')}/",
+                    origin=referer_root,
+                    trust_env=True,
+                    proxy_url=str(proxy_url or "").strip(),
+                )
+                title_stem = _fetch_dzi_object_title(
+                    title_session,
+                    zoom_base,
+                    timeout=20.0,
+                    transport=str(transport or "auto").strip().lower(),
+                    fallback_stem=title_stem,
+                )
             filename_stem = _render_dzi_filename(
                 filename_template,
                 index=index,
@@ -1978,6 +2111,7 @@ class ImageDownloadDZITilesBatchSave:
                 effective_mw=effective_mw,
                 site_config=site_config,
                 effective_level=effective_level,
+                title_stem=title_stem,
             )
             output_path, output_policy = _resolve_unique_output_path(
                 output_dir_text,

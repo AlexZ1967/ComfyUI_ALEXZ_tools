@@ -14,6 +14,7 @@ Purpose:
 
 from __future__ import annotations
 
+import html
 import json
 import math
 import os
@@ -341,6 +342,27 @@ def _sanitize_filename_component(text: str) -> str:
     return cleaned or "iiif_image"
 
 
+def _extract_html_title(html_text: str) -> str:
+    """Extract best available human-readable title from HTML."""
+    text = str(html_text or "")
+    patterns = [
+        r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
+        r'<meta[^>]+name=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
+        r'<meta[^>]+property=["\']twitter:title["\'][^>]+content=["\'](.*?)["\']',
+        r'<meta[^>]+name=["\']twitter:title["\'][^>]+content=["\'](.*?)["\']',
+        r"<title[^>]*>(.*?)</title>",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        value = html.unescape(str(match.group(1) or "")).strip()
+        value = re.sub(r"\s+", " ", value).strip()
+        if value:
+            return value
+    return ""
+
+
 def _derive_output_stem_from_source_url(source_url: str) -> str:
     """Derive filename stem from last meaningful path segment of source URL."""
     path = str(urlsplit(str(source_url or "").strip()).path or "").strip("/")
@@ -355,6 +377,22 @@ def _derive_output_stem_from_source_url(source_url: str) -> str:
         candidate = segments[-2]
     candidate = re.sub(r"\.[A-Za-z0-9]+$", "", candidate)
     return _sanitize_filename_component(candidate)
+
+
+def _derive_output_stem_from_source_title_or_url(source_url: str, *, timeout: float) -> str:
+    """Prefer object page title for filename; fall back to URL slug."""
+    fallback = _derive_output_stem_from_source_url(source_url)
+    url = str(source_url or "").strip()
+    if not url:
+        return fallback
+    try:
+        response = _http_get(url, timeout=timeout)
+        if int(response.status_code) != 200:
+            return fallback
+        title = _extract_html_title(str(response.text or ""))
+        return _sanitize_filename_component(title) if title else fallback
+    except Exception:
+        return fallback
 
 
 def _save_pil_image(image: Image.Image, output_path: str, output_format: str) -> None:
@@ -428,6 +466,13 @@ class ImageDownloadIIIFImage:
                         "tooltip": "Если указана директория, итоговая картинка будет сохранена на диск. Имя файла берется из последнего meaningful сегмента входного source_url.",
                     },
                 ),
+                "filename_mode": (
+                    ["source_url_slug", "title_or_slug"],
+                    {
+                        "default": "source_url_slug",
+                        "tooltip": "source_url_slug = имя файла из URL. title_or_slug = попытаться взять title страницы source_url, иначе fallback на slug из URL.",
+                    },
+                ),
                 "delivery_mode": (
                     ["single_request", "tile_assemble_full"],
                     {
@@ -457,6 +502,7 @@ class ImageDownloadIIIFImage:
         size_mode: str = "max",
         requested_width: int = 2000,
         output_dir: str = "",
+        filename_mode: str = "source_url_slug",
         delivery_mode: str = "single_request",
         output_format: str = "jpg",
     ):
@@ -514,7 +560,11 @@ class ImageDownloadIIIFImage:
                 check_interrupt()
                 output_dir_abs = os.path.abspath(os.path.expanduser(output_dir_text))
                 os.makedirs(output_dir_abs, exist_ok=True)
-                filename_stem = _derive_output_stem_from_source_url(source_url)
+                filename_mode_text = str(filename_mode or "source_url_slug").strip().lower()
+                if filename_mode_text == "title_or_slug":
+                    filename_stem = _derive_output_stem_from_source_title_or_url(source_url, timeout=timeout)
+                else:
+                    filename_stem = _derive_output_stem_from_source_url(source_url)
                 save_ext = str(selected_format or output_format or "jpg").strip().lower().lstrip(".") or "jpg"
                 saved_path = os.path.join(output_dir_abs, f"{filename_stem}.{save_ext}")
                 _save_pil_image(image, saved_path, save_ext)

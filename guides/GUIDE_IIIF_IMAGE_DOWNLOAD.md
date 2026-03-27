@@ -34,7 +34,10 @@
   - `width`: запросить изображение заданной ширины
 - `requested_width` (`INT`): ширина для `size_mode=width`
 - `output_dir` (`STRING`): если указана директория, нода сохранит итоговую картинку на диск  
-  Имя файла берется из последнего meaningful сегмента `source_url`
+  При пустом значении файл не сохраняется, а картинка только идет в выход `image`
+- `filename_mode` (`source_url_slug|title_or_slug`):
+  - `source_url_slug`: имя файла из последнего meaningful сегмента `source_url`
+  - `title_or_slug`: попытаться взять `og:title`/`title` страницы `source_url`, иначе fallback на slug из URL
 - `delivery_mode` (`single_request|tile_assemble_full`):
   - `single_request`: один IIIF image request (`full/max/...` или `full/{width},/...`)
   - `tile_assemble_full`: скачать и склеить full-resolution изображение из IIIF tiles
