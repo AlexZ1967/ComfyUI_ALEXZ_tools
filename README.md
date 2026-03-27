@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.31.0
+Version: 0.31.1
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -254,7 +254,7 @@ Guide: [GUIDE_QR_CODE.md](guides/GUIDE_QR_CODE.md)
 Если `level = -1`, используется `default_level` выбранного сайта.  
 `tile_extension`: `jpg` / `jpeg` / `png` / `webp` (используется только выбранный формат, без перебора остальных).  
 Если `proxy_url` пустой, нода автоматически пытается подобрать рабочий маршрут через env/system proxy настройки.  
-Если `output_dir` задан, нода сохраняет итоговую собранную картинку на диск.  
+Если `output_dir` задан, нода сохраняет итоговую собранную картинку на диск. Если имя уже занято, автоматически добавляется суффикс `_2`, `_3`, ... вместо перезаписи.  
 `filename_mode`: `mw` или `title_or_mw`. Для `title_or_mw` нода пытается взять title страницы объекта и использует `mw` как fallback.  
 Если `output_dir` пустой, файл не записывается и картинка только отдается через выход `image`.  
 Новые сайты можно добавлять через `config/dzi_sites.json`, если указать `object_url_template`, `dzi_url_template` и `tile_url_template`.  
@@ -287,7 +287,7 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 Входы: `site`, `source_url`, `size_mode`, `requested_width`, `output_dir`, `cache_dir`, `filename_mode`, `delivery_mode`, `output_format`.  
 `London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.  
 `Generic IIIF Service URL`: принимает direct service URL, `info.json` URL или HTML-страницу с встроенным IIIF viewer.  
-Если `output_dir` задан, нода сохраняет итоговую картинку на диск, а имя файла берет из последнего meaningful сегмента входного `source_url`.  
+Если `output_dir` задан, нода сохраняет итоговую картинку на диск, а имя файла берет из последнего meaningful сегмента входного `source_url`. Если имя уже занято, автоматически добавляется суффикс `_2`, `_3`, ... вместо перезаписи.  
 `cache_dir`: recovery-кеш для `tile_assemble_full`; уже скачанные тайлы переиспользуются при повторных запусках после сбоя. После полностью успешной сборки кеш этой конкретной картинки автоматически удаляется. Пусто = встроенная папка `cache/iiif_tiles`.  
 `filename_mode`: `source_url_slug` или `title_or_slug`. Во втором режиме нода пытается взять title страницы `source_url`, а при неудаче использует slug из URL.  
 Выходы: `image`, `info_json`.  

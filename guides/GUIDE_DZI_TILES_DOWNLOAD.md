@@ -53,7 +53,8 @@
 - `filename_template` (`STRING`, batch only): шаблон имени файла без расширения.  
   Поддерживаются плейсхолдеры: `{index}`, `{raw_id}`, `{mw}`, `{id}`, `{title}`, `{site}`, `{site_key}`, `{level}`.  
   `{title}` пытается взять `og:title`/`title` со страницы объекта и использует `mw` как fallback.
-- `overwrite_mode` (`skip|overwrite|unique`, batch only): поведение при существующем файле.
+- `overwrite_mode` (`skip|overwrite|unique`, batch only): поведение при существующем файле.  
+  В режиме `unique` нода теперь пишет человекочитаемые суффиксы: `_2`, `_3`, ...
 - `continue_on_error` (`true|false`, batch only): продолжать ли батч после ошибки отдельного элемента.
 - `save_mode` (`save_only|save_and_manifest`, batch only): сохранять только изображения или дополнительно записывать `dzi_batch_manifest*.json`.
 
@@ -94,7 +95,8 @@
 
 ## Интерпретация выходов
 - `image`: собранное изображение в формате ComfyUI `IMAGE` (`[1, H, W, 3]`, float32, `0..1`).
-- `Download DZI Tiles Image` при заданном `output_dir` сохраняет файл либо с именем из `mw`, либо с title страницы объекта, если выбран `filename_mode=title_or_mw`.
+- `Download DZI Tiles Image` при заданном `output_dir` сохраняет файл либо с именем из `mw`, либо с title страницы объекта, если выбран `filename_mode=title_or_mw`.  
+  Если файл с таким именем уже существует, single-нода автоматически сохраняет как `name_2.ext`, `name_3.ext`, ...
 - `manifest_json` (batch): JSON с параметрами батча, статусом каждого элемента и итоговыми счётчиками.
 - `saved_paths_json` (batch): JSON-массив путей к успешно сохранённым файлам.
 - `count_ok` / `count_failed` (batch): агрегированная статистика батча.

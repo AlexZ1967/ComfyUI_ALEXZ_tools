@@ -567,6 +567,20 @@ def _save_pil_image(image: Image.Image, output_path: str, output_format: str) ->
     raise ValueError("Unsupported save format. Allowed: jpg, jpeg, png, webp, tif, gif.")
 
 
+def _resolve_unique_output_path(output_dir: str, stem: str, ext: str) -> str:
+    """Return non-destructive output path by adding numeric suffix when needed."""
+    normalized_ext = str(ext or "jpg").strip().lower().lstrip(".") or "jpg"
+    base_path = os.path.join(output_dir, f"{stem}.{normalized_ext}")
+    if not os.path.exists(base_path):
+        return base_path
+    index = 2
+    while True:
+        candidate = os.path.join(output_dir, f"{stem}_{index}.{normalized_ext}")
+        if not os.path.exists(candidate):
+            return candidate
+        index += 1
+
+
 class ImageDownloadIIIFImage:
     """ComfyUI node for downloading one image from IIIF Image API sources."""
 
@@ -733,7 +747,7 @@ class ImageDownloadIIIFImage:
                 else:
                     filename_stem = _derive_output_stem_from_source_url(source_url)
                 save_ext = str(selected_format or output_format or "jpg").strip().lower().lstrip(".") or "jpg"
-                saved_path = os.path.join(output_dir_abs, f"{filename_stem}.{save_ext}")
+                saved_path = _resolve_unique_output_path(output_dir_abs, filename_stem, save_ext)
                 _save_pil_image(image, saved_path, save_ext)
                 _log(f"Saved: {saved_path}")
 

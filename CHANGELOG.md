@@ -1,5 +1,29 @@
 # Changelog — ALEXZ_tools
 
+## 0.31.1 — 2026-03-27
+- Improved non-destructive save behavior for image download nodes:
+  - `Download DZI Tiles Image` no longer overwrites an existing file when
+    `output_dir` is set;
+  - `Download IIIF Image` no longer overwrites an existing file when
+    `output_dir` is set;
+  - instead, both single-image nodes now append numeric suffixes `_2`, `_3`,
+    ... to the filename automatically.
+- Adjusted batch DZI unique-save naming:
+  - `overwrite_mode=unique` now uses human-readable suffixes `_2`, `_3`, ...
+    instead of zero-padded `_001`, `_002`, ...
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_DZI_TILES_DOWNLOAD.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+- Tests:
+  - added smoke coverage for filename collision handling in both single-save
+    DZI and IIIF flows.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "dzi or iiif"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.31.1` in `pyproject.toml` and `README.md`.
+
 ## 0.31.0 — 2026-03-27
 - Added new companion node `Apply Descreen Percent`:
   - applies a known descreen percent to a full image or batch without

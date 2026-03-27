@@ -1390,9 +1390,9 @@ def _resolve_unique_output_path(output_dir: str, stem: str, ext: str, overwrite_
     if mode == "unique":
         if not os.path.exists(base_path):
             return base_path, "unique_new"
-        index = 1
+        index = 2
         while True:
-            candidate = os.path.join(output_dir, f"{stem}_{index:03d}.{normalized_ext}")
+            candidate = os.path.join(output_dir, f"{stem}_{index}.{normalized_ext}")
             if not os.path.exists(candidate):
                 return candidate, "unique_suffix"
             index += 1
@@ -1905,7 +1905,7 @@ class ImageDownloadDZITiles:
                     output_dir_path,
                     filename_stem,
                     output_extension,
-                    "overwrite",
+                    "unique",
                 )
                 _save_pil_image(canvas, output_path, output_extension)
                 _log(f"Saved assembled image: {output_path}")
