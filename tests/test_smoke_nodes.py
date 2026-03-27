@@ -1372,8 +1372,8 @@ class SmokeTests(unittest.TestCase):
                 "sizes": [{"width": 800, "height": 600}],
             }
 
-            def _fake_assemble(service_url, info, output_format="jpg", timeout=30.0, session=None):
-                _ = (service_url, info, output_format, timeout, session)
+            def _fake_assemble(service_url, info, output_format="jpg", timeout=30.0, session=None, cache_dir=None):
+                _ = (service_url, info, output_format, timeout, session, cache_dir)
                 image = Image.new("RGB", (1600, 1200), color=(32, 64, 96))
                 return image, {
                     "mode": "tile_assemble_full",
@@ -1555,6 +1555,114 @@ class SmokeTests(unittest.TestCase):
 
         self.assertEqual(int(response.status_code), 200)
         self.assertEqual(session.calls, 2)
+
+    def test_iiif_tile_cache_reuses_saved_tile_bytes(self):
+        """Verify IIIF tile cache skips repeated network fetches for the same tile URL."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        old_http_get = iiif_mod._http_get
+        calls = {"count": 0}
+
+        class _DummyResponse:
+            def __init__(self, content: bytes):
+                self.status_code = 200
+                self.content = content
+                self.text = ""
+
+            def json(self):
+                return {}
+
+        try:
+            def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
+                _ = (timeout, session, retries, retry_backoff)
+                calls["count"] += 1
+                return _DummyResponse(b"tile-bytes")
+
+            iiif_mod._http_get = _fake_http_get
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tile_url_1, content_1, fmt_1 = iiif_mod._download_iiif_tile_bytes(
+                    "https://collections.example.test/iiif/3/sample.ptif",
+                    region="0,0,128,128",
+                    output_format="jpg",
+                    timeout=1.0,
+                    cache_dir=tmpdir,
+                )
+                tile_url_2, content_2, fmt_2 = iiif_mod._download_iiif_tile_bytes(
+                    "https://collections.example.test/iiif/3/sample.ptif",
+                    region="0,0,128,128",
+                    output_format="jpg",
+                    timeout=1.0,
+                    cache_dir=tmpdir,
+                )
+        finally:
+            iiif_mod._http_get = old_http_get
+
+        self.assertEqual(tile_url_1, tile_url_2)
+        self.assertEqual(content_1, b"tile-bytes")
+        self.assertEqual(content_2, b"tile-bytes")
+        self.assertEqual(fmt_1, "jpg")
+        self.assertEqual(fmt_2, "jpg")
+        self.assertEqual(calls["count"], 1)
+
+    def test_iiif_tile_assembly_clears_cache_after_success(self):
+        """Verify resume cache is removed after successful tile assembly completion."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_assemble = iiif_mod._assemble_iiif_full_image
+
+        try:
+            iiif_mod._resolve_iiif_service_url = lambda *args, **kwargs: "https://collections.example.test/iiif/3/sample.ptif"
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://collections.example.test/iiif/3/sample.ptif",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 64,
+                "height": 48,
+                "tiles": [{"width": 32, "height": 32, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                cache_scope = os.path.join(tmpdir, "resume_scope")
+
+                def _fake_assemble(service_url, info, output_format="jpg", timeout=30.0, session=None, cache_dir=None):
+                    _ = (service_url, info, output_format, timeout, session, cache_dir)
+                    os.makedirs(cache_scope, exist_ok=True)
+                    with open(os.path.join(cache_scope, "tile.jpg"), "wb") as f:
+                        f.write(b"tile")
+                    image = Image.new("RGB", (64, 48), color=(96, 48, 24))
+                    return image, {
+                        "mode": "tile_assemble_full",
+                        "tile_width": 32,
+                        "tile_height": 32,
+                        "tiles_x": 2,
+                        "tiles_y": 2,
+                        "tiles_total": 4,
+                        "tiles_downloaded": 4,
+                        "selected_format": "jpg",
+                        "last_tile_url": "https://collections.example.test/iiif/3/sample.ptif/0,0,32,32/max/0/default.jpg",
+                        "cache_dir": cache_scope,
+                        "cache_hits": 2,
+                        "cache_misses": 2,
+                        "cache_stores": 2,
+                        "cache_cleared": False,
+                    }
+
+                iiif_mod._assemble_iiif_full_image = _fake_assemble
+                _out, info_json = node.download(
+                    "Generic IIIF Service URL",
+                    "https://collections.example.test/iiif/3/sample.ptif/info.json",
+                    delivery_mode="tile_assemble_full",
+                    cache_dir=tmpdir,
+                )
+                payload = json.loads(info_json)
+                self.assertFalse(os.path.exists(cache_scope))
+                self.assertTrue(payload["delivery"]["cache_cleared"])
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._assemble_iiif_full_image = old_assemble
 
 
 if __name__ == "__main__":

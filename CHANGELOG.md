@@ -1,5 +1,27 @@
 # Changelog — ALEXZ_tools
 
+## 0.29.4 — 2026-03-27
+- `Download IIIF Image`:
+  - added tile recovery cache for `delivery_mode=tile_assemble_full`;
+  - downloaded IIIF tile bytes are cached on disk so interrupted/failed runs can
+    resume without re-downloading completed tiles;
+  - cache is scoped per assembled image rather than shared blindly;
+  - after a fully successful tile assembly, the cache for that specific image is
+    removed automatically;
+  - `delivery` metadata now includes cache diagnostics:
+    `cache_dir`, `cache_hits`, `cache_misses`, `cache_stores`, `cache_cleared`.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+- Tests:
+  - added smoke coverage for IIIF tile cache reuse and automatic cache cleanup
+    after successful assembly.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif"`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.29.4` in `pyproject.toml` and `README.md`.
+
 ## 0.29.3 — 2026-03-27
 - `Download IIIF Image`:
   - improved network resilience for `delivery_mode=tile_assemble_full`;

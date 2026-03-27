@@ -15,13 +15,16 @@ Purpose:
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import math
 import os
 import re
+import shutil
 import time
 import traceback
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -57,6 +60,7 @@ _DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
+_IIIF_TILE_CACHE_ROOT = Path(__file__).resolve().parent.parent / "cache" / "iiif_tiles"
 _RETRYABLE_HTTP_EXCEPTIONS = (
     requests.exceptions.ReadTimeout,
     requests.exceptions.ConnectTimeout,
@@ -281,6 +285,66 @@ def _iiif_tile_profile(info: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def _resolve_iiif_cache_dir(cache_dir: str | None) -> Path:
+    """Resolve persistent cache directory for IIIF tile assembly."""
+    cache_text = str(cache_dir or "").strip()
+    if cache_text:
+        return Path(os.path.abspath(os.path.expanduser(cache_text)))
+    return _IIIF_TILE_CACHE_ROOT
+
+
+def _resolve_iiif_tile_cache_scope(cache_dir: str | None, service_url: str, info: dict[str, Any]) -> Path:
+    """Resolve per-assembly cache scope so completed runs can be cleaned safely."""
+    cache_base = _resolve_iiif_cache_dir(cache_dir)
+    source_width, source_height = _iiif_source_dimensions(info)
+    scope_key = hashlib.sha1(
+        f"{service_url.rstrip('/')}|{source_width}|{source_height}".encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()[:16]
+    return cache_base / scope_key
+
+
+def _clear_iiif_cache_dir(cache_root: Path | str | None) -> bool:
+    """Remove one assembly cache directory after successful completion."""
+    if cache_root is None:
+        return False
+    path = Path(str(cache_root))
+    try:
+        if path.exists():
+            shutil.rmtree(path)
+        return True
+    except Exception:
+        return False
+
+
+def _iiif_tile_cache_path(cache_root: Path, image_url: str) -> Path:
+    """Map tile URL to stable cache file path."""
+    digest = hashlib.sha1(str(image_url or "").encode("utf-8"), usedforsecurity=False).hexdigest()
+    split = urlsplit(str(image_url or "").strip())
+    ext = Path(split.path).suffix or ".bin"
+    return cache_root / digest[:2] / f"{digest}{ext}"
+
+
+def _load_iiif_tile_from_cache(cache_root: Path, image_url: str) -> bytes | None:
+    """Load cached tile bytes if present."""
+    path = _iiif_tile_cache_path(cache_root, image_url)
+    try:
+        if path.exists():
+            return path.read_bytes()
+    except Exception:
+        return None
+    return None
+
+
+def _store_iiif_tile_in_cache(cache_root: Path, image_url: str, content: bytes) -> None:
+    """Persist downloaded tile bytes to cache."""
+    path = _iiif_tile_cache_path(cache_root, image_url)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_bytes(bytes(content or b""))
+    tmp_path.replace(path)
+
+
 def _download_iiif_tile_bytes(
     service_url: str,
     *,
@@ -288,6 +352,8 @@ def _download_iiif_tile_bytes(
     output_format: str,
     timeout: float,
     session: requests.Session | None = None,
+    cache_dir: str | None = None,
+    cache_stats: dict[str, int] | None = None,
 ) -> tuple[str, bytes, str]:
     """Download one IIIF tile region, with jpg fallback when requested format fails."""
     requested_format = str(output_format or "jpg").strip().lower().lstrip(".") or "jpg"
@@ -295,13 +361,24 @@ def _download_iiif_tile_bytes(
     if requested_format != "jpg":
         formats_to_try.append("jpg")
     last_status = 0
+    cache_root = _resolve_iiif_cache_dir(cache_dir)
     for fmt in formats_to_try:
         check_interrupt()
         image_url = f"{service_url.rstrip('/')}/{region}/max/0/default.{fmt}"
+        cached = _load_iiif_tile_from_cache(cache_root, image_url)
+        if cached is not None:
+            if cache_stats is not None:
+                cache_stats["hits"] = int(cache_stats.get("hits", 0)) + 1
+            return image_url, cached, fmt
         response = _http_get(image_url, timeout=timeout, session=session)
         last_status = int(response.status_code)
         if last_status == 200:
-            return image_url, bytes(response.content or b""), fmt
+            content = bytes(response.content or b"")
+            _store_iiif_tile_in_cache(cache_root, image_url, content)
+            if cache_stats is not None:
+                cache_stats["misses"] = int(cache_stats.get("misses", 0)) + 1
+                cache_stats["stores"] = int(cache_stats.get("stores", 0)) + 1
+            return image_url, content, fmt
     raise RuntimeError(
         f"IIIF tile request failed for `{service_url}` region `{region}` "
         f"and formats {formats_to_try} (last_status={last_status})."
@@ -315,6 +392,7 @@ def _assemble_iiif_full_image(
     output_format: str,
     timeout: float,
     session: requests.Session | None = None,
+    cache_dir: str | None = None,
 ) -> tuple[Image.Image, dict[str, Any]]:
     """Assemble full-resolution image from IIIF tiles at scaleFactor=1."""
     source_width, source_height = _iiif_source_dimensions(info)
@@ -328,6 +406,8 @@ def _assemble_iiif_full_image(
     selected_format = ""
     last_tile_url = ""
     downloaded_tiles = 0
+    cache_root = _resolve_iiif_tile_cache_scope(cache_dir, service_url, info)
+    cache_stats = {"hits": 0, "misses": 0, "stores": 0}
 
     bar = tqdm(total=total_tiles, desc="IIIF Tiles", unit="tile")
     try:
@@ -346,6 +426,8 @@ def _assemble_iiif_full_image(
                     output_format=output_format,
                     timeout=timeout,
                     session=session,
+                    cache_dir=str(cache_root),
+                    cache_stats=cache_stats,
                 )
                 tile = _decode_image(content, tile_url)
                 if tile.size != (w, h):
@@ -355,7 +437,10 @@ def _assemble_iiif_full_image(
                 last_tile_url = tile_url
                 downloaded_tiles += 1
                 bar.update(1)
-                bar.set_postfix_str(f"ok={downloaded_tiles}/{total_tiles}", refresh=False)
+                bar.set_postfix_str(
+                    f"ok={downloaded_tiles}/{total_tiles}, cache={cache_stats['hits']}/{downloaded_tiles}",
+                    refresh=False,
+                )
     finally:
         bar.close()
 
@@ -369,6 +454,11 @@ def _assemble_iiif_full_image(
         "tiles_downloaded": downloaded_tiles,
         "selected_format": selected_format or str(output_format or "jpg"),
         "last_tile_url": last_tile_url,
+        "cache_dir": str(cache_root),
+        "cache_hits": int(cache_stats["hits"]),
+        "cache_misses": int(cache_stats["misses"]),
+        "cache_stores": int(cache_stats["stores"]),
+        "cache_cleared": False,
     }
     return canvas, metadata
 
@@ -526,6 +616,14 @@ class ImageDownloadIIIFImage:
                         "tooltip": "Если указана директория, итоговая картинка будет сохранена на диск. Имя файла берется из последнего meaningful сегмента входного source_url.",
                     },
                 ),
+                "cache_dir": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Папка persistent-кеша для IIIF tile assembly. Пусто = использовать встроенную папку cache/iiif_tiles в модуле. Уже загруженные тайлы будут переиспользованы при повторных запусках.",
+                    },
+                ),
                 "filename_mode": (
                     ["source_url_slug", "title_or_slug"],
                     {
@@ -562,6 +660,7 @@ class ImageDownloadIIIFImage:
         size_mode: str = "max",
         requested_width: int = 2000,
         output_dir: str = "",
+        cache_dir: str = "",
         filename_mode: str = "source_url_slug",
         delivery_mode: str = "single_request",
         output_format: str = "jpg",
@@ -588,6 +687,7 @@ class ImageDownloadIIIFImage:
                     output_format=output_format,
                     timeout=timeout,
                     session=session,
+                    cache_dir=cache_dir,
                 )
                 width, height = image.size
                 image_url = str(delivery_meta.get("last_tile_url") or "")
@@ -595,7 +695,7 @@ class ImageDownloadIIIFImage:
                 size_spec = "tile_assemble_full"
                 _log(
                     f"Tile assembly: {delivery_meta['tiles_x']}x{delivery_meta['tiles_y']} "
-                    f"tiles ({delivery_meta['tiles_total']} total)"
+                    f"tiles ({delivery_meta['tiles_total']} total, cache_hits={delivery_meta.get('cache_hits', 0)})"
                 )
             else:
                 size_spec = _build_iiif_size_spec(size_mode, requested_width)
@@ -636,6 +736,13 @@ class ImageDownloadIIIFImage:
                 saved_path = os.path.join(output_dir_abs, f"{filename_stem}.{save_ext}")
                 _save_pil_image(image, saved_path, save_ext)
                 _log(f"Saved: {saved_path}")
+
+            if mode == "tile_assemble_full":
+                cache_scope = delivery_meta.get("cache_dir")
+                cache_cleared = _clear_iiif_cache_dir(cache_scope)
+                delivery_meta["cache_cleared"] = bool(cache_cleared)
+                if cache_cleared:
+                    _log(f"Tile cache cleared: {cache_scope}")
 
             payload = {
                 "site": str(site or "").strip(),
