@@ -508,12 +508,46 @@ def _extract_html_title(html_text: str) -> str:
     return ""
 
 
-def _derive_output_stem_from_source_url(source_url: str) -> str:
-    """Derive filename stem from last meaningful path segment of source URL."""
+def _extract_iiif_stable_id(source_url: str, service_url: str = "") -> str:
+    """Extract stable object/service identifier for filename disambiguation."""
+    combined = " | ".join([str(source_url or "").strip(), str(service_url or "").strip()])
+    patterns = (
+        r"\b(object-\d+)\b",
+        r"\b(nla\.obj-\d+)\b",
+        r"\b(mw\d+)\b",
+        r"/([A-Za-z]\d{3,}(?:\.ptif)?)\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, combined, flags=re.IGNORECASE)
+        if match:
+            value = re.sub(r"\.ptif$", "", str(match.group(1) or ""), flags=re.IGNORECASE)
+            value = _sanitize_filename_component(value)
+            if value:
+                return value
+    return ""
+
+
+def _append_stable_id_to_stem(stem: str, stable_id: str) -> str:
+    """Append stable id to stem unless it is already present."""
+    base = _sanitize_filename_component(stem)
+    stable = _sanitize_filename_component(stable_id)
+    if not stable:
+        return base or "iiif_image"
+    lowered_base = base.lower()
+    lowered_stable = stable.lower()
+    if lowered_stable in lowered_base:
+        return base or stable
+    if not base:
+        return stable
+    return f"{base}_{stable}"
+
+
+def _derive_output_stem_from_source_url(source_url: str, service_url: str = "") -> str:
+    """Derive filename stem from URL slug plus stable object/service id when available."""
     path = str(urlsplit(str(source_url or "").strip()).path or "").strip("/")
     segments = [segment for segment in path.split("/") if segment]
     if not segments:
-        return "iiif_image"
+        return _append_stable_id_to_stem("iiif_image", _extract_iiif_stable_id(source_url, service_url))
     candidate = segments[-1]
     lowered = candidate.lower()
     if lowered in {"info.json"} and len(segments) >= 2:
@@ -521,7 +555,7 @@ def _derive_output_stem_from_source_url(source_url: str) -> str:
     elif lowered.startswith("default.") and len(segments) >= 2:
         candidate = segments[-2]
     candidate = re.sub(r"\.[A-Za-z0-9]+$", "", candidate)
-    return _sanitize_filename_component(candidate)
+    return _append_stable_id_to_stem(candidate, _extract_iiif_stable_id(source_url, service_url))
 
 
 def _derive_output_stem_from_source_title_or_url(
@@ -529,9 +563,11 @@ def _derive_output_stem_from_source_title_or_url(
     *,
     timeout: float,
     session: requests.Session | None = None,
+    service_url: str = "",
 ) -> str:
     """Prefer object page title for filename; fall back to URL slug."""
-    fallback = _derive_output_stem_from_source_url(source_url)
+    stable_id = _extract_iiif_stable_id(source_url, service_url)
+    fallback = _derive_output_stem_from_source_url(source_url, service_url)
     url = str(source_url or "").strip()
     if not url:
         return fallback
@@ -540,7 +576,7 @@ def _derive_output_stem_from_source_title_or_url(
         if int(response.status_code) != 200:
             return fallback
         title = _extract_html_title(str(response.text or ""))
-        return _sanitize_filename_component(title) if title else fallback
+        return _append_stable_id_to_stem(title, stable_id) if title else fallback
     except Exception:
         return fallback
 
@@ -743,9 +779,10 @@ class ImageDownloadIIIFImage:
                         source_url,
                         timeout=timeout,
                         session=session,
+                        service_url=service_url,
                     )
                 else:
-                    filename_stem = _derive_output_stem_from_source_url(source_url)
+                    filename_stem = _derive_output_stem_from_source_url(source_url, service_url)
                 save_ext = str(selected_format or output_format or "jpg").strip().lower().lstrip(".") or "jpg"
                 saved_path = _resolve_unique_output_path(output_dir_abs, filename_stem, save_ext)
                 _save_pil_image(image, saved_path, save_ext)

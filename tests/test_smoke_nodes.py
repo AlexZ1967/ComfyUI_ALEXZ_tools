@@ -1504,7 +1504,7 @@ class SmokeTests(unittest.TestCase):
                 payload = json.loads(info_json)
                 expected_path = os.path.join(
                     tmpdir,
-                    "anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house.jpg",
+                    "anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house_object-443337.jpg",
                 )
                 self.assertEqual(payload["saved_path"], expected_path)
                 self.assertTrue(os.path.exists(expected_path))
@@ -1547,7 +1547,7 @@ class SmokeTests(unittest.TestCase):
 
             iiif_mod._download_iiif_image_bytes = _fake_download
             iiif_mod._derive_output_stem_from_source_title_or_url = (
-                lambda _source_url, timeout=30.0, session=None: "Anna_Pavlova_posed_in_day_dress_by_urn_in_the_garden_of_Ivy_House"
+                lambda _source_url, timeout=30.0, session=None, service_url="": "Anna_Pavlova_posed_in_day_dress_by_urn_in_the_garden_of_Ivy_House_object-443337"
             )
 
             source_url = "https://www.londonmuseum.org.uk/collections/v/object-443337/anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house/"
@@ -1561,7 +1561,7 @@ class SmokeTests(unittest.TestCase):
                 payload = json.loads(info_json)
                 expected_path = os.path.join(
                     tmpdir,
-                    "Anna_Pavlova_posed_in_day_dress_by_urn_in_the_garden_of_Ivy_House.jpg",
+                    "Anna_Pavlova_posed_in_day_dress_by_urn_in_the_garden_of_Ivy_House_object-443337.jpg",
                 )
                 self.assertEqual(payload["saved_path"], expected_path)
                 self.assertTrue(os.path.exists(expected_path))
@@ -1606,7 +1606,7 @@ class SmokeTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmpdir:
                 base_path = os.path.join(
                     tmpdir,
-                    "anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house.jpg",
+                    "anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house_object-443337.jpg",
                 )
                 with open(base_path, "wb") as fh:
                     fh.write(b"existing")
@@ -1618,7 +1618,7 @@ class SmokeTests(unittest.TestCase):
                 payload = json.loads(info_json)
                 suffixed_path = os.path.join(
                     tmpdir,
-                    "anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house_2.jpg",
+                    "anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house_object-443337_2.jpg",
                 )
                 self.assertEqual(payload["saved_path"], suffixed_path)
                 self.assertTrue(os.path.exists(base_path))

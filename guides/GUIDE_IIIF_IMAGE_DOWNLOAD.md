@@ -40,7 +40,9 @@
   При пустом значении используется встроенная папка `cache/iiif_tiles` в модуле. Уже загруженные тайлы будут переиспользованы при повторном запуске после сбоя. После полностью успешной сборки кеш именно этой картинки автоматически удаляется.
 - `filename_mode` (`source_url_slug|title_or_slug`):
   - `source_url_slug`: имя файла из последнего meaningful сегмента `source_url`
-  - `title_or_slug`: попытаться взять `og:title`/`title` страницы `source_url`, иначе fallback на slug из URL
+  - `title_or_slug`: попытаться взять `og:title`/`title` страницы `source_url`, иначе fallback на slug из URL  
+  В оба режима нода автоматически добавляет стабильный ID объекта/сервиса, если может извлечь его из URL  
+  Пример: `anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house_object-443337.jpg`
 - `delivery_mode` (`single_request|tile_assemble_full`):
   - `single_request`: один IIIF image request (`full/max/...` или `full/{width},/...`)
   - `tile_assemble_full`: скачать и склеить full-resolution изображение из IIIF tiles

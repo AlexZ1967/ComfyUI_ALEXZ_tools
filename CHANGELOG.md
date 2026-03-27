@@ -1,5 +1,23 @@
 # Changelog — ALEXZ_tools
 
+## 0.31.2 — 2026-03-27
+- Improved `Download IIIF Image` filename stability:
+  - saved filenames now append a stable identifier extracted from
+    `source_url` and/or `service_url` when available;
+  - typical result is now `slug_or_title + stable_id`, for example
+    `anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house_object-443337.jpg`;
+  - this reduces cross-item collisions even before numeric suffix fallback.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+- Tests:
+  - updated IIIF smoke coverage for new filename contract and collision suffixes.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.31.2` in `pyproject.toml` and `README.md`.
+
 ## 0.31.1 — 2026-03-27
 - Improved non-destructive save behavior for image download nodes:
   - `Download DZI Tiles Image` no longer overwrites an existing file when
