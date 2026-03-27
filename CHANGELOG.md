@@ -1,5 +1,30 @@
 # Changelog — ALEXZ_tools
 
+## 0.29.1 — 2026-03-27
+- `Download IIIF Image` now supports optional save-to-disk output via
+  `output_dir`.
+- `nodes/image_download_iiif.py`:
+  - added `output_dir` parameter;
+  - when `output_dir` is empty, the node does not save any file and only
+    returns the `IMAGE` output;
+  - when `output_dir` is set, the final image is written to disk and the path
+    is returned in `info_json.saved_path`;
+  - output filename is derived from the last meaningful segment of the input
+    `source_url`, for example:
+    `.../anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house/`
+    -> `anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house.jpg`.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+- Tests:
+  - added smoke coverage for `output_dir` save behavior and URL-derived
+    filename generation.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.29.1` in `pyproject.toml` and `README.md`.
+
 ## 0.29.0 — 2026-03-27
 - Added new node `Download IIIF Image` for IIIF Image API sources, with
   first-class support for London Museum object pages.

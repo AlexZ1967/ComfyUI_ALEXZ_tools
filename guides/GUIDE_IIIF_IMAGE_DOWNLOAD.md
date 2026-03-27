@@ -33,6 +33,8 @@
   - `max`: запросить максимально доступный размер
   - `width`: запросить изображение заданной ширины
 - `requested_width` (`INT`): ширина для `size_mode=width`
+- `output_dir` (`STRING`): если указана директория, нода сохранит итоговую картинку на диск  
+  Имя файла берется из последнего meaningful сегмента `source_url`
 - `delivery_mode` (`single_request|tile_assemble_full`):
   - `single_request`: один IIIF image request (`full/max/...` или `full/{width},/...`)
   - `tile_assemble_full`: скачать и склеить full-resolution изображение из IIIF tiles
@@ -62,6 +64,7 @@
   - `image_url`
   - `source.width` / `source.height`
   - `downloaded.width` / `downloaded.height`
+  - `saved_path`
   - `iiif.width` / `iiif.height`
   - `iiif.maxArea` / `iiif.maxAllowedSize`
   - `delivery`

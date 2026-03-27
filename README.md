@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.29.0
+Version: 0.29.1
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -279,9 +279,10 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 - Display name: Download IIIF Image  
 - Type name: ImageDownloadIIIFImage  
 - Category: image/io  
-Входы: `site`, `source_url`, `size_mode`, `requested_width`, `output_format`.  
+Входы: `site`, `source_url`, `size_mode`, `requested_width`, `output_dir`, `delivery_mode`, `output_format`.  
 `London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.  
 `Generic IIIF Service URL`: принимает direct service URL, `info.json` URL или HTML-страницу с встроенным IIIF viewer.  
+Если `output_dir` задан, нода сохраняет итоговую картинку на диск, а имя файла берет из последнего meaningful сегмента входного `source_url`.  
 Выходы: `image`, `info_json`.  
 Guide: [GUIDE_IIIF_IMAGE_DOWNLOAD.md](guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md)
 

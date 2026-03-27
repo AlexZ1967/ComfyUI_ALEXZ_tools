@@ -1302,6 +1302,58 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(payload["source"]["width"], 1600)
         self.assertFalse(payload["limits"]["limited_by_service"])
 
+    def test_iiif_download_saves_using_source_url_slug(self):
+        """Verify IIIF node saves final image using source URL slug as filename."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+
+        try:
+            iiif_mod._resolve_iiif_service_url = lambda *args, **kwargs: "https://collections.example.test/iiif/3/sample.ptif"
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://collections.example.test/iiif/3/sample.ptif",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 32,
+                "height": 24,
+                "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0):
+                _ = (service_url, size_spec, output_format, timeout)
+                image = Image.new("RGB", (32, 24), color=(128, 64, 32))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG")
+                return (
+                    "https://collections.example.test/iiif/3/sample.ptif/full/max/0/default.jpg",
+                    buffer.getvalue(),
+                    "jpg",
+                )
+
+            iiif_mod._download_iiif_image_bytes = _fake_download
+
+            source_url = "https://www.londonmuseum.org.uk/collections/v/object-443337/anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house/"
+            with tempfile.TemporaryDirectory() as tmpdir:
+                _out, info_json = node.download(
+                    "London Museum Object Page",
+                    source_url,
+                    output_dir=tmpdir,
+                )
+                payload = json.loads(info_json)
+                expected_path = os.path.join(
+                    tmpdir,
+                    "anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house.jpg",
+                )
+                self.assertEqual(payload["saved_path"], expected_path)
+                self.assertTrue(os.path.exists(expected_path))
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import traceback
 from io import BytesIO
 from typing import Any
+from urllib.parse import urlsplit
 
 import numpy as np
 import requests
@@ -331,6 +333,52 @@ def _image_to_tensor(image: Image.Image) -> torch.Tensor:
     return torch.from_numpy(np_image).unsqueeze(0)
 
 
+def _sanitize_filename_component(text: str) -> str:
+    """Normalize user-facing filename fragment into a safe portable stem."""
+    cleaned = re.sub(r"[\\/:*?\"<>|]+", "_", str(text or "").strip())
+    cleaned = re.sub(r"\s+", "_", cleaned)
+    cleaned = re.sub(r"_+", "_", cleaned).strip("._")
+    return cleaned or "iiif_image"
+
+
+def _derive_output_stem_from_source_url(source_url: str) -> str:
+    """Derive filename stem from last meaningful path segment of source URL."""
+    path = str(urlsplit(str(source_url or "").strip()).path or "").strip("/")
+    segments = [segment for segment in path.split("/") if segment]
+    if not segments:
+        return "iiif_image"
+    candidate = segments[-1]
+    lowered = candidate.lower()
+    if lowered in {"info.json"} and len(segments) >= 2:
+        candidate = segments[-2]
+    elif lowered.startswith("default.") and len(segments) >= 2:
+        candidate = segments[-2]
+    candidate = re.sub(r"\.[A-Za-z0-9]+$", "", candidate)
+    return _sanitize_filename_component(candidate)
+
+
+def _save_pil_image(image: Image.Image, output_path: str, output_format: str) -> None:
+    """Save PIL image to disk using requested output format."""
+    fmt = str(output_format or "jpg").strip().lower().lstrip(".") or "jpg"
+    image_rgb = image.convert("RGB")
+    if fmt == "png":
+        image_rgb.save(output_path, format="PNG", optimize=True)
+        return
+    if fmt in {"jpg", "jpeg"}:
+        image_rgb.save(output_path, format="JPEG", quality=95, subsampling=0, optimize=True)
+        return
+    if fmt == "webp":
+        image_rgb.save(output_path, format="WEBP", quality=95, method=6)
+        return
+    if fmt == "tif":
+        image_rgb.save(output_path, format="TIFF")
+        return
+    if fmt == "gif":
+        image_rgb.save(output_path, format="GIF")
+        return
+    raise ValueError("Unsupported save format. Allowed: jpg, jpeg, png, webp, tif, gif.")
+
+
 class ImageDownloadIIIFImage:
     """ComfyUI node for downloading one image from IIIF Image API sources."""
 
@@ -372,6 +420,14 @@ class ImageDownloadIIIFImage:
                         "tooltip": "Ширина для size_mode=width. При size_mode=max игнорируется.",
                     },
                 ),
+                "output_dir": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Если указана директория, итоговая картинка будет сохранена на диск. Имя файла берется из последнего meaningful сегмента входного source_url.",
+                    },
+                ),
                 "delivery_mode": (
                     ["single_request", "tile_assemble_full"],
                     {
@@ -400,6 +456,7 @@ class ImageDownloadIIIFImage:
         source_url: str,
         size_mode: str = "max",
         requested_width: int = 2000,
+        output_dir: str = "",
         delivery_mode: str = "single_request",
         output_format: str = "jpg",
     ):
@@ -451,6 +508,17 @@ class ImageDownloadIIIFImage:
 
             limited_by_service = bool((width < source_width) or (height < source_height))
             _log(f"Done: {width}x{height}, format={selected_format}")
+            saved_path = ""
+            output_dir_text = str(output_dir or "").strip()
+            if output_dir_text:
+                check_interrupt()
+                output_dir_abs = os.path.abspath(os.path.expanduser(output_dir_text))
+                os.makedirs(output_dir_abs, exist_ok=True)
+                filename_stem = _derive_output_stem_from_source_url(source_url)
+                save_ext = str(selected_format or output_format or "jpg").strip().lower().lstrip(".") or "jpg"
+                saved_path = os.path.join(output_dir_abs, f"{filename_stem}.{save_ext}")
+                _save_pil_image(image, saved_path, save_ext)
+                _log(f"Saved: {saved_path}")
 
             payload = {
                 "site": str(site or "").strip(),
@@ -481,6 +549,7 @@ class ImageDownloadIIIFImage:
                     "width": int(width),
                     "height": int(height),
                 },
+                "saved_path": saved_path,
                 "delivery": delivery_meta,
                 "limits": {
                     "limited_by_service": limited_by_service,
