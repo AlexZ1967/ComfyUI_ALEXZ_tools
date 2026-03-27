@@ -19,6 +19,7 @@ import json
 import math
 import os
 import re
+import time
 import traceback
 from io import BytesIO
 from typing import Any
@@ -56,6 +57,12 @@ _DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
+_RETRYABLE_HTTP_EXCEPTIONS = (
+    requests.exceptions.ReadTimeout,
+    requests.exceptions.ConnectTimeout,
+    requests.exceptions.ConnectionError,
+    requests.exceptions.SSLError,
+)
 
 
 def _log(message: str) -> None:
@@ -63,12 +70,45 @@ def _log(message: str) -> None:
     print(f"[IIIF] {message}")
 
 
-def _http_get(url: str, *, timeout: float) -> requests.Response:
-    """HTTP GET wrapper with ComfyUI interrupt support and browser-like UA."""
-    check_interrupt()
-    response = requests.get(url, timeout=timeout, headers={"User-Agent": _DEFAULT_UA})
-    check_interrupt()
-    return response
+def _new_http_session() -> requests.Session:
+    """Create reusable HTTP session for IIIF requests."""
+    session = requests.Session()
+    session.headers.update({"User-Agent": _DEFAULT_UA})
+    return session
+
+
+def _http_get(
+    url: str,
+    *,
+    timeout: float,
+    session: requests.Session | None = None,
+    retries: int = 3,
+    retry_backoff: float = 0.75,
+) -> requests.Response:
+    """HTTP GET wrapper with interrupt support, session reuse, and retry for transient network errors."""
+    active_session = session or requests.Session()
+    attempts = max(1, int(retries))
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            check_interrupt()
+            response = active_session.get(url, timeout=timeout)
+            check_interrupt()
+            return response
+        except Exception as exc:
+            if is_interrupt_exception(exc):
+                raise
+            last_exc = exc
+            if not isinstance(exc, _RETRYABLE_HTTP_EXCEPTIONS) or attempt >= attempts:
+                raise
+            _log(
+                f"HTTP retry {attempt}/{attempts - 1}: {url} "
+                f"({type(exc).__name__}: {exc})"
+            )
+            time.sleep(float(retry_backoff) * float(attempt))
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError(f"HTTP request failed without response: {url}")
 
 
 def _normalize_iiif_service_url(source_url: str) -> str:
@@ -113,7 +153,13 @@ def _extract_first_generic_iiif_service_url(html: str) -> str:
     return ""
 
 
-def _resolve_iiif_service_url(site: str, source_url: str, *, timeout: float) -> str:
+def _resolve_iiif_service_url(
+    site: str,
+    source_url: str,
+    *,
+    timeout: float,
+    session: requests.Session | None = None,
+) -> str:
     """Resolve effective IIIF service URL from page URL or direct service URL."""
     site_name = str(site or "").strip()
     source_text = str(source_url or "").strip()
@@ -125,7 +171,7 @@ def _resolve_iiif_service_url(site: str, source_url: str, *, timeout: float) -> 
         if service_url:
             return service_url
 
-    response = _http_get(source_text, timeout=timeout)
+    response = _http_get(source_text, timeout=timeout, session=session)
     if int(response.status_code) != 200:
         raise RuntimeError(f"Source page unavailable: {source_text} (status={int(response.status_code)})")
     html = response.text or ""
@@ -140,10 +186,15 @@ def _resolve_iiif_service_url(site: str, source_url: str, *, timeout: float) -> 
     raise RuntimeError(f"Could not extract IIIF service URL from `{source_text}`.")
 
 
-def _fetch_iiif_info(service_url: str, *, timeout: float) -> dict[str, Any]:
+def _fetch_iiif_info(
+    service_url: str,
+    *,
+    timeout: float,
+    session: requests.Session | None = None,
+) -> dict[str, Any]:
     """Fetch IIIF info.json metadata."""
     info_url = f"{service_url.rstrip('/')}/info.json"
-    response = _http_get(info_url, timeout=timeout)
+    response = _http_get(info_url, timeout=timeout, session=session)
     if int(response.status_code) != 200:
         raise RuntimeError(f"IIIF info.json unavailable: {info_url} (status={int(response.status_code)})")
     try:
@@ -167,6 +218,7 @@ def _download_iiif_image_bytes(
     size_spec: str,
     output_format: str,
     timeout: float,
+    session: requests.Session | None = None,
 ) -> tuple[str, bytes, str]:
     """Download one IIIF image response, with jpg fallback when requested format fails."""
     requested_format = str(output_format or "jpg").strip().lower().lstrip(".") or "jpg"
@@ -177,7 +229,7 @@ def _download_iiif_image_bytes(
     for fmt in formats_to_try:
         check_interrupt()
         image_url = f"{service_url.rstrip('/')}/full/{size_spec}/0/default.{fmt}"
-        response = _http_get(image_url, timeout=timeout)
+        response = _http_get(image_url, timeout=timeout, session=session)
         last_status = int(response.status_code)
         if last_status == 200:
             return image_url, bytes(response.content or b""), fmt
@@ -235,6 +287,7 @@ def _download_iiif_tile_bytes(
     region: str,
     output_format: str,
     timeout: float,
+    session: requests.Session | None = None,
 ) -> tuple[str, bytes, str]:
     """Download one IIIF tile region, with jpg fallback when requested format fails."""
     requested_format = str(output_format or "jpg").strip().lower().lstrip(".") or "jpg"
@@ -245,7 +298,7 @@ def _download_iiif_tile_bytes(
     for fmt in formats_to_try:
         check_interrupt()
         image_url = f"{service_url.rstrip('/')}/{region}/max/0/default.{fmt}"
-        response = _http_get(image_url, timeout=timeout)
+        response = _http_get(image_url, timeout=timeout, session=session)
         last_status = int(response.status_code)
         if last_status == 200:
             return image_url, bytes(response.content or b""), fmt
@@ -261,6 +314,7 @@ def _assemble_iiif_full_image(
     *,
     output_format: str,
     timeout: float,
+    session: requests.Session | None = None,
 ) -> tuple[Image.Image, dict[str, Any]]:
     """Assemble full-resolution image from IIIF tiles at scaleFactor=1."""
     source_width, source_height = _iiif_source_dimensions(info)
@@ -291,6 +345,7 @@ def _assemble_iiif_full_image(
                     region=region,
                     output_format=output_format,
                     timeout=timeout,
+                    session=session,
                 )
                 tile = _decode_image(content, tile_url)
                 if tile.size != (w, h):
@@ -379,14 +434,19 @@ def _derive_output_stem_from_source_url(source_url: str) -> str:
     return _sanitize_filename_component(candidate)
 
 
-def _derive_output_stem_from_source_title_or_url(source_url: str, *, timeout: float) -> str:
+def _derive_output_stem_from_source_title_or_url(
+    source_url: str,
+    *,
+    timeout: float,
+    session: requests.Session | None = None,
+) -> str:
     """Prefer object page title for filename; fall back to URL slug."""
     fallback = _derive_output_stem_from_source_url(source_url)
     url = str(source_url or "").strip()
     if not url:
         return fallback
     try:
-        response = _http_get(url, timeout=timeout)
+        response = _http_get(url, timeout=timeout, session=session)
         if int(response.status_code) != 200:
             return fallback
         title = _extract_html_title(str(response.text or ""))
@@ -510,12 +570,13 @@ class ImageDownloadIIIFImage:
         timeout = 30.0
         try:
             check_interrupt()
-            service_url = _resolve_iiif_service_url(site, source_url, timeout=timeout)
+            session = _new_http_session()
+            service_url = _resolve_iiif_service_url(site, source_url, timeout=timeout, session=session)
             _log(f"Site: {site}")
             _log(f"Source: {source_url}")
             _log(f"Service: {service_url}")
 
-            info = _fetch_iiif_info(service_url, timeout=timeout)
+            info = _fetch_iiif_info(service_url, timeout=timeout, session=session)
             source_width, source_height = _iiif_source_dimensions(info)
             limit_info = _iiif_limit_from_max_area(info)
             mode = str(delivery_mode or "single_request").strip().lower()
@@ -526,6 +587,7 @@ class ImageDownloadIIIFImage:
                     info,
                     output_format=output_format,
                     timeout=timeout,
+                    session=session,
                 )
                 width, height = image.size
                 image_url = str(delivery_meta.get("last_tile_url") or "")
@@ -542,6 +604,7 @@ class ImageDownloadIIIFImage:
                     size_spec=size_spec,
                     output_format=output_format,
                     timeout=timeout,
+                    session=session,
                 )
                 image = _decode_image(content, image_url)
                 width, height = image.size
@@ -562,7 +625,11 @@ class ImageDownloadIIIFImage:
                 os.makedirs(output_dir_abs, exist_ok=True)
                 filename_mode_text = str(filename_mode or "source_url_slug").strip().lower()
                 if filename_mode_text == "title_or_slug":
-                    filename_stem = _derive_output_stem_from_source_title_or_url(source_url, timeout=timeout)
+                    filename_stem = _derive_output_stem_from_source_title_or_url(
+                        source_url,
+                        timeout=timeout,
+                        session=session,
+                    )
                 else:
                     filename_stem = _derive_output_stem_from_source_url(source_url)
                 save_ext = str(selected_format or output_format or "jpg").strip().lower().lstrip(".") or "jpg"

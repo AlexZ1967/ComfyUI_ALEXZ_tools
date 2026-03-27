@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.29.3 — 2026-03-27
+- `Download IIIF Image`:
+  - improved network resilience for `delivery_mode=tile_assemble_full`;
+  - IIIF requests now reuse one shared `requests.Session` for the whole run;
+  - added retry/backoff for transient network failures:
+    `ReadTimeout`, `ConnectTimeout`, `ConnectionError`, `SSLError`;
+  - this prevents a single transient timeout during tile assembly from
+    aborting the whole London Museum / IIIF full-resolution download too
+    aggressively.
+- Tests:
+  - added smoke coverage for IIIF HTTP retry after transient timeout.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif"`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.29.3` in `pyproject.toml` and `README.md`.
+
 ## 0.29.2 — 2026-03-27
 - `Download DZI Tiles Image`:
   - added optional `output_dir` and `output_extension` save-to-disk flow;

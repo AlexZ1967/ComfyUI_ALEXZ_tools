@@ -1301,12 +1301,12 @@ class SmokeTests(unittest.TestCase):
         old_download = iiif_mod._download_iiif_image_bytes
 
         try:
-            def _fake_resolve(site, source_url, timeout=30.0):
-                _ = (site, source_url, timeout)
+            def _fake_resolve(site, source_url, timeout=30.0, session=None):
+                _ = (site, source_url, timeout, session)
                 return "https://collections.example.test/iiif/3/sample.ptif"
 
-            def _fake_info(service_url, timeout=30.0):
-                _ = (service_url, timeout)
+            def _fake_info(service_url, timeout=30.0, session=None):
+                _ = (service_url, timeout, session)
                 return {
                     "id": "https://collections.example.test/iiif/3/sample.ptif",
                     "type": "ImageService3",
@@ -1317,8 +1317,8 @@ class SmokeTests(unittest.TestCase):
                     "sizes": [{"width": 800, "height": 600}],
                 }
 
-            def _fake_download(service_url, size_spec, output_format, timeout=30.0):
-                _ = (service_url, size_spec, output_format, timeout)
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0, session=None):
+                _ = (service_url, size_spec, output_format, timeout, session)
                 image = Image.new("RGB", (16, 12), color=(64, 128, 192))
                 buffer = BytesIO()
                 image.save(buffer, format="JPEG")
@@ -1372,8 +1372,8 @@ class SmokeTests(unittest.TestCase):
                 "sizes": [{"width": 800, "height": 600}],
             }
 
-            def _fake_assemble(service_url, info, output_format="jpg", timeout=30.0):
-                _ = (service_url, info, output_format, timeout)
+            def _fake_assemble(service_url, info, output_format="jpg", timeout=30.0, session=None):
+                _ = (service_url, info, output_format, timeout, session)
                 image = Image.new("RGB", (1600, 1200), color=(32, 64, 96))
                 return image, {
                     "mode": "tile_assemble_full",
@@ -1426,8 +1426,8 @@ class SmokeTests(unittest.TestCase):
                 "sizes": [{"width": 800, "height": 600}],
             }
 
-            def _fake_download(service_url, size_spec, output_format, timeout=30.0):
-                _ = (service_url, size_spec, output_format, timeout)
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0, session=None):
+                _ = (service_url, size_spec, output_format, timeout, session)
                 image = Image.new("RGB", (32, 24), color=(128, 64, 32))
                 buffer = BytesIO()
                 image.save(buffer, format="JPEG")
@@ -1479,8 +1479,8 @@ class SmokeTests(unittest.TestCase):
                 "sizes": [{"width": 800, "height": 600}],
             }
 
-            def _fake_download(service_url, size_spec, output_format, timeout=30.0):
-                _ = (service_url, size_spec, output_format, timeout)
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0, session=None):
+                _ = (service_url, size_spec, output_format, timeout, session)
                 image = Image.new("RGB", (32, 24), color=(64, 64, 160))
                 buffer = BytesIO()
                 image.save(buffer, format="JPEG")
@@ -1492,7 +1492,7 @@ class SmokeTests(unittest.TestCase):
 
             iiif_mod._download_iiif_image_bytes = _fake_download
             iiif_mod._derive_output_stem_from_source_title_or_url = (
-                lambda _source_url, timeout=30.0: "Anna_Pavlova_posed_in_day_dress_by_urn_in_the_garden_of_Ivy_House"
+                lambda _source_url, timeout=30.0, session=None: "Anna_Pavlova_posed_in_day_dress_by_urn_in_the_garden_of_Ivy_House"
             )
 
             source_url = "https://www.londonmuseum.org.uk/collections/v/object-443337/anna-pavlova-posed-in-day-dress-by-urn-in-the-garden-of-ivy-house/"
@@ -1515,6 +1515,46 @@ class SmokeTests(unittest.TestCase):
             iiif_mod._fetch_iiif_info = old_info
             iiif_mod._download_iiif_image_bytes = old_download
             iiif_mod._derive_output_stem_from_source_title_or_url = old_title_stem
+
+    def test_iiif_http_get_retries_read_timeout(self):
+        """Verify IIIF HTTP wrapper retries transient timeout errors."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        old_sleep = iiif_mod.time.sleep
+        import requests
+
+        class _DummySession:
+            def __init__(self):
+                self.calls = 0
+
+            def get(self, url, timeout=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise requests.exceptions.ReadTimeout("timed out")
+
+                class _Response:
+                    status_code = 200
+                    content = b"ok"
+                    text = "ok"
+
+                    def json(self):
+                        return {}
+
+                return _Response()
+
+        try:
+            iiif_mod.time.sleep = lambda *_args, **_kwargs: None
+            session = _DummySession()
+            response = iiif_mod._http_get(
+                "https://collections.example.test/ping",
+                timeout=1.0,
+                session=session,
+                retries=2,
+            )
+        finally:
+            iiif_mod.time.sleep = old_sleep
+
+        self.assertEqual(int(response.status_code), 200)
+        self.assertEqual(session.calls, 2)
 
 
 if __name__ == "__main__":
