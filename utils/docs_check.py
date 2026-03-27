@@ -99,6 +99,12 @@ NODE_DOCS = [
         "readme_heading": "## Download DZI Tiles Batch Save",
     },
     {
+        "file": "nodes/image_download_iiif.py",
+        "class": "ImageDownloadIIIFImage",
+        "guide": "guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md",
+        "readme_heading": "## Download IIIF Image",
+    },
+    {
         "file": "nodes/trove_search_ids.py",
         "class": "SearchTroveImageIDs",
         "guide": "guides/GUIDE_TROVE_SEARCH_IDS.md",

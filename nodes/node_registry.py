@@ -48,6 +48,7 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("GenerateQRCode", "Generate QR Code", ".qr_code_generate", "GenerateQRCode"),
     NodeSpec("ImageDownloadDZITiles", "Download DZI Tiles Image", ".image_download_dzi_tiles", "ImageDownloadDZITiles"),
     NodeSpec("ImageDownloadDZITilesBatchSave", "Download DZI Tiles Batch Save", ".image_download_dzi_tiles", "ImageDownloadDZITilesBatchSave"),
+    NodeSpec("ImageDownloadIIIFImage", "Download IIIF Image", ".image_download_iiif", "ImageDownloadIIIFImage"),
     NodeSpec("SearchTroveImageIDs", "Search Trove Image IDs", ".trove_search_ids", "SearchTroveImageIDs"),
     NodeSpec("ALEXZTestNode", "ALEXZ Test Node", ".test_node", "ALEXZTestNode"),
 )
@@ -158,6 +159,11 @@ NODE_UI_METADATA = {
         "description": "Батч-скачивание DZI изображений со сохранением на диск и manifest JSON.",
         "output_tooltips": ["JSON manifest по всему батчу.", "JSON списка сохраненных путей.", "Количество успешно сохраненных изображений.", "Количество ошибок."],
         "search_aliases": ["dzi", "tiles", "download", "batch", "save"],
+    },
+    "ImageDownloadIIIFImage": {
+        "description": "Скачивает изображение из IIIF Image API сервиса, включая London Museum object pages.",
+        "output_tooltips": ["Скачанное IIIF изображение.", "JSON с IIIF service/info/image URL и метаданными."],
+        "search_aliases": ["iiif", "download", "image", "london museum", "viewer"],
     },
     "SearchTroveImageIDs": {
         "description": "Ищет `nla.obj-...` id в Trove Images через best-effort headless Chrome search.",

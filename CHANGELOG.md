@@ -1,5 +1,42 @@
 # Changelog — ALEXZ_tools
 
+## 0.29.0 — 2026-03-27
+- Added new node `Download IIIF Image` for IIIF Image API sources, with
+  first-class support for London Museum object pages.
+- `nodes/image_download_iiif.py`:
+  - resolves IIIF service URLs from either London Museum object pages or
+    direct/generic IIIF service URLs;
+  - downloads images via IIIF Image API single-request mode;
+  - exposes `info_json` with `service_url`, `info_url`, `image_url`, and IIIF
+    metadata;
+  - now reports `source.width/height` separately from delivered image size;
+  - now reports service-side limits in `limits`, including `maxArea`-derived
+    diagnostics when single-request delivery is downscaled by server policy;
+  - added `delivery_mode=tile_assemble_full` to assemble full-resolution output
+    from IIIF tiles when the service exposes `tiles` and `scaleFactor=1`.
+- London Museum verification:
+  - object pages embed IIIF service URLs in `data-clover-image-viewer`
+    `data-src`;
+  - `.../info.json` works as standard IIIF Image API 3 metadata;
+  - single-request `full/max` is limited by service policy (`maxArea`), while
+    tile assembly can be used for full-resolution output.
+- `nodes/node_registry.py`:
+  - registered `ImageDownloadIIIFImage`;
+  - added UI metadata, aliases, and output tooltips.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+  - README node list now includes `Download IIIF Image`.
+- Tests/docs contracts updated:
+  - added IIIF node contract smoke test;
+  - added IIIF tile-assembly contract smoke test;
+  - extended `utils/docs_check.py` for the new node.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.29.0` in `pyproject.toml` and `README.md`.
+
 ## 0.28.1 — 2026-03-26
 - `Download DZI Tiles Image` and `Download DZI Tiles Batch Save` now respect
   `Cancel current run` in ComfyUI.

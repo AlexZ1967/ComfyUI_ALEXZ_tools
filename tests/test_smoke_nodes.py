@@ -18,8 +18,10 @@ import sys
 import tempfile
 import types
 import unittest
+from io import BytesIO
 
 import torch
+from PIL import Image
 
 
 def _install_folder_paths_stub():
@@ -1059,6 +1061,7 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("GenerateQRCode", class_map)
         self.assertIn("ImageDownloadDZITiles", class_map)
         self.assertIn("ImageDownloadDZITilesBatchSave", class_map)
+        self.assertIn("ImageDownloadIIIFImage", class_map)
         self.assertIn("SearchTroveImageIDs", class_map)
         qr_cls = class_map["GenerateQRCode"]
         self.assertTrue(bool(getattr(qr_cls, "DESCRIPTION", "")))
@@ -1184,6 +1187,120 @@ class SmokeTests(unittest.TestCase):
                     )
         finally:
             dzi_mod.ImageDownloadDZITiles.download = old_download
+
+    def test_iiif_download_node_contract(self):
+        """Verify IIIF node returns IMAGE tensor and JSON contract."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+
+        try:
+            def _fake_resolve(site, source_url, timeout=30.0):
+                _ = (site, source_url, timeout)
+                return "https://collections.example.test/iiif/3/sample.ptif"
+
+            def _fake_info(service_url, timeout=30.0):
+                _ = (service_url, timeout)
+                return {
+                    "id": "https://collections.example.test/iiif/3/sample.ptif",
+                    "type": "ImageService3",
+                    "profile": "level2",
+                    "width": 16,
+                    "height": 12,
+                    "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                    "sizes": [{"width": 800, "height": 600}],
+                }
+
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0):
+                _ = (service_url, size_spec, output_format, timeout)
+                image = Image.new("RGB", (16, 12), color=(64, 128, 192))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG")
+                return (
+                    "https://collections.example.test/iiif/3/sample.ptif/full/max/0/default.jpg",
+                    buffer.getvalue(),
+                    "jpg",
+                )
+
+            iiif_mod._resolve_iiif_service_url = _fake_resolve
+            iiif_mod._fetch_iiif_info = _fake_info
+            iiif_mod._download_iiif_image_bytes = _fake_download
+
+            out, info_json = node.download(
+                "London Museum Object Page",
+                "https://www.londonmuseum.org.uk/collections/v/object-443296/early-portrait-of-anna-pavlova/",
+            )
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
+
+        payload = json.loads(info_json)
+        self.assertEqual(tuple(out.shape), (1, 12, 16, 3))
+        self.assertEqual(payload["site"], "London Museum Object Page")
+        self.assertEqual(payload["iiif"]["type"], "ImageService3")
+        self.assertEqual(payload["downloaded"]["width"], 16)
+        self.assertEqual(payload["source"]["width"], 16)
+        self.assertFalse(payload["limits"]["limited_by_service"])
+        self.assertEqual(payload["delivery"]["mode"], "single_request")
+        self.assertTrue(str(payload["service_url"]).startswith("https://collections.example.test/iiif/"))
+
+    def test_iiif_download_tile_assembly_contract(self):
+        """Verify IIIF node can return full-res tile-assembled image contract."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_assemble = iiif_mod._assemble_iiif_full_image
+
+        try:
+            iiif_mod._resolve_iiif_service_url = lambda *args, **kwargs: "https://collections.example.test/iiif/3/sample.ptif"
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://collections.example.test/iiif/3/sample.ptif",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 1600,
+                "height": 1200,
+                "maxArea": 1000000,
+                "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            def _fake_assemble(service_url, info, output_format="jpg", timeout=30.0):
+                _ = (service_url, info, output_format, timeout)
+                image = Image.new("RGB", (1600, 1200), color=(32, 64, 96))
+                return image, {
+                    "mode": "tile_assemble_full",
+                    "tile_width": 512,
+                    "tile_height": 512,
+                    "tiles_x": 4,
+                    "tiles_y": 3,
+                    "tiles_total": 12,
+                    "tiles_downloaded": 12,
+                    "selected_format": "jpg",
+                    "last_tile_url": "https://collections.example.test/iiif/3/sample.ptif/0,0,512,512/max/0/default.jpg",
+                }
+
+            iiif_mod._assemble_iiif_full_image = _fake_assemble
+            out, info_json = node.download(
+                "Generic IIIF Service URL",
+                "https://collections.example.test/iiif/3/sample.ptif/info.json",
+                delivery_mode="tile_assemble_full",
+            )
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._assemble_iiif_full_image = old_assemble
+
+        payload = json.loads(info_json)
+        self.assertEqual(tuple(out.shape), (1, 1200, 1600, 3))
+        self.assertEqual(payload["delivery"]["mode"], "tile_assemble_full")
+        self.assertEqual(payload["delivery"]["tiles_total"], 12)
+        self.assertEqual(payload["downloaded"]["width"], 1600)
+        self.assertEqual(payload["source"]["width"], 1600)
+        self.assertFalse(payload["limits"]["limited_by_service"])
 
 
 if __name__ == "__main__":

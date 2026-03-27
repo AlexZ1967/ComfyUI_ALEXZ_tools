@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.28.1
+Version: 0.29.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -54,6 +54,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Generate QR Code](#generate-qr-code)
 - [Download DZI Tiles Image](#download-dzi-tiles-image)
 - [Download DZI Tiles Batch Save](#download-dzi-tiles-batch-save)
+- [Download IIIF Image](#download-iiif-image)
 - [Search Trove Image IDs](#search-trove-image-ids)
 - [Image Waveform Scope](#image-waveform-scope)
 - [Image Histogram Scope](#image-histogram-scope)
@@ -269,6 +270,20 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 `filename_template` поддерживает: `{index}`, `{raw_id}`, `{mw}`, `{id}`, `{site}`, `{site_key}`, `{level}`.  
 Выходы: `manifest_json`, `saved_paths_json`, `count_ok`, `count_failed`.  
 Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
+
+---
+
+## Download IIIF Image
+Скачивает изображение из IIIF Image API сервиса, включая London Museum object pages.
+
+- Display name: Download IIIF Image  
+- Type name: ImageDownloadIIIFImage  
+- Category: image/io  
+Входы: `site`, `source_url`, `size_mode`, `requested_width`, `output_format`.  
+`London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.  
+`Generic IIIF Service URL`: принимает direct service URL, `info.json` URL или HTML-страницу с встроенным IIIF viewer.  
+Выходы: `image`, `info_json`.  
+Guide: [GUIDE_IIIF_IMAGE_DOWNLOAD.md](guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md)
 
 ---
 
