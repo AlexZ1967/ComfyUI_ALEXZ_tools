@@ -1,5 +1,26 @@
 # Changelog — ALEXZ_tools
 
+## 0.31.0 — 2026-03-27
+- Added new companion node `Apply Descreen Percent`:
+  - applies a known descreen percent to a full image or batch without
+    repeating FFT analysis;
+  - designed for production flow where `recommended_percent` is measured once
+    and then reused for a whole series of frames;
+  - returns processed image, applied percent, and fixed-mode analysis JSON.
+- Updated descreen docs and registry:
+  - `README.md`
+  - `guides/GUIDE_IMAGE_DESCREEN_APPLY.md`
+  - `nodes/node_registry.py`
+  - `utils/docs_check.py`
+- Tests:
+  - added smoke coverage for `ImageDescreenApplyPercent`;
+  - updated node registration compatibility coverage.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_descreen_adaptive.py tests/test_smoke_nodes.py utils/docs_check.py nodes/node_registry.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "descreen or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.31.0` in `pyproject.toml` and `README.md`.
+
 ## 0.30.0 — 2026-03-27
 - Added new node `Descreen By Adaptive Scale`:
   - estimates halftone screen period from a selected ROI via FFT;

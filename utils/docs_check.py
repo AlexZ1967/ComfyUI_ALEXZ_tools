@@ -129,6 +129,12 @@ NODE_DOCS = [
         "readme_heading": "## Descreen By Adaptive Scale",
     },
     {
+        "file": "nodes/image_descreen_adaptive.py",
+        "class": "ImageDescreenApplyPercent",
+        "guide": "guides/GUIDE_IMAGE_DESCREEN_APPLY.md",
+        "readme_heading": "## Apply Descreen Percent",
+    },
+    {
         "file": "nodes/video_inpaint.py",
         "class": "VideoInpaintWatermark",
         "guide": "guides/GUIDE_VIDEO_INPAINT.md",

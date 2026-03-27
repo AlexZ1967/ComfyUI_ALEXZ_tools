@@ -46,6 +46,7 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
     NodeSpec("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
     NodeSpec("ImageDescreenAdaptiveScale", "Descreen By Adaptive Scale", ".image_descreen_adaptive", "ImageDescreenAdaptiveScale"),
+    NodeSpec("ImageDescreenApplyPercent", "Apply Descreen Percent", ".image_descreen_adaptive", "ImageDescreenApplyPercent"),
     NodeSpec("GenerateQRCode", "Generate QR Code", ".qr_code_generate", "GenerateQRCode"),
     NodeSpec("ImageDownloadDZITiles", "Download DZI Tiles Image", ".image_download_dzi_tiles", "ImageDownloadDZITiles"),
     NodeSpec("ImageDownloadDZITilesBatchSave", "Download DZI Tiles Batch Save", ".image_download_dzi_tiles", "ImageDownloadDZITilesBatchSave"),
@@ -150,6 +151,11 @@ NODE_UI_METADATA = {
         "description": "Оценивает шаг печатного растра, подбирает adaptive scale и сразу делает descreen через downscale/upscale.",
         "output_tooltips": ["Обработанное изображение.", "Сравнение ROI: original vs processed.", "Рекомендуемый масштаб в процентах.", "Оцененный шаг растра в пикселях.", "JSON с ROI, period estimate и таблицей кандидатов."],
         "search_aliases": ["descreen", "halftone", "raster", "moire", "scan"],
+    },
+    "ImageDescreenApplyPercent": {
+        "description": "Применяет уже найденный descreen percent к полному изображению или батчу без повторного анализа.",
+        "output_tooltips": ["Обработанное изображение.", "Фактически примененный масштаб в процентах.", "JSON с параметрами fixed descreen."],
+        "search_aliases": ["descreen", "apply", "percent", "halftone", "raster"],
     },
     "GenerateQRCode": {
         "description": "Генерирует QR-код из ссылки или текста.",

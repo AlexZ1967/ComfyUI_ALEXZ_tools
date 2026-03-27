@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.30.0
+Version: 0.31.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -55,6 +55,8 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Download DZI Tiles Image](#download-dzi-tiles-image)
 - [Download DZI Tiles Batch Save](#download-dzi-tiles-batch-save)
 - [Download IIIF Image](#download-iiif-image)
+- [Descreen By Adaptive Scale](#descreen-by-adaptive-scale)
+- [Apply Descreen Percent](#apply-descreen-percent)
 - [Search Trove Image IDs](#search-trove-image-ids)
 - [Image Waveform Scope](#image-waveform-scope)
 - [Image Histogram Scope](#image-histogram-scope)
@@ -303,6 +305,19 @@ Guide: [GUIDE_IIIF_IMAGE_DOWNLOAD.md](guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md)
 Нода анализирует растр в ROI, строит таблицу кандидатов и выбирает scale, где остаточная энергия растра минимальна при контроле потери структуры.  
 Выходы: `image`, `roi_preview`, `recommended_percent`, `estimated_period_px`, `analysis_json`.  
 Guide: [GUIDE_IMAGE_DESCREEN_ADAPTIVE.md](guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md)
+
+---
+
+## Apply Descreen Percent
+Применяет уже найденный descreen percent к полному изображению или батчу без повторного FFT-анализа.
+
+- Display name: Apply Descreen Percent  
+- Type name: ImageDescreenApplyPercent  
+- Category: image/restoration  
+Входы: `image`, `scale_percent`, `pre_blur_px`.  
+Подходит для production-flow: один раз измерить `recommended_percent` на репрезентативном фрагменте, затем применить это значение ко всей серии кадров.  
+Выходы: `image`, `applied_percent`, `analysis_json`.  
+Guide: [GUIDE_IMAGE_DESCREEN_APPLY.md](guides/GUIDE_IMAGE_DESCREEN_APPLY.md)
 
 ---
 

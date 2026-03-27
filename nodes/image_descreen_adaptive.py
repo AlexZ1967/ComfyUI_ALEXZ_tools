@@ -4,13 +4,14 @@ Author: AlexZ1967
 Last updated: 2026-03-27
 
 Description:
-    Estimate halftone screen period from an ROI and choose an adaptive
-    downscale percentage to suppress visible raster.
+    Estimate halftone screen period from an ROI, choose an adaptive
+    downscale percentage to suppress visible raster, and apply a fixed
+    descreen percent to a full image/batch.
 
 Purpose:
-    Provides a ComfyUI node that analyzes periodic screen artifacts in a scan,
-    searches candidate downscale percentages, and returns both the restored
-    image and diagnostic JSON.
+    Provides ComfyUI nodes that analyze periodic screen artifacts in a scan,
+    search candidate downscale percentages, and then apply either the chosen
+    adaptive scale or a user-specified fixed scale to the full image/batch.
 """
 
 from __future__ import annotations
@@ -267,6 +268,24 @@ def _analyze_one(
     return processed_rgb, compare_preview, result
 
 
+def _apply_fixed_percent_batch(
+    image: torch.Tensor,
+    *,
+    scale_percent: float,
+    pre_blur_px: float,
+) -> torch.Tensor:
+    """Apply fixed downscale/upscale descreening to the whole batch."""
+    scale = float(scale_percent) / 100.0
+    if scale <= 0.0:
+        raise ValueError("scale_percent must be greater than 0.")
+    rgb_batch = _to_rgb_batch(image)
+    processed_batch = []
+    for rgb in rgb_batch:
+        processed_rgb = _pil_resample_rgb(rgb, scale, pre_blur_px=pre_blur_px)
+        processed_batch.append(torch.from_numpy(processed_rgb.astype(np.float32) / 255.0))
+    return torch.stack(processed_batch, dim=0)
+
+
 class ImageDescreenAdaptiveScale:
     """Estimate and apply an adaptive downscale percentage for halftone descreening."""
 
@@ -422,5 +441,70 @@ class ImageDescreenAdaptiveScale:
             preview_first,
             float(first["recommended_percent"]),
             float(first["estimated_period_px"]),
+            json.dumps(payload, ensure_ascii=True, indent=2),
+        )
+
+
+class ImageDescreenApplyPercent:
+    """Apply a known descreen percent to a full image or batch."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        """Return ComfyUI INPUT_TYPES schema."""
+        return {
+            "required": {
+                "image": ("IMAGE", {"tooltip": "Изображение или батч, к которому нужно применить уже найденный descreen percent."}),
+                "scale_percent": (
+                    "FLOAT",
+                    {
+                        "default": 13.0,
+                        "min": 1.0,
+                        "max": 100.0,
+                        "step": 0.1,
+                        "tooltip": "Готовый descreen percent. Удобно подключать recommended_percent из Descreen By Adaptive Scale.",
+                    },
+                ),
+            },
+            "optional": {
+                "pre_blur_px": (
+                    "FLOAT",
+                    {
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 4.0,
+                        "step": 0.1,
+                        "tooltip": "Опциональный blur перед downscale. Обычно 0.0 или очень малое значение.",
+                    },
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "FLOAT", "STRING")
+    RETURN_NAMES = ("image", "applied_percent", "analysis_json")
+    FUNCTION = "apply"
+    CATEGORY = "image/restoration"
+
+    def apply(
+        self,
+        image: torch.Tensor,
+        scale_percent: float = 13.0,
+        pre_blur_px: float = 0.0,
+    ):
+        """Apply fixed descreen percent to the whole image batch."""
+        processed = _apply_fixed_percent_batch(
+            image,
+            scale_percent=scale_percent,
+            pre_blur_px=pre_blur_px,
+        )
+        payload = {
+            "mode": "fixed_percent",
+            "applied_percent": float(scale_percent),
+            "applied_scale": float(scale_percent) / 100.0,
+            "pre_blur_px": float(pre_blur_px),
+            "batch_size": int(processed.shape[0]),
+        }
+        return (
+            processed,
+            float(scale_percent),
             json.dumps(payload, ensure_ascii=True, indent=2),
         )

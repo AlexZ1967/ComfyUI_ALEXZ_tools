@@ -1165,6 +1165,7 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("ImageDownloadDZITilesBatchSave", class_map)
         self.assertIn("ImageDownloadIIIFImage", class_map)
         self.assertIn("ImageDescreenAdaptiveScale", class_map)
+        self.assertIn("ImageDescreenApplyPercent", class_map)
         self.assertIn("SearchTroveImageIDs", class_map)
         qr_cls = class_map["GenerateQRCode"]
         self.assertTrue(bool(getattr(qr_cls, "DESCRIPTION", "")))
@@ -1699,6 +1700,32 @@ class SmokeTests(unittest.TestCase):
         self.assertTrue(4.5 <= float(estimated_period_px) <= 12.5)
         self.assertIn("candidates", payload)
         self.assertIn("recommended_percent", payload)
+
+    def test_descreen_apply_percent_node_contract(self):
+        """Verify fixed descreen node returns processed image, applied percent, and JSON diagnostics."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_descreen_adaptive")
+        node = mod.ImageDescreenApplyPercent()
+
+        h, w = 96, 96
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        base = 120.0 + 30.0 * np.exp(-(((xx - 48.0) ** 2 + (yy - 48.0) ** 2) / (2.0 * 18.0 * 18.0)))
+        halftone = 10.0 * np.cos(2.0 * np.pi * (xx + yy) / 8.0)
+        image = np.clip(base + halftone, 0.0, 255.0).astype(np.uint8)
+        rgb = np.stack([image, image, image], axis=-1)
+        tensor = torch.from_numpy(rgb.astype(np.float32) / 255.0).unsqueeze(0)
+
+        processed, applied_percent, analysis_json = node.apply(
+            tensor,
+            scale_percent=13.0,
+            pre_blur_px=0.0,
+        )
+
+        payload = json.loads(analysis_json)
+        self.assertEqual(tuple(processed.shape), (1, h, w, 3))
+        self.assertEqual(float(applied_percent), 13.0)
+        self.assertEqual(payload["mode"], "fixed_percent")
+        self.assertEqual(float(payload["applied_percent"]), 13.0)
+        self.assertEqual(int(payload["batch_size"]), 1)
 
 
 if __name__ == "__main__":
