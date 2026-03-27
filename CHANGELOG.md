@@ -1,5 +1,27 @@
 # Changelog — ALEXZ_tools
 
+## 0.30.0 — 2026-03-27
+- Added new node `Descreen By Adaptive Scale`:
+  - estimates halftone screen period from a selected ROI via FFT;
+  - searches adaptive downscale candidates in a configurable percent range;
+  - chooses the best compromise between screen suppression and structure retention;
+  - returns processed image, side-by-side ROI preview, recommended percent,
+    estimated period, and diagnostic JSON.
+- Added node docs and guide:
+  - `README.md`
+  - `guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md`
+- Updated registry and docs contracts:
+  - `nodes/node_registry.py`
+  - `utils/docs_check.py`
+- Tests:
+  - added smoke coverage for `ImageDescreenAdaptiveScale` output contract and
+    node registration visibility.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_descreen_adaptive.py tests/test_smoke_nodes.py utils/docs_check.py nodes/node_registry.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "descreen or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.30.0` in `pyproject.toml` and `README.md`.
+
 ## 0.29.4 — 2026-03-27
 - `Download IIIF Image`:
   - added tile recovery cache for `delivery_mode=tile_assemble_full`;

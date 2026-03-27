@@ -123,6 +123,12 @@ NODE_DOCS = [
         "readme_heading": "## Image Histogram Scope",
     },
     {
+        "file": "nodes/image_descreen_adaptive.py",
+        "class": "ImageDescreenAdaptiveScale",
+        "guide": "guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md",
+        "readme_heading": "## Descreen By Adaptive Scale",
+    },
+    {
         "file": "nodes/video_inpaint.py",
         "class": "VideoInpaintWatermark",
         "guide": "guides/GUIDE_VIDEO_INPAINT.md",

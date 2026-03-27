@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.29.4
+Version: 0.30.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -290,6 +290,19 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 `filename_mode`: `source_url_slug` или `title_or_slug`. Во втором режиме нода пытается взять title страницы `source_url`, а при неудаче использует slug из URL.  
 Выходы: `image`, `info_json`.  
 Guide: [GUIDE_IIIF_IMAGE_DOWNLOAD.md](guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md)
+
+---
+
+## Descreen By Adaptive Scale
+Оценивает шаг печатного растра по ROI, подбирает adaptive downscale и сразу применяет descreen через downscale/upscale.
+
+- Display name: Descreen By Adaptive Scale  
+- Type name: ImageDescreenAdaptiveScale  
+- Category: image/restoration  
+Входы: `image`, `roi_mode`, `roi_size_percent`, `roi_x`, `roi_y`, `roi_w`, `roi_h`, `min_scale_percent`, `max_scale_percent`, `step_percent`, `target_screen_px`, `detail_weight`, `pre_blur_px`.  
+Нода анализирует растр в ROI, строит таблицу кандидатов и выбирает scale, где остаточная энергия растра минимальна при контроле потери структуры.  
+Выходы: `image`, `roi_preview`, `recommended_percent`, `estimated_period_px`, `analysis_json`.  
+Guide: [GUIDE_IMAGE_DESCREEN_ADAPTIVE.md](guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md)
 
 ---
 

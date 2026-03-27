@@ -20,6 +20,7 @@ import types
 import unittest
 from io import BytesIO
 
+import numpy as np
 import torch
 from PIL import Image
 
@@ -1163,6 +1164,7 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("ImageDownloadDZITiles", class_map)
         self.assertIn("ImageDownloadDZITilesBatchSave", class_map)
         self.assertIn("ImageDownloadIIIFImage", class_map)
+        self.assertIn("ImageDescreenAdaptiveScale", class_map)
         self.assertIn("SearchTroveImageIDs", class_map)
         qr_cls = class_map["GenerateQRCode"]
         self.assertTrue(bool(getattr(qr_cls, "DESCRIPTION", "")))
@@ -1663,6 +1665,40 @@ class SmokeTests(unittest.TestCase):
             iiif_mod._resolve_iiif_service_url = old_resolve
             iiif_mod._fetch_iiif_info = old_info
             iiif_mod._assemble_iiif_full_image = old_assemble
+
+    def test_descreen_adaptive_scale_node_contract(self):
+        """Verify descreen node returns processed image, preview, floats, and JSON diagnostics."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_descreen_adaptive")
+        node = mod.ImageDescreenAdaptiveScale()
+
+        h, w = 128, 128
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        base = 140.0 + 55.0 * np.exp(-(((xx - 64.0) ** 2 + (yy - 64.0) ** 2) / (2.0 * 24.0 * 24.0)))
+        halftone = 14.0 * np.cos(2.0 * np.pi * (xx + yy) / 8.0)
+        image = np.clip(base + halftone, 0.0, 255.0).astype(np.uint8)
+        rgb = np.stack([image, image, image], axis=-1)
+        tensor = torch.from_numpy(rgb.astype(np.float32) / 255.0).unsqueeze(0)
+
+        processed, roi_preview, recommended_percent, estimated_period_px, analysis_json = node.descreen(
+            tensor,
+            roi_mode="full_frame",
+            min_scale_percent=8.0,
+            max_scale_percent=18.0,
+            step_percent=1.0,
+            target_screen_px=1.0,
+            detail_weight=1.25,
+            pre_blur_px=0.0,
+        )
+
+        payload = json.loads(analysis_json)
+        self.assertEqual(tuple(processed.shape), (1, h, w, 3))
+        self.assertEqual(int(roi_preview.shape[0]), 1)
+        self.assertGreater(int(roi_preview.shape[2]), w)
+        self.assertGreater(float(recommended_percent), 0.0)
+        self.assertTrue(8.0 <= float(recommended_percent) <= 18.0)
+        self.assertTrue(4.5 <= float(estimated_period_px) <= 12.5)
+        self.assertIn("candidates", payload)
+        self.assertIn("recommended_percent", payload)
 
 
 if __name__ == "__main__":
