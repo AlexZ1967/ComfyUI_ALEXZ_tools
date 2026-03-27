@@ -1380,6 +1380,19 @@ def _render_dzi_filename(
     return _sanitize_filename_component(rendered)
 
 
+def _append_dzi_stable_id_to_stem(stem: str, effective_mw: str) -> str:
+    """Append stable object id to human-readable DZI stem unless already present."""
+    base = _sanitize_filename_component(stem)
+    stable = _sanitize_filename_component(effective_mw)
+    if not stable:
+        return base
+    if not base:
+        return stable
+    if stable.lower() in base.lower():
+        return base
+    return f"{base}_{stable}"
+
+
 def _resolve_unique_output_path(output_dir: str, stem: str, ext: str, overwrite_mode: str) -> tuple[str, str]:
     """Resolve final output path according to overwrite strategy."""
     normalized_ext = str(ext or "png").strip().lower().lstrip(".") or "png"
@@ -1901,6 +1914,8 @@ class ImageDownloadDZITiles:
                     effective_level=effective_level,
                     title_stem=filename_stem,
                 )
+                if filename_mode_text == "title_or_mw":
+                    filename_stem = _append_dzi_stable_id_to_stem(filename_stem, effective_mw)
                 output_path, _ = _resolve_unique_output_path(
                     output_dir_path,
                     filename_stem,

@@ -1148,7 +1148,7 @@ class SmokeTests(unittest.TestCase):
                     output_extension="png",
                     filename_mode="title_or_mw",
                 )
-                saved_path = os.path.join(tmpdir, "Anna_Pavlova_as_the_Dying_swan_Melbourne_1926.png")
+                saved_path = os.path.join(tmpdir, "Anna_Pavlova_as_the_Dying_swan_Melbourne_1926_nla.obj-138204672.png")
                 self.assertTrue(os.path.exists(saved_path))
         finally:
             dzi_mod._new_session = old_new_session

@@ -1,5 +1,24 @@
 # Changelog — ALEXZ_tools
 
+## 0.31.3 — 2026-03-27
+- Improved `Download DZI Tiles Image` title-based filename stability:
+  - when `filename_mode=title_or_mw`, the saved filename now appends the stable
+    object id (`mw...` / `nla.obj-...`) to the human-readable title;
+  - typical result is now `title + stable_id`, for example
+    `Anna_Pavlova_as_the_Dying_swan_Melbourne_1926_nla.obj-138204672.png`;
+  - this aligns DZI single-save naming with the stable-id strategy already used
+    for IIIF downloads.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_DZI_TILES_DOWNLOAD.md`
+- Tests:
+  - updated DZI smoke coverage for the new single-save title naming contract.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_download_dzi_tiles.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "dzi"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.31.3` in `pyproject.toml` and `README.md`.
+
 ## 0.31.2 — 2026-03-27
 - Improved `Download IIIF Image` filename stability:
   - saved filenames now append a stable identifier extracted from

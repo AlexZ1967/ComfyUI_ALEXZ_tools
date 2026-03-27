@@ -47,7 +47,9 @@
   Для `Download DZI Tiles Image` пустое значение означает: не сохранять файл, только вернуть `IMAGE`.
 - `output_extension` (`png|jpg|jpeg|webp`, single optional / batch only previously): формат сохранения итогового файла.
 - `filename_mode` (`mw|title_or_mw`, single only): режим имени файла для `Download DZI Tiles Image`.  
-  `title_or_mw` пытается взять `og:title`/`title` со страницы объекта и использует `mw` как fallback.
+  `title_or_mw` пытается взять `og:title`/`title` со страницы объекта и использует `mw` как fallback.  
+  В режиме `title_or_mw` к title также автоматически добавляется stable ID объекта.  
+  Пример: `Anna_Pavlova_as_the_Dying_swan_Melbourne_1926_nla.obj-138204672.png`
 - `ids_text` (`STRING`, batch only): список ID, по одному на строку.  
   Также поддерживаются разделители `,` и `;`. Пустые строки и строки/хвосты после `#` игнорируются.
 - `filename_template` (`STRING`, batch only): шаблон имени файла без расширения.  
@@ -96,6 +98,7 @@
 ## Интерпретация выходов
 - `image`: собранное изображение в формате ComfyUI `IMAGE` (`[1, H, W, 3]`, float32, `0..1`).
 - `Download DZI Tiles Image` при заданном `output_dir` сохраняет файл либо с именем из `mw`, либо с title страницы объекта, если выбран `filename_mode=title_or_mw`.  
+  Для `title_or_mw` single-нода дописывает к title stable ID объекта, чтобы разные картинки с похожими названиями не конфликтовали.  
   Если файл с таким именем уже существует, single-нода автоматически сохраняет как `name_2.ext`, `name_3.ext`, ...
 - `manifest_json` (batch): JSON с параметрами батча, статусом каждого элемента и итоговыми счётчиками.
 - `saved_paths_json` (batch): JSON-массив путей к успешно сохранённым файлам.

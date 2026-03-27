@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.31.2
+Version: 0.31.3
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -255,7 +255,7 @@ Guide: [GUIDE_QR_CODE.md](guides/GUIDE_QR_CODE.md)
 `tile_extension`: `jpg` / `jpeg` / `png` / `webp` (используется только выбранный формат, без перебора остальных).  
 Если `proxy_url` пустой, нода автоматически пытается подобрать рабочий маршрут через env/system proxy настройки.  
 Если `output_dir` задан, нода сохраняет итоговую собранную картинку на диск. Если имя уже занято, автоматически добавляется суффикс `_2`, `_3`, ... вместо перезаписи.  
-`filename_mode`: `mw` или `title_or_mw`. Для `title_or_mw` нода пытается взять title страницы объекта и использует `mw` как fallback.  
+`filename_mode`: `mw` или `title_or_mw`. Для `title_or_mw` нода пытается взять title страницы объекта и использует `mw` как fallback. В режиме `title_or_mw` к title также автоматически добавляется stable ID объекта (`mw...` / `nla.obj-...`).  
 Если `output_dir` пустой, файл не записывается и картинка только отдается через выход `image`.  
 Новые сайты можно добавлять через `config/dzi_sites.json`, если указать `object_url_template`, `dzi_url_template` и `tile_url_template`.  
 Выходы: `image`.  
