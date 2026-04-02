@@ -45,7 +45,9 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
     NodeSpec("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
     NodeSpec("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
-    NodeSpec("ImageDescreenAdaptiveScale", "Descreen By Adaptive Scale", ".image_descreen_adaptive", "ImageDescreenAdaptiveScale"),
+    NodeSpec("ImageEstimateRasterPeriod", "Estimate Raster Period", ".image_descreen_adaptive", "ImageEstimateRasterPeriod"),
+    NodeSpec("ImageDescreenScalePreview", "Descreen Scale Preview", ".image_descreen_adaptive", "ImageDescreenScalePreview"),
+    NodeSpec("ImageDescreenAdaptiveScale", "Descreen By Adaptive Scale (Legacy)", ".image_descreen_adaptive", "ImageDescreenAdaptiveScale"),
     NodeSpec("ImageDescreenApplyPercent", "Apply Descreen Percent", ".image_descreen_adaptive", "ImageDescreenApplyPercent"),
     NodeSpec("GenerateQRCode", "Generate QR Code", ".qr_code_generate", "GenerateQRCode"),
     NodeSpec("ImageDownloadDZITiles", "Download DZI Tiles Image", ".image_download_dzi_tiles", "ImageDownloadDZITiles"),
@@ -147,10 +149,20 @@ NODE_UI_METADATA = {
         "output_tooltips": ["Гистограмма как изображение.", "JSON статистики гистограммы."],
         "search_aliases": ["histogram", "scope", "analysis"],
     },
+    "ImageEstimateRasterPeriod": {
+        "description": "Измеряет шаг печатного растра по ROI и выдает прогноз базового процента уменьшения.",
+        "output_tooltips": ["ROI превью для контроля анализа.", "Оцененный шаг растра в пикселях.", "Прогноз базового процента уменьшения.", "JSON с ROI, period estimate и predicted scale."],
+        "search_aliases": ["descreen", "estimate", "period", "halftone", "raster"],
+    },
+    "ImageDescreenScalePreview": {
+        "description": "Строит scale-sheet от заданного базового процента вверх для визуального выбора лучшего уменьшения.",
+        "output_tooltips": ["Подборочный scale-sheet с подписями процентов.", "JSON с ROI, методом ресемплинга и списком scale-вариантов."],
+        "search_aliases": ["descreen", "preview", "scale", "sheet", "halftone", "raster"],
+    },
     "ImageDescreenAdaptiveScale": {
-        "description": "Оценивает шаг печатного растра, подбирает adaptive scale и сразу делает descreen через downscale/upscale.",
+        "description": "Legacy all-in-one: оценивает шаг растра, строит preview и сразу делает descreen через downscale/upscale.",
         "output_tooltips": ["Обработанное изображение.", "Подборочный scale-sheet по ROI с подписями процентов.", "Рекомендуемый масштаб в процентах.", "Оцененный шаг растра в пикселях.", "JSON с ROI, period estimate, scale-sheet и таблицей кандидатов."],
-        "search_aliases": ["descreen", "halftone", "raster", "moire", "scan"],
+        "search_aliases": ["descreen", "halftone", "raster", "moire", "scan", "legacy"],
     },
     "ImageDescreenApplyPercent": {
         "description": "Применяет уже найденный descreen percent как final downscale без обратного апскейла.",

@@ -1,5 +1,31 @@
 # Changelog — ALEXZ_tools
 
+## 0.33.0 — 2026-04-02
+- Split the practical descreen workflow into separate nodes with clearer responsibilities:
+  - added `Estimate Raster Period` for ROI-based period measurement and
+    predicted base scale calculation;
+  - added `Descreen Scale Preview` for visual scale-sheet generation from a
+    chosen base percent upward;
+  - kept the old all-in-one workflow as `Descreen By Adaptive Scale (Legacy)`.
+- Updated descreen node registration and UI metadata:
+  - the legacy node is now explicitly marked as legacy in the picker;
+  - new estimate/preview nodes have dedicated descriptions and output tooltips.
+- Added documentation for the new split workflow:
+  - `guides/GUIDE_IMAGE_RASTER_PERIOD_ESTIMATE.md`
+  - `guides/GUIDE_IMAGE_DESCREEN_SCALE_PREVIEW.md`
+- Updated existing descreen docs:
+  - `README.md`
+  - `guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md`
+- Tests:
+  - added smoke coverage for `Estimate Raster Period`;
+  - added smoke coverage for `Descreen Scale Preview`;
+  - updated node registration compatibility coverage.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_descreen_adaptive.py nodes/node_registry.py tests/test_smoke_nodes.py utils/docs_check.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "descreen or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.33.0` in `pyproject.toml` and `README.md`.
+
 ## 0.32.0 — 2026-04-02
 - Reworked the descreen workflow around the practical scale-based path:
   - `Descreen By Adaptive Scale` now supports explicit resampler choice

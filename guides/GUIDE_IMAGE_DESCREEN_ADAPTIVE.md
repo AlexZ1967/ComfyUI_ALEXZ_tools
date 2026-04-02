@@ -1,7 +1,7 @@
-# GUIDE: Descreen By Adaptive Scale
+# GUIDE: Descreen By Adaptive Scale (Legacy)
 
 ## Назначение
-Нода `Descreen By Adaptive Scale` помогает убирать печатный растр и моаре со сканов.
+Нода `Descreen By Adaptive Scale` теперь считается legacy all-in-one вариантом.
 
 Она:
 - оценивает шаг растра по ROI через FFT;
@@ -11,9 +11,14 @@
 - сразу отдает обработанное изображение.
 
 ## Когда использовать
+- Когда нужен старый one-shot workflow в одной ноде.
+- Когда вы не хотите разделять этапы `estimate -> preview -> apply`.
 - Когда скан или репродукция содержит полутоновый печатный растр.
 - Когда вы хотите подобрать рабочий downscale автоматически, а не вручную.
-- Когда нужен быстрый practical descreen без FFT notch filtering и без ML.
+- Для новых workflow предпочтительнее связка:
+  - `Estimate Raster Period`
+  - `Descreen Scale Preview`
+  - `Apply Descreen Percent`
 
 ## Минимальный сценарий (3 шага)
 1. Подайте изображение в `Descreen By Adaptive Scale`.

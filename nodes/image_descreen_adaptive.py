@@ -4,15 +4,14 @@ Author: AlexZ1967
 Last updated: 2026-03-27
 
 Description:
-    Estimate halftone screen period from an ROI, choose an adaptive
-    downscale percentage to suppress visible raster, and apply a fixed
-    descreen percent to a full image/batch, plus FFT-notch descreening.
+    Utilities for practical scale-based halftone descreening:
+    estimate raster period, build visual scale previews, run the
+    legacy all-in-one adaptive node, and apply a chosen fixed scale.
 
 Purpose:
-    Provides ComfyUI nodes that analyze periodic screen artifacts in a scan,
-    search candidate downscale percentages, and then apply either the chosen
-    adaptive scale, a user-specified fixed scale, or an FFT notch filter to
-    the full image/batch.
+    Provides ComfyUI nodes for pragmatic descreen workflows where the user
+    measures raster period, reviews a scale sheet, and then applies a fixed
+    final downscale to one image or a batch.
 """
 
 from __future__ import annotations
@@ -1151,8 +1150,313 @@ def _analyze_one(
     return processed_rgb, compare_preview, result
 
 
+def _estimate_period_one(
+    image_rgb: np.ndarray,
+    *,
+    roi_mode: str,
+    roi_size_percent: float,
+    roi_x: int,
+    roi_y: int,
+    roi_w: int,
+    roi_h: int,
+    target_screen_px: float,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Estimate raster period and predicted base scale from one ROI."""
+    h, w, _ = image_rgb.shape
+    rx, ry, rw, rh = _select_roi_rect(
+        w,
+        h,
+        roi_mode=roi_mode,
+        roi_size_percent=roi_size_percent,
+        roi_x=roi_x,
+        roi_y=roi_y,
+        roi_w=roi_w,
+        roi_h=roi_h,
+    )
+    roi_rgb = image_rgb[ry : ry + rh, rx : rx + rw]
+    peak = _fft_peak(_rgb_to_gray(roi_rgb))
+    predicted_percent = _predict_descreen_scale_percent(
+        float(peak["period_px"]),
+        target_screen_px=target_screen_px,
+    )
+    result = {
+        "roi": {"x": int(rx), "y": int(ry), "w": int(rw), "h": int(rh)},
+        "estimated_period_px": float(peak["period_px"]),
+        "screen_angle_deg": float(peak["angle_deg"]),
+        "target_screen_px": float(target_screen_px),
+        "predicted_scale_percent": float(predicted_percent),
+    }
+    return roi_rgb, result
+
+
+def _build_scale_preview_one(
+    image_rgb: np.ndarray,
+    *,
+    resample_mode: str,
+    roi_mode: str,
+    roi_size_percent: float,
+    roi_x: int,
+    roi_y: int,
+    roi_w: int,
+    roi_h: int,
+    base_percent: float,
+    range_up_percent: float,
+    step_percent: float,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Build a scale sheet from one ROI using a fixed base percent."""
+    h, w, _ = image_rgb.shape
+    rx, ry, rw, rh = _select_roi_rect(
+        w,
+        h,
+        roi_mode=roi_mode,
+        roi_size_percent=roi_size_percent,
+        roi_x=roi_x,
+        roi_y=roi_y,
+        roi_w=roi_w,
+        roi_h=roi_h,
+    )
+    roi_rgb = image_rgb[ry : ry + rh, rx : rx + rw]
+    step = max(0.1, float(step_percent))
+    current = max(step, float(base_percent))
+    max_percent = current + max(0.0, float(range_up_percent))
+    variants: list[dict[str, Any]] = []
+    while current <= max_percent + 1e-6:
+        scaled = _pil_downscale_rgb_with_mode(
+            roi_rgb,
+            current / 100.0,
+            pre_blur_px=0.0,
+            resample_mode=resample_mode,
+        )
+        variants.append({"percent": round(current, 4), "image": scaled})
+        current += step
+    preview = _build_scale_sheet_preview(variants)
+    result = {
+        "roi": {"x": int(rx), "y": int(ry), "w": int(rw), "h": int(rh)},
+        "resample_mode": str(resample_mode),
+        "base_percent": float(base_percent),
+        "range_up_percent": float(range_up_percent),
+        "step_percent": float(step),
+        "sheet_scales": [float(item["percent"]) for item in variants],
+    }
+    return preview, result
+
+
+class ImageEstimateRasterPeriod:
+    """Estimate raster period and predict a practical base downscale percent."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        """Return ComfyUI INPUT_TYPES schema."""
+        return {
+            "required": {
+                "image": ("IMAGE", {"tooltip": "Скан/изображение с заметным печатным растром."}),
+            },
+            "optional": {
+                "roi_mode": (
+                    ["center_square", "full_frame", "manual_rect"],
+                    {
+                        "default": "center_square",
+                        "tooltip": "Область анализа для оценки шага растра.",
+                    },
+                ),
+                "roi_size_percent": (
+                    "FLOAT",
+                    {
+                        "default": 40.0,
+                        "min": 5.0,
+                        "max": 100.0,
+                        "step": 1.0,
+                        "tooltip": "Размер центрального ROI в процентах от меньшей стороны кадра.",
+                    },
+                ),
+                "roi_x": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Левая координата ROI для manual_rect."}),
+                "roi_y": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Верхняя координата ROI для manual_rect."}),
+                "roi_w": ("INT", {"default": 256, "min": 8, "max": 100000, "tooltip": "Ширина ROI для manual_rect."}),
+                "roi_h": ("INT", {"default": 256, "min": 8, "max": 100000, "tooltip": "Высота ROI для manual_rect."}),
+                "target_screen_px": (
+                    "FLOAT",
+                    {
+                        "default": 1.0,
+                        "min": 0.1,
+                        "max": 3.0,
+                        "step": 0.05,
+                        "tooltip": "Целевой остаточный шаг растра в пикселях для расчета базового процента.",
+                    },
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "FLOAT", "FLOAT", "STRING")
+    RETURN_NAMES = ("roi_preview", "estimated_period_px", "predicted_scale_percent", "analysis_json")
+    FUNCTION = "estimate"
+    CATEGORY = "image/restoration"
+
+    def estimate(
+        self,
+        image: torch.Tensor,
+        roi_mode: str = "center_square",
+        roi_size_percent: float = 40.0,
+        roi_x: int = 0,
+        roi_y: int = 0,
+        roi_w: int = 256,
+        roi_h: int = 256,
+        target_screen_px: float = 1.0,
+    ):
+        """Estimate raster period for one image or batch, returning first ROI preview."""
+        rgb_batch = _to_rgb_batch(image)
+        preview_first = None
+        analysis = []
+        for idx, rgb in enumerate(rgb_batch):
+            roi_preview, result = _estimate_period_one(
+                rgb,
+                roi_mode=roi_mode,
+                roi_size_percent=roi_size_percent,
+                roi_x=roi_x,
+                roi_y=roi_y,
+                roi_w=roi_w,
+                roi_h=roi_h,
+                target_screen_px=target_screen_px,
+            )
+            result["batch_index"] = int(idx)
+            analysis.append(result)
+            if preview_first is None:
+                preview_first = _to_tensor(roi_preview)
+        if preview_first is None:
+            raise ValueError("Empty image batch.")
+        first = analysis[0]
+        payload: Any = first if len(analysis) == 1 else analysis
+        return (
+            preview_first,
+            float(first["estimated_period_px"]),
+            float(first["predicted_scale_percent"]),
+            json.dumps(payload, ensure_ascii=True, indent=2),
+        )
+
+
+class ImageDescreenScalePreview:
+    """Build a visual scale sheet from a chosen base percent and ROI."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        """Return ComfyUI INPUT_TYPES schema."""
+        return {
+            "required": {
+                "image": ("IMAGE", {"tooltip": "Скан/изображение для визуального подбора scale."}),
+                "base_percent": (
+                    "FLOAT",
+                    {
+                        "default": 26.0,
+                        "min": 0.1,
+                        "max": 100.0,
+                        "step": 0.1,
+                        "tooltip": "Базовый процент, от которого строится подборочная лестница.",
+                    },
+                ),
+            },
+            "optional": {
+                "resample_mode": (
+                    ["lanczos", "bicubic"],
+                    {
+                        "default": "lanczos",
+                        "tooltip": "Ресемплер для preview-вариантов.",
+                    },
+                ),
+                "roi_mode": (
+                    ["center_square", "full_frame", "manual_rect"],
+                    {
+                        "default": "center_square",
+                        "tooltip": "Зона preview, по которой строится scale-sheet.",
+                    },
+                ),
+                "roi_size_percent": (
+                    "FLOAT",
+                    {
+                        "default": 40.0,
+                        "min": 5.0,
+                        "max": 100.0,
+                        "step": 1.0,
+                        "tooltip": "Размер центрального ROI в процентах от меньшей стороны кадра.",
+                    },
+                ),
+                "roi_x": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Левая координата ROI для manual_rect."}),
+                "roi_y": ("INT", {"default": 0, "min": 0, "max": 100000, "tooltip": "Верхняя координата ROI для manual_rect."}),
+                "roi_w": ("INT", {"default": 256, "min": 8, "max": 100000, "tooltip": "Ширина ROI для manual_rect."}),
+                "roi_h": ("INT", {"default": 256, "min": 8, "max": 100000, "tooltip": "Высота ROI для manual_rect."}),
+                "range_up_percent": (
+                    "FLOAT",
+                    {
+                        "default": 10.0,
+                        "min": 0.0,
+                        "max": 50.0,
+                        "step": 0.5,
+                        "tooltip": "На сколько процентов вверх строить лестницу от base_percent.",
+                    },
+                ),
+                "step_percent": (
+                    "FLOAT",
+                    {
+                        "default": 2.0,
+                        "min": 0.1,
+                        "max": 10.0,
+                        "step": 0.1,
+                        "tooltip": "Шаг процентов между вариантами в scale-sheet.",
+                    },
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("scale_sheet", "analysis_json")
+    FUNCTION = "preview"
+    CATEGORY = "image/restoration"
+
+    def preview(
+        self,
+        image: torch.Tensor,
+        base_percent: float = 26.0,
+        resample_mode: str = "lanczos",
+        roi_mode: str = "center_square",
+        roi_size_percent: float = 40.0,
+        roi_x: int = 0,
+        roi_y: int = 0,
+        roi_w: int = 256,
+        roi_h: int = 256,
+        range_up_percent: float = 10.0,
+        step_percent: float = 2.0,
+    ):
+        """Build preview for the first image in batch and return diagnostics for all."""
+        rgb_batch = _to_rgb_batch(image)
+        preview_first = None
+        analysis = []
+        for idx, rgb in enumerate(rgb_batch):
+            scale_sheet, result = _build_scale_preview_one(
+                rgb,
+                resample_mode=resample_mode,
+                roi_mode=roi_mode,
+                roi_size_percent=roi_size_percent,
+                roi_x=roi_x,
+                roi_y=roi_y,
+                roi_w=roi_w,
+                roi_h=roi_h,
+                base_percent=base_percent,
+                range_up_percent=range_up_percent,
+                step_percent=step_percent,
+            )
+            result["batch_index"] = int(idx)
+            analysis.append(result)
+            if preview_first is None:
+                preview_first = _to_tensor(scale_sheet)
+        if preview_first is None:
+            raise ValueError("Empty image batch.")
+        payload: Any = analysis[0] if len(analysis) == 1 else analysis
+        return (
+            preview_first,
+            json.dumps(payload, ensure_ascii=True, indent=2),
+        )
+
+
 class ImageDescreenAdaptiveScale:
-    """Estimate and apply an adaptive downscale percentage for halftone descreening."""
+    """Legacy all-in-one node: estimate, preview, and apply adaptive scale at once."""
 
     @classmethod
     def INPUT_TYPES(cls):

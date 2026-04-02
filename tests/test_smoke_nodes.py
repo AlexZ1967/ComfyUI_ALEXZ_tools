@@ -1216,6 +1216,8 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("ImageDownloadDZITiles", class_map)
         self.assertIn("ImageDownloadDZITilesBatchSave", class_map)
         self.assertIn("ImageDownloadIIIFImage", class_map)
+        self.assertIn("ImageEstimateRasterPeriod", class_map)
+        self.assertIn("ImageDescreenScalePreview", class_map)
         self.assertIn("ImageDescreenAdaptiveScale", class_map)
         self.assertIn("ImageDescreenApplyPercent", class_map)
         self.assertIn("SearchTroveImageIDs", class_map)
@@ -1821,6 +1823,68 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("sheet_zone", payload)
         self.assertIn("candidates", payload)
         self.assertIn("recommended_percent", payload)
+
+    def test_estimate_raster_period_node_contract(self):
+        """Verify raster-period estimate node returns ROI preview, floats, and JSON diagnostics."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_descreen_adaptive")
+        node = mod.ImageEstimateRasterPeriod()
+
+        h, w = 128, 128
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        base = 138.0 + 40.0 * np.exp(-(((xx - 64.0) ** 2 + (yy - 64.0) ** 2) / (2.0 * 24.0 * 24.0)))
+        halftone = 18.0 * np.cos(2.0 * np.pi * (xx + yy) / 8.0)
+        image = np.clip(base + halftone, 0.0, 255.0).astype(np.uint8)
+        rgb = np.stack([image, image, image], axis=-1)
+        tensor = torch.from_numpy(rgb.astype(np.float32) / 255.0).unsqueeze(0)
+
+        roi_preview, estimated_period_px, predicted_scale_percent, analysis_json = node.estimate(
+            tensor,
+            roi_mode="manual_rect",
+            roi_x=24,
+            roi_y=24,
+            roi_w=48,
+            roi_h=48,
+            target_screen_px=1.0,
+        )
+
+        payload = json.loads(analysis_json)
+        self.assertEqual(tuple(roi_preview.shape), (1, 48, 48, 3))
+        self.assertTrue(4.5 <= float(estimated_period_px) <= 12.5)
+        self.assertGreater(float(predicted_scale_percent), 0.0)
+        self.assertEqual(payload["roi"]["w"], 48)
+        self.assertIn("predicted_scale_percent", payload)
+
+    def test_descreen_scale_preview_node_contract(self):
+        """Verify scale preview node returns a scale-sheet and JSON diagnostics."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_descreen_adaptive")
+        node = mod.ImageDescreenScalePreview()
+
+        h, w = 128, 128
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        base = 138.0 + 40.0 * np.exp(-(((xx - 64.0) ** 2 + (yy - 64.0) ** 2) / (2.0 * 24.0 * 24.0)))
+        halftone = 18.0 * np.cos(2.0 * np.pi * (xx + yy) / 8.0)
+        image = np.clip(base + halftone, 0.0, 255.0).astype(np.uint8)
+        rgb = np.stack([image, image, image], axis=-1)
+        tensor = torch.from_numpy(rgb.astype(np.float32) / 255.0).unsqueeze(0)
+
+        scale_sheet, analysis_json = node.preview(
+            tensor,
+            base_percent=26.0,
+            resample_mode="lanczos",
+            roi_mode="manual_rect",
+            roi_x=24,
+            roi_y=24,
+            roi_w=48,
+            roi_h=48,
+            range_up_percent=10.0,
+            step_percent=2.0,
+        )
+
+        payload = json.loads(analysis_json)
+        self.assertEqual(int(scale_sheet.shape[0]), 1)
+        self.assertGreater(int(scale_sheet.shape[2]), 48)
+        self.assertEqual(payload["resample_mode"], "lanczos")
+        self.assertEqual(payload["sheet_scales"], [26.0, 28.0, 30.0, 32.0, 34.0, 36.0])
 
     def test_descreen_apply_percent_node_contract(self):
         """Verify fixed descreen node returns processed image, applied percent, and JSON diagnostics."""

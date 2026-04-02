@@ -124,9 +124,21 @@ NODE_DOCS = [
     },
     {
         "file": "nodes/image_descreen_adaptive.py",
+        "class": "ImageEstimateRasterPeriod",
+        "guide": "guides/GUIDE_IMAGE_RASTER_PERIOD_ESTIMATE.md",
+        "readme_heading": "## Estimate Raster Period",
+    },
+    {
+        "file": "nodes/image_descreen_adaptive.py",
+        "class": "ImageDescreenScalePreview",
+        "guide": "guides/GUIDE_IMAGE_DESCREEN_SCALE_PREVIEW.md",
+        "readme_heading": "## Descreen Scale Preview",
+    },
+    {
+        "file": "nodes/image_descreen_adaptive.py",
         "class": "ImageDescreenAdaptiveScale",
         "guide": "guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md",
-        "readme_heading": "## Descreen By Adaptive Scale",
+        "readme_heading": "## Descreen By Adaptive Scale (Legacy)",
     },
     {
         "file": "nodes/image_descreen_adaptive.py",

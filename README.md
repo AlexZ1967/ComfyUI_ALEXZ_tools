@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.32.0
+Version: 0.33.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -55,7 +55,9 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Download DZI Tiles Image](#download-dzi-tiles-image)
 - [Download DZI Tiles Batch Save](#download-dzi-tiles-batch-save)
 - [Download IIIF Image](#download-iiif-image)
-- [Descreen By Adaptive Scale](#descreen-by-adaptive-scale)
+- [Estimate Raster Period](#estimate-raster-period)
+- [Descreen Scale Preview](#descreen-scale-preview)
+- [Descreen By Adaptive Scale (Legacy)](#descreen-by-adaptive-scale-legacy)
 - [Apply Descreen Percent](#apply-descreen-percent)
 - [Search Trove Image IDs](#search-trove-image-ids)
 - [Image Waveform Scope](#image-waveform-scope)
@@ -295,10 +297,36 @@ Guide: [GUIDE_IIIF_IMAGE_DOWNLOAD.md](guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md)
 
 ---
 
-## Descreen By Adaptive Scale
+## Estimate Raster Period
+Измеряет шаг печатного растра по ROI и выдает прогноз базового процента уменьшения.
+
+- Display name: Estimate Raster Period  
+- Type name: ImageEstimateRasterPeriod  
+- Category: image/restoration  
+Входы: `image`, `roi_mode`, `roi_size_percent`, `roi_x`, `roi_y`, `roi_w`, `roi_h`, `target_screen_px`.  
+Нода анализирует выбранный ROI, оценивает `estimated_period_px` и сразу рассчитывает `predicted_scale_percent`, который удобно подавать в `Descreen Scale Preview`.  
+Выходы: `roi_preview`, `estimated_period_px`, `predicted_scale_percent`, `analysis_json`.  
+Guide: [GUIDE_IMAGE_RASTER_PERIOD_ESTIMATE.md](guides/GUIDE_IMAGE_RASTER_PERIOD_ESTIMATE.md)
+
+---
+
+## Descreen Scale Preview
+Строит подборочный scale-sheet от заданной базовой точки вверх, чтобы выбрать лучший final downscale визуально.
+
+- Display name: Descreen Scale Preview  
+- Type name: ImageDescreenScalePreview  
+- Category: image/restoration  
+Входы: `image`, `base_percent`, `resample_mode`, `roi_mode`, `roi_size_percent`, `roi_x`, `roi_y`, `roi_w`, `roi_h`, `range_up_percent`, `step_percent`.  
+Нода не анализирует растр заново: она только берет ROI, строит лестницу scale-вариантов и возвращает подписанный `scale_sheet`.  
+Выходы: `scale_sheet`, `analysis_json`.  
+Guide: [GUIDE_IMAGE_DESCREEN_SCALE_PREVIEW.md](guides/GUIDE_IMAGE_DESCREEN_SCALE_PREVIEW.md)
+
+---
+
+## Descreen By Adaptive Scale (Legacy)
 Оценивает шаг печатного растра по ROI, подбирает adaptive downscale и сразу применяет descreen через downscale/upscale.
 
-- Display name: Descreen By Adaptive Scale  
+- Display name: Descreen By Adaptive Scale (Legacy)  
 - Type name: ImageDescreenAdaptiveScale  
 - Category: image/restoration  
 Входы: `image`, `resample_mode`, `roi_mode`, `roi_size_percent`, `roi_x`, `roi_y`, `roi_w`, `roi_h`, `min_scale_percent`, `max_scale_percent`, `step_percent`, `target_screen_px`, `detail_weight`, `pre_blur_px`, `sheet_zone_mode`, `sheet_zone_size_percent`, `sheet_zone_x`, `sheet_zone_y`, `sheet_zone_w`, `sheet_zone_h`, `sheet_range_up_percent`, `sheet_step_percent`.  
