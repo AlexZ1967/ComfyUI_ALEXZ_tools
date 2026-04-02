@@ -1789,8 +1789,9 @@ class SmokeTests(unittest.TestCase):
         rgb = np.stack([image, image, image], axis=-1)
         tensor = torch.from_numpy(rgb.astype(np.float32) / 255.0).unsqueeze(0)
 
-        processed, roi_preview, recommended_percent, estimated_period_px, analysis_json = node.descreen(
+        processed, scale_sheet, recommended_percent, estimated_period_px, analysis_json = node.descreen(
             tensor,
+            resample_mode="lanczos",
             roi_mode="full_frame",
             min_scale_percent=8.0,
             max_scale_percent=18.0,
@@ -1798,15 +1799,26 @@ class SmokeTests(unittest.TestCase):
             target_screen_px=1.0,
             detail_weight=1.25,
             pre_blur_px=0.0,
+            sheet_zone_mode="manual_rect",
+            sheet_zone_x=24,
+            sheet_zone_y=24,
+            sheet_zone_w=48,
+            sheet_zone_h=48,
+            sheet_range_up_percent=10.0,
+            sheet_step_percent=2.0,
         )
 
         payload = json.loads(analysis_json)
         self.assertEqual(tuple(processed.shape), (1, h, w, 3))
-        self.assertEqual(int(roi_preview.shape[0]), 1)
-        self.assertGreater(int(roi_preview.shape[2]), w)
+        self.assertEqual(int(scale_sheet.shape[0]), 1)
+        self.assertGreater(int(scale_sheet.shape[2]), 48)
         self.assertGreater(float(recommended_percent), 0.0)
         self.assertTrue(8.0 <= float(recommended_percent) <= 18.0)
         self.assertTrue(4.5 <= float(estimated_period_px) <= 12.5)
+        self.assertEqual(payload["resample_mode"], "lanczos")
+        self.assertEqual(payload["sheet_zone_mode"], "manual_rect")
+        self.assertIn("sheet_scales", payload)
+        self.assertIn("sheet_zone", payload)
         self.assertIn("candidates", payload)
         self.assertIn("recommended_percent", payload)
 
@@ -1826,14 +1838,16 @@ class SmokeTests(unittest.TestCase):
         processed, applied_percent, analysis_json = node.apply(
             tensor,
             scale_percent=13.0,
-            pre_blur_px=0.0,
+            resample_mode="lanczos",
         )
 
         payload = json.loads(analysis_json)
-        self.assertEqual(tuple(processed.shape), (1, h, w, 3))
+        self.assertEqual(tuple(processed.shape), (1, 12, 12, 3))
         self.assertEqual(float(applied_percent), 13.0)
-        self.assertEqual(payload["mode"], "fixed_percent")
+        self.assertEqual(payload["mode"], "fixed_percent_downscale_only")
         self.assertEqual(float(payload["applied_percent"]), 13.0)
+        self.assertEqual(payload["resample_mode"], "lanczos")
+        self.assertFalse(payload["return_to_original_size"])
         self.assertEqual(int(payload["batch_size"]), 1)
 
 

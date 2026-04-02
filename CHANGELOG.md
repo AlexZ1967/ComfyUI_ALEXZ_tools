@@ -1,5 +1,39 @@
 # Changelog — ALEXZ_tools
 
+## 0.32.0 — 2026-04-02
+- Reworked the descreen workflow around the practical scale-based path:
+  - `Descreen By Adaptive Scale` now supports explicit resampler choice
+    (`lanczos` / `bicubic`);
+  - the node now returns a labeled `scale_sheet` built from the calculated
+    base scale upward, instead of the older compare preview;
+  - `scale_sheet` no longer includes the original card and now supports an
+    independent preview zone via `sheet_zone_mode` and `sheet_zone_*`;
+  - percentage labels in the scale sheet were made more readable.
+- Simplified `Apply Descreen Percent` into a final downscale-only node:
+  - removed the old pre-blur option;
+  - added `resample_mode`;
+  - the node now outputs the reduced final image and no longer upscales back
+    to the original size.
+- Removed experimental descreen nodes that did not justify their maintenance:
+  - `Descreen FFT Notch`;
+  - `Descreen Tonal Hybrid`.
+- Docs updated:
+  - `README.md`
+  - `guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md`
+  - `guides/GUIDE_IMAGE_DESCREEN_APPLY.md`
+- Docs removed:
+  - `guides/GUIDE_IMAGE_DESCREEN_FFT.md`
+  - `guides/GUIDE_IMAGE_DESCREEN_TONAL_HYBRID.md`
+- Tests:
+  - updated smoke coverage for the new adaptive `scale_sheet` contract and
+    the new downscale-only `Apply Descreen Percent`;
+  - removed smoke coverage for deleted experimental descreen nodes.
+- Validation:
+  - `conda run -n p313 python -m py_compile nodes/image_descreen_adaptive.py nodes/node_registry.py tests/test_smoke_nodes.py utils/docs_check.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "descreen or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.32.0` in `pyproject.toml` and `README.md`.
+
 ## 0.31.3 — 2026-03-27
 - Improved `Download DZI Tiles Image` title-based filename stability:
   - when `filename_mode=title_or_mw`, the saved filename now appends the stable

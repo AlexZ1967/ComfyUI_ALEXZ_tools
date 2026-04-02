@@ -149,12 +149,12 @@ NODE_UI_METADATA = {
     },
     "ImageDescreenAdaptiveScale": {
         "description": "Оценивает шаг печатного растра, подбирает adaptive scale и сразу делает descreen через downscale/upscale.",
-        "output_tooltips": ["Обработанное изображение.", "Сравнение ROI: original vs processed.", "Рекомендуемый масштаб в процентах.", "Оцененный шаг растра в пикселях.", "JSON с ROI, period estimate и таблицей кандидатов."],
+        "output_tooltips": ["Обработанное изображение.", "Подборочный scale-sheet по ROI с подписями процентов.", "Рекомендуемый масштаб в процентах.", "Оцененный шаг растра в пикселях.", "JSON с ROI, period estimate, scale-sheet и таблицей кандидатов."],
         "search_aliases": ["descreen", "halftone", "raster", "moire", "scan"],
     },
     "ImageDescreenApplyPercent": {
-        "description": "Применяет уже найденный descreen percent к полному изображению или батчу без повторного анализа.",
-        "output_tooltips": ["Обработанное изображение.", "Фактически примененный масштаб в процентах.", "JSON с параметрами fixed descreen."],
+        "description": "Применяет уже найденный descreen percent как final downscale без обратного апскейла.",
+        "output_tooltips": ["Уменьшенное обработанное изображение.", "Фактически примененный масштаб в процентах.", "JSON с параметрами fixed downscale descreen."],
         "search_aliases": ["descreen", "apply", "percent", "halftone", "raster"],
     },
     "GenerateQRCode": {

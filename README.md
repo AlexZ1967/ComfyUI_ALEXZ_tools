@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.31.3
+Version: 0.32.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -301,21 +301,21 @@ Guide: [GUIDE_IIIF_IMAGE_DOWNLOAD.md](guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md)
 - Display name: Descreen By Adaptive Scale  
 - Type name: ImageDescreenAdaptiveScale  
 - Category: image/restoration  
-Входы: `image`, `roi_mode`, `roi_size_percent`, `roi_x`, `roi_y`, `roi_w`, `roi_h`, `min_scale_percent`, `max_scale_percent`, `step_percent`, `target_screen_px`, `detail_weight`, `pre_blur_px`.  
-Нода анализирует растр в ROI, строит таблицу кандидатов и выбирает scale, где остаточная энергия растра минимальна при контроле потери структуры.  
-Выходы: `image`, `roi_preview`, `recommended_percent`, `estimated_period_px`, `analysis_json`.  
+Входы: `image`, `resample_mode`, `roi_mode`, `roi_size_percent`, `roi_x`, `roi_y`, `roi_w`, `roi_h`, `min_scale_percent`, `max_scale_percent`, `step_percent`, `target_screen_px`, `detail_weight`, `pre_blur_px`, `sheet_zone_mode`, `sheet_zone_size_percent`, `sheet_zone_x`, `sheet_zone_y`, `sheet_zone_w`, `sheet_zone_h`, `sheet_range_up_percent`, `sheet_step_percent`.  
+Нода анализирует растр в ROI, строит таблицу кандидатов, выбирает scale, где остаточная энергия растра минимальна при контроле потери структуры, и дополнительно возвращает подборочный scale-sheet от расчетной базы вверх по отдельной preview-зоне без карточки исходника.  
+Выходы: `image`, `scale_sheet`, `recommended_percent`, `estimated_period_px`, `analysis_json`.  
 Guide: [GUIDE_IMAGE_DESCREEN_ADAPTIVE.md](guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md)
 
 ---
 
 ## Apply Descreen Percent
-Применяет уже найденный descreen percent к полному изображению или батчу без повторного FFT-анализа.
+Применяет уже найденный descreen percent к полному изображению или батчу без повторного FFT-анализа, оставляя итоговый кадр уменьшенным.
 
 - Display name: Apply Descreen Percent  
 - Type name: ImageDescreenApplyPercent  
 - Category: image/restoration  
-Входы: `image`, `scale_percent`, `pre_blur_px`.  
-Подходит для production-flow: один раз измерить `recommended_percent` на репрезентативном фрагменте, затем применить это значение ко всей серии кадров.  
+Входы: `image`, `scale_percent`, `resample_mode`.  
+Подходит для production-flow: один раз измерить `recommended_percent` на репрезентативном фрагменте, затем применить это значение ко всей серии кадров как final downscale без апскейла обратно.  
 Выходы: `image`, `applied_percent`, `analysis_json`.  
 Guide: [GUIDE_IMAGE_DESCREEN_APPLY.md](guides/GUIDE_IMAGE_DESCREEN_APPLY.md)
 
