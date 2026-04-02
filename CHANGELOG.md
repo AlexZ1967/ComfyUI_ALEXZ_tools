@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.33.1 — 2026-04-02
+- Marked the old all-in-one descreen node as deprecated everywhere it appears:
+  - picker display name changed to `Descreen By Adaptive Scale (Deprecated)`;
+  - node description in registry now explicitly states deprecated legacy status;
+  - README and the legacy guide now warn that new workflows should use the
+    split chain instead.
+- Updated documentation links/checks to match the new deprecated heading:
+  - `README.md`
+  - `guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md`
+  - `nodes/node_registry.py`
+  - `utils/docs_check.py`
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "descreen or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.33.1` in `pyproject.toml` and `README.md`.
+
 ## 0.33.0 — 2026-04-02
 - Split the practical descreen workflow into separate nodes with clearer responsibilities:
   - added `Estimate Raster Period` for ROI-based period measurement and

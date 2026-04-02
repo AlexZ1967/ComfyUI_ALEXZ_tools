@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.33.0
+Version: 0.33.1
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -57,7 +57,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Download IIIF Image](#download-iiif-image)
 - [Estimate Raster Period](#estimate-raster-period)
 - [Descreen Scale Preview](#descreen-scale-preview)
-- [Descreen By Adaptive Scale (Legacy)](#descreen-by-adaptive-scale-legacy)
+- [Descreen By Adaptive Scale (Deprecated)](#descreen-by-adaptive-scale-deprecated)
 - [Apply Descreen Percent](#apply-descreen-percent)
 - [Search Trove Image IDs](#search-trove-image-ids)
 - [Image Waveform Scope](#image-waveform-scope)
@@ -323,14 +323,14 @@ Guide: [GUIDE_IMAGE_DESCREEN_SCALE_PREVIEW.md](guides/GUIDE_IMAGE_DESCREEN_SCALE
 
 ---
 
-## Descreen By Adaptive Scale (Legacy)
+## Descreen By Adaptive Scale (Deprecated)
 Оценивает шаг печатного растра по ROI, подбирает adaptive downscale и сразу применяет descreen через downscale/upscale.
 
-- Display name: Descreen By Adaptive Scale (Legacy)  
+- Display name: Descreen By Adaptive Scale (Deprecated)  
 - Type name: ImageDescreenAdaptiveScale  
 - Category: image/restoration  
 Входы: `image`, `resample_mode`, `roi_mode`, `roi_size_percent`, `roi_x`, `roi_y`, `roi_w`, `roi_h`, `min_scale_percent`, `max_scale_percent`, `step_percent`, `target_screen_px`, `detail_weight`, `pre_blur_px`, `sheet_zone_mode`, `sheet_zone_size_percent`, `sheet_zone_x`, `sheet_zone_y`, `sheet_zone_w`, `sheet_zone_h`, `sheet_range_up_percent`, `sheet_step_percent`.  
-Нода анализирует растр в ROI, строит таблицу кандидатов, выбирает scale, где остаточная энергия растра минимальна при контроле потери структуры, и дополнительно возвращает подборочный scale-sheet от расчетной базы вверх по отдельной preview-зоне без карточки исходника.  
+Нода помечена как deprecated: для новых workflow используйте связку `Estimate Raster Period` → `Descreen Scale Preview` → `Apply Descreen Percent`. Эта нода оставлена только для совместимости со старыми графами.  
 Выходы: `image`, `scale_sheet`, `recommended_percent`, `estimated_period_px`, `analysis_json`.  
 Guide: [GUIDE_IMAGE_DESCREEN_ADAPTIVE.md](guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md)
 

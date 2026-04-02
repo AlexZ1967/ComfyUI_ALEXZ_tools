@@ -1,7 +1,7 @@
-# GUIDE: Descreen By Adaptive Scale (Legacy)
+# GUIDE: Descreen By Adaptive Scale (Deprecated)
 
 ## Назначение
-Нода `Descreen By Adaptive Scale` теперь считается legacy all-in-one вариантом.
+Нода `Descreen By Adaptive Scale` теперь считается deprecated legacy all-in-one вариантом.
 
 Она:
 - оценивает шаг растра по ROI через FFT;
@@ -11,6 +11,7 @@
 - сразу отдает обработанное изображение.
 
 ## Когда использовать
+- Только когда нужно открыть старый граф без переделки.
 - Когда нужен старый one-shot workflow в одной ноде.
 - Когда вы не хотите разделять этапы `estimate -> preview -> apply`.
 - Когда скан или репродукция содержит полутоновый печатный растр.

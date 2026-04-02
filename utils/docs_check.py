@@ -138,7 +138,7 @@ NODE_DOCS = [
         "file": "nodes/image_descreen_adaptive.py",
         "class": "ImageDescreenAdaptiveScale",
         "guide": "guides/GUIDE_IMAGE_DESCREEN_ADAPTIVE.md",
-        "readme_heading": "## Descreen By Adaptive Scale (Legacy)",
+        "readme_heading": "## Descreen By Adaptive Scale (Deprecated)",
     },
     {
         "file": "nodes/image_descreen_adaptive.py",

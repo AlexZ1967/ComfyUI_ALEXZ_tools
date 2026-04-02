@@ -47,7 +47,7 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
     NodeSpec("ImageEstimateRasterPeriod", "Estimate Raster Period", ".image_descreen_adaptive", "ImageEstimateRasterPeriod"),
     NodeSpec("ImageDescreenScalePreview", "Descreen Scale Preview", ".image_descreen_adaptive", "ImageDescreenScalePreview"),
-    NodeSpec("ImageDescreenAdaptiveScale", "Descreen By Adaptive Scale (Legacy)", ".image_descreen_adaptive", "ImageDescreenAdaptiveScale"),
+    NodeSpec("ImageDescreenAdaptiveScale", "Descreen By Adaptive Scale (Deprecated)", ".image_descreen_adaptive", "ImageDescreenAdaptiveScale"),
     NodeSpec("ImageDescreenApplyPercent", "Apply Descreen Percent", ".image_descreen_adaptive", "ImageDescreenApplyPercent"),
     NodeSpec("GenerateQRCode", "Generate QR Code", ".qr_code_generate", "GenerateQRCode"),
     NodeSpec("ImageDownloadDZITiles", "Download DZI Tiles Image", ".image_download_dzi_tiles", "ImageDownloadDZITiles"),
@@ -160,9 +160,9 @@ NODE_UI_METADATA = {
         "search_aliases": ["descreen", "preview", "scale", "sheet", "halftone", "raster"],
     },
     "ImageDescreenAdaptiveScale": {
-        "description": "Legacy all-in-one: оценивает шаг растра, строит preview и сразу делает descreen через downscale/upscale.",
+        "description": "Deprecated legacy all-in-one: оценивает шаг растра, строит preview и сразу делает descreen через downscale/upscale.",
         "output_tooltips": ["Обработанное изображение.", "Подборочный scale-sheet по ROI с подписями процентов.", "Рекомендуемый масштаб в процентах.", "Оцененный шаг растра в пикселях.", "JSON с ROI, period estimate, scale-sheet и таблицей кандидатов."],
-        "search_aliases": ["descreen", "halftone", "raster", "moire", "scan", "legacy"],
+        "search_aliases": ["descreen", "halftone", "raster", "moire", "scan", "legacy", "deprecated"],
     },
     "ImageDescreenApplyPercent": {
         "description": "Применяет уже найденный descreen percent как final downscale без обратного апскейла.",
