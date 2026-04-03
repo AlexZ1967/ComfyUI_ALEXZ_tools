@@ -1778,6 +1778,244 @@ class SmokeTests(unittest.TestCase):
             iiif_mod._fetch_iiif_info = old_info
             iiif_mod._assemble_iiif_full_image = old_assemble
 
+    def test_video_inpaint_defaults_to_safe_fp32_mode(self):
+        """Verify video inpaint node defaults to the safer FP32 mode."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_inpaint")
+        schema = mod.VideoInpaintWatermark.INPUT_TYPES()
+        fp16_spec = schema["required"]["fp16"]
+        self.assertEqual(fp16_spec[1]["default"], "disable")
+        self.assertEqual(schema["required"]["feather_radius"][1]["default"], 12)
+
+    def test_video_inpaint_feather_alpha_softens_patch_edge(self):
+        """Verify feathered alpha creates a soft edge instead of binary patch boundary."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_inpaint")
+        mask = torch.zeros((1, 32, 32), dtype=torch.float32)
+        mask[:, 8:24, 8:24] = 1.0
+
+        soft = mod._feather_alpha_mask(mask, feather_radius=4)
+
+        self.assertEqual(tuple(soft.shape), (1, 32, 32))
+        self.assertAlmostEqual(float(soft[0, 16, 16].item()), 1.0, places=4)
+        self.assertEqual(float(soft[0, 0, 0].item()), 0.0)
+        self.assertGreater(float(soft[0, 9, 9].item()), 0.0)
+        self.assertLess(float(soft[0, 9, 9].item()), 1.0)
+
+    def test_video_inpaint_retries_chunk_in_fp32_when_fp16_output_is_black(self):
+        """Verify chunk processing retries with fp16 disabled when masked output is invalid."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_inpaint")
+        node = mod.VideoInpaintWatermark()
+
+        frames_buf = [
+            np.full((16, 16, 3), 180, dtype=np.uint8),
+            np.full((16, 16, 3), 180, dtype=np.uint8),
+        ]
+        mask = torch.zeros((2, 16, 16), dtype=torch.float32)
+        mask[:, 4:12, 4:12] = 1.0
+
+        old_prepare = mod.prepare_frames_and_masks
+        old_init = mod.initialize_models
+        old_process = mod.process_inpainting
+        old_feature = mod.feature_propagation
+        old_handle = mod.handle_output
+        old_device = mod.model_management.get_torch_device
+
+        calls = []
+
+        try:
+            mod.model_management.get_torch_device = lambda: torch.device("cpu")
+
+            def _fake_prepare(frames_np, mask_full, image_config, device):
+                _ = (image_config, device)
+                frames_tensor = torch.zeros((1, len(frames_np), 3, 16, 16), dtype=torch.float32)
+                masks_tensor = torch.zeros((1, len(frames_np), 1, 16, 16), dtype=torch.float32)
+                masks_tensor[:, :, :, 4:12, 4:12] = 1.0
+                return frames_tensor, masks_tensor, masks_tensor.clone(), frames_np
+
+            def _fake_initialize(device, fp16_mode):
+                _ = device
+                return types.SimpleNamespace(
+                    raft_model=None,
+                    flow_model=None,
+                    inpaint_model=types.SimpleNamespace(fp16_mode=fp16_mode),
+                )
+
+            def _fake_process(models, frames_tensor, flow_masks_tensor, masks_dilated_tensor, inpaint_config):
+                _ = (models, frames_tensor, flow_masks_tensor, masks_dilated_tensor)
+                calls.append(inpaint_config.fp16)
+                updated_frames = torch.zeros((1, 2, 3, 16, 16), dtype=torch.float32)
+                updated_masks = torch.zeros((1, 2, 1, 16, 16), dtype=torch.float32)
+                return updated_frames, updated_masks, (torch.empty(0), torch.empty(0))
+
+            def _fake_feature(inpaint_model, updated_frames, updated_masks, masks_dilated_tensor, pred_flows_bi, original_frames, inpaint_config):
+                _ = (inpaint_model, updated_frames, updated_masks, masks_dilated_tensor, pred_flows_bi, original_frames)
+                if inpaint_config.fp16 == "enable":
+                    return [np.zeros((16, 16, 3), dtype=np.uint8) for _ in range(2)]
+                frames = []
+                for _idx in range(2):
+                    frame = np.full((16, 16, 3), 180, dtype=np.uint8)
+                    frame[4:12, 4:12, :] = 96
+                    frames.append(frame)
+                return frames
+
+            def _fake_handle(composed_frames, flow_masks_tensor, masks_dilated_tensor):
+                _ = flow_masks_tensor
+                output_array = np.stack(composed_frames, axis=0).astype(np.float32) / 255.0
+                output_images = torch.from_numpy(output_array)
+                return output_images, masks_dilated_tensor.squeeze(), masks_dilated_tensor.squeeze()
+
+            mod.prepare_frames_and_masks = _fake_prepare
+            mod.initialize_models = _fake_initialize
+            mod.process_inpainting = _fake_process
+            mod.feature_propagation = _fake_feature
+            mod.handle_output = _fake_handle
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                end_index = node._process_stream_chunk(
+                    frames_buf=frames_buf,
+                    mask=mask,
+                    mask_dilates=0,
+                    flow_mask_dilates=0,
+                    ref_stride=10,
+                    neighbor_length=10,
+                    subvideo_length=8,
+                    raft_iter=10,
+                    fp16="enable",
+                    throughput_mode="disable",
+                    cudnn_benchmark="default",
+                    tf32="default",
+                    pre_crop=False,
+                    feather_radius=0,
+                    color_match_mode="none",
+                    bbox=(0, 0, 16, 16),
+                    status="ok",
+                    full_width=16,
+                    full_height=16,
+                    cache_dir="",
+                    output_dir=tmpdir,
+                    output_name="patch_",
+                    start_index=0,
+                    inputs_already_cropped=False,
+                    mask_is_ready=True,
+                )
+                output_path = os.path.join(tmpdir, "patch_0000.png")
+                self.assertTrue(os.path.exists(output_path))
+                rgba = np.asarray(Image.open(output_path).convert("RGBA"), dtype=np.uint8)
+        finally:
+            mod.prepare_frames_and_masks = old_prepare
+            mod.initialize_models = old_init
+            mod.process_inpainting = old_process
+            mod.feature_propagation = old_feature
+            mod.handle_output = old_handle
+            mod.model_management.get_torch_device = old_device
+
+        self.assertEqual(end_index, 2)
+        self.assertGreaterEqual(len(calls), 1)
+        self.assertEqual(calls[0], "enable")
+        self.assertGreater(int(rgba[6, 6, 0]), 80)
+
+    def test_video_inpaint_invalid_output_check_handles_resized_output(self):
+        """Verify invalid-output guard resizes source frames before masked comparison."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_inpaint")
+
+        output_images = torch.zeros((30, 96, 96, 3), dtype=torch.float32)
+        source_images = torch.ones((30, 100, 102, 3), dtype=torch.float32) * 0.75
+        mask = torch.zeros((30, 100, 102), dtype=torch.float32)
+        mask[:, 20:80, 20:80] = 1.0
+
+        looks_invalid = mod._masked_output_looks_invalid(output_images, source_images, mask)
+
+        self.assertTrue(bool(looks_invalid))
+
+    def test_video_inpaint_falls_back_to_image_propagation_when_feature_stage_is_black(self):
+        """Verify black feature-propagation output falls back to non-black image-propagation frames."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_inpaint")
+        node = mod.VideoInpaintWatermark()
+
+        frames_np = np.full((2, 16, 16, 3), 180 / 255.0, dtype=np.float32)
+        frames = torch.from_numpy(frames_np.copy())
+        mask = torch.zeros((2, 16, 16), dtype=torch.float32)
+        mask[:, 4:12, 4:12] = 1.0
+        image_config = mod.ImageConfig(16, 16, 0, 0, (16, 16), 2)
+        inpaint_config = mod.ProPainterConfig(
+            ref_stride=10,
+            neighbor_length=10,
+            subvideo_length=8,
+            raft_iter=10,
+            fp16="disable",
+            video_length=2,
+            device=torch.device("cpu"),
+            process_size=image_config.process_size,
+            skip_empty_cache=False,
+        )
+
+        old_prepare = mod.prepare_frames_and_masks
+        old_init = mod.initialize_models
+        old_process = mod.process_inpainting
+        old_feature = mod.feature_propagation
+        old_handle = mod.handle_output
+        old_device = mod.model_management.get_torch_device
+
+        try:
+            mod.model_management.get_torch_device = lambda: torch.device("cpu")
+
+            def _fake_prepare(frames_np, mask_full, image_config, device):
+                _ = (image_config, device)
+                frames_tensor = torch.zeros((1, len(frames_np), 3, 16, 16), dtype=torch.float32)
+                masks_tensor = torch.zeros((1, len(frames_np), 1, 16, 16), dtype=torch.float32)
+                masks_tensor[:, :, :, 4:12, 4:12] = 1.0
+                return frames_tensor, masks_tensor, masks_tensor.clone(), frames_np
+
+            def _fake_initialize(device, fp16_mode):
+                _ = (device, fp16_mode)
+                return types.SimpleNamespace(
+                    raft_model=None,
+                    flow_model=None,
+                    inpaint_model=types.SimpleNamespace(),
+                )
+
+            def _fake_process(models, frames_tensor, flow_masks_tensor, masks_dilated_tensor, inpaint_config):
+                _ = (models, flow_masks_tensor, masks_dilated_tensor, inpaint_config)
+                updated_frames = frames_tensor.clone()
+                updated_frames[:, :, :, 4:12, 4:12] = -0.2
+                updated_masks = torch.zeros((1, 2, 1, 16, 16), dtype=torch.float32)
+                pred = (torch.empty(0), torch.empty(0))
+                return updated_frames, updated_masks, pred
+
+            def _fake_feature(inpaint_model, updated_frames, updated_masks, masks_dilated_tensor, pred_flows_bi, original_frames, inpaint_config):
+                _ = (inpaint_model, updated_frames, updated_masks, masks_dilated_tensor, pred_flows_bi, original_frames, inpaint_config)
+                return [np.zeros((16, 16, 3), dtype=np.uint8) for _ in range(2)]
+
+            def _fake_handle(composed_frames, flow_masks_tensor, masks_dilated_tensor):
+                _ = flow_masks_tensor
+                output_array = np.stack(composed_frames, axis=0).astype(np.float32) / 255.0
+                output_images = torch.from_numpy(output_array)
+                return output_images, masks_dilated_tensor.squeeze(), masks_dilated_tensor.squeeze()
+
+            mod.prepare_frames_and_masks = _fake_prepare
+            mod.initialize_models = _fake_initialize
+            mod.process_inpainting = _fake_process
+            mod.feature_propagation = _fake_feature
+            mod.handle_output = _fake_handle
+
+            output_images = node._run_propainter_chunk(
+                frames_np=frames_np,
+                frames=frames,
+                mask_full=mask,
+                image_config=image_config,
+                inpaint_config=inpaint_config,
+                throughput_mode="disable",
+            )
+        finally:
+            mod.prepare_frames_and_masks = old_prepare
+            mod.initialize_models = old_init
+            mod.process_inpainting = old_process
+            mod.feature_propagation = old_feature
+            mod.handle_output = old_handle
+            mod.model_management.get_torch_device = old_device
+
+        self.assertEqual(tuple(output_images.shape), (2, 16, 16, 3))
+        self.assertGreater(float(output_images[0, 6, 6, 0].item()), 0.35)
+
     def test_descreen_adaptive_scale_node_contract(self):
         """Verify descreen node returns processed image, preview, floats, and JSON diagnostics."""
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_descreen_adaptive")

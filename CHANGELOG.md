@@ -1,5 +1,38 @@
 # Changelog — ALEXZ_tools
 
+## 0.33.2 — 2026-04-03
+- Hardened `Remove Static Watermark from Video` against black masked-area failures:
+  - changed the safe default to `fp16=disable`;
+  - added automatic FP32 retry when an FP16 chunk collapses to an almost-black
+    result inside the masked region;
+  - fixed the masked-area validation path to handle resized ProPainter
+    `process_size` outputs without shape mismatches.
+- Added a second safety fallback for ProPainter output staging:
+  - when `feature_propagation` returns an invalid dark patch but
+    `image_propagation` already contains a sane fill, the node now uses the
+    `image_propagation` result for that chunk.
+- Improved patch compositing to reduce the visible circular seam:
+  - added `feather_radius`;
+  - patch alpha is now feathered before saving RGBA patch frames, which also
+    improves `preview_image` and `write_fullframes` compositing.
+- Updated docs for the new recommended workflow:
+  - `patch_*.png` are explicitly documented as RGBA patches, not final frames;
+  - `write_fullframes=true` is now the recommended way to inspect final output;
+  - documented the practical guidance that black patch failures often require
+    larger `crop_padding` (commonly `64+`) and that seam visibility is addressed
+    with `feather_radius`.
+- Added smoke coverage for:
+  - safe default `fp16=disable`;
+  - resized masked-area validation;
+  - fallback from invalid `feature_propagation` output to
+    `image_propagation`;
+  - non-binary feathered alpha edges.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "video_inpaint or node_ui_metadata_compat"`;
+  - `conda run -n p313 python -m py_compile nodes/video_inpaint.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.33.2` in `pyproject.toml` and `README.md`.
+
 ## 0.33.1 — 2026-04-02
 - Marked the old all-in-one descreen node as deprecated everywhere it appears:
   - picker display name changed to `Descreen By Adaptive Scale (Deprecated)`;

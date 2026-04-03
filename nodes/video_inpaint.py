@@ -23,6 +23,7 @@ import torch
 import folder_paths
 from comfy import model_management
 from PIL import Image
+from scipy import ndimage
 
 from ..utils.interrupt import check_interrupt as shared_check_interrupt
 from ..utils.color_match_utils import (
@@ -56,6 +57,62 @@ STREAM_STRIDE_DEFAULT = 1
 def _check_interrupt() -> None:
     """Raise an interrupt error when ComfyUI requests execution cancellation."""
     shared_check_interrupt()
+
+
+def _masked_output_looks_invalid(
+    output_images: torch.Tensor,
+    source_images: torch.Tensor,
+    mask: torch.Tensor,
+) -> bool:
+    """Detect obviously broken inpaint output inside the masked region.
+
+    FP16 inference on some devices can collapse the inpaint region to near-black.
+    We only trigger fallback when the masked area is overwhelmingly dark compared to
+    the corresponding source region or contains non-finite values.
+    """
+    if output_images.numel() == 0:
+        return True
+    if not torch.isfinite(output_images).all():
+        return True
+
+    mask = _normalize_mask(mask)
+    mask = _ensure_mask_batch(mask, output_images.size(dim=0))
+    mask = _resize_mask_to_output(mask, output_images.shape[1], output_images.shape[2])
+    if source_images.shape[1:3] != output_images.shape[1:3]:
+        source_images = _resize_images_to_size(
+            source_images, output_images.shape[1], output_images.shape[2]
+        )
+    selected = mask > 0.5
+    if not bool(selected.any()):
+        return False
+
+    selected_rgb = selected.unsqueeze(-1).expand_as(output_images)
+    masked_output = output_images[selected_rgb]
+    masked_source = source_images[selected_rgb]
+    if masked_output.numel() == 0 or masked_source.numel() == 0:
+        return False
+
+    out_mean = float(masked_output.mean().item())
+    src_mean = float(masked_source.mean().item())
+    near_black_ratio = float((masked_output < 0.02).float().mean().item())
+    dynamic_range = float((masked_output.max() - masked_output.min()).item())
+
+    if near_black_ratio > 0.985 and src_mean > 0.05:
+        return True
+    if out_mean < 0.02 and src_mean > 0.08:
+        return True
+    if dynamic_range < 0.01 and out_mean < 0.05 and src_mean > 0.08:
+        return True
+    return False
+
+
+def _updated_frames_to_images(updated_frames: torch.Tensor) -> torch.Tensor:
+    """Convert ProPainter updated frames from [-1, 1] BTCHW to [0, 1] THWC."""
+    if updated_frames.dim() != 5:
+        raise ValueError(f"Expected updated_frames in BTCHW layout, got shape={tuple(updated_frames.shape)}")
+    frames = updated_frames[0].detach().float().clamp(-1.0, 1.0)
+    frames = (frames + 1.0) * 0.5
+    return frames.permute(0, 2, 3, 1).contiguous()
 
 
 def _check_inputs(frames: torch.Tensor, masks: torch.Tensor) -> None:
@@ -143,6 +200,31 @@ def _sanitize_prefix_with_default(prefix: str, default: str) -> str:
     return prefix if prefix else default
 
 
+def _feather_alpha_mask(alpha_mask: torch.Tensor, feather_radius: int) -> torch.Tensor:
+    """Return a softened alpha mask for patch compositing.
+
+    The input mask uses the node convention: white = replace. Feathering is applied
+    only inside the selected region so the exterior remains fully transparent.
+    """
+    alpha_mask = alpha_mask.detach().float().cpu()
+    if alpha_mask.dim() == 2:
+        alpha_mask = alpha_mask.unsqueeze(0)
+    if feather_radius <= 0:
+        return alpha_mask.clamp(0.0, 1.0)
+
+    feather_radius = int(max(1, feather_radius))
+    out = []
+    for idx in range(alpha_mask.size(0)):
+        binary = (alpha_mask[idx].numpy() > 0.5).astype(np.uint8)
+        if binary.max() == 0:
+            out.append(torch.from_numpy(binary.astype(np.float32)))
+            continue
+        dist_in = ndimage.distance_transform_edt(binary)
+        soft = np.clip(dist_in / float(feather_radius), 0.0, 1.0).astype(np.float32)
+        out.append(torch.from_numpy(soft))
+    return torch.stack(out, dim=0)
+
+
 def _ensure_dir(path: str) -> None:
     """Create directory (and parents) when it does not exist yet."""
     if not path:
@@ -157,6 +239,7 @@ def _save_rgba_sequence(
     prefix: str,
     label: str,
     start_index: int = 0,
+    feather_radius: int = 0,
 ) -> None:
     """Save RGBA tensor batch to numbered PNG sequence on disk."""
     if not output_dir:
@@ -165,7 +248,7 @@ def _save_rgba_sequence(
     prefix = _sanitize_prefix(prefix)
 
     rgb_frames = rgb_frames.detach().cpu()
-    alpha_mask = alpha_mask.detach().cpu()
+    alpha_mask = _feather_alpha_mask(alpha_mask, feather_radius)
     if alpha_mask.dim() == 2:
         alpha_mask = alpha_mask.unsqueeze(0)
     if alpha_mask.size(0) == 1 and rgb_frames.size(0) > 1:
@@ -545,6 +628,55 @@ def _compose_outputs_from_bbox(
 
 class VideoInpaintWatermark:
     """ComfyUI node that removes static watermarks from video frames."""
+    def _run_propainter_chunk(
+        self,
+        frames_np: np.ndarray,
+        frames: torch.Tensor,
+        mask_full: torch.Tensor,
+        image_config: ImageConfig,
+        inpaint_config: ProPainterConfig,
+        throughput_mode: str,
+    ) -> torch.Tensor:
+        """Run one ProPainter pass and return output images in [0, 1] NHWC."""
+        device = inpaint_config.device
+        frames_tensor, flow_masks_tensor, masks_dilated_tensor, original_frames = (
+            prepare_frames_and_masks(frames_np, mask_full, image_config, device)
+        )
+        models = initialize_models(device, inpaint_config.fp16)
+        updated_frames, updated_masks, pred_flows_bi = process_inpainting(
+            models,
+            frames_tensor,
+            flow_masks_tensor,
+            masks_dilated_tensor,
+            inpaint_config,
+        )
+        propagated_images = None
+        if updated_frames.dim() == 5 and updated_frames.numel() > 0:
+            propagated_images = _updated_frames_to_images(updated_frames)
+        composed_frames = feature_propagation(
+            models.inpaint_model,
+            updated_frames,
+            updated_masks,
+            masks_dilated_tensor,
+            pred_flows_bi,
+            original_frames,
+            inpaint_config,
+        )
+        output_images, _flow_masks, _masks_dilated = handle_output(
+            composed_frames, flow_masks_tensor, masks_dilated_tensor
+        )
+        if (
+            propagated_images is not None
+            and _masked_output_looks_invalid(output_images, frames, mask_full)
+            and not _masked_output_looks_invalid(propagated_images, frames, mask_full)
+        ):
+            print("[VideoInpaint] feature_propagation output looked invalid; using image_propagation result for this chunk.")
+            output_images = propagated_images
+        del frames_tensor, flow_masks_tensor, masks_dilated_tensor, updated_frames, updated_masks, pred_flows_bi
+        if torch.cuda.is_available() and throughput_mode != "enable":
+            torch.cuda.empty_cache()
+        return output_images
+
     def _stream_video(
         self,
         video: str,
@@ -560,6 +692,7 @@ class VideoInpaintWatermark:
         cudnn_benchmark: str,
         tf32: str,
         crop_padding: int,
+        feather_radius: int,
         color_match_mode: str,
         cache_dir: str,
         output_dir: str,
@@ -743,6 +876,7 @@ class VideoInpaintWatermark:
                 cudnn_benchmark,
                 tf32,
                 pre_crop,
+                feather_radius,
                 color_match_mode,
                 bbox,
                 status,
@@ -796,6 +930,7 @@ class VideoInpaintWatermark:
         cudnn_benchmark: str,
         tf32: str,
         pre_crop: bool,
+        feather_radius: int,
         color_match_mode: str,
         bbox: tuple[int, int, int, int],
         status: str,
@@ -861,33 +996,36 @@ class VideoInpaintWatermark:
             process_size=image_config.process_size,
             skip_empty_cache=throughput_mode == "enable",
         )
+        output_images = self._run_propainter_chunk(
+            frames_np=frames_np,
+            frames=frames,
+            mask_full=mask_full,
+            image_config=image_config,
+            inpaint_config=inpaint_config,
+            throughput_mode=throughput_mode,
+        )
 
-        frames_tensor, flow_masks_tensor, masks_dilated_tensor, original_frames = (
-            prepare_frames_and_masks(frames_np, mask_full, image_config, device)
-        )
-        models = initialize_models(device, inpaint_config.fp16)
-        updated_frames, updated_masks, pred_flows_bi = process_inpainting(
-            models,
-            frames_tensor,
-            flow_masks_tensor,
-            masks_dilated_tensor,
-            inpaint_config,
-        )
-        composed_frames = feature_propagation(
-            models.inpaint_model,
-            updated_frames,
-            updated_masks,
-            masks_dilated_tensor,
-            pred_flows_bi,
-            original_frames,
-            inpaint_config,
-        )
-        output_images, _flow_masks, _masks_dilated = handle_output(
-            composed_frames, flow_masks_tensor, masks_dilated_tensor
-        )
-        del frames_tensor, flow_masks_tensor, masks_dilated_tensor, updated_frames, updated_masks, pred_flows_bi
-        if torch.cuda.is_available() and throughput_mode != "enable":
-            torch.cuda.empty_cache()
+        if fp16 == "enable" and _masked_output_looks_invalid(output_images, frames, mask_full):
+            print("[VideoInpaint] FP16 chunk output looked invalid inside mask; retrying in FP32.")
+            retry_config = ProPainterConfig(
+                ref_stride=ref_stride,
+                neighbor_length=neighbor_length,
+                subvideo_length=subvideo_length,
+                raft_iter=raft_iter,
+                fp16="disable",
+                video_length=video_length,
+                device=device,
+                process_size=image_config.process_size,
+                skip_empty_cache=throughput_mode == "enable",
+            )
+            output_images = self._run_propainter_chunk(
+                frames_np=frames_np,
+                frames=frames,
+                mask_full=mask_full,
+                image_config=image_config,
+                inpaint_config=retry_config,
+                throughput_mode=throughput_mode,
+            )
 
         if pre_crop:
             crop_width = max(1, bbox[2] - bbox[0])
@@ -915,7 +1053,15 @@ class VideoInpaintWatermark:
             if save_count < rgba.size(dim=0):
                 rgba = rgba[:save_count]
                 out_mask = out_mask[:save_count]
-            _save_rgba_sequence(rgba[..., :3], out_mask, output_dir, output_name, "", start_index)
+            _save_rgba_sequence(
+                rgba[..., :3],
+                out_mask,
+                output_dir,
+                output_name,
+                "",
+                start_index,
+                feather_radius=feather_radius,
+            )
         return start_index + save_count
 
     @classmethod
@@ -933,11 +1079,12 @@ class VideoInpaintWatermark:
                 "neighbor_length": ("INT", {"default": 10, "min": 2, "max": 300, "tooltip": "Соседние кадры (2-300, типично 5–15)."}),
                 "subvideo_length": ("INT", {"default": 80, "min": 1, "max": 300, "tooltip": "Длина подвидео (1-300, типично 40–120)."}),
                 "raft_iter": ("INT", {"default": 20, "min": 1, "max": 100, "tooltip": "Итерации RAFT (1-100, типично 10–30)."}),
-                "fp16": (["enable", "disable"], {"default": "enable", "tooltip": "FP16 режим (enable быстрее/меньше VRAM)."}),
+                "fp16": (["enable", "disable"], {"default": "disable", "tooltip": "FP16 режим. `disable` безопаснее; `enable` быстрее/меньше VRAM, но на части GPU может давать черный masked-area результат."}),
                 "throughput_mode": (["enable", "disable"], {"default": "disable", "tooltip": "Пропускать очистку кэша GPU (enable быстрее, но больше памяти)."}),
                 "cudnn_benchmark": (["default", "enable", "disable"], {"default": "default", "tooltip": "cuDNN benchmark (enable быстрее при фикс. размере)."}),
                 "tf32": (["default", "enable", "disable"], {"default": "default", "tooltip": "TF32 матмулы (enable быстрее, чуть менее точно)."}),
                 "crop_padding": ("INT", {"default": 16, "min": 0, "max": 512, "tooltip": "Паддинг вокруг маски (0-512, типично 8–32)."}),
+                "feather_radius": ("INT", {"default": 12, "min": 0, "max": 256, "tooltip": "Мягкость края заплаты в пикселях. Убирает заметный контур patch при композите."}),
                 "color_match_mode": (["none", "mean_std", "linear", "hist", "lab_l", "lab_l_cdf", "lab_full", "lab_cdf"], {"default": "none", "tooltip": "Подгонка цвета по чистой зоне (mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)."}),
                 "cache_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для кэша обрезанного входа (RGB+mask). Обязательна."}),
                 "output_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для сохранения результата (PNG с альфой). Обязательна."}),
@@ -969,6 +1116,7 @@ class VideoInpaintWatermark:
         cudnn_benchmark: str,
         tf32: str,
         crop_padding: int,
+        feather_radius: int,
         color_match_mode: str,
         cache_dir: str,
         output_dir: str,
@@ -993,6 +1141,7 @@ class VideoInpaintWatermark:
             cudnn_benchmark=cudnn_benchmark,
             tf32=tf32,
             crop_padding=crop_padding,
+            feather_radius=feather_radius,
             color_match_mode=color_match_mode,
             cache_dir=cache_dir,
             output_dir=output_dir,
