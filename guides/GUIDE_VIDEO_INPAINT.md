@@ -9,7 +9,7 @@
 
 ## Минимальный сценарий (3 шага)
 1. Подайте `video` и `mask` (белое = удалять).
-2. Стартуйте с `fp16=disable`, `mask_dilates=8`, `flow_mask_dilates=8`.
+2. Стартуйте с `fp16=disable`, `crop_padding=64`, `mask_dilates=8`, `flow_mask_dilates=8`.
 3. Проверьте `preview_image` и `transform_json.status`.
 
 ## Параметры
@@ -24,7 +24,7 @@
 | `cudnn_benchmark` | Автотюнинг cuDNN | Вкл для стабильного разрешения и скорости |
 | `tf32` | Разрешить TF32 на Ampere+ | Вкл для скорости при допустимой погрешности |
 | `throughput_mode` | Режим пропускной способности | Вкл для скорости, но выше риск OOM |
-| `crop_padding` | Отступ вокруг bbox маски | Для водяных знаков чаще 48-96; если masked-area чернеет, увеличивайте первым делом |
+| `crop_padding` | Отступ вокруг bbox маски | Дефолт `64` — безопасный старт; для водяных знаков чаще 48-96 |
 | `feather_radius` | Мягкость края заплаты при композите | 8-20 обычно; помогает убрать видимый круг/контур patch |
 | `color_match_mode` | Подгон цвета патча | Начните с `lab_l_cdf` / `lab_full` при цветовом дрейфе |
 | `output_dir` | Папка сохранения результатов | Укажите отдельную папку проекта |
@@ -34,7 +34,7 @@
 | `fullframe_prefix` | Префикс для полноразмерных кадров | Например `full_` |
 
 ## Decision helper
-- Нужен безопасный старт -> `propainter`, `fp16=disable`, `throughput_mode=disable`.
+- Нужен безопасный старт -> `propainter`, `fp16=disable`, `crop_padding=64`, `throughput_mode=disable`.
 - Динамичный фон/сложная текстура -> увеличьте `neighbor_length` и `raft_iter`.
 - Видна граница заплаты -> увеличьте `feather_radius`.
 - Не хватает VRAM -> уменьшайте `subvideo_length`, отключите `write_fullframes`.

@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.33.2
+Version: 0.33.3
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -186,7 +186,7 @@ Guide: [GUIDE_SEAM_MATCH.md](guides/GUIDE_SEAM_MATCH.md)
 - Type name: VideoInpaintWatermark  
 - Category: video/inpaint
 
-Ключевые входы: mask, mask_dilates/flow_mask_dilates, ref_stride, neighbor_length, subvideo_length, raft_iter, fp16, throughput_mode, crop_padding, feather_radius, color_match_mode, cache_dir, output_dir, output_name, video, preview_frame, write_fullframes. `fp16=disable` — безопасный старт; `crop_padding=64` часто нужен для устойчивого watermark-removal; `feather_radius` смягчает край заплаты. Нода теперь умеет fallback-ить на результат `image_propagation`, если финальный `feature_propagation` деградирует в почти черный patch, и при `fp16=enable` автоматически повторяет chunk в FP32, если masked-area вырождается в почти черный результат.  
+Ключевые входы: mask, mask_dilates/flow_mask_dilates, ref_stride, neighbor_length, subvideo_length, raft_iter, fp16, throughput_mode, crop_padding, feather_radius, color_match_mode, cache_dir, output_dir, output_name, video, preview_frame, write_fullframes. `fp16=disable` и `crop_padding=64` — безопасный старт; `feather_radius` смягчает край заплаты. Нода теперь умеет fallback-ить на результат `image_propagation`, если финальный `feature_propagation` деградирует в почти черный patch, и при `fp16=enable` автоматически повторяет chunk в FP32, если masked-area вырождается в почти черный результат.  
 Выходы: `preview_image`, `transform_json`
 Guide: [GUIDE_VIDEO_INPAINT.md](guides/GUIDE_VIDEO_INPAINT.md)
 

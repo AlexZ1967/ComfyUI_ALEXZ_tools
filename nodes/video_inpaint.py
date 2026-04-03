@@ -1083,7 +1083,7 @@ class VideoInpaintWatermark:
                 "throughput_mode": (["enable", "disable"], {"default": "disable", "tooltip": "Пропускать очистку кэша GPU (enable быстрее, но больше памяти)."}),
                 "cudnn_benchmark": (["default", "enable", "disable"], {"default": "default", "tooltip": "cuDNN benchmark (enable быстрее при фикс. размере)."}),
                 "tf32": (["default", "enable", "disable"], {"default": "default", "tooltip": "TF32 матмулы (enable быстрее, чуть менее точно)."}),
-                "crop_padding": ("INT", {"default": 16, "min": 0, "max": 512, "tooltip": "Паддинг вокруг маски (0-512, типично 8–32)."}),
+                "crop_padding": ("INT", {"default": 64, "min": 0, "max": 512, "tooltip": "Паддинг вокруг маски (0-512). Для watermark-removal безопасный старт часто 64+, иначе masked-area может деградировать в черный patch."}),
                 "feather_radius": ("INT", {"default": 12, "min": 0, "max": 256, "tooltip": "Мягкость края заплаты в пикселях. Убирает заметный контур patch при композите."}),
                 "color_match_mode": (["none", "mean_std", "linear", "hist", "lab_l", "lab_l_cdf", "lab_full", "lab_cdf"], {"default": "none", "tooltip": "Подгонка цвета по чистой зоне (mean_std/linear/hist/lab_l/lab_l_cdf/lab_full/lab_cdf)."}),
                 "cache_dir": ("STRING", {"default": "", "multiline": False, "tooltip": "Папка для кэша обрезанного входа (RGB+mask). Обязательна."}),

@@ -1,5 +1,20 @@
 # Changelog — ALEXZ_tools
 
+## 0.33.3 — 2026-04-03
+- Updated the safe default for `Remove Static Watermark from Video`:
+  - `crop_padding` default changed from `16` to `64`;
+  - tooltip and docs now describe `64` as the practical safe-start value for
+    watermark removal, based on the observed black masked-area failure with
+    smaller crop context.
+- Updated:
+  - `nodes/video_inpaint.py`
+  - `README.md`
+  - `guides/GUIDE_VIDEO_INPAINT.md`
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "video_inpaint or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.33.3` in `pyproject.toml` and `README.md`.
+
 ## 0.33.2 — 2026-04-03
 - Hardened `Remove Static Watermark from Video` against black masked-area failures:
   - changed the safe default to `fp16=disable`;
