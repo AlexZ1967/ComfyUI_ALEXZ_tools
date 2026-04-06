@@ -1408,6 +1408,35 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(payload["delivery"]["mode"], "single_request")
         self.assertTrue(str(payload["service_url"]).startswith("https://collections.example.test/iiif/"))
 
+    def test_iiif_gallica_site_dropdown_and_direct_resolve(self):
+        """Verify Gallica appears in IIIF site list and resolves from ARK URL without HTML fetch."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        input_types = iiif_mod.ImageDownloadIIIFImage.INPUT_TYPES()
+        site_choices = input_types["required"]["site"][0]
+        self.assertIn("Gallica BnF Object Page", site_choices)
+
+        service_url = iiif_mod._resolve_iiif_service_url(
+            "Gallica BnF Object Page",
+            "https://gallica.bnf.fr/ark:/12148/btv1b10579141s/f1.item.r=L'exposition%20universelle%20de%20Paris.zoom#",
+            timeout=1.0,
+            session=None,
+        )
+        self.assertEqual(
+            service_url,
+            "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10579141s/f1",
+        )
+
+        service_url = iiif_mod._resolve_iiif_service_url(
+            "Gallica BnF Object Page",
+            "https://gallica.bnf.fr/ark:/12148/btv1b7002302c.r=Anna%20Pavlova?rk=21459;2",
+            timeout=1.0,
+            session=None,
+        )
+        self.assertEqual(
+            service_url,
+            "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1",
+        )
+
     def test_iiif_download_tile_assembly_contract(self):
         """Verify IIIF node can return full-res tile-assembled image contract."""
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
@@ -1572,6 +1601,376 @@ class SmokeTests(unittest.TestCase):
             iiif_mod._fetch_iiif_info = old_info
             iiif_mod._download_iiif_image_bytes = old_download
             iiif_mod._derive_output_stem_from_source_title_or_url = old_title_stem
+
+    def test_iiif_download_title_or_slug_gallica_uses_clean_title_plus_ark_id(self):
+        """Verify Gallica title-based filenames keep readable title and append ARK stable id."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+        old_http_get = iiif_mod._http_get
+
+        class _DummyResponse:
+            def __init__(self, text="", content=b"", status_code=200, headers=None):
+                self.text = text
+                self.content = content
+                self.status_code = status_code
+                self.headers = headers or {}
+
+            def json(self):
+                return {}
+
+        try:
+            iiif_mod._resolve_iiif_service_url = (
+                lambda *args, **kwargs: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1"
+            )
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 32,
+                "height": 24,
+                "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0, session=None):
+                _ = (service_url, size_spec, output_format, timeout, session)
+                image = Image.new("RGB", (32, 24), color=(64, 96, 160))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG")
+                return (
+                    "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1/full/max/0/default.jpg",
+                    buffer.getvalue(),
+                    "jpg",
+                )
+
+            def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
+                _ = (url, timeout, session, retries, retry_backoff)
+                html = """
+                <html><head>
+                <title>Gallica</title>
+                </head><body>
+                <span class="title">Anna Pavlova / Photo[graphie de] Bert</span>
+                </body></html>
+                """
+                return _DummyResponse(text=html, status_code=200, headers={"content-type": "text/html"})
+
+            iiif_mod._download_iiif_image_bytes = _fake_download
+            iiif_mod._http_get = _fake_http_get
+
+            source_url = "https://gallica.bnf.fr/ark:/12148/btv1b7002302c.r=Anna%20Pavlova?rk=21459;2"
+            with tempfile.TemporaryDirectory() as tmpdir:
+                _out, info_json = node.download(
+                    "Gallica BnF Object Page",
+                    source_url,
+                    output_dir=tmpdir,
+                    filename_mode="title_or_slug",
+                )
+                payload = json.loads(info_json)
+                expected_path = os.path.join(
+                    tmpdir,
+                    "Anna_Pavlova_Photographie_de_Bert_btv1b7002302c.jpg",
+                )
+                self.assertEqual(payload["saved_path"], expected_path)
+                self.assertTrue(os.path.exists(expected_path))
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
+            iiif_mod._http_get = old_http_get
+
+    def test_iiif_download_title_or_slug_gallica_falls_back_to_query_title(self):
+        """Verify Gallica title mode can fall back to `.r=` query text when HTML title is unavailable."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+        old_http_get = iiif_mod._http_get
+
+        class _DummyResponse:
+            def __init__(self, text="", content=b"", status_code=200, headers=None):
+                self.text = text
+                self.content = content
+                self.status_code = status_code
+                self.headers = headers or {}
+
+            def json(self):
+                return {}
+
+        try:
+            iiif_mod._resolve_iiif_service_url = (
+                lambda *args, **kwargs: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1"
+            )
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 32,
+                "height": 24,
+                "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0, session=None):
+                _ = (service_url, size_spec, output_format, timeout, session)
+                image = Image.new("RGB", (32, 24), color=(80, 120, 160))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG")
+                return (
+                    "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1/full/max/0/default.jpg",
+                    buffer.getvalue(),
+                    "jpg",
+                )
+
+            def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
+                _ = (url, timeout, session, retries, retry_backoff)
+                html = "<html><head><title>Gallica</title></head></html>"
+                return _DummyResponse(text=html, status_code=200, headers={"content-type": "text/html"})
+
+            iiif_mod._download_iiif_image_bytes = _fake_download
+            iiif_mod._http_get = _fake_http_get
+
+            source_url = "https://gallica.bnf.fr/ark:/12148/btv1b7002302c.r=Anna%20Pavlova?rk=21459;2"
+            with tempfile.TemporaryDirectory() as tmpdir:
+                _out, info_json = node.download(
+                    "Gallica BnF Object Page",
+                    source_url,
+                    output_dir=tmpdir,
+                    filename_mode="title_or_slug",
+                )
+                payload = json.loads(info_json)
+                expected_path = os.path.join(
+                    tmpdir,
+                    "Anna_Pavlova_btv1b7002302c.jpg",
+                )
+                self.assertEqual(payload["saved_path"], expected_path)
+                self.assertTrue(os.path.exists(expected_path))
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
+            iiif_mod._http_get = old_http_get
+
+    def test_iiif_download_title_or_slug_gallica_prefers_span_title_content(self):
+        """Verify Gallica title mode prefers `.title` content over shorter `.r=` query fallback."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+        old_http_get = iiif_mod._http_get
+
+        class _DummyResponse:
+            def __init__(self, text="", content=b"", status_code=200, headers=None):
+                self.text = text
+                self.content = content
+                self.status_code = status_code
+                self.headers = headers or {}
+
+            def json(self):
+                return {}
+
+        try:
+            iiif_mod._resolve_iiif_service_url = (
+                lambda *args, **kwargs: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b70023380/f1"
+            )
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b70023380/f1",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 32,
+                "height": 24,
+                "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0, session=None):
+                _ = (service_url, size_spec, output_format, timeout, session)
+                image = Image.new("RGB", (32, 24), color=(100, 120, 140))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG")
+                return (
+                    "https://gallica.bnf.fr/iiif/ark:/12148/btv1b70023380/f1/full/max/0/default.jpg",
+                    buffer.getvalue(),
+                    "jpg",
+                )
+
+            def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
+                _ = (url, timeout, session, retries, retry_backoff)
+                html = """
+                <html><head><title>Gallica</title></head><body>
+                <span class="title">[Anna Pavlova (assise dans un fauteuil avec son chien à St. Petersbourg)] (Roger Viollet)</span>
+                </body></html>
+                """
+                return _DummyResponse(text=html, status_code=200, headers={"content-type": "text/html"})
+
+            iiif_mod._download_iiif_image_bytes = _fake_download
+            iiif_mod._http_get = _fake_http_get
+
+            source_url = "https://gallica.bnf.fr/ark:/12148/btv1b70023380.r=Anna%20Pavlova?rk=85837;2"
+            with tempfile.TemporaryDirectory() as tmpdir:
+                _out, info_json = node.download(
+                    "Gallica BnF Object Page",
+                    source_url,
+                    output_dir=tmpdir,
+                    filename_mode="title_or_slug",
+                )
+                payload = json.loads(info_json)
+                expected_path = os.path.join(
+                    tmpdir,
+                    "Anna_Pavlova_assise_dans_un_fauteuil_avec_son_chien_à_St._Petersbourg_Roger_Viollet_btv1b70023380.jpg",
+                )
+                self.assertEqual(payload["saved_path"], expected_path)
+                self.assertTrue(os.path.exists(expected_path))
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
+            iiif_mod._http_get = old_http_get
+
+    def test_iiif_download_title_or_slug_gallica_prefers_manifest_title(self):
+        """Verify Gallica title mode prefers IIIF manifest metadata over URL query fallback."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+        old_http_get = iiif_mod._http_get
+
+        class _DummyResponse:
+            def __init__(self, text="", content=b"", status_code=200, headers=None, json_data=None):
+                self.text = text
+                self.content = content
+                self.status_code = status_code
+                self.headers = headers or {}
+                self._json_data = json_data
+
+            def json(self):
+                if self._json_data is None:
+                    raise ValueError("No JSON payload")
+                return self._json_data
+
+        try:
+            iiif_mod._resolve_iiif_service_url = (
+                lambda *args, **kwargs: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b70023380/f1"
+            )
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b70023380/f1",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 32,
+                "height": 24,
+                "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0, session=None):
+                _ = (service_url, size_spec, output_format, timeout, session)
+                image = Image.new("RGB", (32, 24), color=(110, 130, 150))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG")
+                return (
+                    "https://gallica.bnf.fr/iiif/ark:/12148/btv1b70023380/f1/full/max/0/default.jpg",
+                    buffer.getvalue(),
+                    "jpg",
+                )
+
+            def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
+                _ = (timeout, session, retries, retry_backoff)
+                if url.endswith("/manifest.json"):
+                    return _DummyResponse(
+                        text="{}",
+                        status_code=200,
+                        headers={"content-type": "application/json"},
+                        json_data={
+                            "label": {"none": ["[Anna Pavlova (assise dans un fauteuil avec son chien à St. Petersbourg)] (Roger Viollet)"]},
+                            "metadata": [],
+                        },
+                    )
+                html = "<html><head><title>Gallica</title></head><body></body></html>"
+                return _DummyResponse(text=html, status_code=200, headers={"content-type": "text/html"})
+
+            iiif_mod._download_iiif_image_bytes = _fake_download
+            iiif_mod._http_get = _fake_http_get
+
+            source_url = "https://gallica.bnf.fr/ark:/12148/btv1b70023380.r=Anna%20Pavlova?rk=85837;2"
+            with tempfile.TemporaryDirectory() as tmpdir:
+                _out, info_json = node.download(
+                    "Gallica BnF Object Page",
+                    source_url,
+                    output_dir=tmpdir,
+                    filename_mode="title_or_slug",
+                )
+                payload = json.loads(info_json)
+                expected_path = os.path.join(
+                    tmpdir,
+                    "Anna_Pavlova_assise_dans_un_fauteuil_avec_son_chien_à_St._Petersbourg_Roger_Viollet_btv1b70023380.jpg",
+                )
+                self.assertEqual(payload["saved_path"], expected_path)
+                self.assertTrue(os.path.exists(expected_path))
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
+            iiif_mod._http_get = old_http_get
+
+    def test_iiif_download_source_url_slug_gallica_uses_clean_ark_id(self):
+        """Verify Gallica slug mode avoids technical `.r=` tails and keeps stable ARK id."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+
+        try:
+            iiif_mod._resolve_iiif_service_url = (
+                lambda *args, **kwargs: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1"
+            )
+            iiif_mod._fetch_iiif_info = lambda *args, **kwargs: {
+                "id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1",
+                "type": "ImageService3",
+                "profile": "level2",
+                "width": 32,
+                "height": 24,
+                "tiles": [{"width": 512, "height": 512, "scaleFactors": [1, 2, 4]}],
+                "sizes": [{"width": 800, "height": 600}],
+            }
+
+            def _fake_download(service_url, size_spec, output_format, timeout=30.0, session=None):
+                _ = (service_url, size_spec, output_format, timeout, session)
+                image = Image.new("RGB", (32, 24), color=(96, 96, 160))
+                buffer = BytesIO()
+                image.save(buffer, format="JPEG")
+                return (
+                    "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1/full/max/0/default.jpg",
+                    buffer.getvalue(),
+                    "jpg",
+                )
+
+            iiif_mod._download_iiif_image_bytes = _fake_download
+
+            source_url = "https://gallica.bnf.fr/ark:/12148/btv1b7002302c.r=Anna%20Pavlova?rk=21459;2"
+            with tempfile.TemporaryDirectory() as tmpdir:
+                _out, info_json = node.download(
+                    "Gallica BnF Object Page",
+                    source_url,
+                    output_dir=tmpdir,
+                    filename_mode="source_url_slug",
+                )
+                payload = json.loads(info_json)
+                expected_path = os.path.join(
+                    tmpdir,
+                    "btv1b7002302c.jpg",
+                )
+                self.assertEqual(payload["saved_path"], expected_path)
+                self.assertTrue(os.path.exists(expected_path))
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
 
     def test_iiif_download_save_adds_numeric_suffix_when_name_exists(self):
         """Verify IIIF saver avoids overwrite by appending numeric suffix."""

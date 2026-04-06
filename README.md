@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.33.3
+Version: 0.33.4
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -281,13 +281,14 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 ---
 
 ## Download IIIF Image
-Скачивает изображение из IIIF Image API сервиса, включая London Museum object pages.
+Скачивает изображение из IIIF Image API сервиса, включая London Museum и Gallica BnF object pages.
 
 - Display name: Download IIIF Image  
 - Type name: ImageDownloadIIIFImage  
 - Category: image/io  
 Входы: `site`, `source_url`, `size_mode`, `requested_width`, `output_dir`, `cache_dir`, `filename_mode`, `delivery_mode`, `output_format`.  
 `London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.  
+`Gallica BnF Object Page`: принимает Gallica ARK/object URL и строит IIIF service URL напрямую.  
 `Generic IIIF Service URL`: принимает direct service URL, `info.json` URL или HTML-страницу с встроенным IIIF viewer.  
 Если `output_dir` задан, нода сохраняет итоговую картинку на диск, а имя файла строит как `slug_or_title + stable_id`, если стабильный ID удается извлечь из URL/IIIF service. Если имя уже занято, автоматически добавляется суффикс `_2`, `_3`, ... вместо перезаписи.  
 `cache_dir`: recovery-кеш для `tile_assemble_full`; уже скачанные тайлы переиспользуются при повторных запусках после сбоя. После полностью успешной сборки кеш этой конкретной картинки автоматически удаляется. Пусто = встроенная папка `cache/iiif_tiles`.  

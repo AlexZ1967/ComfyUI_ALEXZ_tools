@@ -5,6 +5,7 @@
 
 Текущий фокус:
 - `London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.
+- `Gallica BnF Object Page`: принимает Gallica ARK/object URL и строит IIIF service URL напрямую.
 - `Generic IIIF Service URL`: принимает прямой IIIF service URL, `info.json` URL или HTML-страницу с встраиваемым IIIF viewer.
 
 ## Когда использовать
@@ -21,10 +22,13 @@
 ## Параметры
 - `site` (`LIST`):
   - `London Museum Object Page`
+  - `Gallica BnF Object Page`
   - `Generic IIIF Service URL`
 - `source_url` (`STRING`):
   - для London Museum: URL object page, например  
     `https://www.londonmuseum.org.uk/collections/v/object-443296/early-portrait-of-anna-pavlova/`
+  - для Gallica: URL object page/ARK, например  
+    `https://gallica.bnf.fr/ark:/12148/btv1b10579141s/f1.item.r=L'exposition%20universelle%20de%20Paris.zoom#`
   - для Generic:
     - IIIF service URL
     - или `info.json` URL
@@ -53,6 +57,9 @@
 - Нужна страница London Museum объекта:
   - `site = London Museum Object Page`
   - `source_url = URL страницы объекта`
+- Нужна страница Gallica BnF:
+  - `site = Gallica BnF Object Page`
+  - `source_url = URL страницы/ARK`
 - Уже есть IIIF `info.json` или service URL:
   - `site = Generic IIIF Service URL`
   - `source_url = direct IIIF URL`

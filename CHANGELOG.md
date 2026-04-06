@@ -1,5 +1,30 @@
 # Changelog — ALEXZ_tools
 
+## 0.33.4 — 2026-04-07
+- Improved `Download IIIF Image` support for `Gallica BnF Object Page`:
+  - fixed Gallica ARK parsing so `.r=...`, `.zoom`, query strings, and similar
+    suffixes no longer pollute the IIIF service URL;
+  - cleaned `source_url_slug` naming for Gallica so fallback filenames use the
+    stable ARK id instead of technical URL tails;
+  - improved `title_or_slug` naming for Gallica:
+    - first prefer IIIF `manifest.json` metadata;
+    - then prefer Gallica page title blocks such as `.title`;
+    - ignore generic page titles like `Gallica`;
+    - only then fall back to the human-readable `.r=...` query fragment.
+- Filename sanitization now strips both square and round brackets from extracted
+  page titles before saving the final image.
+- Updated:
+  - `nodes/image_download_iiif.py`
+  - `tests/test_smoke_nodes.py`
+  - `README.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+  - `nodes/node_registry.py`
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.33.4` in `pyproject.toml` and `README.md`.
+
 ## 0.33.3 — 2026-04-03
 - Updated the safe default for `Remove Static Watermark from Video`:
   - `crop_padding` default changed from `16` to `64`;

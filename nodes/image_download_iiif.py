@@ -26,7 +26,7 @@ import traceback
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import numpy as np
 import requests
@@ -60,6 +60,7 @@ _DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
+_GALLICA_REFERRER = "https://gallica.bnf.fr/"
 _IIIF_TILE_CACHE_ROOT = Path(__file__).resolve().parent.parent / "cache" / "iiif_tiles"
 _RETRYABLE_HTTP_EXCEPTIONS = (
     requests.exceptions.ReadTimeout,
@@ -74,10 +75,20 @@ def _log(message: str) -> None:
     print(f"[IIIF] {message}")
 
 
-def _new_http_session() -> requests.Session:
-    """Create reusable HTTP session for IIIF requests."""
+def _new_http_session(site: str = "", source_url: str = "") -> requests.Session:
+    """Create reusable HTTP session for IIIF requests with optional site profile."""
     session = requests.Session()
     session.headers.update({"User-Agent": _DEFAULT_UA})
+    site_name = str(site or "").strip()
+    source_text = str(source_url or "").strip().lower()
+    if site_name == "Gallica BnF Object Page" or "gallica.bnf.fr" in source_text:
+        session.headers.update(
+            {
+                "Referer": _GALLICA_REFERRER,
+                "Accept-Language": "fr,fr-FR;q=0.9,en;q=0.8",
+                "Accept": "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            }
+        )
     return session
 
 
@@ -157,6 +168,28 @@ def _extract_first_generic_iiif_service_url(html: str) -> str:
     return ""
 
 
+def _extract_gallica_service_url_from_source_url(source_url: str) -> str:
+    """Build direct Gallica IIIF service URL from an ARK/object page URL."""
+    text = str(source_url or "").strip()
+    if not text:
+        return ""
+    split = urlsplit(text)
+    path = str(split.path or "").strip()
+    if not path:
+        return ""
+    ark_match = re.search(r"/ark:/12148/([A-Za-z0-9]+)", path, flags=re.IGNORECASE)
+    if not ark_match:
+        return ""
+    ark_id = str(ark_match.group(1) or "").strip()
+    if not ark_id:
+        return ""
+    ark_path = f"ark:/12148/{ark_id}"
+    tail = path[ark_match.end() :]
+    page_match = re.search(r"/(f\d+)(?:[./][^/?#]*)?", tail, flags=re.IGNORECASE)
+    page = str(page_match.group(1) or "").strip() if page_match else "f1"
+    return f"https://gallica.bnf.fr/iiif/{ark_path}/{page}"
+
+
 def _resolve_iiif_service_url(
     site: str,
     source_url: str,
@@ -172,6 +205,11 @@ def _resolve_iiif_service_url(
 
     if "/iiif/" in source_text:
         service_url = _normalize_iiif_service_url(source_text)
+        if service_url:
+            return service_url
+
+    if site_name == "Gallica BnF Object Page" or "gallica.bnf.fr/ark:/12148/" in source_text.lower():
+        service_url = _extract_gallica_service_url_from_source_url(source_text)
         if service_url:
             return service_url
 
@@ -482,9 +520,112 @@ def _image_to_tensor(image: Image.Image) -> torch.Tensor:
 def _sanitize_filename_component(text: str) -> str:
     """Normalize user-facing filename fragment into a safe portable stem."""
     cleaned = re.sub(r"[\\/:*?\"<>|]+", "_", str(text or "").strip())
+    cleaned = cleaned.replace("[", "").replace("]", "")
+    cleaned = cleaned.replace("(", "").replace(")", "")
     cleaned = re.sub(r"\s+", "_", cleaned)
     cleaned = re.sub(r"_+", "_", cleaned).strip("._")
     return cleaned or "iiif_image"
+
+
+def _normalize_extracted_title(text: str, source_url: str = "") -> str:
+    """Clean human-readable titles before filename sanitization."""
+    value = html.unescape(str(text or "")).strip()
+    if not value:
+        return ""
+    if "gallica.bnf.fr" in str(source_url or "").lower():
+        value = re.sub(r"\s+[|:-]\s*Gallica.*$", "", value, flags=re.IGNORECASE)
+    value = value.replace("/", " ")
+    value = value.replace("\\", " ")
+    value = value.replace("[", "").replace("]", "")
+    value = value.replace("(", "").replace(")", "")
+    value = re.sub(r"\s+", " ", value).strip()
+    return value
+
+
+def _is_generic_source_title(title: str, source_url: str = "") -> bool:
+    """Return True when extracted page title is only a generic site label."""
+    value = str(title or "").strip().lower()
+    if not value:
+        return True
+    if "gallica.bnf.fr" in str(source_url or "").lower() and value in {"gallica", "bnf gallica"}:
+        return True
+    return False
+
+
+def _extract_gallica_query_title(source_url: str) -> str:
+    """Extract human-readable fallback title from Gallica `.r=` segment."""
+    text = str(source_url or "").strip()
+    if "gallica.bnf.fr" not in text.lower():
+        return ""
+    path_text = unquote(str(urlsplit(text).path or ""))
+    match = re.search(r"\.r=([^/?#]+)", path_text, flags=re.IGNORECASE)
+    if not match:
+        return ""
+    value = str(match.group(1) or "").strip()
+    return _normalize_extracted_title(value, source_url)
+
+
+def _extract_iiif_label_text(value: Any) -> str:
+    """Extract human-readable label text from IIIF v2/v3 manifest fields."""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("none", "fr", "en"):
+            field = value.get(key)
+            if isinstance(field, list):
+                for item in field:
+                    text = _extract_iiif_label_text(item)
+                    if text:
+                        return text
+            elif isinstance(field, str) and field.strip():
+                return field.strip()
+        for key in ("@value", "value"):
+            field = value.get(key)
+            if isinstance(field, str) and field.strip():
+                return field.strip()
+    if isinstance(value, list):
+        for item in value:
+            text = _extract_iiif_label_text(item)
+            if text:
+                return text
+    return ""
+
+
+def _fetch_gallica_manifest_title(
+    source_url: str,
+    *,
+    timeout: float,
+    session: requests.Session | None = None,
+) -> str:
+    """Fetch Gallica title from IIIF manifest.json using stable ARK id."""
+    stable_id = _extract_iiif_stable_id(source_url, "")
+    if not stable_id or not stable_id.lower().startswith("btv"):
+        return ""
+    manifest_url = f"https://gallica.bnf.fr/iiif/ark:/12148/{stable_id}/manifest.json"
+    response = _http_get(manifest_url, timeout=timeout, session=session)
+    if int(response.status_code) != 200:
+        return ""
+    try:
+        data = response.json()
+    except Exception:
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    candidates = [data.get("label")]
+    metadata = data.get("metadata")
+    if isinstance(metadata, list):
+        for item in metadata:
+            if not isinstance(item, dict):
+                continue
+            label_text = _extract_iiif_label_text(item.get("label"))
+            if label_text.lower() in {"title", "titre"}:
+                candidates.insert(0, item.get("value"))
+    for candidate in candidates:
+        text = _extract_iiif_label_text(candidate)
+        text = _normalize_extracted_title(text, source_url)
+        if text and not _is_generic_source_title(text, source_url):
+            return text
+    return ""
 
 
 def _extract_html_title(html_text: str) -> str:
@@ -508,10 +649,32 @@ def _extract_html_title(html_text: str) -> str:
     return ""
 
 
+def _extract_gallica_html_title(html_text: str) -> str:
+    """Extract Gallica object title from page content before falling back to document title."""
+    text = str(html_text or "")
+    patterns = [
+        r'<span[^>]+class=["\'][^"\']*\btitle\b[^"\']*["\'][^>]*>(.*?)</span>',
+        r'<div[^>]+class=["\'][^"\']*\btitle\b[^"\']*["\'][^>]*>(.*?)</div>',
+        r'<h1[^>]*>(.*?)</h1>',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        value = re.sub(r"<[^>]+>", " ", str(match.group(1) or ""))
+        value = html.unescape(value)
+        value = re.sub(r"\s+", " ", value).strip()
+        if value:
+            return value
+    return _extract_html_title(text)
+
+
 def _extract_iiif_stable_id(source_url: str, service_url: str = "") -> str:
     """Extract stable object/service identifier for filename disambiguation."""
     combined = " | ".join([str(source_url or "").strip(), str(service_url or "").strip()])
     patterns = (
+        r"ark:/12148/([A-Za-z0-9]+)\b",
+        r"\b(btv[0-9a-z]+)\b",
         r"\b(object-\d+)\b",
         r"\b(nla\.obj-\d+)\b",
         r"\b(mw\d+)\b",
@@ -546,16 +709,24 @@ def _derive_output_stem_from_source_url(source_url: str, service_url: str = "") 
     """Derive filename stem from URL slug plus stable object/service id when available."""
     path = str(urlsplit(str(source_url or "").strip()).path or "").strip("/")
     segments = [segment for segment in path.split("/") if segment]
+    stable_id = _extract_iiif_stable_id(source_url, service_url)
+    if "gallica.bnf.fr" in str(source_url or "").lower():
+        page_match = re.search(r"/(f\d+)(?:[./][^/?#]*)?", f"/{path}", flags=re.IGNORECASE)
+        page = str(page_match.group(1) or "").strip() if page_match else ""
+        if stable_id:
+            gallica_base = stable_id if not page or page.lower() == "f1" else f"{stable_id}_{page}"
+            return _append_stable_id_to_stem(gallica_base, stable_id)
     if not segments:
-        return _append_stable_id_to_stem("iiif_image", _extract_iiif_stable_id(source_url, service_url))
+        return _append_stable_id_to_stem("iiif_image", stable_id)
     candidate = segments[-1]
+    candidate = unquote(candidate)
     lowered = candidate.lower()
     if lowered in {"info.json"} and len(segments) >= 2:
         candidate = segments[-2]
     elif lowered.startswith("default.") and len(segments) >= 2:
         candidate = segments[-2]
     candidate = re.sub(r"\.[A-Za-z0-9]+$", "", candidate)
-    return _append_stable_id_to_stem(candidate, _extract_iiif_stable_id(source_url, service_url))
+    return _append_stable_id_to_stem(candidate, stable_id)
 
 
 def _derive_output_stem_from_source_title_or_url(
@@ -572,13 +743,27 @@ def _derive_output_stem_from_source_title_or_url(
     if not url:
         return fallback
     try:
+        if "gallica.bnf.fr" in url.lower():
+            manifest_title = _fetch_gallica_manifest_title(url, timeout=timeout, session=session)
+            if manifest_title:
+                return _append_stable_id_to_stem(manifest_title, stable_id)
         response = _http_get(url, timeout=timeout, session=session)
         if int(response.status_code) != 200:
-            return fallback
-        title = _extract_html_title(str(response.text or ""))
-        return _append_stable_id_to_stem(title, stable_id) if title else fallback
+            gallica_query_title = _extract_gallica_query_title(source_url)
+            return _append_stable_id_to_stem(gallica_query_title, stable_id) if gallica_query_title else fallback
+        raw_html = str(response.text or "")
+        if "gallica.bnf.fr" in url.lower():
+            raw_title = _extract_gallica_html_title(raw_html)
+        else:
+            raw_title = _extract_html_title(raw_html)
+        title = _normalize_extracted_title(raw_title, source_url)
+        if title and not _is_generic_source_title(title, source_url):
+            return _append_stable_id_to_stem(title, stable_id)
+        gallica_query_title = _extract_gallica_query_title(source_url)
+        return _append_stable_id_to_stem(gallica_query_title, stable_id) if gallica_query_title else fallback
     except Exception:
-        return fallback
+        gallica_query_title = _extract_gallica_query_title(source_url)
+        return _append_stable_id_to_stem(gallica_query_title, stable_id) if gallica_query_title else fallback
 
 
 def _save_pil_image(image: Image.Image, output_path: str, output_format: str) -> None:
@@ -626,10 +811,10 @@ class ImageDownloadIIIFImage:
         return {
             "required": {
                 "site": (
-                    ["London Museum Object Page", "Generic IIIF Service URL"],
+                    ["London Museum Object Page", "Gallica BnF Object Page", "Generic IIIF Service URL"],
                     {
                         "default": "London Museum Object Page",
-                        "tooltip": "Источник IIIF. London Museum умеет принимать object page URL. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
+                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
                     },
                 ),
                 "source_url": (
@@ -637,7 +822,7 @@ class ImageDownloadIIIFImage:
                     {
                         "default": "https://www.londonmuseum.org.uk/collections/v/object-443296/early-portrait-of-anna-pavlova/",
                         "multiline": False,
-                        "tooltip": "London Museum: URL object page. Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
+                        "tooltip": "London Museum / Gallica: URL object page. Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
                     },
                 ),
             },
@@ -719,7 +904,7 @@ class ImageDownloadIIIFImage:
         timeout = 30.0
         try:
             check_interrupt()
-            session = _new_http_session()
+            session = _new_http_session(site, source_url)
             service_url = _resolve_iiif_service_url(site, source_url, timeout=timeout, session=session)
             _log(f"Site: {site}")
             _log(f"Source: {source_url}")
