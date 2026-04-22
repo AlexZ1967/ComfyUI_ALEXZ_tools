@@ -20,8 +20,6 @@ import shutil
 
 import numpy as np
 import torch
-import folder_paths
-from comfy import model_management
 from PIL import Image
 from scipy import ndimage
 
@@ -52,6 +50,47 @@ STREAM_CHUNK_DEFAULT = 30
 STREAM_START_DEFAULT = 0
 STREAM_END_DEFAULT = 0
 STREAM_STRIDE_DEFAULT = 1
+
+
+class _LazyModelManagementProxy:
+    """Lazy proxy for Comfy model_management preserving module-level monkeypatching."""
+
+    def __init__(self) -> None:
+        object.__setattr__(self, "_overrides", {})
+
+    def _load(self):
+        from comfy import model_management as comfy_model_management
+
+        return comfy_model_management
+
+    def __getattribute__(self, name):
+        if name in {"_overrides", "_load", "__dict__", "__class__", "__getattr__", "__getattribute__", "__setattr__"}:
+            return object.__getattribute__(self, name)
+        overrides = object.__getattribute__(self, "_overrides")
+        if name in overrides:
+            return overrides[name]
+        try:
+            return object.__getattribute__(self, name)
+        except AttributeError:
+            return getattr(self._load(), name)
+
+    def get_torch_device(self):
+        """Resolve Comfy torch device only when runtime actually needs it."""
+        return self._load().get_torch_device()
+
+    def __setattr__(self, name, value) -> None:
+        overrides = object.__getattribute__(self, "_overrides")
+        overrides[name] = value
+
+
+model_management = _LazyModelManagementProxy()
+
+
+def _load_folder_paths():
+    """Import Comfy folder_paths lazily to keep module import headless-safe."""
+    import folder_paths as comfy_folder_paths
+
+    return comfy_folder_paths
 
 
 def _check_interrupt() -> None:
@@ -715,6 +754,7 @@ class VideoInpaintWatermark:
             raise ValueError("output_dir is required.")
         if not cache_dir:
             raise ValueError("cache_dir is required.")
+        folder_paths = _load_folder_paths()
         video_path = folder_paths.get_annotated_filepath(video)
         if not os.path.exists(video_path):
             raise ValueError(f"Video file not found: {video}")
@@ -1067,6 +1107,7 @@ class VideoInpaintWatermark:
     @classmethod
     def INPUT_TYPES(cls):
         """Return ComfyUI INPUT_TYPES schema with defaults and UI options."""
+        folder_paths = _load_folder_paths()
         input_dir = folder_paths.get_input_directory()
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         files = folder_paths.filter_files_content_types(files, ["video"])

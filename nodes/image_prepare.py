@@ -13,8 +13,6 @@ Purpose:
 import math
 
 
-import comfy.model_management
-import comfy.utils
 import torch
 
 
@@ -32,6 +30,14 @@ _ASPECT_RATIOS = {
 # Целевая площадь для масштабирования (при as_is)
 _TARGET_AREA = 1328 * 1328
 _LATENT_CHANNELS = 4  # Стандартный VAE использует 4 канала
+
+
+def _load_comfy_runtime():
+    """Import Comfy runtime helpers lazily to keep module import test-safe."""
+    import comfy.model_management as comfy_model_management
+    import comfy.utils as comfy_utils
+
+    return comfy_model_management, comfy_utils
 
 
 class ImagePrepareForQwenEditOutpaint:
@@ -56,6 +62,7 @@ class ImagePrepareForQwenEditOutpaint:
 
     def prepare(self, image, aspect_ratio):
         """Prepare the input image for outpaint usage and return transformed outputs."""
+        comfy_model_management, comfy_utils = _load_comfy_runtime()
         samples = image.movedim(-1, 1)
         in_height = samples.shape[2]
         in_width = samples.shape[3]
@@ -81,10 +88,10 @@ class ImagePrepareForQwenEditOutpaint:
             latent_width = target_width // 8
             latent_height = target_height // 8
 
-        resized = comfy.utils.common_upscale(samples, new_width, new_height, "lanczos", "disabled")
+        resized = comfy_utils.common_upscale(samples, new_width, new_height, "lanczos", "disabled")
         resized = resized.movedim(1, -1)
 
         return (resized, {"samples": torch.zeros(
             (image.shape[0], _LATENT_CHANNELS, latent_height, latent_width),
-            device=comfy.model_management.intermediate_device(),
+            device=comfy_model_management.intermediate_device(),
         )})

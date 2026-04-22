@@ -1,5 +1,31 @@
 # Changelog — ALEXZ_tools
 
+## 0.34.0 — 2026-04-23
+- Minor-version release for the safe stabilization pass and follow-up baseline
+  tooling.
+- Restored legacy `utils.module_browser` import compatibility through thin shim
+  modules so older import paths keep working after the internal refactor.
+- Removed import-time Comfy/CUDA side effects from the targeted nodes:
+  - `nodes/image_prepare.py`
+  - `nodes/video_inpaint.py`
+  - GPU availability remains a runtime requirement instead of breaking package
+    import in headless or CI contexts.
+- Improved node-loader diagnostics in `nodes/__init__.py`:
+  - failure records now distinguish `runtime_unavailable` from `import_error`;
+  - public node mappings remain unchanged.
+- Added follow-up safety coverage and release tooling:
+  - dedicated smoke test for `image_prepare`;
+  - `scripts/save_baseline.sh` helper with configurable output path;
+  - `make save-baseline` target;
+  - refreshed `baseline.json`.
+- Plan execution record:
+  - [SAFE_STABILIZATION_EXECUTION_TRACKER_RU.md](refactoring_plan/SAFE_STABILIZATION_EXECUTION_TRACKER_RU.md)
+- Validation:
+  - `conda run -n p313 python utils/docs_check.py`;
+  - `conda run -n p313 node --check web/widget_visibility_profiles.js`;
+  - `conda run -n p313 pytest -q`.
+- Version updated to `0.34.0` in `pyproject.toml` and `README.md`.
+
 ## 0.33.6 — 2026-04-22
 - Renamed the NYPL IIIF site option in `Download IIIF Image` to a natural
   user-facing label:

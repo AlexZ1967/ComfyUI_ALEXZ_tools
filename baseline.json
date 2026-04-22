@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-04-22T23:23:06.236628+00:00",
+  "git_commit": "13a788a0f8e3460b97812307d4a75a41e5d28934",
+  "checks": [
+    {
+      "name": "docs_check",
+      "status": "passed",
+      "output_sha256": "d5a7deac8b4720c53f728daceef8c8833cde9c74f4b239e211280a45ca393b7d",
+      "summary": "docs-check: OK",
+      "command": "conda run -n p313 python utils/docs_check.py"
+    },
+    {
+      "name": "phase0_and_contracts",
+      "status": "passed",
+      "output_sha256": "90edd1d8a74af3f2399e42b29e8b722c4cd4f60ab528343d037f4c9bb9aaa1b3",
+      "summary": "20 passed, 1 warning in 2.87s",
+      "command": "conda run -n p313 pytest -q tests/test_phase0_baseline.py tests/test_module_browser_api_contracts_golden.py"
+    },
+    {
+      "name": "smoke_nodes",
+      "status": "passed",
+      "output_sha256": "cb7c3f7600cc627dca07483b38771e40e190fd27789faa469a76c4fcf643f1f7",
+      "summary": "70 passed, 65 warnings in 3.44s",
+      "command": "conda run -n p313 pytest -q tests/test_smoke_nodes.py"
+    },
+    {
+      "name": "js_check",
+      "status": "passed",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "summary": "OK",
+      "command": "conda run -n p313 node --check web/widget_visibility_profiles.js"
+    },
+    {
+      "name": "full_pytest",
+      "status": "passed",
+      "output_sha256": "d91893876b79b41d73638f59320e34a27e5358a098a0d714ab6e9b24a82571bf",
+      "summary": "238 passed, 66 warnings in 3.76s",
+      "command": "conda run -n p313 pytest -q"
+    }
+  ]
+}

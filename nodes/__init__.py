@@ -13,6 +13,7 @@ Purpose:
 
 import importlib
 import logging
+import re
 import traceback
 
 from .node_registry import NODE_UI_METADATA, iter_node_specs
@@ -27,6 +28,21 @@ NODE_DISPLAY_NAME_MAPPINGS = {}
 LOAD_RESULTS = {"ok": [], "fail": []}
 _LOG_LINES = []
 
+_RUNTIME_UNAVAILABLE_PATTERNS = (
+    re.compile(r"\bNo CUDA GPUs are available\b", re.IGNORECASE),
+    re.compile(r"\bTorch not compiled with CUDA enabled\b", re.IGNORECASE),
+    re.compile(r"\bNo module named 'folder_paths'\b", re.IGNORECASE),
+)
+
+
+def _classify_load_failure(exc: Exception) -> str:
+    """Classify import failure into runtime-unavailable vs generic import error."""
+    text = str(exc or "").strip()
+    for pattern in _RUNTIME_UNAVAILABLE_PATTERNS:
+        if pattern.search(text):
+            return "runtime_unavailable"
+    return "import_error"
+
 
 def _load_node(name: str, display: str, module: str, attr: str):
     """Load one node class and store it in ComfyUI mappings."""
@@ -38,9 +54,20 @@ def _load_node(name: str, display: str, module: str, attr: str):
         LOAD_RESULTS["ok"].append(name)
         _LOG_LINES.append(f"✅ {display} loaded")
     except Exception as exc:  # pragma: no cover - diagnostic
-        LOAD_RESULTS["fail"].append({"name": name, "reason": str(exc)})
+        failure_kind = _classify_load_failure(exc)
+        LOAD_RESULTS["fail"].append(
+            {
+                "name": name,
+                "display_name": display,
+                "module": module,
+                "class_name": attr,
+                "reason": str(exc),
+                "failure_kind": failure_kind,
+            }
+        )
         _LOG_LINES.append(f"❌ {display} failed: {exc}")
-        _LOGGER.error("Failed to load node %s: %s\n%s", name, exc, traceback.format_exc())
+        log_fn = _LOGGER.warning if failure_kind == "runtime_unavailable" else _LOGGER.error
+        log_fn("Failed to load node %s: %s\n%s", name, exc, traceback.format_exc())
 
 
 def _apply_node_ui_metadata() -> None:

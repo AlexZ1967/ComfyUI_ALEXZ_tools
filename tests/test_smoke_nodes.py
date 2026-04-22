@@ -22,6 +22,7 @@ from io import BytesIO
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
 
 
@@ -57,6 +58,34 @@ class SmokeTests(unittest.TestCase):
         b = torch.rand(32, 48, 3)
         diff = utils_mod.image_difference(a, b)
         self.assertEqual(tuple(diff.shape), (64, 64, 3))
+
+    def test_image_prepare_returns_expected_output_and_latent(self):
+        """Verify image prepare node keeps output contract with lazy Comfy runtime stubs."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_prepare")
+        old_load_runtime = mod._load_comfy_runtime
+
+        class _FakeModelManagement:
+            @staticmethod
+            def intermediate_device():
+                return torch.device("cpu")
+
+        class _FakeUtils:
+            @staticmethod
+            def common_upscale(samples, width, height, _method, _crop):
+                return F.interpolate(samples, size=(height, width), mode="bilinear", align_corners=False)
+
+        try:
+            mod._load_comfy_runtime = lambda: (_FakeModelManagement, _FakeUtils)
+            node = mod.ImagePrepareForQwenEditOutpaint()
+            image = torch.rand(1, 8, 8, 3)
+            resized, latent = node.prepare(image, "1x1")
+        finally:
+            mod._load_comfy_runtime = old_load_runtime
+
+        self.assertEqual(tuple(resized.shape), (1, 1328, 1328, 3))
+        self.assertIn("samples", latent)
+        self.assertEqual(tuple(latent["samples"].shape), (1, 4, 166, 166))
+        self.assertEqual(str(latent["samples"].device), "cpu")
 
     def test_color_match_json_has_quality_metrics(self):
         """Verify Color Match returns quality metrics in output JSON."""

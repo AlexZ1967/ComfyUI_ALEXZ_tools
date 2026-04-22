@@ -112,7 +112,7 @@ def compute_snapshot_signature(snapshot: dict[str, Any]) -> str:
 def _iter_node_specs() -> list[tuple[str, str, str, str]]:
     """Load node specs from central node registry with import-safe fallback."""
     try:
-        from ...nodes.node_registry import iter_node_specs  # type: ignore
+        from ....nodes.node_registry import iter_node_specs  # type: ignore
     except Exception:
         try:
             from nodes.node_registry import iter_node_specs  # type: ignore
