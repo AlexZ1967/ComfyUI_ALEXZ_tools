@@ -1,5 +1,19 @@
 # Changelog — ALEXZ_tools
 
+## 0.33.6 — 2026-04-22
+- Renamed the NYPL IIIF site option in `Download IIIF Image` to a natural
+  user-facing label:
+  - `The New York Public Library (NYPL) Digital Collections`
+- Synchronized the new label across:
+  - `nodes/image_download_iiif.py`
+  - `README.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+  - `tests/test_smoke_nodes.py`
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.33.6` in `pyproject.toml` and `README.md`.
+
 ## 0.33.5 — 2026-04-22
 - Added explicit NYPL support to `Download IIIF Image`:
   - new `site = NYPL IIIF Info URL`;

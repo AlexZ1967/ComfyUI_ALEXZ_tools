@@ -1414,7 +1414,7 @@ class SmokeTests(unittest.TestCase):
         input_types = iiif_mod.ImageDownloadIIIFImage.INPUT_TYPES()
         site_choices = input_types["required"]["site"][0]
         self.assertIn("Gallica BnF Object Page", site_choices)
-        self.assertIn("NYPL IIIF Info URL", site_choices)
+        self.assertIn("The New York Public Library (NYPL) Digital Collections", site_choices)
 
         service_url = iiif_mod._resolve_iiif_service_url(
             "Gallica BnF Object Page",
@@ -1439,7 +1439,7 @@ class SmokeTests(unittest.TestCase):
         )
 
         service_url = iiif_mod._resolve_iiif_service_url(
-            "NYPL IIIF Info URL",
+            "The New York Public Library (NYPL) Digital Collections",
             "https://iiif.nypl.org/iiif/3/57538105/info.json",
             timeout=1.0,
             session=None,

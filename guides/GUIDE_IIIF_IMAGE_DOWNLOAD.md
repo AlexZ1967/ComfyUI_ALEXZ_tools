@@ -6,7 +6,7 @@
 Текущий фокус:
 - `London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.
 - `Gallica BnF Object Page`: принимает Gallica ARK/object URL и строит IIIF service URL напрямую.
-- `NYPL IIIF Info URL`: принимает прямой `iiif.nypl.org/.../info.json` или service URL.
+- `The New York Public Library (NYPL) Digital Collections`: принимает прямой `iiif.nypl.org/.../info.json` или service URL.
 - `Generic IIIF Service URL`: принимает прямой IIIF service URL, `info.json` URL или HTML-страницу с встраиваемым IIIF viewer.
 
 ## Когда использовать
@@ -24,7 +24,7 @@
 - `site` (`LIST`):
   - `London Museum Object Page`
   - `Gallica BnF Object Page`
-  - `NYPL IIIF Info URL`
+  - `The New York Public Library (NYPL) Digital Collections`
   - `Generic IIIF Service URL`
 - `source_url` (`STRING`):
   - для London Museum: URL object page, например  
@@ -71,7 +71,7 @@
   - `site = Generic IIIF Service URL`
   - `source_url = direct IIIF URL`
 - Уже найден прямой NYPL `iiif.nypl.org/.../info.json`:
-  - `site = NYPL IIIF Info URL`
+  - `site = The New York Public Library (NYPL) Digital Collections`
   - `source_url = direct IIIF URL`
 - Есть только NYPL item page `digitalcollections.nypl.org/items/...`:
   - сначала найдите прямой `iiif.nypl.org/.../info.json` во viewer/devtools
