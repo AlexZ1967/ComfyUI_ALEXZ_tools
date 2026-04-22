@@ -1414,6 +1414,7 @@ class SmokeTests(unittest.TestCase):
         input_types = iiif_mod.ImageDownloadIIIFImage.INPUT_TYPES()
         site_choices = input_types["required"]["site"][0]
         self.assertIn("Gallica BnF Object Page", site_choices)
+        self.assertIn("NYPL IIIF Info URL", site_choices)
 
         service_url = iiif_mod._resolve_iiif_service_url(
             "Gallica BnF Object Page",
@@ -1435,6 +1436,17 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(
             service_url,
             "https://gallica.bnf.fr/iiif/ark:/12148/btv1b7002302c/f1",
+        )
+
+        service_url = iiif_mod._resolve_iiif_service_url(
+            "NYPL IIIF Info URL",
+            "https://iiif.nypl.org/iiif/3/57538105/info.json",
+            timeout=1.0,
+            session=None,
+        )
+        self.assertEqual(
+            service_url,
+            "https://iiif.nypl.org/iiif/3/57538105",
         )
 
     def test_iiif_download_tile_assembly_contract(self):

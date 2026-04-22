@@ -1,5 +1,32 @@
 # Changelog — ALEXZ_tools
 
+## 0.33.5 — 2026-04-22
+- Added explicit NYPL support to `Download IIIF Image`:
+  - new `site = NYPL IIIF Info URL`;
+  - intended for direct `iiif.nypl.org/.../info.json` or service URLs;
+  - keeps the existing generic resolver path, but exposes a clearer UX for
+    NYPL sources discovered from the viewer.
+- Updated IIIF docs to distinguish NYPL item pages from direct IIIF sources:
+  - `digitalcollections.nypl.org/items/...` pages are not recommended as direct
+    node input because the site is fronted by Imperva/Incapsula;
+  - `iiif.nypl.org/.../info.json` is the stable input path for high-resolution
+    downloads.
+- Extended smoke coverage:
+  - IIIF site dropdown now includes `NYPL IIIF Info URL`;
+  - direct resolver contract is covered for
+    `https://iiif.nypl.org/iiif/3/57538105/info.json`.
+- Updated:
+  - `nodes/image_download_iiif.py`
+  - `nodes/node_registry.py`
+  - `README.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+  - `tests/test_smoke_nodes.py`
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python -m py_compile nodes/image_download_iiif.py tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.33.5` in `pyproject.toml` and `README.md`.
+
 ## 0.33.4 — 2026-04-07
 - Improved `Download IIIF Image` support for `Gallica BnF Object Page`:
   - fixed Gallica ARK parsing so `.r=...`, `.zoom`, query strings, and similar

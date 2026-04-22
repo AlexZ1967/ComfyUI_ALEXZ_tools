@@ -185,9 +185,9 @@ NODE_UI_METADATA = {
         "search_aliases": ["dzi", "tiles", "download", "batch", "save"],
     },
     "ImageDownloadIIIFImage": {
-        "description": "Скачивает изображение из IIIF Image API сервиса, включая London Museum и Gallica BnF object pages.",
+        "description": "Скачивает изображение из IIIF Image API сервиса, включая London Museum, Gallica BnF и прямые NYPL IIIF info URL.",
         "output_tooltips": ["Скачанное IIIF изображение.", "JSON с IIIF service/info/image URL и метаданными."],
-        "search_aliases": ["iiif", "download", "image", "london museum", "gallica", "bnf", "viewer"],
+        "search_aliases": ["iiif", "download", "image", "london museum", "gallica", "bnf", "nypl", "new york public library", "viewer"],
     },
     "SearchTroveImageIDs": {
         "description": "Ищет `nla.obj-...` id в Trove Images через best-effort headless Chrome search.",

@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.33.4
+Version: 0.33.5
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -281,7 +281,7 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 ---
 
 ## Download IIIF Image
-Скачивает изображение из IIIF Image API сервиса, включая London Museum и Gallica BnF object pages.
+Скачивает изображение из IIIF Image API сервиса, включая London Museum, Gallica BnF и прямые NYPL IIIF info URL.
 
 - Display name: Download IIIF Image  
 - Type name: ImageDownloadIIIFImage  
@@ -289,7 +289,8 @@ Guide: [GUIDE_DZI_TILES_DOWNLOAD.md](guides/GUIDE_DZI_TILES_DOWNLOAD.md)
 Входы: `site`, `source_url`, `size_mode`, `requested_width`, `output_dir`, `cache_dir`, `filename_mode`, `delivery_mode`, `output_format`.  
 `London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.  
 `Gallica BnF Object Page`: принимает Gallica ARK/object URL и строит IIIF service URL напрямую.  
-`Generic IIIF Service URL`: принимает direct service URL, `info.json` URL или HTML-страницу с встроенным IIIF viewer.  
+`NYPL IIIF Info URL`: принимает прямой `iiif.nypl.org/.../info.json` или service URL.  
+`Generic IIIF Service URL`: принимает direct service URL, `info.json` URL или HTML-страницу с встроенным IIIF viewer. Для NYPL item pages `digitalcollections.nypl.org/items/...` лучше не использовать этот режим из-за Imperva/Incapsula; подавайте сразу прямой `iiif.nypl.org` URL.  
 Если `output_dir` задан, нода сохраняет итоговую картинку на диск, а имя файла строит как `slug_or_title + stable_id`, если стабильный ID удается извлечь из URL/IIIF service. Если имя уже занято, автоматически добавляется суффикс `_2`, `_3`, ... вместо перезаписи.  
 `cache_dir`: recovery-кеш для `tile_assemble_full`; уже скачанные тайлы переиспользуются при повторных запусках после сбоя. После полностью успешной сборки кеш этой конкретной картинки автоматически удаляется. Пусто = встроенная папка `cache/iiif_tiles`.  
 `filename_mode`: `source_url_slug` или `title_or_slug`. Во втором режиме нода пытается взять title страницы `source_url`, а при неудаче использует slug из URL. В оба режима автоматически добавляется стабильный ID объекта/сервиса, если он извлекается из URL.  

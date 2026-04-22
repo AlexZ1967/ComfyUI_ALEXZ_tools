@@ -811,10 +811,10 @@ class ImageDownloadIIIFImage:
         return {
             "required": {
                 "site": (
-                    ["London Museum Object Page", "Gallica BnF Object Page", "Generic IIIF Service URL"],
+                    ["London Museum Object Page", "Gallica BnF Object Page", "NYPL IIIF Info URL", "Generic IIIF Service URL"],
                     {
                         "default": "London Museum Object Page",
-                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
+                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. NYPL ожидает прямой iiif.nypl.org service/info URL. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
                     },
                 ),
                 "source_url": (
@@ -822,7 +822,7 @@ class ImageDownloadIIIFImage:
                     {
                         "default": "https://www.londonmuseum.org.uk/collections/v/object-443296/early-portrait-of-anna-pavlova/",
                         "multiline": False,
-                        "tooltip": "London Museum / Gallica: URL object page. Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
+                        "tooltip": "London Museum / Gallica: URL object page. NYPL: прямой `https://iiif.nypl.org/iiif/3/<image_id>/info.json` или service URL. Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
                     },
                 ),
             },

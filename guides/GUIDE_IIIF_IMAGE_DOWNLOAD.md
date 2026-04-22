@@ -6,6 +6,7 @@
 Текущий фокус:
 - `London Museum Object Page`: принимает URL страницы объекта и сама извлекает IIIF service URL.
 - `Gallica BnF Object Page`: принимает Gallica ARK/object URL и строит IIIF service URL напрямую.
+- `NYPL IIIF Info URL`: принимает прямой `iiif.nypl.org/.../info.json` или service URL.
 - `Generic IIIF Service URL`: принимает прямой IIIF service URL, `info.json` URL или HTML-страницу с встраиваемым IIIF viewer.
 
 ## Когда использовать
@@ -23,12 +24,18 @@
 - `site` (`LIST`):
   - `London Museum Object Page`
   - `Gallica BnF Object Page`
+  - `NYPL IIIF Info URL`
   - `Generic IIIF Service URL`
 - `source_url` (`STRING`):
   - для London Museum: URL object page, например  
     `https://www.londonmuseum.org.uk/collections/v/object-443296/early-portrait-of-anna-pavlova/`
   - для Gallica: URL object page/ARK, например  
     `https://gallica.bnf.fr/ark:/12148/btv1b10579141s/f1.item.r=L'exposition%20universelle%20de%20Paris.zoom#`
+  - для NYPL:
+    - прямой `info.json`, например  
+      `https://iiif.nypl.org/iiif/3/57538105/info.json`
+    - или service URL  
+      `https://iiif.nypl.org/iiif/3/57538105`
   - для Generic:
     - IIIF service URL
     - или `info.json` URL
@@ -63,6 +70,12 @@
 - Уже есть IIIF `info.json` или service URL:
   - `site = Generic IIIF Service URL`
   - `source_url = direct IIIF URL`
+- Уже найден прямой NYPL `iiif.nypl.org/.../info.json`:
+  - `site = NYPL IIIF Info URL`
+  - `source_url = direct IIIF URL`
+- Есть только NYPL item page `digitalcollections.nypl.org/items/...`:
+  - сначала найдите прямой `iiif.nypl.org/.../info.json` во viewer/devtools
+  - затем подавайте его в ноду
 - Нужен максимум качества:
   - `size_mode = max`
 - Сервис режет single-request размер:
