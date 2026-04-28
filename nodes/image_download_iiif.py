@@ -168,6 +168,25 @@ def _extract_first_generic_iiif_service_url(html: str) -> str:
     return ""
 
 
+def _extract_nypl_image_id_from_html(html: str) -> str:
+    """Extract numeric NYPL image id from page HTML when available."""
+    text = str(html or "")
+    if not text:
+        return ""
+    patterns = (
+        r"https://iiif\.nypl\.org/iiif/3/(\d+)(?:/info\.json)?",
+        r'"imageId"\s*:\s*"?(\d+)"?',
+        r'"image_id"\s*:\s*"?(\d+)"?',
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            image_id = str(match.group(1) or "").strip()
+            if image_id:
+                return image_id
+    return ""
+
+
 def _extract_gallica_service_url_from_source_url(source_url: str) -> str:
     """Build direct Gallica IIIF service URL from an ARK/object page URL."""
     text = str(source_url or "").strip()
@@ -194,7 +213,7 @@ def _resolve_iiif_service_url(
     site: str,
     source_url: str,
     *,
-    timeout: float,
+    timeout: float = 30.0,
     session: requests.Session | None = None,
 ) -> str:
     """Resolve effective IIIF service URL from page URL or direct service URL."""
@@ -212,6 +231,31 @@ def _resolve_iiif_service_url(
         service_url = _extract_gallica_service_url_from_source_url(source_text)
         if service_url:
             return service_url
+
+    # NYPL Digital Collections – item page URLs look like
+    #   https://digitalcollections.nypl.org/items/<nypl_id>?canvasIndex=0
+    # For NYPL pages we try to extract the numeric image id from page payload,
+    # then fallback to /items/<id> token when extraction is unavailable.
+    if site_name == "The New York Public Library (NYPL) Digital Collections" or "digitalcollections.nypl.org" in source_text.lower():
+        fallback_item_id = ""
+        m = re.search(r"/items/([^/?#]+)", source_text, flags=re.IGNORECASE)
+        if m:
+            fallback_item_id = str(m.group(1) or "").strip()
+        try:
+            response = _http_get(source_text, timeout=timeout, session=session)
+            if int(response.status_code) == 200:
+                html = response.text or ""
+                nypl_image_id = _extract_nypl_image_id_from_html(html)
+                if nypl_image_id:
+                    return f"https://iiif.nypl.org/iiif/3/{nypl_image_id}"
+                service_url = _extract_first_generic_iiif_service_url(html)
+                if service_url:
+                    return service_url
+        except Exception:
+            # NYPL item pages can be blocked by anti-bot filters; keep fallback.
+            pass
+        if fallback_item_id:
+            return f"https://iiif.nypl.org/iiif/3/{fallback_item_id}"
 
     response = _http_get(source_text, timeout=timeout, session=session)
     if int(response.status_code) != 200:
@@ -814,7 +858,7 @@ class ImageDownloadIIIFImage:
                     ["London Museum Object Page", "Gallica BnF Object Page", "The New York Public Library (NYPL) Digital Collections", "Generic IIIF Service URL"],
                     {
                         "default": "London Museum Object Page",
-                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. The New York Public Library (NYPL) Digital Collections ожидает прямой iiif.nypl.org service/info URL. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
+                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. The New York Public Library (NYPL) Digital Collections принимает прямой iiif.nypl.org service/info URL и также пытается извлечь numeric imageId из digitalcollections item page. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
                     },
                 ),
                 "source_url": (
@@ -822,7 +866,7 @@ class ImageDownloadIIIFImage:
                     {
                         "default": "https://www.londonmuseum.org.uk/collections/v/object-443296/early-portrait-of-anna-pavlova/",
                         "multiline": False,
-                        "tooltip": "London Museum / Gallica: URL object page. The New York Public Library (NYPL) Digital Collections: прямой `https://iiif.nypl.org/iiif/3/<image_id>/info.json` или service URL. Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
+                        "tooltip": "London Museum / Gallica: URL object page. The New York Public Library (NYPL) Digital Collections: прямой `https://iiif.nypl.org/iiif/3/<image_id>/info.json` или service URL; для `digitalcollections.nypl.org/items/...` нода пытается извлечь numeric imageId автоматически (best effort). Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
                     },
                 ),
             },

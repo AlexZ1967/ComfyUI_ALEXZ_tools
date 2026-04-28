@@ -74,8 +74,8 @@
   - `site = The New York Public Library (NYPL) Digital Collections`
   - `source_url = direct IIIF URL`
 - Есть только NYPL item page `digitalcollections.nypl.org/items/...`:
-  - сначала найдите прямой `iiif.nypl.org/.../info.json` во viewer/devtools
-  - затем подавайте его в ноду
+  - при `site = The New York Public Library (NYPL) Digital Collections` нода сначала пытается извлечь numeric `imageId` из HTML и собрать `https://iiif.nypl.org/iiif/3/<image_id>`;
+  - если страница недоступна из-за Imperva/Incapsula, используйте прямой `iiif.nypl.org/.../info.json` из viewer/devtools.
 - Нужен максимум качества:
   - `size_mode = max`
 - Сервис режет single-request размер:
