@@ -188,14 +188,16 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._http_get = old_http_get
         self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/57538105")
 
-    def test_nypl_download_retries_with_preview_size_when_max_returns_403(self):
+    def test_nypl_download_retries_with_tile_assembly_when_max_returns_403(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
         node = iiif_mod.ImageDownloadIIIFImage()
         old_resolve = iiif_mod._resolve_iiif_service_url
         old_info = iiif_mod._fetch_iiif_info
         old_download = iiif_mod._download_iiif_image_bytes
+        old_assemble = iiif_mod._assemble_iiif_full_image
 
         calls = []
+        assembled_calls = []
 
         def _fake_resolve(*args, **kwargs):
             _ = (args, kwargs)
@@ -214,19 +216,39 @@ class TestNYPLResolution(unittest.TestCase):
             calls.append(size_spec)
             if size_spec == "max":
                 raise iiif_mod._IIIFImageRequestError("forbidden", last_status=403)
+            raise RuntimeError("unexpected second single-request download")
+
+        def _fake_assemble(service_url, info, *, output_format, timeout, session, cache_dir):
+            _ = (service_url, info, output_format, timeout, session, cache_dir)
+            assembled_calls.append("called")
             arr = np.zeros((8, 10, 3), dtype=np.uint8)
             arr[:, :, 0] = 64
             arr[:, :, 1] = 128
             arr[:, :, 2] = 192
             im = Image.fromarray(arr, mode="RGB")
-            buff = BytesIO()
-            im.save(buff, format="JPEG")
-            return "https://iiif.nypl.org/fallback.jpg", buff.getvalue(), "jpg"
+            meta = {
+                "mode": "tile_assemble_full",
+                "tile_width": 512,
+                "tile_height": 512,
+                "tiles_x": 1,
+                "tiles_y": 1,
+                "tiles_total": 1,
+                "tiles_downloaded": 1,
+                "selected_format": "jpg",
+                "last_tile_url": "https://iiif.nypl.org/tile.jpg",
+                "cache_dir": "/tmp/mock_cache",
+                "cache_hits": 0,
+                "cache_misses": 1,
+                "cache_stores": 1,
+                "cache_cleared": False,
+            }
+            return im, meta
 
         try:
             iiif_mod._resolve_iiif_service_url = _fake_resolve
             iiif_mod._fetch_iiif_info = _fake_info
             iiif_mod._download_iiif_image_bytes = _fake_download
+            iiif_mod._assemble_iiif_full_image = _fake_assemble
             image, info_json = node.download(
                 "The New York Public Library (NYPL) Digital Collections",
                 "https://digitalcollections.nypl.org/items/e4c3c3e0-71a8-0136-e6bf-134f659bcb2e?canvasIndex=0",
@@ -236,10 +258,12 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._resolve_iiif_service_url = old_resolve
             iiif_mod._fetch_iiif_info = old_info
             iiif_mod._download_iiif_image_bytes = old_download
+            iiif_mod._assemble_iiif_full_image = old_assemble
 
-        self.assertEqual(calls, ["max", "1200,"])
+        self.assertEqual(calls, ["max"])
+        self.assertEqual(assembled_calls, ["called"])
         self.assertEqual(tuple(image.shape), (1, 8, 10, 3))
-        self.assertIn('"request_size_spec": "1200,"', info_json)
+        self.assertIn('"mode": "tile_assemble_full"', info_json)
 
 if __name__ == "__main__":
     unittest.main()

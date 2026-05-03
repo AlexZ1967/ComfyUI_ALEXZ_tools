@@ -1159,6 +1159,7 @@ class ImageDownloadIIIFImage:
                 )
             else:
                 size_spec = _build_iiif_size_spec(size_mode, requested_width)
+                assembled_fallback_used = False
                 try:
                     image_url, content, selected_format = _download_iiif_image_bytes(
                         service_url,
@@ -1174,30 +1175,55 @@ class ImageDownloadIIIFImage:
                     )
                     if not is_full_size_403:
                         raise
-                    preview_width = _largest_listed_iiif_width(info)
-                    if preview_width <= 0:
-                        raise
-                    preview_spec = f"{preview_width},"
+                    # Prefer mosaic assembly when server denies full-size single request.
                     _log(
                         "IIIF full-size request returned 403; "
-                        f"retrying with preview size `{preview_spec}`."
+                        "retrying with tile assembly fallback."
                     )
-                    image_url, content, selected_format = _download_iiif_image_bytes(
-                        service_url,
-                        size_spec=preview_spec,
-                        output_format=output_format,
-                        timeout=timeout,
-                        session=session,
-                    )
-                    size_spec = preview_spec
-                image = _decode_image(content, image_url)
-                width, height = image.size
-                delivery_meta = {
-                    "mode": "single_request",
-                    "selected_format": selected_format,
-                    "request_size_spec": size_spec,
-                }
-                _log(f"Image request: {image_url}")
+                    try:
+                        image, delivery_meta = _assemble_iiif_full_image(
+                            service_url,
+                            info,
+                            output_format=output_format,
+                            timeout=timeout,
+                            session=session,
+                            cache_dir=cache_dir,
+                        )
+                        width, height = image.size
+                        image_url = str(delivery_meta.get("last_tile_url") or "")
+                        selected_format = str(delivery_meta.get("selected_format") or output_format)
+                        size_spec = "tile_assemble_full"
+                        assembled_fallback_used = True
+                        _log(
+                            f"Tile assembly: {delivery_meta['tiles_x']}x{delivery_meta['tiles_y']} "
+                            f"tiles ({delivery_meta['tiles_total']} total, cache_hits={delivery_meta.get('cache_hits', 0)})"
+                        )
+                    except Exception:
+                        preview_width = _largest_listed_iiif_width(info)
+                        if preview_width <= 0:
+                            raise
+                        preview_spec = f"{preview_width},"
+                        _log(
+                            "IIIF tile assembly fallback failed; "
+                            f"retrying with preview size `{preview_spec}`."
+                        )
+                        image_url, content, selected_format = _download_iiif_image_bytes(
+                            service_url,
+                            size_spec=preview_spec,
+                            output_format=output_format,
+                            timeout=timeout,
+                            session=session,
+                        )
+                        size_spec = preview_spec
+                if not assembled_fallback_used:
+                    image = _decode_image(content, image_url)
+                    width, height = image.size
+                    delivery_meta = {
+                        "mode": "single_request",
+                        "selected_format": selected_format,
+                        "request_size_spec": size_spec,
+                    }
+                    _log(f"Image request: {image_url}")
 
             limited_by_service = bool((width < source_width) or (height < source_height))
             _log(f"Done: {width}x{height}, format={selected_format}")
