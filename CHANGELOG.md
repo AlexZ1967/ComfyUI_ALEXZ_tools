@@ -1,5 +1,18 @@
 # Changelog — ALEXZ_tools
 
+## Unreleased
+- Simplified NYPL support in `Download IIIF Image`:
+  - for `site = The New York Public Library (NYPL) Digital Collections`,
+    `source_url` can now be a plain NYPL image id such as `57538105` or
+    `NIJINSKY_2032V`;
+  - the node now builds `https://iiif.nypl.org/iiif/3/<image_id>` directly
+    from that value;
+  - the temporary separate `nypl_image_id` UI input was removed again to keep
+    NYPL on the same single-field flow as other IIIF sources.
+- NYPL docs were synchronized across:
+  - `README.md`
+  - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+
 ## 0.34.0 — 2026-04-23
 - Minor-version release for the safe stabilization pass and follow-up baseline
   tooling.
