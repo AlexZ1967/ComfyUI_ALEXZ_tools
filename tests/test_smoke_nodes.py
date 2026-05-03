@@ -1444,6 +1444,7 @@ class SmokeTests(unittest.TestCase):
         site_choices = input_types["required"]["site"][0]
         self.assertIn("Gallica BnF Object Page", site_choices)
         self.assertIn("The New York Public Library (NYPL) Digital Collections", site_choices)
+        self.assertIn("nypl_image_id", input_types["optional"])
 
         service_url = iiif_mod._resolve_iiif_service_url(
             "Gallica BnF Object Page",

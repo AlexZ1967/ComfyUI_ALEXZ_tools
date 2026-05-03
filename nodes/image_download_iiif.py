@@ -26,7 +26,7 @@ import traceback
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 import numpy as np
 import requests
@@ -345,6 +345,22 @@ def _extract_forced_nypl_image_id_from_source_url(source_url: str) -> str:
             if text and _NYPL_IMAGE_ID_TOKEN_RE.match(text):
                 return text
     return ""
+
+
+def _inject_nypl_image_id_into_source_url(source_url: str, nypl_image_id: str) -> str:
+    """Append or replace NYPL image_id override in source_url query string."""
+    source_text = str(source_url or "").strip()
+    image_id = str(nypl_image_id or "").strip()
+    if not source_text or not image_id or not _NYPL_IMAGE_ID_TOKEN_RE.match(image_id):
+        return source_text
+    split = urlsplit(source_text)
+    query_pairs = [
+        (key, value)
+        for key, value in parse_qsl(split.query or "", keep_blank_values=True)
+        if str(key).lower() not in {"image_id", "imageid", "nypl_image_id", "iiif_id"}
+    ]
+    query_pairs.append(("image_id", image_id))
+    return urlunsplit((split.scheme, split.netloc, split.path, urlencode(query_pairs), split.fragment))
 
 
 def _extract_gallica_service_url_from_source_url(source_url: str) -> str:
@@ -1045,7 +1061,7 @@ class ImageDownloadIIIFImage:
                     ["London Museum Object Page", "Gallica BnF Object Page", "The New York Public Library (NYPL) Digital Collections", "Generic IIIF Service URL"],
                     {
                         "default": "London Museum Object Page",
-                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. The New York Public Library (NYPL) Digital Collections принимает прямой iiif.nypl.org service/info URL и также пытается извлечь numeric imageId из digitalcollections item page. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
+                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. The New York Public Library (NYPL) Digital Collections принимает прямой iiif.nypl.org service/info URL и также пытается извлечь NYPL image ID из digitalcollections item page. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
                     },
                 ),
                 "source_url": (
@@ -1053,11 +1069,19 @@ class ImageDownloadIIIFImage:
                     {
                         "default": "https://www.londonmuseum.org.uk/collections/v/object-443296/early-portrait-of-anna-pavlova/",
                         "multiline": False,
-                        "tooltip": "London Museum / Gallica: URL object page. The New York Public Library (NYPL) Digital Collections: прямой `https://iiif.nypl.org/iiif/3/<image_id>/info.json` или service URL; для `digitalcollections.nypl.org/items/...` нода пытается извлечь numeric imageId автоматически (best effort). Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
+                        "tooltip": "London Museum / Gallica: URL object page. The New York Public Library (NYPL) Digital Collections: прямой `https://iiif.nypl.org/iiif/3/<image_id>/info.json` или service URL; для `digitalcollections.nypl.org/items/...` нода пытается извлечь NYPL image ID автоматически (best effort). Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
                     },
                 ),
             },
             "optional": {
+                "nypl_image_id": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": False,
+                        "tooltip": "Только для NYPL. Явный `Image ID`/`image_id` из item page, например `57538105` или `NIJINSKY_2032V`. Если заполнено, нода использует его для резолва IIIF service URL и не зависит от HTML item page.",
+                    },
+                ),
                 "size_mode": (
                     ["max", "width"],
                     {
@@ -1130,13 +1154,21 @@ class ImageDownloadIIIFImage:
         filename_mode: str = "source_url_slug",
         delivery_mode: str = "single_request",
         output_format: str = "jpg",
+        nypl_image_id: str = "",
     ):
         """Resolve IIIF service URL, fetch image, and return IMAGE tensor with JSON metadata."""
         timeout = 30.0
         try:
             check_interrupt()
-            session = _new_http_session(site, source_url)
-            service_url = _resolve_iiif_service_url(site, source_url, timeout=timeout, session=session)
+            site_name = str(site or "").strip()
+            original_source_url = str(source_url or "").strip()
+            effective_source_url = original_source_url
+            if site_name == "The New York Public Library (NYPL) Digital Collections":
+                effective_source_url = _inject_nypl_image_id_into_source_url(original_source_url, nypl_image_id)
+                if effective_source_url != original_source_url and str(nypl_image_id or "").strip():
+                    _log(f"NYPL imageID input override: {str(nypl_image_id or '').strip()}")
+            session = _new_http_session(site, effective_source_url)
+            service_url = _resolve_iiif_service_url(site, effective_source_url, timeout=timeout, session=session)
             _log(f"Site: {site}")
             _log(f"Source: {source_url}")
             _log(f"Service: {service_url}")
@@ -1145,7 +1177,6 @@ class ImageDownloadIIIFImage:
             source_width, source_height = _iiif_source_dimensions(info)
             limit_info = _iiif_limit_from_max_area(info)
             mode = str(delivery_mode or "single_request").strip().lower()
-            site_name = str(site or "").strip()
             is_nypl = (
                 site_name == "The New York Public Library (NYPL) Digital Collections"
                 or "iiif.nypl.org/iiif/3/" in str(service_url or "").lower()
@@ -1272,6 +1303,7 @@ class ImageDownloadIIIFImage:
             payload = {
                 "site": str(site or "").strip(),
                 "source_url": str(source_url or "").strip(),
+                "nypl_image_id": str(nypl_image_id or "").strip(),
                 "service_url": service_url,
                 "info_url": f"{service_url}/info.json",
                 "image_url": image_url,
