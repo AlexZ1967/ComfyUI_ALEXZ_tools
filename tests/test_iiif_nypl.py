@@ -53,6 +53,16 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._http_get = old_http_get
         self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/NIJINSKY_2032V")
 
+    def test_nypl_session_uses_browser_like_image_headers(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        session = iiif_mod._new_http_session(
+            "The New York Public Library (NYPL) Digital Collections",
+            "NIJINSKY_2033V",
+        )
+        self.assertEqual(session.headers.get("Referer"), "https://digitalcollections.nypl.org/")
+        self.assertEqual(session.headers.get("Accept-Language"), "en-US,en;q=0.9")
+        self.assertIn("image/*", str(session.headers.get("Accept") or ""))
+
     def test_nypl_download_uses_plain_source_url_image_id_without_html_lookup(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
         node = iiif_mod.ImageDownloadIIIFImage()
@@ -283,6 +293,35 @@ class TestNYPLResolution(unittest.TestCase):
             "https://iiif.nypl.org/iiif/3/NIJINSKY_2033V/0,0,462,512/462,512/0/default.jpg",
         )
         self.assertEqual(seen_urls, [image_url])
+
+    def test_iiif_tile_download_rejects_html_body_before_decode(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        old_http_get = iiif_mod._http_get
+
+        class _Response:
+            status_code = 200
+            content = b"<html><title>Forbidden</title></html>"
+            headers = {"content-type": "text/html; charset=utf-8"}
+
+        try:
+            iiif_mod._http_get = lambda *args, **kwargs: _Response()
+            with tempfile.TemporaryDirectory() as tmpdir:
+                with self.assertRaises(RuntimeError) as cm:
+                    iiif_mod._download_iiif_tile_bytes(
+                        "https://iiif.nypl.org/iiif/3/NIJINSKY_2033V",
+                        region="0,0,462,512",
+                        size_spec="462,512",
+                        output_format="jpg",
+                        timeout=1.0,
+                        session=None,
+                        cache_dir=tmpdir,
+                        cache_stats=None,
+                    )
+        finally:
+            iiif_mod._http_get = old_http_get
+
+        self.assertIn("non-image content", str(cm.exception))
+        self.assertIn("content-type=text/html", str(cm.exception))
 
 if __name__ == "__main__":
     unittest.main()

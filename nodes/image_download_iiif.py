@@ -61,6 +61,7 @@ _DEFAULT_UA = (
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
 _GALLICA_REFERRER = "https://gallica.bnf.fr/"
+_NYPL_REFERRER = "https://digitalcollections.nypl.org/"
 _IIIF_TILE_CACHE_ROOT = Path(__file__).resolve().parent.parent / "cache" / "iiif_tiles"
 _RETRYABLE_HTTP_EXCEPTIONS = (
     requests.exceptions.ReadTimeout,
@@ -103,6 +104,14 @@ def _new_http_session(site: str = "", source_url: str = "") -> requests.Session:
                 "Referer": _GALLICA_REFERRER,
                 "Accept-Language": "fr,fr-FR;q=0.9,en;q=0.8",
                 "Accept": "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            }
+        )
+    if site_name == "The New York Public Library (NYPL) Digital Collections" or "nypl.org" in source_text:
+        session.headers.update(
+            {
+                "Referer": _NYPL_REFERRER,
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
             }
         )
     return session
@@ -670,6 +679,14 @@ def _download_iiif_tile_bytes(
         last_status = int(response.status_code)
         if last_status == 200:
             content = bytes(response.content or b"")
+            response_headers = getattr(response, "headers", {}) or {}
+            content_type = str(response_headers.get("content-type") or "").strip().lower()
+            if content_type and not content_type.startswith("image/"):
+                preview = bytes(content[:120]).decode("utf-8", errors="replace").replace("\n", " ").replace("\r", " ")
+                raise RuntimeError(
+                    f"IIIF tile request returned non-image content for `{image_url}` "
+                    f"(content-type={content_type}, preview={preview!r})"
+                )
             _store_iiif_tile_in_cache(cache_root, image_url, content)
             if cache_stats is not None:
                 cache_stats["misses"] = int(cache_stats.get("misses", 0)) + 1

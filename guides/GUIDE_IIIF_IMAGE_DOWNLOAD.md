@@ -114,6 +114,9 @@
 - `IIIF image request failed`:
   - Причина: размер/формат не поддерживается сервисом
   - Решение: переключите `size_mode`, уменьшите ширину или оставьте `output_format=jpg`
+- `Could not decode image bytes` при NYPL tile assembly:
+  - Причина: сервер мог вернуть не JPEG/PNG, а HTML/служебную страницу, даже если URL выглядит корректно
+  - Решение: проверьте лог на `non-image content`; для NYPL нода теперь шлёт browser-like image headers и использует явный tile size `w,h` в region URL
 - Результат меньше, чем `iiif.width` / `iiif.height`:
   - Причина: сервер ограничивает single-request размер через `maxArea` или собственную policy
   - Решение: смотрите `limits` в `info_json`; для full-res используйте `delivery_mode=tile_assemble_full`

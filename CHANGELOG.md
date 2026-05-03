@@ -1,5 +1,19 @@
 # Changelog — ALEXZ_tools
 
+## 0.34.2 — 2026-05-03
+- Hardened NYPL IIIF tile delivery in `Download IIIF Image`:
+  - NYPL sessions now send browser-like image request headers
+    (`Referer`, `Accept`, `Accept-Language`) for `iiif.nypl.org` tile fetches;
+  - tile responses are now checked for non-image `content-type` before decode,
+    so HTML/service pages fail earlier with a clearer error;
+  - synchronized NYPL troubleshooting notes in `README.md` and
+    `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_iiif_nypl.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.34.2` in `pyproject.toml` and `README.md`.
+
 ## 0.34.1 — 2026-05-03
 - Simplified NYPL support in `Download IIIF Image`:
   - for `site = The New York Public Library (NYPL) Digital Collections`,
