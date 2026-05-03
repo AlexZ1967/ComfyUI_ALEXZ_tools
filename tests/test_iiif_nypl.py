@@ -188,7 +188,7 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._http_get = old_http_get
         self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/57538105")
 
-    def test_nypl_download_retries_with_tile_assembly_when_max_returns_403(self):
+    def test_nypl_download_forces_tile_assembly_without_single_request_attempt(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
         node = iiif_mod.ImageDownloadIIIFImage()
         old_resolve = iiif_mod._resolve_iiif_service_url
@@ -214,9 +214,7 @@ class TestNYPLResolution(unittest.TestCase):
         def _fake_download(service_url, *, size_spec, output_format, timeout, session):
             _ = (service_url, output_format, timeout, session)
             calls.append(size_spec)
-            if size_spec == "max":
-                raise iiif_mod._IIIFImageRequestError("forbidden", last_status=403)
-            raise RuntimeError("unexpected second single-request download")
+            raise RuntimeError("single-request path must not be used for NYPL")
 
         def _fake_assemble(service_url, info, *, output_format, timeout, session, cache_dir):
             _ = (service_url, info, output_format, timeout, session, cache_dir)
@@ -260,7 +258,7 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._download_iiif_image_bytes = old_download
             iiif_mod._assemble_iiif_full_image = old_assemble
 
-        self.assertEqual(calls, ["max"])
+        self.assertEqual(calls, [])
         self.assertEqual(assembled_calls, ["called"])
         self.assertEqual(tuple(image.shape), (1, 8, 10, 3))
         self.assertIn('"mode": "tile_assemble_full"', info_json)

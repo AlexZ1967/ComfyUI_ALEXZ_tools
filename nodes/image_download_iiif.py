@@ -1139,6 +1139,14 @@ class ImageDownloadIIIFImage:
             source_width, source_height = _iiif_source_dimensions(info)
             limit_info = _iiif_limit_from_max_area(info)
             mode = str(delivery_mode or "single_request").strip().lower()
+            site_name = str(site or "").strip()
+            is_nypl = (
+                site_name == "The New York Public Library (NYPL) Digital Collections"
+                or "iiif.nypl.org/iiif/3/" in str(service_url or "").lower()
+            )
+            if is_nypl and mode != "tile_assemble_full":
+                mode = "tile_assemble_full"
+                _log("NYPL source detected: forcing tile assembly mode (skip full-size single request).")
 
             if mode == "tile_assemble_full":
                 image, delivery_meta = _assemble_iiif_full_image(
