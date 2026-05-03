@@ -4,6 +4,10 @@ Test NYPL IIIF URL resolution in ImageDownloadIIIFImage node.
 
 import importlib
 import unittest
+from io import BytesIO
+
+import numpy as np
+from PIL import Image
 
 class TestNYPLResolution(unittest.TestCase):
     def test_nypl_extract_image_id_from_real_item_html_block(self):
@@ -183,6 +187,59 @@ class TestNYPLResolution(unittest.TestCase):
         finally:
             iiif_mod._http_get = old_http_get
         self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/57538105")
+
+    def test_nypl_download_retries_with_preview_size_when_max_returns_403(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        node = iiif_mod.ImageDownloadIIIFImage()
+        old_resolve = iiif_mod._resolve_iiif_service_url
+        old_info = iiif_mod._fetch_iiif_info
+        old_download = iiif_mod._download_iiif_image_bytes
+
+        calls = []
+
+        def _fake_resolve(*args, **kwargs):
+            _ = (args, kwargs)
+            return "https://iiif.nypl.org/iiif/3/57538105"
+
+        def _fake_info(*args, **kwargs):
+            _ = (args, kwargs)
+            return {
+                "width": 4000,
+                "height": 3000,
+                "sizes": [{"width": 1200, "height": 900}],
+            }
+
+        def _fake_download(service_url, *, size_spec, output_format, timeout, session):
+            _ = (service_url, output_format, timeout, session)
+            calls.append(size_spec)
+            if size_spec == "max":
+                raise iiif_mod._IIIFImageRequestError("forbidden", last_status=403)
+            arr = np.zeros((8, 10, 3), dtype=np.uint8)
+            arr[:, :, 0] = 64
+            arr[:, :, 1] = 128
+            arr[:, :, 2] = 192
+            im = Image.fromarray(arr, mode="RGB")
+            buff = BytesIO()
+            im.save(buff, format="JPEG")
+            return "https://iiif.nypl.org/fallback.jpg", buff.getvalue(), "jpg"
+
+        try:
+            iiif_mod._resolve_iiif_service_url = _fake_resolve
+            iiif_mod._fetch_iiif_info = _fake_info
+            iiif_mod._download_iiif_image_bytes = _fake_download
+            image, info_json = node.download(
+                "The New York Public Library (NYPL) Digital Collections",
+                "https://digitalcollections.nypl.org/items/e4c3c3e0-71a8-0136-e6bf-134f659bcb2e?canvasIndex=0",
+                size_mode="max",
+            )
+        finally:
+            iiif_mod._resolve_iiif_service_url = old_resolve
+            iiif_mod._fetch_iiif_info = old_info
+            iiif_mod._download_iiif_image_bytes = old_download
+
+        self.assertEqual(calls, ["max", "1200,"])
+        self.assertEqual(tuple(image.shape), (1, 8, 10, 3))
+        self.assertIn('"request_size_spec": "1200,"', info_json)
 
 if __name__ == "__main__":
     unittest.main()

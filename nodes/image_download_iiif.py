@@ -81,6 +81,14 @@ def _log(message: str) -> None:
     print(f"[IIIF] {message}")
 
 
+class _IIIFImageRequestError(RuntimeError):
+    """Structured image-request error that exposes HTTP status for fallbacks."""
+
+    def __init__(self, message: str, *, last_status: int | None = None):
+        super().__init__(message)
+        self.last_status = int(last_status or 0)
+
+
 def _new_http_session(site: str = "", source_url: str = "") -> requests.Session:
     """Create reusable HTTP session for IIIF requests with optional site profile."""
     session = requests.Session()
@@ -473,15 +481,34 @@ def _download_iiif_image_bytes(
         last_status = int(response.status_code)
         if last_status == 200:
             return image_url, bytes(response.content or b""), fmt
-    raise RuntimeError(
+    raise _IIIFImageRequestError(
         f"IIIF image request failed for `{service_url}` with size `{size_spec}` "
-        f"and formats {formats_to_try} (last_status={last_status})."
+        f"and formats {formats_to_try} (last_status={last_status}).",
+        last_status=last_status,
     )
 
 
 def _iiif_source_dimensions(info: dict[str, Any]) -> tuple[int, int]:
     """Return declared source width/height from IIIF info.json."""
     return max(1, int(info.get("width") or 1)), max(1, int(info.get("height") or 1))
+
+
+def _largest_listed_iiif_width(info: dict[str, Any]) -> int:
+    """Return largest width from info.sizes, or 0 when unavailable."""
+    sizes = info.get("sizes")
+    if not isinstance(sizes, list):
+        return 0
+    max_width = 0
+    for item in sizes:
+        if not isinstance(item, dict):
+            continue
+        try:
+            width = int(item.get("width") or 0)
+        except Exception:
+            width = 0
+        if width > max_width:
+            max_width = width
+    return max_width
 
 
 def _iiif_limit_from_max_area(info: dict[str, Any]) -> dict[str, Any] | None:
@@ -1132,13 +1159,37 @@ class ImageDownloadIIIFImage:
                 )
             else:
                 size_spec = _build_iiif_size_spec(size_mode, requested_width)
-                image_url, content, selected_format = _download_iiif_image_bytes(
-                    service_url,
-                    size_spec=size_spec,
-                    output_format=output_format,
-                    timeout=timeout,
-                    session=session,
-                )
+                try:
+                    image_url, content, selected_format = _download_iiif_image_bytes(
+                        service_url,
+                        size_spec=size_spec,
+                        output_format=output_format,
+                        timeout=timeout,
+                        session=session,
+                    )
+                except _IIIFImageRequestError as exc:
+                    is_full_size_403 = (
+                        exc.last_status == 403
+                        and str(size_mode or "").strip().lower() == "max"
+                    )
+                    if not is_full_size_403:
+                        raise
+                    preview_width = _largest_listed_iiif_width(info)
+                    if preview_width <= 0:
+                        raise
+                    preview_spec = f"{preview_width},"
+                    _log(
+                        "IIIF full-size request returned 403; "
+                        f"retrying with preview size `{preview_spec}`."
+                    )
+                    image_url, content, selected_format = _download_iiif_image_bytes(
+                        service_url,
+                        size_spec=preview_spec,
+                        output_format=output_format,
+                        timeout=timeout,
+                        session=session,
+                    )
+                    size_spec = preview_spec
                 image = _decode_image(content, image_url)
                 width, height = image.size
                 delivery_meta = {
