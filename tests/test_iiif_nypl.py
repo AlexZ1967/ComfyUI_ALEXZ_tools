@@ -10,6 +10,21 @@ import numpy as np
 from PIL import Image
 
 class TestNYPLResolution(unittest.TestCase):
+    def test_nypl_resolve_uses_image_id_from_source_url_query_without_network(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        site = "The New York Public Library (NYPL) Digital Collections"
+        source_url = (
+            "https://digitalcollections.nypl.org/items/"
+            "3d9f41f0-c6bb-012f-b741-58d385a7bc34?canvasIndex=0&image_id=57538105"
+        )
+        old_http_get = iiif_mod._http_get
+        try:
+            iiif_mod._http_get = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("must not call network"))
+            resolved = iiif_mod._resolve_iiif_service_url(site, source_url, timeout=1.0, session=None)
+        finally:
+            iiif_mod._http_get = old_http_get
+        self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/57538105")
+
     def test_nypl_extract_image_id_from_real_item_html_block(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
         html = (

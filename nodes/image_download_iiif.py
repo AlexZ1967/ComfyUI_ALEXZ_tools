@@ -324,6 +324,27 @@ def _iter_nypl_item_page_candidates(source_url: str) -> list[str]:
     return candidates
 
 
+def _extract_forced_nypl_image_id_from_source_url(source_url: str) -> str:
+    """Allow explicit NYPL image id override via source_url query/fragment."""
+    split = urlsplit(str(source_url or "").strip())
+    query_map = parse_qs(split.query or "")
+    fragment_map = parse_qs(split.fragment or "")
+    keys = ("image_id", "imageid", "nypl_image_id", "iiif_id")
+    for key in keys:
+        values = query_map.get(key) or query_map.get(key.upper()) or []
+        for value in values:
+            text = str(value or "").strip()
+            if text.isdigit():
+                return text
+    for key in keys:
+        values = fragment_map.get(key) or fragment_map.get(key.upper()) or []
+        for value in values:
+            text = str(value or "").strip()
+            if text.isdigit():
+                return text
+    return ""
+
+
 def _extract_gallica_service_url_from_source_url(source_url: str) -> str:
     """Build direct Gallica IIIF service URL from an ARK/object page URL."""
     text = str(source_url or "").strip()
@@ -374,6 +395,10 @@ def _resolve_iiif_service_url(
     # For NYPL pages we try to extract the numeric image id from page payload,
     # then fallback to /items/<id> token when extraction is unavailable.
     if site_name == "The New York Public Library (NYPL) Digital Collections" or "digitalcollections.nypl.org" in source_text.lower():
+        forced_image_id = _extract_forced_nypl_image_id_from_source_url(source_text)
+        if forced_image_id:
+            _log(f"NYPL imageID override from source_url: {forced_image_id}")
+            return f"https://iiif.nypl.org/iiif/3/{forced_image_id}"
         fallback_item_id = ""
         m = re.search(r"/items/([^/?#]+)", source_text, flags=re.IGNORECASE)
         if m:
