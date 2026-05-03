@@ -40,6 +40,18 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._http_get = old_http_get
         self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/NIJINSKY_2032V")
 
+    def test_nypl_resolve_uses_plain_source_url_image_id_without_network(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        site = "The New York Public Library (NYPL) Digital Collections"
+        source_url = "NIJINSKY_2032V"
+        old_http_get = iiif_mod._http_get
+        try:
+            iiif_mod._http_get = lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("must not call network"))
+            resolved = iiif_mod._resolve_iiif_service_url(site, source_url, timeout=1.0, session=None)
+        finally:
+            iiif_mod._http_get = old_http_get
+        self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/NIJINSKY_2032V")
+
     def test_nypl_download_uses_explicit_input_override_without_html_lookup(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
         node = iiif_mod.ImageDownloadIIIFImage()

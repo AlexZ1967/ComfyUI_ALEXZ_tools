@@ -415,6 +415,9 @@ def _resolve_iiif_service_url(
     # 3. do not walk long API/rp/UUID fallbacks; in restricted environments the
     #    caller should pass image_id explicitly.
     if site_name == "The New York Public Library (NYPL) Digital Collections" or "digitalcollections.nypl.org" in source_text.lower():
+        if _NYPL_IMAGE_ID_TOKEN_RE.match(source_text):
+            _log(f"NYPL imageID from source_url: {source_text}")
+            return f"https://iiif.nypl.org/iiif/3/{source_text}"
         forced_image_id = _extract_forced_nypl_image_id_from_source_url(source_text)
         if forced_image_id:
             _log(f"NYPL imageID override from source_url: {forced_image_id}")
@@ -1061,7 +1064,7 @@ class ImageDownloadIIIFImage:
                     ["London Museum Object Page", "Gallica BnF Object Page", "The New York Public Library (NYPL) Digital Collections", "Generic IIIF Service URL"],
                     {
                         "default": "London Museum Object Page",
-                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. The New York Public Library (NYPL) Digital Collections принимает прямой iiif.nypl.org service/info URL и также пытается извлечь NYPL image ID из digitalcollections item page. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
+                        "tooltip": "Источник IIIF. London Museum и Gallica умеют принимать object page URL. The New York Public Library (NYPL) Digital Collections принимает прямой iiif.nypl.org service/info URL, plain NYPL image ID и также пытается извлечь NYPL image ID из digitalcollections item page. Generic ожидает IIIF service URL, info.json URL или HTML-страницу с встраиваемым IIIF viewer.",
                     },
                 ),
                 "source_url": (
@@ -1069,7 +1072,7 @@ class ImageDownloadIIIFImage:
                     {
                         "default": "https://www.londonmuseum.org.uk/collections/v/object-443296/early-portrait-of-anna-pavlova/",
                         "multiline": False,
-                        "tooltip": "London Museum / Gallica: URL object page. The New York Public Library (NYPL) Digital Collections: прямой `https://iiif.nypl.org/iiif/3/<image_id>/info.json` или service URL; для `digitalcollections.nypl.org/items/...` нода пытается извлечь NYPL image ID автоматически (best effort). Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
+                        "tooltip": "London Museum / Gallica: URL object page. The New York Public Library (NYPL) Digital Collections: можно передать plain `image_id`, прямой `https://iiif.nypl.org/iiif/3/<image_id>/info.json`/service URL или `digitalcollections.nypl.org/items/...` URL. Generic: IIIF service URL, info.json URL или HTML-страница, из которой можно извлечь IIIF service URL.",
                     },
                 ),
             },
