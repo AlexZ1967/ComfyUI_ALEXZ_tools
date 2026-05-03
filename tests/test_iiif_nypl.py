@@ -113,5 +113,55 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._http_get = old_http_get
         self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/57538105")
 
+    def test_nypl_resolve_uses_items_json_when_api_repo_is_unavailable(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        site = "The New York Public Library (NYPL) Digital Collections"
+        source_url = "https://digitalcollections.nypl.org/items/e4c3c3e0-71a8-0136-e6bf-134f659bcb2e?canvasIndex=0"
+        old_http_get = iiif_mod._http_get
+
+        class _BlockedResponse:
+            status_code = 403
+            text = "blocked"
+
+            @staticmethod
+            def json():
+                raise RuntimeError("no json")
+
+        class _RepoUnauthorized:
+            status_code = 401
+            text = "unauthorized"
+
+            @staticmethod
+            def json():
+                raise RuntimeError("unauthorized")
+
+        class _ItemsJsonResponse:
+            status_code = 200
+            text = '{"item":{"imageID":["57538105"]}}'
+
+            @staticmethod
+            def json():
+                return {"item": {"imageID": ["57538105"]}}
+
+        def _fake_http_get(url, **kwargs):
+            _ = kwargs
+            url_text = str(url)
+            if url_text.startswith("https://digitalcollections.nypl.org/items/") and url_text.endswith(".json"):
+                return _ItemsJsonResponse()
+            if url_text.startswith("https://digitalcollections.nypl.org/items/"):
+                return _BlockedResponse()
+            if url_text.startswith("https://rp-digitalcollections.nypl.org/items/"):
+                return _BlockedResponse()
+            if url_text.startswith("https://api.repo.nypl.org/api/v2/items/"):
+                return _RepoUnauthorized()
+            raise RuntimeError(f"unexpected url: {url_text}")
+
+        try:
+            iiif_mod._http_get = _fake_http_get
+            resolved = iiif_mod._resolve_iiif_service_url(site, source_url, timeout=1.0, session=None)
+        finally:
+            iiif_mod._http_get = old_http_get
+        self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/57538105")
+
 if __name__ == "__main__":
     unittest.main()

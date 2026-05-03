@@ -248,16 +248,23 @@ def _fetch_nypl_image_id_from_api(
     if not clean_item_id:
         return ""
 
+    api_timeout = min(float(timeout), 8.0)
     api_urls = (
         f"https://api.repo.nypl.org/api/v2/items/{clean_item_id}.json",
         f"https://api.repo.nypl.org/api/v2/items/{clean_item_id}",
+        f"https://api.repo.nypl.org/api/v2/items/{clean_item_id}.xml",
+        f"https://api.repo.nypl.org/api/v2/items/item_details/{clean_item_id}.json",
+        f"https://api.repo.nypl.org/api/v2/items/mods_captures/{clean_item_id}.json",
+        f"https://digitalcollections.nypl.org/items/{clean_item_id}.json",
+        f"https://rp-digitalcollections.nypl.org/items/{clean_item_id}.json",
     )
     for api_url in api_urls:
         try:
-            response = _http_get(api_url, timeout=timeout, session=session)
+            response = _http_get(api_url, timeout=api_timeout, session=session, retries=1)
         except Exception:
             continue
         if int(response.status_code) != 200:
+            _log(f"NYPL API candidate skipped (status={int(response.status_code)}): {api_url}")
             continue
         ids: list[str] = []
         try:
@@ -267,7 +274,9 @@ def _fetch_nypl_image_id_from_api(
             pass
         ids.extend([x for x in _extract_nypl_image_ids_from_text(response.text or "") if x not in ids])
         if not ids:
+            _log(f"NYPL API candidate has no imageID markers: {api_url}")
             continue
+        _log(f"NYPL API candidate matched {len(ids)} imageID value(s): {api_url}")
         if 0 <= int(canvas_index) < len(ids):
             return ids[int(canvas_index)]
         return ids[0]
@@ -356,8 +365,9 @@ def _resolve_iiif_service_url(
             canvas_index = 0
         for candidate_url in _iter_nypl_item_page_candidates(source_text):
             try:
-                response = _http_get(candidate_url, timeout=timeout, session=session)
+                response = _http_get(candidate_url, timeout=timeout, session=session, retries=1)
                 if int(response.status_code) != 200:
+                    _log(f"NYPL page candidate skipped (status={int(response.status_code)}): {candidate_url}")
                     continue
                 html = response.text or ""
                 nypl_image_id = _extract_nypl_image_id_from_html(html)
@@ -368,6 +378,7 @@ def _resolve_iiif_service_url(
                     return service_url
             except Exception:
                 # NYPL item pages can be blocked by anti-bot filters; keep fallback.
+                _log(f"NYPL page candidate failed: {candidate_url}")
                 continue
         if fallback_item_id:
             api_image_id = _fetch_nypl_image_id_from_api(
@@ -378,6 +389,7 @@ def _resolve_iiif_service_url(
             )
             if api_image_id:
                 return f"https://iiif.nypl.org/iiif/3/{api_image_id}"
+            _log("NYPL API fallback did not return imageID; using UUID fallback.")
         if fallback_item_id:
             return f"https://iiif.nypl.org/iiif/3/{fallback_item_id}"
 
