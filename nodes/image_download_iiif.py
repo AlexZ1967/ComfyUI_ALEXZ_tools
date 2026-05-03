@@ -177,6 +177,7 @@ def _extract_nypl_image_id_from_html(html: str) -> str:
         r"https://iiif\.nypl\.org/iiif/3/(\d+)(?:/info\.json)?",
         r'"imageId"\s*:\s*"?(\d+)"?',
         r'"image_id"\s*:\s*"?(\d+)"?',
+        r"Image\s*ID[^0-9]{0,32}(\d+)",
     )
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)
@@ -273,6 +274,25 @@ def _fetch_nypl_image_id_from_api(
     return ""
 
 
+def _iter_nypl_item_page_candidates(source_url: str) -> list[str]:
+    """Return candidate NYPL item page URLs for best-effort HTML extraction."""
+    text = str(source_url or "").strip()
+    if not text:
+        return []
+    split = urlsplit(text)
+    host = str(split.netloc or "").strip().lower()
+    path = str(split.path or "")
+    query = str(split.query or "")
+    candidates: list[str] = [text]
+    if host == "digitalcollections.nypl.org":
+        alt = f"https://rp-digitalcollections.nypl.org{path}"
+        if query:
+            alt = f"{alt}?{query}"
+        if alt not in candidates:
+            candidates.append(alt)
+    return candidates
+
+
 def _extract_gallica_service_url_from_source_url(source_url: str) -> str:
     """Build direct Gallica IIIF service URL from an ARK/object page URL."""
     text = str(source_url or "").strip()
@@ -334,9 +354,11 @@ def _resolve_iiif_service_url(
             canvas_index = max(0, int(canvas_raw))
         except Exception:
             canvas_index = 0
-        try:
-            response = _http_get(source_text, timeout=timeout, session=session)
-            if int(response.status_code) == 200:
+        for candidate_url in _iter_nypl_item_page_candidates(source_text):
+            try:
+                response = _http_get(candidate_url, timeout=timeout, session=session)
+                if int(response.status_code) != 200:
+                    continue
                 html = response.text or ""
                 nypl_image_id = _extract_nypl_image_id_from_html(html)
                 if nypl_image_id:
@@ -344,9 +366,9 @@ def _resolve_iiif_service_url(
                 service_url = _extract_first_generic_iiif_service_url(html)
                 if service_url:
                     return service_url
-        except Exception:
-            # NYPL item pages can be blocked by anti-bot filters; keep fallback.
-            pass
+            except Exception:
+                # NYPL item pages can be blocked by anti-bot filters; keep fallback.
+                continue
         if fallback_item_id:
             api_image_id = _fetch_nypl_image_id_from_api(
                 fallback_item_id,
