@@ -116,7 +116,10 @@
   - Решение: переключите `size_mode`, уменьшите ширину или оставьте `output_format=jpg`
 - `Could not decode image bytes` при NYPL tile assembly:
   - Причина: сервер мог вернуть не JPEG/PNG, а HTML/служебную страницу, даже если URL выглядит корректно
-  - Решение: проверьте лог на `non-image content`; для NYPL нода теперь шлёт browser-like image headers, использует явный tile size `w,h` в region URL и автоматически выбрасывает битые cached tile bytes перед повторной загрузкой
+  - Решение: проверьте лог на `non-image content`; для NYPL нода теперь шлёт browser-like image headers, использует явный tile size `w,h` в region URL, автоматически выбрасывает битые cached tile bytes перед повторной загрузкой и консервативно режет oversized NYPL tiles до `512x512`
+- `IIIF tile request failed ... last_status=403` на NYPL:
+  - Причина: некоторые NYPL items публикуют слишком крупный tile profile, но реально отдают `403` на oversized region requests
+  - Решение: нода теперь ограничивает NYPL tile size до safe `512x512`; если ошибка остаётся, пришли конкретный `image_id` и первый failing region из лога
 - Результат меньше, чем `iiif.width` / `iiif.height`:
   - Причина: сервер ограничивает single-request размер через `maxArea` или собственную policy
   - Решение: смотрите `limits` в `info_json`; для full-res используйте `delivery_mode=tile_assemble_full`

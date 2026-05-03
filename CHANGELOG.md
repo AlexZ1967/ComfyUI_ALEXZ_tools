@@ -1,5 +1,18 @@
 # Changelog — ALEXZ_tools
 
+## 0.34.4 — 2026-05-03
+- Added conservative NYPL tile-size clamping in `Download IIIF Image`:
+  - when NYPL `info.json` advertises large tiles (for example `1024x1024`),
+    the node now clamps tile assembly to a safe maximum of `512x512`;
+  - this avoids `403` failures on NYPL region requests that are formally
+    advertised but not actually accepted by the backend;
+  - dedicated NYPL coverage was added for the tile-profile clamp.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_iiif_nypl.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.34.4` in `pyproject.toml` and `README.md`.
+
 ## 0.34.3 — 2026-05-03
 - Hardened NYPL IIIF tile cache handling in `Download IIIF Image`:
   - invalid cached tile bytes are now discarded automatically and refetched

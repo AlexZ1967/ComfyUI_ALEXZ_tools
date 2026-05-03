@@ -62,6 +62,7 @@ _DEFAULT_UA = (
 )
 _GALLICA_REFERRER = "https://gallica.bnf.fr/"
 _NYPL_REFERRER = "https://digitalcollections.nypl.org/"
+_NYPL_SAFE_TILE_MAX = 512
 _IIIF_TILE_CACHE_ROOT = Path(__file__).resolve().parent.parent / "cache" / "iiif_tiles"
 _RETRYABLE_HTTP_EXCEPTIONS = (
     requests.exceptions.ReadTimeout,
@@ -565,7 +566,7 @@ def _iiif_limit_from_max_area(info: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _iiif_tile_profile(info: dict[str, Any]) -> dict[str, int]:
+def _iiif_tile_profile(info: dict[str, Any], *, service_url: str = "") -> dict[str, int]:
     """Extract tile profile needed for full-res assembly."""
     tiles = info.get("tiles") or []
     if not isinstance(tiles, list) or not tiles:
@@ -576,6 +577,10 @@ def _iiif_tile_profile(info: dict[str, Any]) -> dict[str, int]:
         raise RuntimeError("IIIF service does not expose scaleFactor=1, full-res tile assembly is unavailable.")
     tile_width = max(1, int(tile.get("width") or 512))
     tile_height = max(1, int(tile.get("height") or tile_width))
+    service_text = str(service_url or "").strip().lower()
+    if "iiif.nypl.org/iiif/3/" in service_text:
+        tile_width = min(tile_width, _NYPL_SAFE_TILE_MAX)
+        tile_height = min(tile_height, _NYPL_SAFE_TILE_MAX)
     return {
         "tile_width": tile_width,
         "tile_height": tile_height,
@@ -746,7 +751,7 @@ def _assemble_iiif_full_image(
 ) -> tuple[Image.Image, dict[str, Any]]:
     """Assemble full-resolution image from IIIF tiles at scaleFactor=1."""
     source_width, source_height = _iiif_source_dimensions(info)
-    tile_profile = _iiif_tile_profile(info)
+    tile_profile = _iiif_tile_profile(info, service_url=service_url)
     tile_width = int(tile_profile["tile_width"])
     tile_height = int(tile_profile["tile_height"])
     tiles_x = int(math.ceil(float(source_width) / float(tile_width)))

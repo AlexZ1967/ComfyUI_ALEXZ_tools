@@ -63,6 +63,17 @@ class TestNYPLResolution(unittest.TestCase):
         self.assertEqual(session.headers.get("Accept-Language"), "en-US,en;q=0.9")
         self.assertIn("image/*", str(session.headers.get("Accept") or ""))
 
+    def test_nypl_tile_profile_clamps_large_tiles_to_safe_size(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        profile = iiif_mod._iiif_tile_profile(
+            {
+                "tiles": [{"width": 1024, "height": 1024, "scaleFactors": [1, 2, 4]}],
+            },
+            service_url="https://iiif.nypl.org/iiif/3/5011522",
+        )
+        self.assertEqual(profile["tile_width"], 512)
+        self.assertEqual(profile["tile_height"], 512)
+
     def test_nypl_download_uses_plain_source_url_image_id_without_html_lookup(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
         node = iiif_mod.ImageDownloadIIIFImage()
