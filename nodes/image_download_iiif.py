@@ -26,7 +26,7 @@ import traceback
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import numpy as np
 import requests
@@ -187,6 +187,92 @@ def _extract_nypl_image_id_from_html(html: str) -> str:
     return ""
 
 
+def _extract_nypl_image_ids_from_text(text: str) -> list[str]:
+    """Extract NYPL image ids from generic text/JSON/XML payload."""
+    source = str(text or "")
+    if not source:
+        return []
+    patterns = (
+        r'"imageID"\s*:\s*"?(\d+)"?',
+        r'"imageId"\s*:\s*"?(\d+)"?',
+        r"<imageID>\s*(\d+)\s*</imageID>",
+        r"https://iiif\.nypl\.org/iiif/3/(\d+)(?:/info\.json)?",
+    )
+    ids: list[str] = []
+    for pattern in patterns:
+        for match in re.findall(pattern, source, flags=re.IGNORECASE):
+            value = str(match or "").strip()
+            if value and value not in ids:
+                ids.append(value)
+    return ids
+
+
+def _extract_nypl_image_ids_from_json_payload(payload: Any) -> list[str]:
+    """Walk arbitrary JSON payload and collect imageID-like numeric values."""
+    ids: list[str] = []
+
+    def _walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                key_text = str(key or "").strip().lower()
+                if key_text in {"imageid", "image_id"}:
+                    if isinstance(value, (list, tuple)):
+                        for item in value:
+                            item_text = str(item or "").strip()
+                            if item_text.isdigit() and item_text not in ids:
+                                ids.append(item_text)
+                    else:
+                        value_text = str(value or "").strip()
+                        if value_text.isdigit() and value_text not in ids:
+                            ids.append(value_text)
+                _walk(value)
+            return
+        if isinstance(node, (list, tuple)):
+            for item in node:
+                _walk(item)
+
+    _walk(payload)
+    return ids
+
+
+def _fetch_nypl_image_id_from_api(
+    item_id: str,
+    *,
+    canvas_index: int,
+    timeout: float,
+    session: requests.Session | None = None,
+) -> str:
+    """Best-effort lookup of NYPL numeric image id via public API endpoints."""
+    clean_item_id = str(item_id or "").strip()
+    if not clean_item_id:
+        return ""
+
+    api_urls = (
+        f"https://api.repo.nypl.org/api/v2/items/{clean_item_id}.json",
+        f"https://api.repo.nypl.org/api/v2/items/{clean_item_id}",
+    )
+    for api_url in api_urls:
+        try:
+            response = _http_get(api_url, timeout=timeout, session=session)
+        except Exception:
+            continue
+        if int(response.status_code) != 200:
+            continue
+        ids: list[str] = []
+        try:
+            payload = response.json()
+            ids.extend(_extract_nypl_image_ids_from_json_payload(payload))
+        except Exception:
+            pass
+        ids.extend([x for x in _extract_nypl_image_ids_from_text(response.text or "") if x not in ids])
+        if not ids:
+            continue
+        if 0 <= int(canvas_index) < len(ids):
+            return ids[int(canvas_index)]
+        return ids[0]
+    return ""
+
+
 def _extract_gallica_service_url_from_source_url(source_url: str) -> str:
     """Build direct Gallica IIIF service URL from an ARK/object page URL."""
     text = str(source_url or "").strip()
@@ -241,6 +327,13 @@ def _resolve_iiif_service_url(
         m = re.search(r"/items/([^/?#]+)", source_text, flags=re.IGNORECASE)
         if m:
             fallback_item_id = str(m.group(1) or "").strip()
+        canvas_index = 0
+        try:
+            qs = parse_qs(urlsplit(source_text).query or "")
+            canvas_raw = str((qs.get("canvasIndex") or ["0"])[0] or "0").strip()
+            canvas_index = max(0, int(canvas_raw))
+        except Exception:
+            canvas_index = 0
         try:
             response = _http_get(source_text, timeout=timeout, session=session)
             if int(response.status_code) == 200:
@@ -254,6 +347,15 @@ def _resolve_iiif_service_url(
         except Exception:
             # NYPL item pages can be blocked by anti-bot filters; keep fallback.
             pass
+        if fallback_item_id:
+            api_image_id = _fetch_nypl_image_id_from_api(
+                fallback_item_id,
+                canvas_index=canvas_index,
+                timeout=timeout,
+                session=session,
+            )
+            if api_image_id:
+                return f"https://iiif.nypl.org/iiif/3/{api_image_id}"
         if fallback_item_id:
             return f"https://iiif.nypl.org/iiif/3/{fallback_item_id}"
 
