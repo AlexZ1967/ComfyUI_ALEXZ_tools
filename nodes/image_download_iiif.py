@@ -69,6 +69,8 @@ _RETRYABLE_HTTP_EXCEPTIONS = (
     requests.exceptions.SSLError,
 )
 
+_NYPL_IMAGE_ID_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
 # Local deterministic fallbacks for known NYPL items when online resolution
 # is blocked by anti-bot/network constraints in runtime environments.
 _NYPL_ITEM_ID_OVERRIDES = {
@@ -183,23 +185,23 @@ def _extract_first_generic_iiif_service_url(html: str) -> str:
 
 
 def _extract_nypl_image_id_from_html(html: str) -> str:
-    """Extract numeric NYPL image id from page HTML when available."""
+    """Extract NYPL image id token from page HTML when available."""
     text = str(html or "")
     if not text:
         return ""
     patterns = (
-        r'id\s*=\s*["\']image-id["\'][^>]*>\s*(\d+)\s*<',
-        r'aria-label\s*=\s*["\']Image ID["\'][^>]*>\s*(\d+)\s*<',
-        r"https://iiif\.nypl\.org/iiif/3/(\d+)(?:/info\.json)?",
-        r'"imageId"\s*:\s*"?(\d+)"?',
-        r'"image_id"\s*:\s*"?(\d+)"?',
-        r"Image\s*ID[\s\S]{0,2048}?(\d+)",
+        r'id\s*=\s*["\']image-id["\'][^>]*>\s*([A-Za-z0-9_-]+)\s*<',
+        r'aria-label\s*=\s*["\']Image ID["\'][^>]*>\s*([A-Za-z0-9_-]+)\s*<',
+        r"https://iiif\.nypl\.org/iiif/3/([A-Za-z0-9_-]+)(?:/info\.json)?",
+        r'"imageId"\s*:\s*"?([A-Za-z0-9_-]+)"?',
+        r'"image_id"\s*:\s*"?([A-Za-z0-9_-]+)"?',
+        r"Image\s*ID[\s\S]{0,2048}?([A-Za-z0-9_-]+)",
     )
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
             image_id = str(match.group(1) or "").strip()
-            if image_id:
+            if image_id and _NYPL_IMAGE_ID_TOKEN_RE.match(image_id):
                 return image_id
     return ""
 
@@ -334,13 +336,13 @@ def _extract_forced_nypl_image_id_from_source_url(source_url: str) -> str:
         values = query_map.get(key) or query_map.get(key.upper()) or []
         for value in values:
             text = str(value or "").strip()
-            if text.isdigit():
+            if text and _NYPL_IMAGE_ID_TOKEN_RE.match(text):
                 return text
     for key in keys:
         values = fragment_map.get(key) or fragment_map.get(key.upper()) or []
         for value in values:
             text = str(value or "").strip()
-            if text.isdigit():
+            if text and _NYPL_IMAGE_ID_TOKEN_RE.match(text):
                 return text
     return ""
 
@@ -420,7 +422,7 @@ def _resolve_iiif_service_url(
             pass
         raise RuntimeError(
             "Could not extract NYPL Image ID from item page. "
-            "Add `image_id=<numeric_id>` to source_url and retry."
+            "Add `image_id=<nypl_image_id>` to source_url and retry."
         )
 
     response = _http_get(source_text, timeout=timeout, session=session)
