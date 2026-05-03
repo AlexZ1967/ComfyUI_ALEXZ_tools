@@ -52,7 +52,7 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._http_get = old_http_get
         self.assertEqual(resolved, "https://iiif.nypl.org/iiif/3/NIJINSKY_2032V")
 
-    def test_nypl_download_uses_explicit_input_override_without_html_lookup(self):
+    def test_nypl_download_uses_plain_source_url_image_id_without_html_lookup(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
         node = iiif_mod.ImageDownloadIIIFImage()
         old_resolve = iiif_mod._resolve_iiif_service_url
@@ -107,8 +107,7 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._assemble_iiif_full_image = _fake_assemble
             image, info_json = node.download(
                 "The New York Public Library (NYPL) Digital Collections",
-                "https://digitalcollections.nypl.org/items/3d9f41f0-c6bb-012f-b741-58d385a7bc34?canvasIndex=0",
-                nypl_image_id="NIJINSKY_2032V",
+                "NIJINSKY_2032V",
             )
         finally:
             iiif_mod._resolve_iiif_service_url = old_resolve
@@ -119,9 +118,9 @@ class TestNYPLResolution(unittest.TestCase):
         self.assertEqual(tuple(image.shape), (1, 8, 10, 3))
         self.assertEqual(
             resolved_inputs,
-            ["https://digitalcollections.nypl.org/items/3d9f41f0-c6bb-012f-b741-58d385a7bc34?canvasIndex=0&image_id=NIJINSKY_2032V"],
+            ["NIJINSKY_2032V"],
         )
-        self.assertIn('"nypl_image_id": "NIJINSKY_2032V"', info_json)
+        self.assertNotIn('"nypl_image_id":', info_json)
 
     def test_nypl_extract_image_id_from_real_item_html_block(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")

@@ -1077,14 +1077,6 @@ class ImageDownloadIIIFImage:
                 ),
             },
             "optional": {
-                "nypl_image_id": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "multiline": False,
-                        "tooltip": "Только для NYPL. Явный `Image ID`/`image_id` из item page, например `57538105` или `NIJINSKY_2032V`. Если заполнено, нода использует его для резолва IIIF service URL и не зависит от HTML item page.",
-                    },
-                ),
                 "size_mode": (
                     ["max", "width"],
                     {
@@ -1306,7 +1298,6 @@ class ImageDownloadIIIFImage:
             payload = {
                 "site": str(site or "").strip(),
                 "source_url": str(source_url or "").strip(),
-                "nypl_image_id": str(nypl_image_id or "").strip(),
                 "service_url": service_url,
                 "info_url": f"{service_url}/info.json",
                 "image_url": image_url,
