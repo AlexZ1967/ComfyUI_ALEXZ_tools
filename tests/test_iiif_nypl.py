@@ -3,6 +3,7 @@ Test NYPL IIIF URL resolution in ImageDownloadIIIFImage node.
 """
 
 import importlib
+import tempfile
 import unittest
 from io import BytesIO
 
@@ -244,6 +245,44 @@ class TestNYPLResolution(unittest.TestCase):
         self.assertEqual(assembled_calls, ["called"])
         self.assertEqual(tuple(image.shape), (1, 8, 10, 3))
         self.assertIn('"mode": "tile_assemble_full"', info_json)
+
+    def test_iiif_tile_download_uses_explicit_region_size_not_max(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        old_http_get = iiif_mod._http_get
+        seen_urls = []
+
+        class _Response:
+            status_code = 200
+            content = b"tile-bytes"
+
+        try:
+            def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
+                _ = (timeout, session, retries, retry_backoff)
+                seen_urls.append(url)
+                return _Response()
+
+            iiif_mod._http_get = _fake_http_get
+            with tempfile.TemporaryDirectory() as tmpdir:
+                image_url, content, fmt = iiif_mod._download_iiif_tile_bytes(
+                    "https://iiif.nypl.org/iiif/3/NIJINSKY_2033V",
+                    region="0,0,462,512",
+                    size_spec="462,512",
+                    output_format="jpg",
+                    timeout=1.0,
+                    session=None,
+                    cache_dir=tmpdir,
+                    cache_stats=None,
+                )
+        finally:
+            iiif_mod._http_get = old_http_get
+
+        self.assertEqual(fmt, "jpg")
+        self.assertEqual(content, b"tile-bytes")
+        self.assertEqual(
+            image_url,
+            "https://iiif.nypl.org/iiif/3/NIJINSKY_2033V/0,0,462,512/462,512/0/default.jpg",
+        )
+        self.assertEqual(seen_urls, [image_url])
 
 if __name__ == "__main__":
     unittest.main()

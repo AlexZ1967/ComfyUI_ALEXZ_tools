@@ -637,6 +637,7 @@ def _download_iiif_tile_bytes(
     service_url: str,
     *,
     region: str,
+    size_spec: str = "",
     output_format: str,
     timeout: float,
     session: requests.Session | None = None,
@@ -645,6 +646,13 @@ def _download_iiif_tile_bytes(
 ) -> tuple[str, bytes, str]:
     """Download one IIIF tile region, with jpg fallback when requested format fails."""
     requested_format = str(output_format or "jpg").strip().lower().lstrip(".") or "jpg"
+    tile_size_spec = str(size_spec or "").strip()
+    if not tile_size_spec:
+        parts = [part.strip() for part in str(region or "").split(",")]
+        if len(parts) == 4 and parts[2].isdigit() and parts[3].isdigit():
+            tile_size_spec = f"{parts[2]},{parts[3]}"
+        else:
+            tile_size_spec = "max"
     formats_to_try = [requested_format]
     if requested_format != "jpg":
         formats_to_try.append("jpg")
@@ -652,7 +660,7 @@ def _download_iiif_tile_bytes(
     cache_root = _resolve_iiif_cache_dir(cache_dir)
     for fmt in formats_to_try:
         check_interrupt()
-        image_url = f"{service_url.rstrip('/')}/{region}/max/0/default.{fmt}"
+        image_url = f"{service_url.rstrip('/')}/{region}/{tile_size_spec}/0/default.{fmt}"
         cached = _load_iiif_tile_from_cache(cache_root, image_url)
         if cached is not None:
             if cache_stats is not None:
@@ -708,9 +716,11 @@ def _assemble_iiif_full_image(
                 w = int(min(tile_width, source_width - x))
                 h = int(min(tile_height, source_height - y))
                 region = f"{x},{y},{w},{h}"
+                size_spec = f"{w},{h}"
                 tile_url, content, tile_format = _download_iiif_tile_bytes(
                     service_url,
                     region=region,
+                    size_spec=size_spec,
                     output_format=output_format,
                     timeout=timeout,
                     session=session,

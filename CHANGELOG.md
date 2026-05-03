@@ -1,17 +1,28 @@
 # Changelog — ALEXZ_tools
 
-## Unreleased
+## 0.34.1 — 2026-05-03
 - Simplified NYPL support in `Download IIIF Image`:
   - for `site = The New York Public Library (NYPL) Digital Collections`,
-    `source_url` can now be a plain NYPL image id such as `57538105` or
-    `NIJINSKY_2032V`;
-  - the node now builds `https://iiif.nypl.org/iiif/3/<image_id>` directly
-    from that value;
+    `source_url` can now be a plain NYPL image id such as `57538105`,
+    `NIJINSKY_2032V`, or `NIJINSKY_2033V`;
+  - the node builds `https://iiif.nypl.org/iiif/3/<image_id>` directly from
+    that value;
   - the temporary separate `nypl_image_id` UI input was removed again to keep
     NYPL on the same single-field flow as other IIIF sources.
+- Fixed NYPL tile assembly for services that expect explicit tile size in the
+  region request path:
+  - tile URLs now use `region/<w>,<h>/0/default.<fmt>` instead of
+    `region/max/0/default.<fmt>`;
+  - this aligns the node with working NYPL region-request URLs and avoids
+    non-image responses on some NYPL items.
 - NYPL docs were synchronized across:
   - `README.md`
   - `guides/GUIDE_IIIF_IMAGE_DOWNLOAD.md`
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_iiif_nypl.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.34.1` in `pyproject.toml` and `README.md`.
 
 ## 0.34.0 — 2026-04-23
 - Minor-version release for the safe stabilization pass and follow-up baseline
