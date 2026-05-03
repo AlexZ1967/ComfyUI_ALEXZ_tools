@@ -2130,7 +2130,7 @@ class SmokeTests(unittest.TestCase):
             def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
                 _ = (timeout, session, retries, retry_backoff)
                 calls["count"] += 1
-                return _DummyResponse(b"tile-bytes")
+                return _DummyResponse(b"\xff\xd8\xff\xdbtile-bytes")
 
             iiif_mod._http_get = _fake_http_get
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -2152,10 +2152,51 @@ class SmokeTests(unittest.TestCase):
             iiif_mod._http_get = old_http_get
 
         self.assertEqual(tile_url_1, tile_url_2)
-        self.assertEqual(content_1, b"tile-bytes")
-        self.assertEqual(content_2, b"tile-bytes")
+        self.assertEqual(content_1, b"\xff\xd8\xff\xdbtile-bytes")
+        self.assertEqual(content_2, b"\xff\xd8\xff\xdbtile-bytes")
         self.assertEqual(fmt_1, "jpg")
         self.assertEqual(fmt_2, "jpg")
+        self.assertEqual(calls["count"], 1)
+
+    def test_iiif_tile_cache_discards_invalid_cached_bytes_and_refetches(self):
+        """Verify invalid cached tile bytes are deleted and replaced by a fresh network response."""
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        old_http_get = iiif_mod._http_get
+        calls = {"count": 0}
+
+        class _DummyResponse:
+            def __init__(self, content: bytes):
+                self.status_code = 200
+                self.content = content
+                self.text = ""
+
+            def json(self):
+                return {}
+
+        try:
+            def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
+                _ = (url, timeout, session, retries, retry_backoff)
+                calls["count"] += 1
+                return _DummyResponse(b"\xff\xd8\xff\xdbfresh-jpeg-bytes")
+
+            iiif_mod._http_get = _fake_http_get
+            with tempfile.TemporaryDirectory() as tmpdir:
+                image_url = "https://collections.example.test/iiif/3/sample.ptif/0,0,128,128/128,128/0/default.jpg"
+                cache_root = iiif_mod._resolve_iiif_cache_dir(tmpdir)
+                iiif_mod._store_iiif_tile_in_cache(cache_root, image_url, b"<html>forbidden</html>")
+                tile_url, content, fmt = iiif_mod._download_iiif_tile_bytes(
+                    "https://collections.example.test/iiif/3/sample.ptif",
+                    region="0,0,128,128",
+                    output_format="jpg",
+                    timeout=1.0,
+                    cache_dir=tmpdir,
+                )
+        finally:
+            iiif_mod._http_get = old_http_get
+
+        self.assertEqual(tile_url, image_url)
+        self.assertEqual(content, b"\xff\xd8\xff\xdbfresh-jpeg-bytes")
+        self.assertEqual(fmt, "jpg")
         self.assertEqual(calls["count"], 1)
 
     def test_iiif_tile_assembly_clears_cache_after_success(self):

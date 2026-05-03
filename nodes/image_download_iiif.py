@@ -622,6 +622,24 @@ def _iiif_tile_cache_path(cache_root: Path, image_url: str) -> Path:
     return cache_root / digest[:2] / f"{digest}{ext}"
 
 
+def _looks_like_raster_image_bytes(content: bytes) -> bool:
+    """Cheap signature check for common raster formats returned by IIIF servers."""
+    blob = bytes(content or b"")
+    if len(blob) < 8:
+        return False
+    if blob.startswith(b"\xff\xd8\xff"):
+        return True
+    if blob.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if blob.startswith((b"GIF87a", b"GIF89a")):
+        return True
+    if blob.startswith((b"II*\x00", b"MM\x00*")):
+        return True
+    if blob[:4] == b"RIFF" and blob[8:12] == b"WEBP":
+        return True
+    return False
+
+
 def _load_iiif_tile_from_cache(cache_root: Path, image_url: str) -> bytes | None:
     """Load cached tile bytes if present."""
     path = _iiif_tile_cache_path(cache_root, image_url)
@@ -631,6 +649,16 @@ def _load_iiif_tile_from_cache(cache_root: Path, image_url: str) -> bytes | None
     except Exception:
         return None
     return None
+
+
+def _delete_iiif_tile_from_cache(cache_root: Path, image_url: str) -> None:
+    """Delete one cached tile so the next attempt is forced to refetch it."""
+    path = _iiif_tile_cache_path(cache_root, image_url)
+    try:
+        if path.exists():
+            path.unlink()
+    except Exception:
+        return None
 
 
 def _store_iiif_tile_in_cache(cache_root: Path, image_url: str, content: bytes) -> None:
@@ -672,25 +700,34 @@ def _download_iiif_tile_bytes(
         image_url = f"{service_url.rstrip('/')}/{region}/{tile_size_spec}/0/default.{fmt}"
         cached = _load_iiif_tile_from_cache(cache_root, image_url)
         if cached is not None:
-            if cache_stats is not None:
-                cache_stats["hits"] = int(cache_stats.get("hits", 0)) + 1
-            return image_url, cached, fmt
+            if not _looks_like_raster_image_bytes(cached):
+                _delete_iiif_tile_from_cache(cache_root, image_url)
+            else:
+                if cache_stats is not None:
+                    cache_stats["hits"] = int(cache_stats.get("hits", 0)) + 1
+                return image_url, cached, fmt
         response = _http_get(image_url, timeout=timeout, session=session)
         last_status = int(response.status_code)
         if last_status == 200:
             content = bytes(response.content or b"")
-            response_headers = getattr(response, "headers", {}) or {}
-            content_type = str(response_headers.get("content-type") or "").strip().lower()
-            if content_type and not content_type.startswith("image/"):
-                preview = bytes(content[:120]).decode("utf-8", errors="replace").replace("\n", " ").replace("\r", " ")
+            if not _looks_like_raster_image_bytes(content):
+                response_headers = getattr(response, "headers", {}) or {}
+                content_type = str(response_headers.get("content-type") or "").strip().lower()
+                if content_type and not content_type.startswith("image/"):
+                    preview = bytes(content[:120]).decode("utf-8", errors="replace").replace("\n", " ").replace("\r", " ")
+                    raise RuntimeError(
+                        f"IIIF tile request returned non-image content for `{image_url}` "
+                        f"(content-type={content_type}, preview={preview!r})"
+                    )
+                preview = bytes(content[:32]).hex()
                 raise RuntimeError(
-                    f"IIIF tile request returned non-image content for `{image_url}` "
-                    f"(content-type={content_type}, preview={preview!r})"
+                    f"IIIF tile request returned undecodable bytes for `{image_url}` "
+                    f"(content-type={content_type or 'unknown'}, first_bytes_hex={preview})"
                 )
-            _store_iiif_tile_in_cache(cache_root, image_url, content)
             if cache_stats is not None:
                 cache_stats["misses"] = int(cache_stats.get("misses", 0)) + 1
                 cache_stats["stores"] = int(cache_stats.get("stores", 0)) + 1
+            _store_iiif_tile_in_cache(cache_root, image_url, content)
             return image_url, content, fmt
     raise RuntimeError(
         f"IIIF tile request failed for `{service_url}` region `{region}` "

@@ -1,5 +1,18 @@
 # Changelog — ALEXZ_tools
 
+## 0.34.3 — 2026-05-03
+- Hardened NYPL IIIF tile cache handling in `Download IIIF Image`:
+  - invalid cached tile bytes are now discarded automatically and refetched
+    instead of being reused and failing later in Pillow decode;
+  - raw tile responses are checked with a lightweight image-signature guard
+    before being stored in the persistent cache;
+  - smoke coverage now includes invalid-cache replacement for IIIF tile fetches.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_iiif_nypl.py`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k "iiif or node_ui_metadata_compat"`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.34.3` in `pyproject.toml` and `README.md`.
+
 ## 0.34.2 — 2026-05-03
 - Hardened NYPL IIIF tile delivery in `Download IIIF Image`:
   - NYPL sessions now send browser-like image request headers

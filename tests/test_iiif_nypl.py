@@ -263,7 +263,7 @@ class TestNYPLResolution(unittest.TestCase):
 
         class _Response:
             status_code = 200
-            content = b"tile-bytes"
+            content = b"\xff\xd8\xff\xdbtile-bytes"
 
         try:
             def _fake_http_get(url, *, timeout, session=None, retries=3, retry_backoff=0.75):
@@ -287,7 +287,7 @@ class TestNYPLResolution(unittest.TestCase):
             iiif_mod._http_get = old_http_get
 
         self.assertEqual(fmt, "jpg")
-        self.assertEqual(content, b"tile-bytes")
+        self.assertEqual(content, b"\xff\xd8\xff\xdbtile-bytes")
         self.assertEqual(
             image_url,
             "https://iiif.nypl.org/iiif/3/NIJINSKY_2033V/0,0,462,512/462,512/0/default.jpg",
