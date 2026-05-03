@@ -174,10 +174,12 @@ def _extract_nypl_image_id_from_html(html: str) -> str:
     if not text:
         return ""
     patterns = (
+        r'id\s*=\s*["\']image-id["\'][^>]*>\s*(\d+)\s*<',
+        r'aria-label\s*=\s*["\']Image ID["\'][^>]*>\s*(\d+)\s*<',
         r"https://iiif\.nypl\.org/iiif/3/(\d+)(?:/info\.json)?",
         r'"imageId"\s*:\s*"?(\d+)"?',
         r'"image_id"\s*:\s*"?(\d+)"?',
-        r"Image\s*ID[^0-9]{0,32}(\d+)",
+        r"Image\s*ID[\s\S]{0,2048}?(\d+)",
     )
     for pattern in patterns:
         match = re.search(pattern, text, flags=re.IGNORECASE)

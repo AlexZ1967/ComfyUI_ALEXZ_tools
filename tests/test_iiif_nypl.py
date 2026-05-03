@@ -6,6 +6,15 @@ import importlib
 import unittest
 
 class TestNYPLResolution(unittest.TestCase):
+    def test_nypl_extract_image_id_from_real_item_html_block(self):
+        iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
+        html = (
+            '<div class="css-0"><h2 class="chakra-heading css-bfy4z6" data-testid="ds-heading">'
+            'Image ID</h2><p class="chakra-text css-1xdhyk6" data-testid="ds-text" id="image-id" '
+            'aria-label="Image ID">57538105</p></div>'
+        )
+        self.assertEqual(iiif_mod._extract_nypl_image_id_from_html(html), "57538105")
+
     def test_nypl_resolve_prefers_numeric_image_id_from_page(self):
         iiif_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_iiif")
         site = "The New York Public Library (NYPL) Digital Collections"
