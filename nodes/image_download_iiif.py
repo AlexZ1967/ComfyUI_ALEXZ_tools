@@ -390,32 +390,25 @@ def _resolve_iiif_service_url(
         if service_url:
             return service_url
 
-    # NYPL Digital Collections – item page URLs look like
-    #   https://digitalcollections.nypl.org/items/<nypl_id>?canvasIndex=0
-    # For NYPL pages we try to extract the numeric image id from page payload,
-    # then fallback to /items/<id> token when extraction is unavailable.
+    # NYPL Digital Collections:
+    # 1. accept explicit image_id override in source_url
+    # 2. otherwise make one fast attempt to read the HTML item page and extract
+    #    the numeric Image ID from the known DOM block
+    # 3. do not walk long API/rp/UUID fallbacks; in restricted environments the
+    #    caller should pass image_id explicitly.
     if site_name == "The New York Public Library (NYPL) Digital Collections" or "digitalcollections.nypl.org" in source_text.lower():
         forced_image_id = _extract_forced_nypl_image_id_from_source_url(source_text)
         if forced_image_id:
             _log(f"NYPL imageID override from source_url: {forced_image_id}")
             return f"https://iiif.nypl.org/iiif/3/{forced_image_id}"
-        fallback_item_id = ""
-        m = re.search(r"/items/([^/?#]+)", source_text, flags=re.IGNORECASE)
-        if m:
-            fallback_item_id = str(m.group(1) or "").strip()
-        canvas_index = 0
         try:
-            qs = parse_qs(urlsplit(source_text).query or "")
-            canvas_raw = str((qs.get("canvasIndex") or ["0"])[0] or "0").strip()
-            canvas_index = max(0, int(canvas_raw))
-        except Exception:
-            canvas_index = 0
-        for candidate_url in _iter_nypl_item_page_candidates(source_text):
-            try:
-                response = _http_get(candidate_url, timeout=timeout, session=session, retries=1)
-                if int(response.status_code) != 200:
-                    _log(f"NYPL page candidate skipped (status={int(response.status_code)}): {candidate_url}")
-                    continue
+            response = _http_get(
+                source_text,
+                timeout=min(float(timeout), 8.0),
+                session=session,
+                retries=1,
+            )
+            if int(response.status_code) == 200:
                 html = response.text or ""
                 nypl_image_id = _extract_nypl_image_id_from_html(html)
                 if nypl_image_id:
@@ -423,26 +416,12 @@ def _resolve_iiif_service_url(
                 service_url = _extract_first_generic_iiif_service_url(html)
                 if service_url:
                     return service_url
-            except Exception:
-                # NYPL item pages can be blocked by anti-bot filters; keep fallback.
-                _log(f"NYPL page candidate failed: {candidate_url}")
-                continue
-        if fallback_item_id:
-            api_image_id = _fetch_nypl_image_id_from_api(
-                fallback_item_id,
-                canvas_index=canvas_index,
-                timeout=timeout,
-                session=session,
-            )
-            if api_image_id:
-                return f"https://iiif.nypl.org/iiif/3/{api_image_id}"
-            local_image_id = _lookup_nypl_item_id_override(fallback_item_id)
-            if local_image_id:
-                _log(f"NYPL local override matched item UUID -> imageID: {fallback_item_id} -> {local_image_id}")
-                return f"https://iiif.nypl.org/iiif/3/{local_image_id}"
-            _log("NYPL API fallback did not return imageID; using UUID fallback.")
-        if fallback_item_id:
-            return f"https://iiif.nypl.org/iiif/3/{fallback_item_id}"
+        except Exception:
+            pass
+        raise RuntimeError(
+            "Could not extract NYPL Image ID from item page. "
+            "Add `image_id=<numeric_id>` to source_url and retry."
+        )
 
     response = _http_get(source_text, timeout=timeout, session=session)
     if int(response.status_code) != 200:
