@@ -1,5 +1,32 @@
 # Changelog — ALEXZ_tools
 
+## 0.35.0 — 2026-05-08
+- Added new `Silent Film Cadence` video stylization node:
+  - accepts VHS/Comfy `IMAGE` frame batches and emulates silent-era cadence
+    with target capture ranges such as `16-20 fps`, fps drift, and temporal
+    exposure blur;
+  - includes two playback modes: `preserve_duration_25fps` for cadence-only
+    stylization and `undercrank_projected_25fps` for historically accurate
+    speed-up when the shortened batch is assembled back at `25 fps`;
+  - returns diagnostic `cadence_json` with effective fps, interval/group
+    sizes, durations, and preview values for drift/bias behavior.
+- Hardened the new cadence node after real workflow feedback:
+  - fixed ComfyUI output contract for the `STRING` socket so the node no
+    longer appears to run successfully with an empty result;
+  - replaced exact intra-group duplicate frames with phase-shifted temporal
+    samples when blur is enabled, reducing the "double frame" look;
+  - fixed an `IndexError` in `undercrank_projected_25fps` by deriving blur
+    span from interval duration instead of preserve-mode group maps.
+- Wired release docs and validation around the new node:
+  - registered the node in canonical registry/UI metadata;
+  - added README section and dedicated guide
+    `guides/GUIDE_VIDEO_SILENT_FILM_CADENCE.md`;
+  - extended smoke coverage for both preserve-duration and undercrank modes.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.35.0` in `pyproject.toml` and `README.md`.
+
 ## 0.34.5 — 2026-05-07
 - Reduced project-side Pillow deprecation risk ahead of Pillow 13:
   - removed deprecated `mode=` usage from `Image.fromarray(...)` in the

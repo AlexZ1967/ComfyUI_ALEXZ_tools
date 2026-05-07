@@ -75,6 +75,12 @@ NODE_DOCS = [
         "readme_heading": "## Match Video Cut Point",
     },
     {
+        "file": "nodes/video_silent_film_cadence.py",
+        "class": "VideoSilentFilmCadence",
+        "guide": "guides/GUIDE_VIDEO_SILENT_FILM_CADENCE.md",
+        "readme_heading": "## Silent Film Cadence",
+    },
+    {
         "file": "nodes/image_difference.py",
         "class": "ImageDifference",
         "guide": "guides/GUIDE_IMAGE_DIFFERENCE.md",

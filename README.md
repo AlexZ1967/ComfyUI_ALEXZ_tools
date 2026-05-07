@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.34.5
+Version: 0.35.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -51,6 +51,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Seam Match To Reference (Legacy)](#seam-match-to-reference-legacy)
 - [Find Closest Video Frame](#find-closest-video-frame)
 - [Match Video Cut Point](#match-video-cut-point)
+- [Silent Film Cadence](#silent-film-cadence)
 - [Image Difference](#image-difference)
 - [Generate QR Code](#generate-qr-code)
 - [Download DZI Tiles Image](#download-dzi-tiles-image)
@@ -217,6 +218,21 @@ Guide: [GUIDE_VIDEO_FRAME_MATCH.md](guides/GUIDE_VIDEO_FRAME_MATCH.md)
 Для удобства в ноде есть две отдельные кнопки загрузки: `choose video_a to upload` и `choose video_b to upload`.
 `match_json` содержит `best`, `top_k`, `confidence` и `cut_hint` для склейки.
 Guide: [GUIDE_VIDEO_CUT_MATCH.md](guides/GUIDE_VIDEO_CUT_MATCH.md)
+
+---
+
+## Silent Film Cadence
+Снижает эффективную кадровую плотность батча до диапазона немого кино (`16-20 fps`), оставляя длительность и количество выходных кадров как у исходного 25 fps клипа. Для каждого виртуального low-fps кадра строится hold-группа и, при необходимости, добавляется темпоральный motion blur за счет усреднения соседних исходных кадров.
+
+- Display name: Silent Film Cadence
+- Type name: VideoSilentFilmCadence
+- Category: video/stylize
+
+Ключевые входы: `image`, `source_fps`, `playback_mode`, `target_fps_min`, `target_fps_max`, `fps_drift_strength`, `shutter_fraction`, `motion_blur_strength`, `blur_samples`, `seed`.
+`playback_mode=preserve_duration_25fps` сохраняет длину клипа и только меняет пластику движения. `playback_mode=undercrank_projected_25fps` делает аутентичное ускорение движения и возвращает более короткий батч, который нужно собирать в `Video Combine` на `25 fps`.
+Типовой старт для имитации середины 1920-х: `source_fps=25`, `playback_mode=undercrank_projected_25fps`, `target_fps_min=16`, `target_fps_max=18`, `fps_drift_strength=0.8`, `shutter_fraction=1.0`, `motion_blur_strength=1.2`.
+Выходы: `image`, `cadence_json` (`average_effective_fps`, `group_count`, `output_duration_seconds`, `group_sizes_preview`, `fps_values_preview`).
+Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADENCE.md)
 
 ---
 

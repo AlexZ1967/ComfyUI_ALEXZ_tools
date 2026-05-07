@@ -792,6 +792,69 @@ class SmokeTests(unittest.TestCase):
         blend = cut_mod._blend_window_from_confidence(conf)
         self.assertIn(blend, [4, 8, 12])
 
+    def test_video_silent_film_cadence_preserves_length_and_reduces_unique_frames(self):
+        """Ensure silent-film cadence keeps 25 fps length while lowering unique motion phases."""
+        video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        node = video_mod.VideoSilentFilmCadence()
+
+        ramp = torch.linspace(0.0, 1.0, steps=25, dtype=torch.float32).view(25, 1, 1, 1).expand(25, 4, 4, 3)
+        out_hard, payload_hard = node.apply(
+            ramp,
+            source_fps=25.0,
+            playback_mode="preserve_duration_25fps",
+            target_fps_min=16.0,
+            target_fps_max=16.0,
+            fps_drift_strength=0.0,
+            shutter_fraction=0.0,
+            motion_blur_strength=0.0,
+            blur_samples=1,
+            seed=1925,
+        )
+        out_blur, payload_blur = node.apply(
+            ramp,
+            source_fps=25.0,
+            playback_mode="preserve_duration_25fps",
+            target_fps_min=16.0,
+            target_fps_max=20.0,
+            fps_drift_strength=0.65,
+            shutter_fraction=0.9,
+            motion_blur_strength=0.85,
+            blur_samples=7,
+            seed=1925,
+        )
+
+        self.assertEqual(tuple(out_hard.shape), (25, 4, 4, 3))
+        self.assertEqual(tuple(out_blur.shape), (25, 4, 4, 3))
+
+        unique_hard = torch.unique(out_hard[:, 0, 0, 0]).numel()
+        self.assertLess(unique_hard, 25)
+
+        hard_data = json.loads(payload_hard)
+        blur_data = json.loads(payload_blur)
+        self.assertEqual(hard_data["group_count"], int(unique_hard))
+        self.assertGreaterEqual(float(hard_data["average_effective_fps"]), 15.0)
+        self.assertLessEqual(float(hard_data["average_effective_fps"]), 17.0)
+        self.assertNotEqual(payload_hard, payload_blur)
+        self.assertGreater(float(torch.mean(torch.abs(out_blur - out_hard)).item()), 0.0)
+
+        out_undercrank, payload_undercrank = node.apply(
+            ramp,
+            source_fps=25.0,
+            playback_mode="undercrank_projected_25fps",
+            target_fps_min=16.0,
+            target_fps_max=16.0,
+            fps_drift_strength=0.0,
+            shutter_fraction=1.0,
+            motion_blur_strength=1.0,
+            blur_samples=7,
+            seed=1925,
+        )
+        undercrank_data = json.loads(payload_undercrank)
+        self.assertEqual(undercrank_data["playback_mode"], "undercrank_projected_25fps")
+        self.assertLess(out_undercrank.shape[0], 25)
+        self.assertEqual(int(out_undercrank.shape[0]), int(undercrank_data["output_frame_count"]))
+        self.assertLess(float(undercrank_data["output_duration_seconds"]), float(undercrank_data["input_duration_seconds"]))
+
     def test_qr_code_generation(self):
         """Verify QR node returns a square image tensor with requested resolution."""
         try:

@@ -42,6 +42,7 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("ImageSeamMatchV4LUTToReference", "Seam Match v4 LUT", ".image_seam_match", "ImageSeamMatchV4LUTToReference"),
     NodeSpec("VideoFrameMatch", "Find Closest Video Frame", ".video_frame_match", "VideoFrameMatch"),
     NodeSpec("VideoCutMatch", "Match Video Cut Point", ".video_cut_match", "VideoCutMatch"),
+    NodeSpec("VideoSilentFilmCadence", "Silent Film Cadence", ".video_silent_film_cadence", "VideoSilentFilmCadence"),
     NodeSpec("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
     NodeSpec("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
     NodeSpec("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
@@ -133,6 +134,11 @@ NODE_UI_METADATA = {
         "description": "Подбирает оптимальную пару кадров для склейки двух видео.",
         "output_tooltips": ["Лучший кадр из A.", "Лучший кадр из B.", "Номер кадра A.", "Номер кадра B.", "JSON с cut-point и top-k."],
         "search_aliases": ["video", "cut", "stitch", "match"],
+    },
+    "VideoSilentFilmCadence": {
+        "description": "Имитирует 16-20 fps немой пленочный каденс, сохраняя выходной батч на 25 fps.",
+        "output_tooltips": ["Стилизованный батч кадров.", "JSON с реальным effective fps, размерами hold-групп и параметрами blur."],
+        "search_aliases": ["video", "silent film", "cadence", "fps", "motion blur", "1920s"],
     },
     "ImageDifference": {
         "description": "Строит абсолютную разницу двух изображений.",
