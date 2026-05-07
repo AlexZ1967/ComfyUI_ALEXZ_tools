@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.34.4
+Version: 0.34.5
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -26,6 +26,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - Быстрые команды: `make docs-check`, `make seam-smoke`, `make smoke`, `make js-check`
 
 ## Runtime notes
+- Pillow 13 compatibility: internal image conversions no longer rely on deprecated `mode=` in `Image.fromarray(...)` across the affected nodes/helpers, reducing future upgrade risk without changing node behavior.
 - `Color Match To Reference` preset `perceptual_vgg_fast` использует `torchvision` из базовой среды ComfyUI.
 - `Find Closest Video Frame` при `max_frames > 0` использует `ffmpeg` (должен быть в `PATH`).
   Linux: `sudo apt install ffmpeg`  

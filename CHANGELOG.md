@@ -1,5 +1,19 @@
 # Changelog — ALEXZ_tools
 
+## 0.34.5 — 2026-05-07
+- Reduced project-side Pillow deprecation risk ahead of Pillow 13:
+  - removed deprecated `mode=` usage from `Image.fromarray(...)` in the
+    affected production paths for adaptive descreening, video inpaint frame
+    export, and DZI tensor-to-PIL conversion;
+  - synchronized the touched NYPL/DZI smoke tests and the helper script under
+    `guides/assets/color_match_examples/` to the same Pillow-safe pattern;
+  - full test warning count is now down to the environment-level
+    `PytestCacheWarning` caused by a read-only `.pytest_cache`.
+- Validation:
+  - `conda run -n p313 pytest -q`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.34.5` in `pyproject.toml` and `README.md`.
+
 ## 0.34.4 — 2026-05-03
 - Added conservative NYPL tile-size clamping in `Download IIIF Image`:
   - when NYPL `info.json` advertises large tiles (for example `1024x1024`),

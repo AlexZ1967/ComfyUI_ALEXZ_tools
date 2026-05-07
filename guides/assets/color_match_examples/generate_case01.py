@@ -43,7 +43,7 @@ def _load_color_match_module(repo_root: Path):
 
 def _save_tensor_image(t: torch.Tensor, path: Path):
     arr = (torch.clamp(t, 0.0, 1.0) * 255.0).round().byte().cpu().numpy()
-    Image.fromarray(arr, mode="RGB").save(path)
+    Image.fromarray(arr).save(path)
 
 
 def _load_image_tensor(path: Path) -> torch.Tensor:

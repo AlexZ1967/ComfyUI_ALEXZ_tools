@@ -301,7 +301,7 @@ def _save_rgba_sequence(
         rgba = np.concatenate([rgb, alpha[..., None]], axis=-1)
         rgba_u8 = (rgba * 255.0).round().astype(np.uint8)
         filename = f"{prefix}{label}{idx + start_index:04d}.png"
-        Image.fromarray(rgba_u8, mode="RGBA").save(os.path.join(output_dir, filename))
+        Image.fromarray(rgba_u8).save(os.path.join(output_dir, filename))
 
 
 def _save_rgba_frame(
@@ -315,7 +315,7 @@ def _save_rgba_frame(
         return
     _ensure_dir(output_dir)
     rgba = np.concatenate([rgb_u8, alpha_u8[..., None]], axis=-1)
-    Image.fromarray(rgba, mode="RGBA").save(os.path.join(output_dir, filename))
+    Image.fromarray(rgba).save(os.path.join(output_dir, filename))
 
 
 def _save_rgb_frame(
@@ -327,7 +327,7 @@ def _save_rgb_frame(
     if not output_dir:
         return
     _ensure_dir(output_dir)
-    Image.fromarray(rgb_u8, mode="RGB").save(os.path.join(output_dir, filename))
+    Image.fromarray(rgb_u8).save(os.path.join(output_dir, filename))
 
 
 def _save_mask_frame(
@@ -339,7 +339,7 @@ def _save_mask_frame(
     if not output_dir:
         return
     _ensure_dir(output_dir)
-    Image.fromarray(mask_u8, mode="L").save(os.path.join(output_dir, filename))
+    Image.fromarray(mask_u8).save(os.path.join(output_dir, filename))
 
 
 def _save_transform_json(output_dir: str, prefix: str, transform_json: str) -> None:

@@ -1417,7 +1417,7 @@ def _tensor_image_to_pil(image_tensor: torch.Tensor) -> Image.Image:
     if image_tensor.ndim != 4 or int(image_tensor.shape[0]) < 1:
         raise ValueError("Expected IMAGE tensor with shape [1,H,W,3].")
     image = image_tensor[0].detach().cpu().clamp(0.0, 1.0).numpy()
-    return Image.fromarray(np.clip(image * 255.0, 0.0, 255.0).astype(np.uint8), mode="RGB")
+    return Image.fromarray(np.clip(image * 255.0, 0.0, 255.0).astype(np.uint8))
 
 
 def _save_pil_image(image: Image.Image, output_path: str, output_extension: str) -> None:

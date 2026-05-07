@@ -843,7 +843,7 @@ class SmokeTests(unittest.TestCase):
                 canvas[:, :, 0] = colors[coords][0]
                 canvas[:, :, 1] = colors[coords][1]
                 canvas[:, :, 2] = colors[coords][2]
-                return Image.fromarray(canvas, mode="RGB")
+                return Image.fromarray(canvas)
 
             dzi_mod._new_session = lambda: _DummySession()
             dzi_mod._parse_dzi = lambda *_args, **_kwargs: None
@@ -985,7 +985,7 @@ class SmokeTests(unittest.TestCase):
 
             canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
             canvas[:, :, 1] = 255
-            image = Image.fromarray(canvas, mode="RGB")
+            image = Image.fromarray(canvas)
             import io
             encoded = io.BytesIO()
             image.save(encoded, format="JPEG")
@@ -1059,7 +1059,7 @@ class SmokeTests(unittest.TestCase):
                     requested.append(coords)
                 canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
                 canvas[:, :, 0] = 255
-                return Image.fromarray(canvas, mode="RGB")
+                return Image.fromarray(canvas)
 
             dzi_mod._new_session = lambda: _DummySession()
             # Full size 10x16, level 3 => 5x8, grid must be 1x1 (max_level=4).
@@ -1105,7 +1105,7 @@ class SmokeTests(unittest.TestCase):
             def _fake_download_tile(_session, _url: str, _timeout: float):
                 canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
                 canvas[:, :, 2] = 255
-                return Image.fromarray(canvas, mode="RGB")
+                return Image.fromarray(canvas)
 
             dzi_mod._new_session = lambda: _DummySession()
             dzi_mod._parse_dzi = lambda *_args, **_kwargs: {
@@ -1155,7 +1155,7 @@ class SmokeTests(unittest.TestCase):
             def _fake_download_tile(_session, _url: str, _timeout: float):
                 canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
                 canvas[:, :, 0] = 255
-                return Image.fromarray(canvas, mode="RGB")
+                return Image.fromarray(canvas)
 
             dzi_mod._new_session = lambda: _DummySession()
             dzi_mod._parse_dzi = lambda *_args, **_kwargs: {
@@ -1206,7 +1206,7 @@ class SmokeTests(unittest.TestCase):
             def _fake_download_tile(_session, _url: str, _timeout: float):
                 canvas = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
                 canvas[:, :, 1] = 255
-                return Image.fromarray(canvas, mode="RGB")
+                return Image.fromarray(canvas)
 
             dzi_mod._new_session = lambda: _DummySession()
             dzi_mod._parse_dzi = lambda *_args, **_kwargs: {

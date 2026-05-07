@@ -104,7 +104,7 @@ class TestNYPLResolution(unittest.TestCase):
         def _fake_assemble(service_url, info, *, output_format, timeout, session, cache_dir):
             _ = (service_url, info, output_format, timeout, session, cache_dir)
             arr = np.zeros((8, 10, 3), dtype=np.uint8)
-            im = Image.fromarray(arr, mode="RGB")
+            im = Image.fromarray(arr)
             return im, {
                 "mode": "tile_assemble_full",
                 "tile_width": 512,
@@ -227,7 +227,7 @@ class TestNYPLResolution(unittest.TestCase):
             arr[:, :, 0] = 64
             arr[:, :, 1] = 128
             arr[:, :, 2] = 192
-            im = Image.fromarray(arr, mode="RGB")
+            im = Image.fromarray(arr)
             meta = {
                 "mode": "tile_assemble_full",
                 "tile_width": 512,

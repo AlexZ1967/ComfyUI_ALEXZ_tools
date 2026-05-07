@@ -104,7 +104,7 @@ def _pil_resample_rgb_with_mode(
     resample_mode: str,
 ) -> np.ndarray:
     """Downscale/upscale RGB image with optional pre-blur and explicit resampler."""
-    pil = Image.fromarray(image_rgb, mode="RGB")
+    pil = Image.fromarray(image_rgb)
     if float(pre_blur_px) > 0.0:
         pil = pil.filter(ImageFilter.GaussianBlur(radius=float(pre_blur_px)))
     resample = _resolve_resample_mode(resample_mode)
@@ -124,7 +124,7 @@ def _pil_downscale_rgb_with_mode(
     resample_mode: str,
 ) -> np.ndarray:
     """Downscale RGB image only, keeping the reduced result."""
-    pil = Image.fromarray(image_rgb, mode="RGB")
+    pil = Image.fromarray(image_rgb)
     if float(pre_blur_px) > 0.0:
         pil = pil.filter(ImageFilter.GaussianBlur(radius=float(pre_blur_px)))
     resample = _resolve_resample_mode(resample_mode)
@@ -417,7 +417,7 @@ def _apply_fft_notch_rgb(
         stacked = work_rgb * ratio[..., None]
     stacked = np.clip(stacked, 0.0, 255.0).astype(np.uint8)
     if float(post_blur_px) > 0.0:
-        pil = Image.fromarray(stacked, mode="RGB")
+        pil = Image.fromarray(stacked)
         pil = pil.filter(ImageFilter.GaussianBlur(radius=float(post_blur_px)))
         stacked = np.asarray(pil, dtype=np.uint8)
     return stacked
@@ -675,7 +675,7 @@ def _screen_energy(gray: np.ndarray, dx: int, dy: int, radius: int = 3) -> float
 
 def _structure_energy(gray: np.ndarray) -> float:
     """Estimate useful structure retention via low-frequency gradient energy."""
-    pil = Image.fromarray(np.clip(gray, 0.0, 255.0).astype(np.uint8), mode="L")
+    pil = Image.fromarray(np.clip(gray, 0.0, 255.0).astype(np.uint8))
     smooth = np.asarray(pil.filter(ImageFilter.GaussianBlur(radius=1.0)), dtype=np.float32)
     gy, gx = np.gradient(smooth)
     return float(np.mean(np.sqrt(gx * gx + gy * gy)))
@@ -731,7 +731,7 @@ def _build_scale_sheet_preview(variants: list[dict[str, Any]]) -> np.ndarray:
     draw = ImageDraw.Draw(canvas)
     x = 0
     for caption, im in zip(captions, images):
-        pil_im = Image.fromarray(im.astype(np.uint8), mode="RGB")
+        pil_im = Image.fromarray(im.astype(np.uint8))
         canvas.paste(pil_im, (x, margin_top))
         _draw_sheet_caption(draw, x, caption)
         x += int(im.shape[1]) + gap
@@ -758,7 +758,7 @@ def _edge_preserve_blend(sharp_rgb: np.ndarray, smooth_rgb: np.ndarray) -> np.nd
     smooth = smooth_rgb.astype(np.float32)
     gray = _rgb_to_gray(sharp)
     base = np.asarray(
-        Image.fromarray(np.clip(gray, 0.0, 255.0).astype(np.uint8), mode="L").filter(ImageFilter.GaussianBlur(radius=1.6)),
+        Image.fromarray(np.clip(gray, 0.0, 255.0).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.6)),
         dtype=np.float32,
     )
     gy, gx = np.gradient(base)
@@ -770,7 +770,7 @@ def _edge_preserve_blend(sharp_rgb: np.ndarray, smooth_rgb: np.ndarray) -> np.nd
         p98 = float(np.max(grad))
     mask = np.clip((grad - p70) / max(1e-6, p98 - p70), 0.0, 1.0)
     mask = np.asarray(
-        Image.fromarray(np.clip(mask * 255.0, 0.0, 255.0).astype(np.uint8), mode="L").filter(ImageFilter.GaussianBlur(radius=1.0)),
+        Image.fromarray(np.clip(mask * 255.0, 0.0, 255.0).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.0)),
         dtype=np.float32,
     ) / 255.0
     blended = smooth * (1.0 - mask[..., None]) + sharp * mask[..., None]
@@ -781,7 +781,7 @@ def _build_transition_cleanup_mask(image_rgb: np.ndarray) -> np.ndarray:
     """Emphasize midtone transition regions where halftone survives notch filtering most often."""
     gray = _rgb_to_gray(image_rgb.astype(np.float32))
     blur = np.asarray(
-        Image.fromarray(np.clip(gray, 0.0, 255.0).astype(np.uint8), mode="L").filter(ImageFilter.GaussianBlur(radius=1.3)),
+        Image.fromarray(np.clip(gray, 0.0, 255.0).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.3)),
         dtype=np.float32,
     )
     gy, gx = np.gradient(blur)
@@ -796,7 +796,7 @@ def _build_transition_cleanup_mask(image_rgb: np.ndarray) -> np.ndarray:
     tone_mask = np.clip(1.0 - np.abs(tone - 0.5) / 0.5, 0.0, 1.0) ** 1.5
     mask = grad_mask * tone_mask
     mask = np.asarray(
-        Image.fromarray(np.clip(mask * 255.0, 0.0, 255.0).astype(np.uint8), mode="L").filter(ImageFilter.GaussianBlur(radius=1.0)),
+        Image.fromarray(np.clip(mask * 255.0, 0.0, 255.0).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.0)),
         dtype=np.float32,
     ) / 255.0
     return np.clip(mask, 0.0, 1.0)
@@ -838,7 +838,7 @@ def _build_tonal_hybrid_mask(
     mid_mask = np.clip(1.0 - np.abs(tone - 0.5) / 0.5, 0.0, 1.0) ** 1.1
 
     blur = np.asarray(
-        Image.fromarray(np.clip(gray, 0.0, 255.0).astype(np.uint8), mode="L").filter(ImageFilter.GaussianBlur(radius=1.4)),
+        Image.fromarray(np.clip(gray, 0.0, 255.0).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.4)),
         dtype=np.float32,
     )
     gy, gx = np.gradient(blur)
@@ -861,7 +861,7 @@ def _build_tonal_hybrid_mask(
     protect = 1.0 - np.clip(float(shadow_protect) * shadow_hold + float(highlight_protect) * highlight_hold, 0.0, 1.0)
     mask = base_mask * protect * float(np.clip(cleanup_strength, 0.0, 1.0))
     mask = np.asarray(
-        Image.fromarray(np.clip(mask * 255.0, 0.0, 255.0).astype(np.uint8), mode="L").filter(ImageFilter.GaussianBlur(radius=1.0)),
+        Image.fromarray(np.clip(mask * 255.0, 0.0, 255.0).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=1.0)),
         dtype=np.float32,
     ) / 255.0
     return np.clip(mask, 0.0, 1.0)
@@ -881,7 +881,7 @@ def _restore_large_scale_detail(
     base_gray = _rgb_to_gray(base)
     edge_mask = _build_transition_cleanup_mask(base_rgb)
     low = np.asarray(
-        Image.fromarray(np.clip(base, 0.0, 255.0).astype(np.uint8), mode="RGB").filter(ImageFilter.GaussianBlur(radius=2.2)),
+        Image.fromarray(np.clip(base, 0.0, 255.0).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius=2.2)),
         dtype=np.float32,
     )
     detail = base - low
