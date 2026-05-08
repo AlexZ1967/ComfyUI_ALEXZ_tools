@@ -196,13 +196,69 @@ def _tone_gray(gray: torch.Tensor, tone_mode: str) -> torch.Tensor:
     raise ValueError(f"Unsupported tone_mode: {tone_mode}")
 
 
-def _apply_grain(
+def _normalize_field(field: torch.Tensor) -> torch.Tensor:
+    """Normalize a per-frame scalar field to zero mean and unit variance."""
+    mean = field.mean(dim=(1, 2, 3), keepdim=True)
+    field = field - mean
+    std = field.std(dim=(1, 2, 3), keepdim=True, unbiased=False).clamp_min(1e-6)
+    return field / std
+
+
+def _scaled_noise(
+    frame_count: int,
+    height: int,
+    width: int,
+    scale_divisor: int,
+    generator: torch.Generator,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Generate a correlated noise field by upscaling lower-resolution noise."""
+    scale_divisor = int(max(1, scale_divisor))
+    small_h = max(1, int(round(height / scale_divisor)))
+    small_w = max(1, int(round(width / scale_divisor)))
+    noise = torch.randn((frame_count, 1, small_h, small_w), generator=generator, dtype=torch.float32)
+    noise = F.interpolate(noise, size=(height, width), mode="bilinear", align_corners=False)
+    return noise.to(device=device, dtype=dtype)
+
+
+def _build_emulsion_grain_field(
+    frame_count: int,
+    height: int,
+    width: int,
+    grain_size: int,
+    seed: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Build a clustered grain field closer to emulsion structure than white noise."""
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(int(seed))
+
+    grain_size = int(max(1, grain_size))
+    fine = _scaled_noise(frame_count, height, width, grain_size, generator, device, dtype)
+    mid = _scaled_noise(frame_count, height, width, max(1, int(round(grain_size * 2.0))), generator, device, dtype)
+    coarse = _scaled_noise(frame_count, height, width, max(1, int(round(grain_size * 4.0))), generator, device, dtype)
+    envelope = _scaled_noise(frame_count, height, width, max(1, int(round(grain_size * 6.0))), generator, device, dtype)
+
+    fine = _normalize_field(fine)
+    mid = _normalize_field(mid)
+    coarse = _normalize_field(coarse)
+    envelope = _normalize_field(envelope)
+
+    clump_gain = 0.78 + 0.48 * torch.sigmoid(envelope * 1.3)
+    grain = fine * clump_gain + mid * 0.42 + coarse * 0.24
+    grain = _normalize_field(grain)
+    return torch.tanh(grain * 1.25)
+
+
+def _apply_grain_overlay(
     image_rgb: torch.Tensor,
     grain_strength: float,
     grain_size: int,
     seed: int,
 ) -> torch.Tensor:
-    """Apply coarse monochrome grain to RGB channels."""
+    """Legacy fast grain overlay for previews and lighter workflows."""
     grain_strength = max(0.0, float(grain_strength))
     if grain_strength <= 1e-8:
         return image_rgb
@@ -217,8 +273,66 @@ def _apply_grain(
     noise = F.interpolate(noise, size=(height, width), mode="bilinear", align_corners=False)
     noise = noise.to(device=image_rgb.device, dtype=image_rgb.dtype)
     noise = noise.permute(0, 2, 3, 1)
-    noise = noise * grain_strength
-    out = image_rgb + noise
+    out = image_rgb + noise * grain_strength
+    return torch.clamp(out, 0.0, 1.0)
+
+
+def _apply_grain(
+    image_rgb: torch.Tensor,
+    grain_mode: str,
+    grain_strength: float,
+    grain_size: int,
+    seed: int,
+) -> torch.Tensor:
+    """Apply either fast overlay grain or a more film-like emulsion grain model."""
+    grain_strength = max(0.0, float(grain_strength))
+    if grain_strength <= 1e-8:
+        return image_rgb
+
+    if grain_mode == "overlay_fast":
+        return _apply_grain_overlay(image_rgb, grain_strength, grain_size, seed)
+
+    if grain_mode != "emulsion_luma":
+        raise ValueError(f"Unsupported grain_mode: {grain_mode}")
+
+    frame_count, height, width, _channels = image_rgb.shape
+    device = image_rgb.device
+    dtype = image_rgb.dtype
+    grain_field = _build_emulsion_grain_field(
+        frame_count=frame_count,
+        height=height,
+        width=width,
+        grain_size=grain_size,
+        seed=seed,
+        device=device,
+        dtype=dtype,
+    )
+
+    luma = (
+        image_rgb[..., 0:1] * 0.299
+        + image_rgb[..., 1:2] * 0.587
+        + image_rgb[..., 2:3] * 0.114
+    )
+    midtone_peak = 1.0 - torch.clamp(torch.abs(luma - 0.5) / 0.5, 0.0, 1.0)
+    shadow_gate = torch.clamp((luma - 0.04) / 0.26, 0.0, 1.0)
+    highlight_gate = torch.clamp((0.96 - luma) / 0.28, 0.0, 1.0)
+    luma_weight = 0.28 + 1.06 * (midtone_peak**0.78) * shadow_gate * highlight_gate
+
+    detail_loss = torch.clamp(grain_strength * (0.46 + 0.58 * luma_weight), 0.0, 0.26)
+    blur_kernel = 3 if int(max(1, grain_size)) <= 2 else 5
+    batch = image_rgb.permute(0, 3, 1, 2).contiguous()
+    blurred = F.avg_pool2d(batch, kernel_size=blur_kernel, stride=1, padding=blur_kernel // 2)
+    blurred = blurred.permute(0, 2, 3, 1).contiguous()
+    eroded = image_rgb * (1.0 - detail_loss) + blurred * detail_loss
+
+    grain_rgb = grain_field.permute(0, 2, 3, 1)
+    density_response = grain_strength * (0.42 + 0.78 * luma_weight)
+    multiplicative = 1.0 + grain_rgb * density_response * 0.48
+    additive = grain_rgb * density_response * 0.16
+
+    local_contrast = torch.clamp(torch.abs(image_rgb - blurred).mean(dim=-1, keepdim=True) * 5.0, 0.0, 1.0)
+    grain_presence = torch.clamp(0.72 + 0.42 * luma_weight - 0.18 * local_contrast, 0.35, 1.2)
+    out = eroded * (1.0 + (multiplicative - 1.0) * grain_presence) + additive * grain_presence
     return torch.clamp(out, 0.0, 1.0)
 
 
@@ -365,14 +479,21 @@ class VideoSilentFilmFinish:
                         "tooltip": "Небольшой сдвиг кадра в пикселях, как у старого проектора.",
                     },
                 ),
+                "grain_mode": (
+                    ["emulsion_luma", "overlay_fast"],
+                    {
+                        "default": "emulsion_luma",
+                        "tooltip": "Режим зерна. emulsion_luma не просто шумит картинку, а слегка съедает микродеталь и сильнее проявляется в полутонах.",
+                    },
+                ),
                 "grain_strength": (
                     "FLOAT",
                     {
-                        "default": 0.028,
+                        "default": 0.032,
                         "min": 0.0,
                         "max": 0.2,
                         "step": 0.005,
-                        "tooltip": "Сила монохромного зерна.",
+                        "tooltip": "Сила монохромного зерна. В emulsion_luma влияет и на зернистость, и на потерю микродетали.",
                     },
                 ),
                 "grain_size": (
@@ -425,6 +546,7 @@ class VideoSilentFilmFinish:
         flicker_strength,
         breathing_strength,
         gate_weave_px,
+        grain_mode,
         grain_strength,
         grain_size,
         seed,
@@ -493,7 +615,7 @@ class VideoSilentFilmFinish:
         gray = torch.clamp(gray * exposure, 0.0, 1.0)
 
         toned = _tone_gray(gray, tone_mode)
-        toned = _apply_grain(toned, grain_strength, grain_size, seed + 1001)
+        toned = _apply_grain(toned, grain_mode, grain_strength, grain_size, seed + 1001)
 
         if woven_alpha is not None:
             output = torch.cat([toned, torch.clamp(woven_alpha, 0.0, 1.0)], dim=-1)
@@ -515,6 +637,7 @@ class VideoSilentFilmFinish:
             "flicker_strength": float(flicker_strength),
             "breathing_strength": float(breathing_strength),
             "gate_weave_px": float(gate_weave_px),
+            "grain_mode": grain_mode,
             "grain_strength": float(grain_strength),
             "grain_size": int(grain_size),
             "seed": int(seed),

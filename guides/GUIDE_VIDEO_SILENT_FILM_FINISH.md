@@ -12,7 +12,7 @@
 1. Подайте батч кадров в `image`, лучше уже после `Silent Film Cadence`.
 2. Если используете `Silent Film Cadence`, подключите его `cadence_json` в optional вход finish-ноды.
 3. Поставьте `tone_mode=neutral_bw` или `warm_print`.
-4. Настройте `flicker_strength`, `gate_weave_px` и `grain_strength`, затем проверьте `finish_json`.
+4. Настройте `flicker_strength`, `gate_weave_px`, `grain_mode` и `grain_strength`, затем проверьте `finish_json`.
 
 ## Параметры
 | Параметр | Что делает | Рекомендация |
@@ -28,7 +28,8 @@
 | `flicker_strength` | Быстрый кадр-кадр flicker | `0.03-0.07` обычно достаточно |
 | `breathing_strength` | Медленное плавание яркости | `0.015-0.04` |
 | `gate_weave_px` | Трансляционный jitter кадра в пикселях | `0.7-1.5` для HD/2K старта |
-| `grain_strength` | Сила зерна | `0.02-0.05` |
+| `grain_mode` | Модель зерна | `emulsion_luma` для реалистичного пленочного зерна, `overlay_fast` только для быстрых preview |
+| `grain_strength` | Сила зерна | `0.028-0.04` для `emulsion_luma`, `0.02-0.05` для `overlay_fast` |
 | `grain_size` | Крупность зерна | `2-3` для умеренного print look |
 | `seed` | Seed для weave/flicker/grain | Меняйте для другой механики |
 
@@ -36,6 +37,7 @@
 - Нужна более “реальная проекция” -> увеличьте `flicker_strength` и `gate_weave_px`.
 - Нужно, чтобы мерцание, дрожание и гуляние фокуса были связаны с ручной скоростью съемки -> обязательно подключайте `cadence_json` из `Silent Film Cadence`.
 - Картинка слишком чистая -> добавьте `grain_strength` и немного `softness`.
+- Нужно, чтобы зерно влияло на perceived resolution, а не просто шумело сверху -> используйте `grain_mode=emulsion_luma`.
 - Нужен едва заметный "то в фокусе, то чуть мягче" -> поднимайте `focus_drift_strength`, обычно без выхода выше `0.12`.
 - Нужен архивный теплый print -> `tone_mode=warm_print` или `sepia_print`.
 - Нужен более холодный nitrate mood -> `tone_mode=cool_nitrate`.
@@ -45,6 +47,7 @@
 - `finish_json`: JSON-диагностика с режимом тонировки, jitter и flicker preview.
 - `finish_json.sync_mode`: `cadence_locked`, если эффекты успешно синхронизировались по `cadence_json`; иначе причина fallback (`none`, `invalid_json`, `frame_mismatch` и т.д.).
 - `finish_json.focus_preview`: первые signed значения focus drift после синхронизации по cadence. Отрицательные кадры чуть резче базового уровня, положительные чуть мягче.
+- `finish_json.grain_mode`: какой режим зерна реально применен.
 - `finish_json.gate_x_preview` / `finish_json.gate_y_preview`: первые смещения кадра по осям.
 - `finish_json.exposure_preview`: первые значения глобальной экспозиции после flicker/breathing.
 
@@ -53,6 +56,7 @@
 {
   "tone_mode": "neutral_bw",
   "sync_mode": "cadence_locked",
+  "grain_mode": "emulsion_luma",
   "focus_preview": [-0.041, 0.018, 0.063],
   "gate_x_preview": [0.21, -0.34, 0.08],
   "gate_y_preview": [-0.11, 0.27, 0.04],
@@ -63,6 +67,7 @@
 ## Типовые ошибки и решения
 - Эффект почти незаметен: увеличьте `flicker_strength`, `gate_weave_px` и `grain_strength`.
 - "Пульс фокуса" не читается: поднимите `focus_drift_strength`, но маленькими шагами по `0.005-0.01`.
+- Зерно похоже на цифровой шум: проверьте, что стоит `grain_mode=emulsion_luma`, а не `overlay_fast`.
 - Слишком “грязно” и карикатурно: уменьшите `grain_strength` и `gate_weave_px`.
 - Слишком похоже на современный hunting autofocus: уменьшите `focus_drift_strength` и `softness`.
 - Слишком цифровые света: увеличьте `highlight_rolloff` и немного `softness`.

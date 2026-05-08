@@ -894,6 +894,7 @@ class SmokeTests(unittest.TestCase):
             flicker_strength=0.05,
             breathing_strength=0.025,
             gate_weave_px=1.0,
+            grain_mode="emulsion_luma",
             grain_strength=0.03,
             grain_size=2,
             seed=1925,
@@ -903,6 +904,7 @@ class SmokeTests(unittest.TestCase):
         data = json.loads(payload)
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["tone_mode"], "warm_print")
+        self.assertEqual(data["grain_mode"], "emulsion_luma")
         self.assertIn("focus_preview", data)
         self.assertIn("gate_x_preview", data)
         self.assertIn("exposure_preview", data)
@@ -945,6 +947,7 @@ class SmokeTests(unittest.TestCase):
             flicker_strength=0.05,
             breathing_strength=0.025,
             gate_weave_px=1.0,
+            grain_mode="emulsion_luma",
             grain_strength=0.03,
             grain_size=2,
             seed=1925,
@@ -954,6 +957,7 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(tuple(finished.shape[:3]), tuple(cadence_out.shape[:3]))
         data = json.loads(payload)
         self.assertEqual(data["sync_mode"], "cadence_locked")
+        self.assertEqual(data["grain_mode"], "emulsion_luma")
         self.assertIn("focus_preview", data)
         self.assertGreater(float(torch.mean(torch.abs(finished - cadence_out)).item()), 0.0)
 
