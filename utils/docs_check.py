@@ -81,6 +81,12 @@ NODE_DOCS = [
         "readme_heading": "## Silent Film Cadence",
     },
     {
+        "file": "nodes/video_silent_film_finish.py",
+        "class": "VideoSilentFilmFinish",
+        "guide": "guides/GUIDE_VIDEO_SILENT_FILM_FINISH.md",
+        "readme_heading": "## Silent Film Finish",
+    },
+    {
         "file": "nodes/image_difference.py",
         "class": "ImageDifference",
         "guide": "guides/GUIDE_IMAGE_DIFFERENCE.md",

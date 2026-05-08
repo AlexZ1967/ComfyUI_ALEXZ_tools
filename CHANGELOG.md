@@ -1,5 +1,35 @@
 # Changelog — ALEXZ_tools
 
+## 0.36.0 — 2026-05-08
+- Added new `Silent Film Finish` video stylization node:
+  - applies projection/print-era finishing such as monochrome toning, soft
+    highlight rolloff, flicker, gate weave, softness, and grain;
+  - supports optional `cadence_json` input from `Silent Film Cadence` so
+    flicker and weave can lock to the same hand-cranked capture rhythm instead
+    of being layered as unrelated noise;
+  - exposes `finish_json.sync_mode` to show whether cadence synchronization is
+    active or whether the node fell back to standalone finish behavior.
+- Upgraded `Silent Film Cadence` blur quality and workflow defaults:
+  - added `blur_mode=flow_integrated` for motion-compensated optical-flow
+    shutter integration, reducing obvious double/triple-frame ghosting versus
+    simple temporal averaging;
+  - extended `cadence_json` with full group ids, fps values, and phase-bias
+    data so downstream nodes can synchronize to the virtual hand-cranked
+    capture intervals;
+  - changed node defaults to the recommended 24 fps source -> 25 fps silent
+    projection setup (`undercrank_projected_25fps`, `flow_integrated`, higher
+    motion blur strength, updated finish defaults).
+- Wired docs, registry, and smoke coverage for the second-stage silent-film workflow:
+  - registered `Silent Film Finish` in the canonical node registry/UI metadata;
+  - added README section and dedicated guide
+    `guides/GUIDE_VIDEO_SILENT_FILM_FINISH.md`;
+  - extended smoke tests to cover cadence undercrank, finish alpha
+    preservation, cadence-locked finish sync, and `flow_integrated` blur mode.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.36.0` in `pyproject.toml` and `README.md`.
+
 ## 0.35.0 — 2026-05-08
 - Added new `Silent Film Cadence` video stylization node:
   - accepts VHS/Comfy `IMAGE` frame batches and emulates silent-era cadence

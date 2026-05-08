@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.35.0
+Version: 0.36.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -52,6 +52,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Find Closest Video Frame](#find-closest-video-frame)
 - [Match Video Cut Point](#match-video-cut-point)
 - [Silent Film Cadence](#silent-film-cadence)
+- [Silent Film Finish](#silent-film-finish)
 - [Image Difference](#image-difference)
 - [Generate QR Code](#generate-qr-code)
 - [Download DZI Tiles Image](#download-dzi-tiles-image)
@@ -228,11 +229,27 @@ Guide: [GUIDE_VIDEO_CUT_MATCH.md](guides/GUIDE_VIDEO_CUT_MATCH.md)
 - Type name: VideoSilentFilmCadence
 - Category: video/stylize
 
-Ключевые входы: `image`, `source_fps`, `playback_mode`, `target_fps_min`, `target_fps_max`, `fps_drift_strength`, `shutter_fraction`, `motion_blur_strength`, `blur_samples`, `seed`.
+Ключевые входы: `image`, `source_fps`, `playback_mode`, `target_fps_min`, `target_fps_max`, `fps_drift_strength`, `shutter_fraction`, `motion_blur_strength`, `blur_mode`, `blur_samples`, `seed`.
 `playback_mode=preserve_duration_25fps` сохраняет длину клипа и только меняет пластику движения. `playback_mode=undercrank_projected_25fps` делает аутентичное ускорение движения и возвращает более короткий батч, который нужно собирать в `Video Combine` на `25 fps`.
+`blur_mode=simple` быстрее и подходит для preview. `blur_mode=flow_integrated` использует optical-flow-based motion-compensated smear и заметно лучше имитирует длинную экспозицию, уменьшая сдвоенность/строенность.
 Типовой старт для имитации середины 1920-х: `source_fps=25`, `playback_mode=undercrank_projected_25fps`, `target_fps_min=16`, `target_fps_max=18`, `fps_drift_strength=0.8`, `shutter_fraction=1.0`, `motion_blur_strength=1.2`.
-Выходы: `image`, `cadence_json` (`average_effective_fps`, `group_count`, `output_duration_seconds`, `group_sizes_preview`, `fps_values_preview`).
+Выходы: `image`, `cadence_json` (`actual_blur_mode`, `average_effective_fps`, `group_count`, `output_duration_seconds`, `group_sizes_preview`, `fps_values_preview`).
 Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADENCE.md)
+
+---
+
+## Silent Film Finish
+Финальный слой под немое кино: перевод в ЧБ или легкую тонировку, глобальный flicker, медленное exposure breathing, gate weave, мягкость и умеренное зерно. Нода рассчитана как пост-процесс после `Silent Film Cadence`, но может использоваться и отдельно.
+
+- Display name: Silent Film Finish
+- Type name: VideoSilentFilmFinish
+- Category: video/stylize
+
+Ключевые входы: `image`, `tone_mode`, `contrast`, `midtone_gamma`, `black_lift`, `highlight_rolloff`, `softness`, `flicker_strength`, `breathing_strength`, `gate_weave_px`, `grain_strength`, `grain_size`, `seed`.
+Опционально можно подать `cadence_json` из `Silent Film Cadence`: тогда `flicker` и `gate weave` будут синхронизированы с виртуальной скоростью ручной съемки и фазами low-fps интервалов, а не наложены как независимый шум.
+Типовой старт для 1920s finish: `tone_mode=neutral_bw`, `contrast=0.95`, `midtone_gamma=0.95`, `black_lift=0.03`, `highlight_rolloff=0.35`, `softness=0.25`, `flicker_strength=0.05`, `breathing_strength=0.025`, `gate_weave_px=1.0`, `grain_strength=0.03`.
+Выходы: `image`, `finish_json` (`sync_mode`, `gate_x_preview`, `gate_y_preview`, `exposure_preview`).
+Guide: [GUIDE_VIDEO_SILENT_FILM_FINISH.md](guides/GUIDE_VIDEO_SILENT_FILM_FINISH.md)
 
 ---
 

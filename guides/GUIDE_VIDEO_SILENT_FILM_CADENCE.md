@@ -24,12 +24,14 @@
 | `fps_drift_strength` | Насколько fps плавает внутри диапазона | `0.4-0.75` обычно достаточно |
 | `shutter_fraction` | Какая доля интервала идет в blur-экспозицию | `0.8-1.0` для аутентичного smear |
 | `motion_blur_strength` | Сила темпорального размытия | `0.7-1.0` как старт |
+| `blur_mode` | Алгоритм motion blur | `simple` для скорости, `flow_integrated` для более мягкой длинной экспозиции без явной сдвоенности |
 | `blur_samples` | Сколько суб-сэмплов усреднять | `5-9` обычно достаточно |
 | `seed` | Детерминирует плавающий fps | Меняйте для другого микроритма |
 
 ## Decision helper
 - Нужна настоящая пластика старой проекции -> `playback_mode=undercrank_projected_25fps`, а в `Video Combine` оставьте `25 fps`.
 - Нужно сохранить длительность исходного клипа -> `playback_mode=preserve_duration_25fps`.
+- Видна сдвоенность/строенность на движении -> переключитесь на `blur_mode=flow_integrated`.
 - Нужен более нервный, дерганый ритм -> уменьшайте `target_fps_max` и `motion_blur_strength`.
 - Нужна более мягкая, дорогая имитация -> держите `target_fps_max=18-20`, `shutter_fraction=0.9-1.0`, `blur_samples=7-9`.
 - Получается слишком современно -> уменьшайте диапазон к `16-18` и увеличивайте `fps_drift_strength`.
@@ -38,6 +40,7 @@
 ## Интерпретация выходов
 - `image`: итоговый батч той же длины, что и вход, но с меньшим числом уникальных фаз движения.
 - `cadence_json`: JSON-диагностика по реальному effective fps, hold-группам и параметрам blur.
+- `cadence_json.actual_blur_mode`: фактический режим blur (`flow_integrated`, `simple` или fallback).
 - `cadence_json.output_duration_seconds`: в `undercrank_projected_25fps` обычно меньше исходной длительности, это и дает ощущение ускоренной старой проекции.
 - `cadence_json.group_count`: сколько виртуальных low-fps кадров получилось.
 - `cadence_json.average_effective_fps`: фактический средний fps виртуального захвата.
@@ -47,6 +50,7 @@
 Пример:
 ```json
 {
+  "actual_blur_mode": "flow_integrated",
   "average_effective_fps": 17.2,
   "group_count": 172,
   "output_duration_seconds": 6.88,

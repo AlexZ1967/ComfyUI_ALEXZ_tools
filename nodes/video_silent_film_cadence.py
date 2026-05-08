@@ -17,7 +17,12 @@ import json
 import math
 import random
 
+import numpy as np
 import torch
+try:
+    import cv2
+except Exception:  # pragma: no cover - runtime dependency check
+    cv2 = None
 
 
 def _validate_video_batch(images: torch.Tensor) -> torch.Tensor:
@@ -45,24 +50,116 @@ def _lerp_frame(images: torch.Tensor, position: float) -> torch.Tensor:
     return images[left] * (1.0 - frac) + images[right] * frac
 
 
-def _temporal_exposure_sample(
+def _frame_to_numpy(images: torch.Tensor, index: int) -> np.ndarray:
+    """Convert one batched frame to float32 HWC numpy."""
+    return images[index].detach().cpu().contiguous().numpy().astype(np.float32, copy=False)
+
+
+def _gray_u8_from_frame(frame_np: np.ndarray) -> np.ndarray:
+    """Convert RGB(A) float frame in [0,1] to uint8 grayscale for optical flow."""
+    rgb = frame_np[..., :3]
+    gray = rgb[..., 0] * 0.299 + rgb[..., 1] * 0.587 + rgb[..., 2] * 0.114
+    gray = np.clip(gray * 255.0, 0.0, 255.0).astype(np.uint8)
+    return gray
+
+
+def _dense_pair_flow(frame_a_np: np.ndarray, frame_b_np: np.ndarray, max_side: int = 640) -> tuple[np.ndarray, np.ndarray]:
+    """Estimate forward/backward dense flow between adjacent frames."""
+    gray_a = _gray_u8_from_frame(frame_a_np)
+    gray_b = _gray_u8_from_frame(frame_b_np)
+    height, width = gray_a.shape[:2]
+    scale = 1.0
+    long_side = max(height, width)
+    if long_side > max_side:
+        scale = float(max_side) / float(long_side)
+        new_w = max(8, int(round(width * scale)))
+        new_h = max(8, int(round(height * scale)))
+        gray_a_small = cv2.resize(gray_a, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        gray_b_small = cv2.resize(gray_b, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    else:
+        new_h, new_w = height, width
+        gray_a_small = gray_a
+        gray_b_small = gray_b
+
+    flow_fw = cv2.calcOpticalFlowFarneback(gray_a_small, gray_b_small, None, 0.5, 3, 17, 3, 5, 1.1, 0)
+    flow_bw = cv2.calcOpticalFlowFarneback(gray_b_small, gray_a_small, None, 0.5, 3, 17, 3, 5, 1.1, 0)
+    if new_w != width or new_h != height:
+        scale_x = float(width) / float(new_w)
+        scale_y = float(height) / float(new_h)
+        flow_fw = cv2.resize(flow_fw, (width, height), interpolation=cv2.INTER_LINEAR)
+        flow_bw = cv2.resize(flow_bw, (width, height), interpolation=cv2.INTER_LINEAR)
+        flow_fw[..., 0] *= scale_x
+        flow_fw[..., 1] *= scale_y
+        flow_bw[..., 0] *= scale_x
+        flow_bw[..., 1] *= scale_y
+    return flow_fw.astype(np.float32, copy=False), flow_bw.astype(np.float32, copy=False)
+
+
+def _warp_np_with_flow(frame_np: np.ndarray, flow_np: np.ndarray, amount: float) -> np.ndarray:
+    """Warp one frame along a dense optical flow field by the given fraction."""
+    height, width = frame_np.shape[:2]
+    grid_x, grid_y = np.meshgrid(
+        np.arange(width, dtype=np.float32),
+        np.arange(height, dtype=np.float32),
+    )
+    map_x = grid_x - flow_np[..., 0] * float(amount)
+    map_y = grid_y - flow_np[..., 1] * float(amount)
+    warped = cv2.remap(
+        frame_np,
+        map_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
+    return warped.astype(np.float32, copy=False)
+
+
+def _lerp_frame_flow(
     images: torch.Tensor,
+    position: float,
+    frame_cache: dict[int, np.ndarray],
+    flow_cache: dict[int, tuple[np.ndarray, np.ndarray]],
+) -> torch.Tensor:
+    """Sample one frame at a fractional index using dense-flow intermediate warps."""
+    frame_count = int(images.size(0))
+    pos = max(0.0, min(float(position), float(frame_count - 1)))
+    left = int(math.floor(pos))
+    right = min(frame_count - 1, left + 1)
+    frac = pos - float(left)
+    if right == left or frac <= 1e-6:
+        return images[left]
+    if left not in frame_cache:
+        frame_cache[left] = _frame_to_numpy(images, left)
+    if right not in frame_cache:
+        frame_cache[right] = _frame_to_numpy(images, right)
+    if left not in flow_cache:
+        flow_cache[left] = _dense_pair_flow(frame_cache[left], frame_cache[right])
+    flow_fw, flow_bw = flow_cache[left]
+    warped_left = _warp_np_with_flow(frame_cache[left], flow_fw, frac)
+    warped_right = _warp_np_with_flow(frame_cache[right], flow_bw, 1.0 - frac)
+    blended = warped_left * (1.0 - frac) + warped_right * frac
+    return torch.from_numpy(blended).to(device=images.device, dtype=images.dtype)
+
+
+def _temporal_exposure_sample(
+    sample_fn,
+    frame_template: torch.Tensor,
     center_position: float,
     exposure_frames: float,
     blur_samples: int,
 ) -> torch.Tensor:
     """Sample one output frame by integrating several nearby temporal samples."""
     if blur_samples <= 1 or exposure_frames <= 1e-4:
-        return _lerp_frame(images, center_position)
+        return sample_fn(center_position)
 
-    offsets = torch.linspace(-0.5, 0.5, steps=int(blur_samples), dtype=images.dtype, device=images.device)
+    offsets = torch.linspace(-0.5, 0.5, steps=int(blur_samples), dtype=frame_template.dtype, device=frame_template.device)
     weights = 1.0 - offsets.abs() * 2.0
     weights = torch.clamp(weights, min=1e-4)
     weights = weights / weights.sum()
 
-    acc = torch.zeros_like(images[0])
+    acc = torch.zeros_like(frame_template)
     for offset, weight in zip(offsets.tolist(), weights.tolist()):
-        sample = _lerp_frame(images, center_position + offset * exposure_frames)
+        sample = sample_fn(center_position + offset * exposure_frames)
         acc = acc + sample * float(weight)
     return acc
 
@@ -154,17 +251,17 @@ class VideoSilentFilmCadence:
                 "source_fps": (
                     "FLOAT",
                     {
-                        "default": 25.0,
+                        "default": 24.0,
                         "min": 1.0,
                         "max": 120.0,
                         "step": 0.1,
-                        "tooltip": "FPS входного батча. Для вашей задачи обычно 25.",
+                        "tooltip": "FPS входного батча. Текущий дефолт под 24 fps исходник с выводом в 25 fps.",
                     },
                 ),
                 "playback_mode": (
                     ["preserve_duration_25fps", "undercrank_projected_25fps"],
                     {
-                        "default": "preserve_duration_25fps",
+                        "default": "undercrank_projected_25fps",
                         "tooltip": "preserve_duration_25fps сохраняет длину клипа. undercrank_projected_25fps делает аутентичное ускорение движения как при проекции немого кино на 25 fps.",
                     },
                 ),
@@ -181,7 +278,7 @@ class VideoSilentFilmCadence:
                 "target_fps_max": (
                     "FLOAT",
                     {
-                        "default": 20.0,
+                        "default": 17.5,
                         "min": 1.0,
                         "max": 60.0,
                         "step": 0.1,
@@ -191,7 +288,7 @@ class VideoSilentFilmCadence:
                 "fps_drift_strength": (
                     "FLOAT",
                     {
-                        "default": 0.65,
+                        "default": 0.82,
                         "min": 0.0,
                         "max": 1.0,
                         "step": 0.01,
@@ -201,7 +298,7 @@ class VideoSilentFilmCadence:
                 "shutter_fraction": (
                     "FLOAT",
                     {
-                        "default": 0.9,
+                        "default": 1.0,
                         "min": 0.0,
                         "max": 1.5,
                         "step": 0.01,
@@ -211,17 +308,24 @@ class VideoSilentFilmCadence:
                 "motion_blur_strength": (
                     "FLOAT",
                     {
-                        "default": 0.85,
+                        "default": 1.22,
                         "min": 0.0,
                         "max": 2.0,
                         "step": 0.01,
                         "tooltip": "Сила темпорального blur для удерживаемых кадров.",
                     },
                 ),
+                "blur_mode": (
+                    ["simple", "flow_integrated"],
+                    {
+                        "default": "flow_integrated",
+                        "tooltip": "simple = быстрое усреднение соседних кадров. flow_integrated = motion-compensated blur для более мягкой длинной экспозиции.",
+                    },
+                ),
                 "blur_samples": (
                     "INT",
                     {
-                        "default": 7,
+                        "default": 9,
                         "min": 1,
                         "max": 17,
                         "step": 2,
@@ -256,6 +360,7 @@ class VideoSilentFilmCadence:
         fps_drift_strength,
         shutter_fraction,
         motion_blur_strength,
+        blur_mode,
         blur_samples,
         seed,
     ):
@@ -264,12 +369,15 @@ class VideoSilentFilmCadence:
 
         source_fps = float(source_fps)
         playback_mode = str(playback_mode)
+        blur_mode = str(blur_mode)
         target_fps_min = float(target_fps_min)
         target_fps_max = float(target_fps_max)
         if source_fps <= 0.0:
             raise ValueError("source_fps must be > 0.")
         if playback_mode not in {"preserve_duration_25fps", "undercrank_projected_25fps"}:
             raise ValueError(f"Unsupported playback_mode: {playback_mode}")
+        if blur_mode not in {"simple", "flow_integrated"}:
+            raise ValueError(f"Unsupported blur_mode: {blur_mode}")
         if target_fps_min <= 0.0 or target_fps_max <= 0.0:
             raise ValueError("target_fps_min and target_fps_max must be > 0.")
         if target_fps_min > target_fps_max:
@@ -290,6 +398,16 @@ class VideoSilentFilmCadence:
         blur_scale = max(0.0, float(motion_blur_strength))
         shutter_fraction = max(0.0, float(shutter_fraction))
         blur_samples = int(max(1, blur_samples))
+        actual_blur_mode = blur_mode
+        frame_cache: dict[int, np.ndarray] = {}
+        flow_cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        if blur_mode == "flow_integrated" and cv2 is None:
+            actual_blur_mode = "simple_fallback_no_cv2"
+
+        def _sample_position(position: float) -> torch.Tensor:
+            if actual_blur_mode == "flow_integrated":
+                return _lerp_frame_flow(images, position, frame_cache, flow_cache)
+            return _lerp_frame(images, position)
         
         def _sample_group_frame(group_idx: int, phase: float) -> torch.Tensor:
             start_t = starts[group_idx]
@@ -308,7 +426,8 @@ class VideoSilentFilmCadence:
                     0.28 * float(interval_span_map[group_idx]) * blur_scale,
                 )
             return _temporal_exposure_sample(
-                images=images,
+                sample_fn=_sample_position,
+                frame_template=images[0],
                 center_position=center_pos,
                 exposure_frames=exposure_frames,
                 blur_samples=blur_samples,
@@ -345,6 +464,8 @@ class VideoSilentFilmCadence:
             "source_fps": float(source_fps),
             "output_fps": float(source_fps),
             "playback_mode": playback_mode,
+            "blur_mode": blur_mode,
+            "actual_blur_mode": actual_blur_mode,
             "target_fps_min": float(target_fps_min),
             "target_fps_max": float(target_fps_max),
             "fps_drift_strength": float(fps_drift_strength),
@@ -363,6 +484,11 @@ class VideoSilentFilmCadence:
             "min_group_size": int(min(group_sizes) if group_sizes else 0),
             "average_group_size": float(sum(group_sizes) / len(group_sizes)) if group_sizes else 0.0,
             "unique_frame_ratio": float((len(starts) - 1) / frame_count),
+            "output_group_ids": [int(x) for x in range(len(output_frames))]
+            if playback_mode == "undercrank_projected_25fps"
+            else [int(x) for x in group_ids],
+            "fps_values_full": [round(float(x), 6) for x in fps_values],
+            "phase_biases_full": [round(float(x), 6) for x in phase_biases],
             "fps_values_preview": [round(x, 4) for x in fps_values[:32]],
             "phase_biases_preview": [round(x, 4) for x in phase_biases[:32]],
             "intra_group_motion": float(intra_group_motion),

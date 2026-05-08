@@ -807,6 +807,7 @@ class SmokeTests(unittest.TestCase):
             fps_drift_strength=0.0,
             shutter_fraction=0.0,
             motion_blur_strength=0.0,
+            blur_mode="simple",
             blur_samples=1,
             seed=1925,
         )
@@ -819,6 +820,7 @@ class SmokeTests(unittest.TestCase):
             fps_drift_strength=0.65,
             shutter_fraction=0.9,
             motion_blur_strength=0.85,
+            blur_mode="simple",
             blur_samples=7,
             seed=1925,
         )
@@ -846,6 +848,7 @@ class SmokeTests(unittest.TestCase):
             fps_drift_strength=0.0,
             shutter_fraction=1.0,
             motion_blur_strength=1.0,
+            blur_mode="simple",
             blur_samples=7,
             seed=1925,
         )
@@ -854,6 +857,101 @@ class SmokeTests(unittest.TestCase):
         self.assertLess(out_undercrank.shape[0], 25)
         self.assertEqual(int(out_undercrank.shape[0]), int(undercrank_data["output_frame_count"]))
         self.assertLess(float(undercrank_data["output_duration_seconds"]), float(undercrank_data["input_duration_seconds"]))
+
+        out_flow, payload_flow = node.apply(
+            ramp,
+            source_fps=25.0,
+            playback_mode="preserve_duration_25fps",
+            target_fps_min=16.0,
+            target_fps_max=18.0,
+            fps_drift_strength=0.5,
+            shutter_fraction=1.0,
+            motion_blur_strength=1.0,
+            blur_mode="flow_integrated",
+            blur_samples=5,
+            seed=1925,
+        )
+        flow_data = json.loads(payload_flow)
+        self.assertEqual(tuple(out_flow.shape), (25, 4, 4, 3))
+        self.assertIn(flow_data["actual_blur_mode"], {"flow_integrated", "simple_fallback_no_cv2"})
+
+    def test_video_silent_film_finish_preserves_shape_and_alpha(self):
+        """Ensure silent-film finish keeps batch shape and preserves alpha channel contract."""
+        video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        node = video_mod.VideoSilentFilmFinish()
+
+        frames = torch.rand(6, 12, 10, 4)
+        frames[..., 3] = torch.linspace(0.2, 0.8, steps=6, dtype=torch.float32).view(6, 1, 1)
+        out, payload = node.apply(
+            frames,
+            tone_mode="warm_print",
+            contrast=0.95,
+            midtone_gamma=0.95,
+            black_lift=0.03,
+            highlight_rolloff=0.35,
+            softness=0.25,
+            flicker_strength=0.05,
+            breathing_strength=0.025,
+            gate_weave_px=1.0,
+            grain_strength=0.03,
+            grain_size=2,
+            seed=1925,
+        )
+
+        self.assertEqual(tuple(out.shape), (6, 12, 10, 4))
+        data = json.loads(payload)
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["tone_mode"], "warm_print")
+        self.assertIn("gate_x_preview", data)
+        self.assertIn("exposure_preview", data)
+        self.assertGreater(float(torch.mean(torch.abs(out[..., :3] - frames[..., :3])).item()), 0.0)
+        self.assertGreaterEqual(float(out[..., 3].min().item()), 0.0)
+        self.assertLessEqual(float(out[..., 3].max().item()), 1.0)
+        self.assertEqual(data["sync_mode"], "none")
+
+    def test_video_silent_film_finish_can_lock_to_cadence_json(self):
+        """Ensure finish node can synchronize flicker/weave to cadence metadata."""
+        cadence_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        finish_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+
+        cadence_node = cadence_mod.VideoSilentFilmCadence()
+        finish_node = finish_mod.VideoSilentFilmFinish()
+        frames = torch.rand(18, 10, 10, 3)
+
+        cadence_out, cadence_json = cadence_node.apply(
+            frames,
+            source_fps=24.0,
+            playback_mode="undercrank_projected_25fps",
+            target_fps_min=16.0,
+            target_fps_max=18.0,
+            fps_drift_strength=0.8,
+            shutter_fraction=1.0,
+            motion_blur_strength=1.2,
+            blur_mode="simple",
+            blur_samples=9,
+            seed=1925,
+        )
+        finished, payload = finish_node.apply(
+            cadence_out,
+            tone_mode="neutral_bw",
+            contrast=0.95,
+            midtone_gamma=0.95,
+            black_lift=0.03,
+            highlight_rolloff=0.35,
+            softness=0.25,
+            flicker_strength=0.05,
+            breathing_strength=0.025,
+            gate_weave_px=1.0,
+            grain_strength=0.03,
+            grain_size=2,
+            seed=1925,
+            cadence_json=cadence_json,
+        )
+
+        self.assertEqual(tuple(finished.shape[:3]), tuple(cadence_out.shape[:3]))
+        data = json.loads(payload)
+        self.assertEqual(data["sync_mode"], "cadence_locked")
+        self.assertGreater(float(torch.mean(torch.abs(finished - cadence_out)).item()), 0.0)
 
     def test_qr_code_generation(self):
         """Verify QR node returns a square image tensor with requested resolution."""
