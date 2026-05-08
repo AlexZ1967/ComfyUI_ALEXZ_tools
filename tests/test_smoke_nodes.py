@@ -890,6 +890,7 @@ class SmokeTests(unittest.TestCase):
             black_lift=0.03,
             highlight_rolloff=0.35,
             softness=0.25,
+            focus_drift_strength=0.06,
             flicker_strength=0.05,
             breathing_strength=0.025,
             gate_weave_px=1.0,
@@ -902,6 +903,7 @@ class SmokeTests(unittest.TestCase):
         data = json.loads(payload)
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["tone_mode"], "warm_print")
+        self.assertIn("focus_preview", data)
         self.assertIn("gate_x_preview", data)
         self.assertIn("exposure_preview", data)
         self.assertGreater(float(torch.mean(torch.abs(out[..., :3] - frames[..., :3])).item()), 0.0)
@@ -939,6 +941,7 @@ class SmokeTests(unittest.TestCase):
             black_lift=0.03,
             highlight_rolloff=0.35,
             softness=0.25,
+            focus_drift_strength=0.06,
             flicker_strength=0.05,
             breathing_strength=0.025,
             gate_weave_px=1.0,
@@ -951,6 +954,7 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(tuple(finished.shape[:3]), tuple(cadence_out.shape[:3]))
         data = json.loads(payload)
         self.assertEqual(data["sync_mode"], "cadence_locked")
+        self.assertIn("focus_preview", data)
         self.assertGreater(float(torch.mean(torch.abs(finished - cadence_out)).item()), 0.0)
 
     def test_qr_code_generation(self):

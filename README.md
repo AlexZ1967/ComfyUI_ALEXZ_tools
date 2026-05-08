@@ -245,10 +245,10 @@ Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADEN
 - Type name: VideoSilentFilmFinish
 - Category: video/stylize
 
-Ключевые входы: `image`, `tone_mode`, `contrast`, `midtone_gamma`, `black_lift`, `highlight_rolloff`, `softness`, `flicker_strength`, `breathing_strength`, `gate_weave_px`, `grain_strength`, `grain_size`, `seed`.
-Опционально можно подать `cadence_json` из `Silent Film Cadence`: тогда `flicker` и `gate weave` будут синхронизированы с виртуальной скоростью ручной съемки и фазами low-fps интервалов, а не наложены как независимый шум.
-Типовой старт для 1920s finish: `tone_mode=neutral_bw`, `contrast=0.95`, `midtone_gamma=0.95`, `black_lift=0.03`, `highlight_rolloff=0.35`, `softness=0.25`, `flicker_strength=0.05`, `breathing_strength=0.025`, `gate_weave_px=1.0`, `grain_strength=0.03`.
-Выходы: `image`, `finish_json` (`sync_mode`, `gate_x_preview`, `gate_y_preview`, `exposure_preview`).
+Ключевые входы: `image`, `tone_mode`, `contrast`, `midtone_gamma`, `black_lift`, `highlight_rolloff`, `softness`, `focus_drift_strength`, `flicker_strength`, `breathing_strength`, `gate_weave_px`, `grain_strength`, `grain_size`, `seed`.
+Опционально можно подать `cadence_json` из `Silent Film Cadence`: тогда `flicker`, `gate weave` и легкое гуляние фокуса будут синхронизированы с виртуальной скоростью ручной съемки и фазами low-fps интервалов, а не наложены как независимый шум.
+Типовой старт для 1920s finish: `tone_mode=neutral_bw`, `contrast=0.97`, `midtone_gamma=0.94`, `black_lift=0.03`, `highlight_rolloff=0.36`, `softness=0.26`, `focus_drift_strength=0.09`, `flicker_strength=0.055`, `breathing_strength=0.022`, `gate_weave_px=1.05`, `grain_strength=0.028`.
+Выходы: `image`, `finish_json` (`sync_mode`, `focus_preview`, `gate_x_preview`, `gate_y_preview`, `exposure_preview`).
 Guide: [GUIDE_VIDEO_SILENT_FILM_FINISH.md](guides/GUIDE_VIDEO_SILENT_FILM_FINISH.md)
 
 ---

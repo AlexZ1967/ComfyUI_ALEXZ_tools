@@ -99,16 +99,67 @@ def _apply_gate_weave(
     return woven.permute(0, 2, 3, 1).contiguous().view(frame_count, height, width, channels)
 
 
+def _build_blur_levels(gray: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build two blur levels: a soft optical blur and a slightly stronger defocus blur."""
+    batch = gray.permute(0, 3, 1, 2).contiguous()
+    soft_blur = F.avg_pool2d(batch, kernel_size=3, stride=1, padding=1)
+    soft_blur = F.avg_pool2d(soft_blur, kernel_size=3, stride=1, padding=1)
+
+    defocus_blur = F.avg_pool2d(soft_blur, kernel_size=5, stride=1, padding=2)
+    downscaled = F.interpolate(soft_blur, scale_factor=0.5, mode="bilinear", align_corners=False)
+    downscaled = F.avg_pool2d(downscaled, kernel_size=3, stride=1, padding=1)
+    downscaled = F.interpolate(
+        downscaled,
+        size=batch.shape[-2:],
+        mode="bilinear",
+        align_corners=False,
+    )
+    defocus_blur = defocus_blur * 0.6 + downscaled * 0.4
+    return (
+        soft_blur.permute(0, 2, 3, 1).contiguous(),
+        defocus_blur.permute(0, 2, 3, 1).contiguous(),
+    )
+
+
 def _apply_softness(gray: torch.Tensor, softness: float) -> torch.Tensor:
     """Blend the image with a gentle spatial blur."""
     softness = max(0.0, min(1.0, float(softness)))
     if softness <= 1e-8:
         return gray
-    batch = gray.permute(0, 3, 1, 2).contiguous()
-    blurred = F.avg_pool2d(batch, kernel_size=3, stride=1, padding=1)
-    blurred = F.avg_pool2d(blurred, kernel_size=3, stride=1, padding=1)
-    out = batch * (1.0 - 0.75 * softness) + blurred * (0.75 * softness)
-    return out.permute(0, 2, 3, 1).contiguous()
+    soft_blur, _defocus_blur = _build_blur_levels(gray)
+    out = gray * (1.0 - 0.78 * softness) + soft_blur * (0.78 * softness)
+    return out
+
+
+def _blur_batch(gray: torch.Tensor) -> torch.Tensor:
+    """Build a reusable softly blurred version of the batch."""
+    soft_blur, _defocus_blur = _build_blur_levels(gray)
+    return soft_blur
+
+
+def _apply_focus_drift(
+    gray_rgb: torch.Tensor,
+    base_softness: float,
+    focus_signal: torch.Tensor,
+    focus_drift_strength: float,
+) -> torch.Tensor:
+    """Modulate apparent focus by varying blur amount per frame."""
+    focus_drift_strength = max(0.0, min(1.0, float(focus_drift_strength)))
+    if focus_drift_strength <= 1e-8:
+        return _apply_softness(gray_rgb, base_softness)
+
+    focus_signal = torch.clamp(focus_signal, -1.0, 1.0).view(-1, 1, 1, 1)
+    base_softness = max(0.0, min(1.0, float(base_softness)))
+
+    soft_blur, defocus_blur = _build_blur_levels(gray_rgb)
+    base_mix = min(0.88, 0.72 * base_softness + 0.08)
+    softened = gray_rgb * (1.0 - base_mix) + soft_blur * base_mix
+
+    sharpen_amount = torch.clamp(-focus_signal, 0.0, 1.0) * min(0.35, 2.4 * focus_drift_strength)
+    defocus_amount = torch.clamp(focus_signal, 0.0, 1.0) * min(0.42, 3.2 * focus_drift_strength)
+
+    sharpened = softened * (1.0 - sharpen_amount) + gray_rgb * sharpen_amount
+    return sharpened * (1.0 - defocus_amount) + defocus_blur * defocus_amount
 
 
 def _tone_gray(gray: torch.Tensor, tone_mode: str) -> torch.Tensor:
@@ -274,6 +325,16 @@ class VideoSilentFilmFinish:
                         "tooltip": "Легкая оптическая мягкость.",
                     },
                 ),
+                "focus_drift_strength": (
+                    "FLOAT",
+                    {
+                        "default": 0.09,
+                        "min": 0.0,
+                        "max": 0.5,
+                        "step": 0.005,
+                        "tooltip": "Очень деликатное пульсирующее изменение резкости. Часть кадров становится чуть резче базового уровня, часть чуть мягче, без modern autofocus hunting.",
+                    },
+                ),
                 "flicker_strength": (
                     "FLOAT",
                     {
@@ -340,7 +401,7 @@ class VideoSilentFilmFinish:
                     {
                         "default": "",
                         "multiline": True,
-                        "tooltip": "Опциональный cadence_json из Silent Film Cadence. Если подключен, flicker и gate weave будут синхронизированы с виртуальной скоростью ручной съемки.",
+                        "tooltip": "Опциональный cadence_json из Silent Film Cadence. Если подключен, flicker, gate weave и focus drift будут синхронизированы с виртуальной скоростью ручной съемки.",
                     },
                 ),
             },
@@ -360,6 +421,7 @@ class VideoSilentFilmFinish:
         black_lift,
         highlight_rolloff,
         softness,
+        focus_drift_strength,
         flicker_strength,
         breathing_strength,
         gate_weave_px,
@@ -390,20 +452,24 @@ class VideoSilentFilmFinish:
             cadence_breathing = _temporal_signal(group_count, seed + 211, breathing_strength, 0.93, device, dtype)
             cadence_gate_x = _temporal_signal(group_count, seed + 11, gate_weave_px, 0.58, device, dtype)
             cadence_gate_y = _temporal_signal(group_count, seed + 23, gate_weave_px * 0.8, 0.63, device, dtype)
+            cadence_focus = _temporal_signal(group_count, seed + 307, 1.0, 0.36, device, dtype)
 
             cadence_flicker = cadence_flicker + fps_deviation * float(flicker_strength) * 0.75
             cadence_gate_x = cadence_gate_x + phase_biases * float(gate_weave_px) * 0.85
             cadence_gate_y = cadence_gate_y - phase_biases * float(gate_weave_px) * 0.45
+            cadence_focus = torch.tanh(cadence_focus + phase_biases * 0.55)
 
             gate_x = _expand_group_series(group_ids, cadence_gate_x, device, dtype)
             gate_y = _expand_group_series(group_ids, cadence_gate_y, device, dtype)
             flicker_fast = _expand_group_series(group_ids, cadence_flicker, device, dtype)
             flicker_slow = _expand_group_series(group_ids, cadence_breathing, device, dtype)
+            focus_signal = _expand_group_series(group_ids, cadence_focus, device, dtype)
         else:
             gate_x = _temporal_signal(frame_count, seed + 11, gate_weave_px, 0.55, device, dtype)
             gate_y = _temporal_signal(frame_count, seed + 23, gate_weave_px * 0.8, 0.60, device, dtype)
             flicker_fast = _temporal_signal(frame_count, seed + 101, flicker_strength, 0.18, device, dtype)
             flicker_slow = _temporal_signal(frame_count, seed + 211, breathing_strength, 0.92, device, dtype)
+            focus_signal = torch.tanh(_temporal_signal(frame_count, seed + 307, 1.0, 0.48, device, dtype))
 
         woven_rgb = _apply_gate_weave(rgb, gate_x, gate_y)
         woven_alpha = _apply_gate_weave(alpha, gate_x, gate_y) if alpha is not None else None
@@ -419,7 +485,7 @@ class VideoSilentFilmFinish:
         gray = torch.clamp(gray, 0.0, 1.0)
         gray = _soft_clip_highlights(gray, highlight_rolloff)
         gray_rgb = gray.repeat(1, 1, 1, 3)
-        gray_rgb = _apply_softness(gray_rgb, softness)
+        gray_rgb = _apply_focus_drift(gray_rgb, softness, focus_signal, focus_drift_strength)
         gray = gray_rgb[..., 0:1]
 
         exposure = 1.0 + flicker_fast + flicker_slow
@@ -445,6 +511,7 @@ class VideoSilentFilmFinish:
             "black_lift": float(black_lift),
             "highlight_rolloff": float(highlight_rolloff),
             "softness": float(softness),
+            "focus_drift_strength": float(focus_drift_strength),
             "flicker_strength": float(flicker_strength),
             "breathing_strength": float(breathing_strength),
             "gate_weave_px": float(gate_weave_px),
@@ -453,6 +520,7 @@ class VideoSilentFilmFinish:
             "seed": int(seed),
             "frame_count": frame_count,
             "sync_mode": sync_mode,
+            "focus_preview": [round(float(x), 4) for x in focus_signal[:16].tolist()],
             "gate_x_preview": [round(float(x), 4) for x in gate_x[:16].tolist()],
             "gate_y_preview": [round(float(y), 4) for y in gate_y[:16].tolist()],
             "exposure_preview": [round(float(x), 4) for x in exposure.view(-1)[:16].tolist()],
