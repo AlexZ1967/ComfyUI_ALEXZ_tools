@@ -129,6 +129,7 @@
 
 Срок: 2026-08-16 -> 2026-09-06
 Приоритет: `P1`
+Статус: 🔄 в работе
 
 ### Цели
 
@@ -138,18 +139,21 @@
 ### Задачи
 
 1. Дорезать `utils/module_node_browser_api.py`:
-   - state/cache helpers
-   - network/release helpers
-   - thin facade only
+   - ✅ state/cache helpers
+   - ✅ request parsing / module-info cache / catalog facade seams
+   - ⏳ network/release helpers
+   - ⏳ thin facade only
 2. Просмотреть compatibility shims в `utils/module_browser/*`:
    - отметить, какие еще реально нужны
    - удалить неиспользуемые
 3. Сузить `except Exception` там, где ошибка уже понятна по домену.
 4. Дофиксировать contract boundaries:
-   - routes
-   - payload shape
-   - runtime refresh/update jobs
+   - ✅ routes
+   - ✅ payload shape
+   - ⏳ runtime refresh/update jobs
 5. Добавить smoke-check на route registration и info-only режимы.
+   - ✅ базовый registration/info-only coverage уже зафиксирован тестами
+     `tests/test_module_browser_api_routes.py`
 
 ### Артефакты
 

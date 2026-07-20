@@ -1,7 +1,7 @@
 """
 Module: utils/module_node_browser_api.py
 Author: AlexZ1967
-Last updated: 2026-03-05
+Last updated: 2026-07-20
 
 Description:
     Backend facade for Module Node Picker widget.
@@ -258,6 +258,16 @@ from .module_browser_api.module_info_ops import (
     remember_module_state as mb_api_remember_module_state,
     resolve_module_info_cached as mb_api_resolve_module_info_cached,
     sanitize_module_description as mb_api_sanitize_module_description,
+)
+from .module_browser_api.catalog_ops import (
+    build_catalog as mb_api_build_catalog,
+    build_group_catalog as mb_api_build_group_catalog,
+    build_group_modules as mb_api_build_group_modules,
+    build_group_payload as mb_api_build_group_payload,
+    build_module_list_payload as mb_api_build_module_list_payload_wrapper,
+    build_module_nodes_payload as mb_api_build_module_nodes_payload_wrapper,
+    collect_nodes as mb_api_collect_nodes,
+    filter_modules as mb_api_filter_modules,
 )
 from .module_browser_api.routes import (
     register_routes as mb_api_register_routes,
@@ -1292,29 +1302,36 @@ def _resolve_module_info(
 
 def _collect_nodes() -> list[dict[str, Any]]:
     """Collect node definitions from registered ComfyUI mappings."""
-    class_map, display_map = _node_mappings()
-    return catalog_collect_nodes(
-        class_map=class_map,
-        display_map=display_map,
-        annotation_resolver=lambda node_name, node_cls: _ALEXZ_ANNOTATIONS.get(node_name) or _fallback_annotation(node_cls),
-        classifier=_classify_by_relative_module,
+    return mb_api_collect_nodes(
+        node_mappings=_node_mappings,
+        collect_nodes_impl=catalog_collect_nodes,
+        annotations=_ALEXZ_ANNOTATIONS,
+        fallback_annotation=_fallback_annotation,
+        classify_by_relative_module=_classify_by_relative_module,
     )
 
 
 def _build_catalog() -> dict[str, list[dict[str, Any]]]:
     """Build cached module-to-node catalog from discovered nodes."""
-    return catalog_build_catalog(_collect_nodes())
+    return mb_api_build_catalog(
+        collect_nodes_fn=_collect_nodes,
+        build_catalog_impl=catalog_build_catalog,
+    )
 
 
 def _build_group_catalog() -> dict[str, list[dict[str, Any]]]:
     """Build grouped node catalog for one category."""
-    return catalog_build_group_catalog(_collect_nodes())
+    return mb_api_build_group_catalog(
+        collect_nodes_fn=_collect_nodes,
+        build_group_catalog_impl=catalog_build_group_catalog,
+    )
 
 
 def _build_group_modules(grouped_nodes: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
     """Build grouped module summaries for one category."""
-    return catalog_build_group_modules(
-        grouped_nodes=grouped_nodes,
+    return mb_api_build_group_modules(
+        grouped_nodes,
+        build_group_modules_impl=catalog_build_group_modules,
         discover_custom_modules=_discover_custom_modules,
         cached_module_flags=_cached_module_flags,
     )
@@ -1322,7 +1339,11 @@ def _build_group_modules(grouped_nodes: dict[str, list[dict[str, Any]]]) -> dict
 
 def _filter_modules(query: str, module_names: list[str]) -> list[str]:
     """Filter module list by case-insensitive text query over module names."""
-    return catalog_filter_modules(query, module_names)
+    return mb_api_filter_modules(
+        query,
+        module_names,
+        filter_modules_impl=catalog_filter_modules,
+    )
 
 
 def _build_group_payload(
@@ -1330,23 +1351,29 @@ def _build_group_payload(
     modules_by_group: dict[str, list[dict[str, Any]]],
 ) -> list[dict[str, Any]]:
     """Build ordered group payload for node-catalog API route."""
-    return mb_build_group_payload(
-        group_order=_GROUP_ORDER,
+    return mb_api_build_group_payload(
         grouped_nodes=grouped_nodes,
         modules_by_group=modules_by_group,
+        build_group_payload_impl=mb_build_group_payload,
+        group_order=_GROUP_ORDER,
     )
 
 
 def _build_module_list_payload(catalog: dict[str, list[dict[str, Any]]], query: str) -> dict[str, Any]:
     """Build module-list payload for module-list API route."""
-    return mb_build_module_list_payload(catalog=catalog, query=query)
+    return mb_api_build_module_list_payload_wrapper(
+        catalog,
+        query,
+        build_module_list_payload_impl=mb_build_module_list_payload,
+    )
 
 
 def _build_module_nodes_payload(catalog: dict[str, list[dict[str, Any]]], query: str) -> dict[str, Any]:
     """Build module-nodes payload for module-nodes API route."""
-    return mb_build_module_nodes_payload(
-        catalog=catalog,
-        query=query,
+    return mb_api_build_module_nodes_payload_wrapper(
+        catalog,
+        query,
+        build_module_nodes_payload_impl=mb_build_module_nodes_payload,
         filter_modules_fn=_filter_modules,
     )
 

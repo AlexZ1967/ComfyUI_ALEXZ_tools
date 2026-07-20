@@ -1,5 +1,25 @@
 # Changelog — ALEXZ_tools
 
+## 0.37.2 — 2026-07-20
+- Phase 3 `Module Node Picker` stabilization continued without API changes:
+  - extracted catalog orchestration seams from
+    `utils/module_node_browser_api.py` to
+    `utils/module_browser_api/catalog_ops.py`;
+  - kept the legacy facade methods (`_collect_nodes`, `_build_catalog`,
+    `_build_group_catalog`, `_build_group_modules`, `_filter_modules`,
+    `_build_group_payload`, `_build_module_list_payload`,
+    `_build_module_nodes_payload`) as thin compatibility delegates;
+  - added direct unit coverage for the new helper seam in
+    `tests/test_module_browser_api_catalog_ops.py`.
+- Updated H2 stabilization roadmap progress in
+  `refactoring_plan/ROADMAP_2026_H2_RU.md` for the completed facade-thinning
+  substeps.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_module_browser_api_catalog_ops.py tests/test_module_browser_catalog.py tests/test_module_browser_catalog_payload_ops.py tests/test_phase0_baseline.py tests/test_module_browser_api_routes.py`;
+  - `conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.37.2` in `pyproject.toml` and `README.md`.
+
 ## 0.37.1 — 2026-07-20
 - Fixed `Module Node Picker` ComfyUI release-check behavior for detached-head
   release installs:
