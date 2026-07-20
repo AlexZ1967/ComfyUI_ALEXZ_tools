@@ -1,5 +1,22 @@
 # Changelog — ALEXZ_tools
 
+## 0.37.1 — 2026-07-20
+- Fixed `Module Node Picker` ComfyUI release-check behavior for detached-head
+  release installs:
+  - removed the false `releases -> commits` fallback that could report
+    `behind=N` even when the selected `ComfyUI check: releases` mode should
+    only compare against the latest release tag;
+  - added local-tag fallback when GitHub latest-release metadata is
+    temporarily unavailable, so release-check can still resolve an installed
+    release from local git tags;
+  - updated the status-card messaging so degraded release checks render as
+    neutral availability diagnostics instead of misleading update warnings.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_module_browser_comfyui_git_status_ops.py`;
+  - `conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.37.1` in `pyproject.toml` and `README.md`.
+
 ## 0.37.0 — 2026-07-19
 - Improved Registry / packaging metadata for current ComfyUI publishing flow:
   - expanded `pyproject.toml` with `requires-python`, project URLs,

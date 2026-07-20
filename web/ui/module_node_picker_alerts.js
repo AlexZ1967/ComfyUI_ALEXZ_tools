@@ -33,6 +33,8 @@ export function renderComfyAlertCard(context) {
     const local = String(info?.installed_commit_short || "unknown");
     const remote = String(info?.remote_commit_short || "unknown");
     const releaseTag = String(info?.release_tag || "").trim();
+    const releaseCheckDegraded = Boolean(info?.release_check_degraded);
+    const releaseCheckReason = String(info?.release_check_reason || "").trim();
     const canUpdate = status === "can_update" && (!Number.isFinite(behind) || behind > 0);
     const requirementsPending = Boolean(info?.requirements_update_pending);
     const requirementsPendingAt = info?.requirements_pending_updated_at
@@ -68,6 +70,20 @@ export function renderComfyAlertCard(context) {
     }
 
     comfyAlert.classList.add("alexz-mod-picker-status-card--neutral");
+    if (mode === "releases" && releaseCheckDegraded) {
+        if (releaseCheckReason === "release_tag_not_resolved" && releaseTag) {
+            comfyAlertText.textContent =
+                `ComfyUI release check unavailable: could not resolve release tag ${releaseTag} locally.`;
+        } else {
+            comfyAlertText.textContent =
+                "ComfyUI release check unavailable: latest GitHub release metadata could not be confirmed.";
+        }
+        return;
+    }
+    if (status === "unknown") {
+        comfyAlertText.textContent = `ComfyUI status check is unavailable (${mode} check).`;
+        return;
+    }
     if (Boolean(info?.updated_between_runs)) {
         const prev = String(info?.startup_prev_commit_short || "unknown");
         const next = String(info?.startup_new_commit_short || "unknown");

@@ -108,26 +108,50 @@ def collect_comfyui_git_status(
     if mode_norm == "releases":
         release = github_latest_release("comfyanonymous", "ComfyUI")
         tag_name = str(release.get("tag_name") or "").strip()
+        result["release_tag"] = tag_name
+        result["release_name"] = str(release.get("name") or "").strip()
+        result["release_url"] = str(release.get("html_url") or "").strip()
+        published = parse_datetime(str(release.get("published_at") or release.get("created_at") or ""))
+        if published is not None:
+            result["remote_updated_at"] = to_iso(published) or ""
+        if not tag_name:
+            # Fall back to freshest locally known tag when GitHub latest-release
+            # metadata is temporarily unavailable.
+            run_git(["git", "-C", str(root), "fetch", "--quiet", remote_name, "--tags"], 25.0)
+            tag_name = (
+                run_git(
+                    [
+                        "git",
+                        "-C",
+                        str(root),
+                        "for-each-ref",
+                        "--sort=-version:refname",
+                        "--count=1",
+                        "--format=%(refname:strip=2)",
+                        "refs/tags",
+                    ],
+                    2.0,
+                )
+                or ""
+            ).strip()
+            result["release_tag"] = tag_name
+            if not tag_name:
+                result["release_check_degraded"] = True
+                result["release_check_reason"] = "github_release_unavailable"
         tag_ref, release_commit = resolve_release_ref(root, remote_name, tag_name)
         if tag_ref and release_commit:
             remote_ref = tag_ref
             result["remote_ref"] = tag_ref
-            result["release_tag"] = tag_name
-            result["release_name"] = str(release.get("name") or "").strip()
-            result["release_url"] = str(release.get("html_url") or "").strip()
             result["remote_commit"] = release_commit
             result["remote_commit_short"] = short_commit(release_commit)
-            published = parse_datetime(str(release.get("published_at") or release.get("created_at") or ""))
-            if published is not None:
-                result["remote_updated_at"] = to_iso(published) or ""
-            if not result["remote_updated_at"]:
+            if not result.get("remote_updated_at"):
                 result["remote_updated_at"] = run_git(
                     ["git", "-C", str(root), "log", "-1", "--format=%cI", tag_ref],
                     2.0,
                 ) or ""
-        else:
-            mode_norm = "commits"
-            result["check_mode"] = "commits"
+        elif tag_name:
+            result["release_check_degraded"] = True
+            result["release_check_reason"] = "release_tag_not_resolved"
 
     if mode_norm == "commits":
         remote_ref, _remote_branch = git_resolve_remote_ref(root, remote_name, result["branch"], upstream)
@@ -140,7 +164,7 @@ def collect_comfyui_git_status(
                 2.0,
             ) or ""
 
-    if result["remote_ref"] and result["remote_commit"]:
+    if result.get("remote_ref") and result.get("remote_commit"):
         counts = run_git(
             ["git", "-C", str(root), "rev-list", "--left-right", "--count", f"HEAD...{result['remote_ref']}"],
             2.0,

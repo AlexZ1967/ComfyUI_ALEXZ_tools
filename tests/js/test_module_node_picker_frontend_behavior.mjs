@@ -37,6 +37,7 @@ import {
     pollRefreshProgressLoop,
     pollUpdateProgressLoop,
 } from "../../web/orchestration/flow/progress/module_node_picker_update_flow.js";
+import { renderComfyAlertCard } from "../../web/ui/module_node_picker_alerts.js";
 
 function makeClassList() {
     const names = new Set();
@@ -305,6 +306,34 @@ async function testRequirementsFollowupUsesManualAdvisoryText() {
     assert.equal(actions[0].onClickType, "object");
 }
 
+async function testComfyReleaseCheckDegradedUsesNeutralWarningText() {
+    const comfyAlert = {
+        style: {},
+        classList: makeClassList(),
+    };
+    const comfyAlertText = { textContent: "" };
+
+    renderComfyAlertCard({
+        info: {
+            check_mode: "releases",
+            update_status: "unknown",
+            release_check_degraded: true,
+            release_check_reason: "release_tag_not_resolved",
+            release_tag: "v0.3.40",
+        },
+        comfyMode: "releases",
+        comfyAlert,
+        comfyAlertText,
+    });
+
+    assert.equal(comfyAlert.style.display, "block");
+    assert.equal(comfyAlert.classList.contains("alexz-mod-picker-status-card--neutral"), true);
+    assert.equal(
+        comfyAlertText.textContent.includes("could not resolve release tag v0.3.40 locally"),
+        true
+    );
+}
+
 async function main() {
     const tests = [
         ["runtime state accessors", testRuntimeStateAccessors],
@@ -316,6 +345,7 @@ async function main() {
         ["custom refresh finalizes busy state", testCustomRefreshFlowFinalizesBusyState],
         ["busy ui force reset bypasses lifecycle guard", testBusyUiForceResetBypassesLifecycleGuard],
         ["requirements follow-up uses manual advisory", testRequirementsFollowupUsesManualAdvisoryText],
+        ["comfy release-check degraded text", testComfyReleaseCheckDegradedUsesNeutralWarningText],
     ];
 
     for (const [name, fn] of tests) {

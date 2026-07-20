@@ -35,6 +35,8 @@ def comfyui_status_template(mode_norm: str) -> dict[str, Any]:
         "release_tag": "",
         "release_name": "",
         "release_url": "",
+        "release_check_degraded": False,
+        "release_check_reason": "",
         "ahead": None,
         "behind": None,
         "update_available": None,
