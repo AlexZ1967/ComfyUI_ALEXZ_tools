@@ -239,6 +239,15 @@ from .module_browser_api.node_introspection import (
 from .module_browser_api.state import (
     get_state as mb_api_get_state,
 )
+from .module_browser_api.state_cache_ops import (
+    ensure_runtime_state_ready as mb_api_ensure_runtime_state_ready,
+    load_module_state_cache as mb_api_load_module_state_cache,
+    runtime_warmup_status as mb_api_runtime_warmup_status,
+    save_module_state_cache as mb_api_save_module_state_cache,
+    start_runtime_state_warmup as mb_api_start_runtime_state_warmup,
+    sync_runtime_warmup_from_legacy as mb_api_sync_runtime_warmup_from_legacy,
+    sync_runtime_warmup_to_legacy as mb_api_sync_runtime_warmup_to_legacy,
+)
 from .module_browser_api.routes import (
     register_routes as mb_api_register_routes,
 )
@@ -285,16 +294,18 @@ _INFO_ONLY_WIDGET_MODE = True
 
 def _sync_runtime_warmup_from_legacy() -> None:
     """Apply legacy runtime warmup globals to extracted state container."""
-    _API_STATE.lazy_refresh_done = bool(_LAZY_REFRESH_DONE)
-    _API_STATE.runtime_warmup_thread = _RUNTIME_WARMUP_THREAD
+    mb_api_sync_runtime_warmup_from_legacy(
+        _API_STATE,
+        lazy_refresh_done=_LAZY_REFRESH_DONE,
+        runtime_warmup_thread=_RUNTIME_WARMUP_THREAD,
+    )
 
 
 def _sync_runtime_warmup_to_legacy() -> None:
     """Mirror extracted runtime warmup state back to legacy globals."""
     global _LAZY_REFRESH_DONE
     global _RUNTIME_WARMUP_THREAD
-    _LAZY_REFRESH_DONE = bool(_API_STATE.lazy_refresh_done)
-    _RUNTIME_WARMUP_THREAD = _API_STATE.runtime_warmup_thread
+    _LAZY_REFRESH_DONE, _RUNTIME_WARMUP_THREAD = mb_api_sync_runtime_warmup_to_legacy(_API_STATE)
 
 
 def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
@@ -1212,21 +1223,22 @@ def _acknowledge_comfyui_novelty() -> dict[str, Any]:
 def _load_module_state() -> dict[str, dict[str, Any]]:
     """Load persisted module snapshot state from extension cache file."""
     global _MODULE_STATE_CACHE
-    if _MODULE_STATE_CACHE is not None:
-        return _MODULE_STATE_CACHE
-    _MODULE_STATE_CACHE = mb_load_state_file(
-        _MODULE_STATE_PATH,
+    _MODULE_STATE_CACHE = mb_api_load_module_state_cache(
+        _MODULE_STATE_CACHE,
+        state_path=_MODULE_STATE_PATH,
         ensure_schema=ensure_module_state_schema,
+        load_state_file=mb_load_state_file,
     )
     return _MODULE_STATE_CACHE
 
 
 def _save_module_state(state: dict[str, dict[str, Any]]) -> None:
     """Persist module snapshot state to extension cache file."""
-    normalized = mb_save_state_file(
-        _MODULE_STATE_PATH,
+    normalized = mb_api_save_module_state_cache(
         state,
+        state_path=_MODULE_STATE_PATH,
         ensure_schema=ensure_module_state_schema,
+        save_state_file=mb_save_state_file,
         logger=_LOGGER,
     )
     global _MODULE_STATE_CACHE
@@ -1498,66 +1510,35 @@ def _refresh_module_runtime_state(sync_upstreams: bool = False, progress_cb: Any
 
 def _ensure_runtime_state_ready() -> None:
     """Ensure runtime snapshot cache is initialized before serving API requests."""
-    _sync_runtime_warmup_from_legacy()
-    if _API_STATE.lazy_refresh_done:
-        return
-    _load_module_state()
-    # On process start, hide stale remote-update status until user runs explicit refresh.
-    _set_custom_update_checked(False)
-    _announce_tracked_module_updates(local_only=True)
-    _track_comfyui_local_update()
-    _API_STATE.lazy_refresh_done = True
-    _sync_runtime_warmup_to_legacy()
+    mb_api_ensure_runtime_state_ready(
+        _API_STATE,
+        sync_from_legacy=_sync_runtime_warmup_from_legacy,
+        sync_to_legacy=_sync_runtime_warmup_to_legacy,
+        load_module_state=_load_module_state,
+        set_custom_update_checked=_set_custom_update_checked,
+        announce_tracked_module_updates=_announce_tracked_module_updates,
+        track_comfyui_local_update=_track_comfyui_local_update,
+    )
 
 
 def _start_runtime_state_warmup() -> bool:
     """Start non-blocking runtime-state warmup once and return start status."""
-    _sync_runtime_warmup_from_legacy()
-    if _API_STATE.lazy_refresh_done:
-        return False
-
-    with _API_STATE.runtime_warmup_lock:
-        _sync_runtime_warmup_from_legacy()
-        if _API_STATE.lazy_refresh_done:
-            return False
-        existing = _API_STATE.runtime_warmup_thread
-        if existing is not None and existing.is_alive():
-            return False
-        # Reset stale remote-update visibility immediately on first access.
-        _set_custom_update_checked(False)
-
-        def _runner() -> None:
-            """Warmup worker for runtime state cache used by first-open UI paths."""
-            try:
-                _ensure_runtime_state_ready()
-            except Exception as exc:  # pragma: no cover - diagnostic
-                _LOGGER.warning("Runtime warmup failed: %s", exc, exc_info=True)
-            finally:
-                with _API_STATE.runtime_warmup_lock:
-                    _API_STATE.runtime_warmup_thread = None
-                    _sync_runtime_warmup_to_legacy()
-
-        _API_STATE.runtime_warmup_thread = threading.Thread(
-            target=_runner,
-            name="ALEXZ_tools_RuntimeWarmup",
-            daemon=True,
-        )
-        _sync_runtime_warmup_to_legacy()
-        _API_STATE.runtime_warmup_thread.start()
-        return True
+    return mb_api_start_runtime_state_warmup(
+        _API_STATE,
+        sync_from_legacy=_sync_runtime_warmup_from_legacy,
+        sync_to_legacy=_sync_runtime_warmup_to_legacy,
+        set_custom_update_checked=_set_custom_update_checked,
+        ensure_runtime_state_ready_fn=_ensure_runtime_state_ready,
+        logger_warning=_LOGGER.warning,
+    )
 
 
 def _runtime_warmup_status() -> dict[str, Any]:
     """Return lightweight runtime warmup state for frontend polling hints."""
-    _sync_runtime_warmup_from_legacy()
-    with _API_STATE.runtime_warmup_lock:
-        thread = _API_STATE.runtime_warmup_thread
-        running = bool(thread is not None and thread.is_alive())
-    done = bool(_API_STATE.lazy_refresh_done)
-    return {
-        "running": running,
-        "done": done,
-    }
+    return mb_api_runtime_warmup_status(
+        _API_STATE,
+        sync_from_legacy=_sync_runtime_warmup_from_legacy,
+    )
 
 
 def _start_refresh_job(sync_upstreams: bool) -> dict[str, Any]:
