@@ -16,6 +16,8 @@ from __future__ import annotations
 from types import ModuleType
 from typing import Any
 
+from .request_parsing import coerce_bool_flag, load_json_payload
+
 
 def register_routes(
     *,
@@ -36,18 +38,12 @@ def register_routes(
     async def alexz_tools_module_refresh(request):
         """API route that starts asynchronous module status refresh."""
         try:
-            sync_raw = (request.query.get("sync_upstreams", "") or "").strip().lower()
-            payload = {}
-            try:
-                payload = await request.json()
-            except Exception:
-                payload = {}
+            sync_raw = request.query.get("sync_upstreams", "")
+            payload = await load_json_payload(request)
             if not sync_raw and isinstance(payload, dict):
-                sync_raw = str(payload.get("sync_upstreams", "1") or "1").strip().lower()
-            if not sync_raw:
-                sync_raw = "1"
-            do_sync = sync_raw not in {"0", "false", "no", "off"}
-            requested_log_mode = api_module._normalize_log_mode(payload.get("log_mode") if isinstance(payload, dict) else None)
+                sync_raw = payload.get("sync_upstreams", "1")
+            do_sync = coerce_bool_flag(sync_raw, default=True)
+            requested_log_mode = api_module._normalize_log_mode(payload.get("log_mode"))
             api_module._set_update_console_log_mode(requested_log_mode)
             return web.json_response(api_module._start_refresh_job(sync_upstreams=do_sync))
         except Exception as exc:  # pragma: no cover - diagnostic
@@ -82,11 +78,7 @@ def register_routes(
                     api_module._info_only_rejection_payload("module_update"),
                     status=403,
                 )
-            payload = {}
-            try:
-                payload = await request.json()
-            except Exception:
-                payload = {}
+            payload = await load_json_payload(request)
             scope = str(payload.get("scope") or request.query.get("scope") or "single").strip().lower()
             module_name = str(payload.get("module") or request.query.get("module") or "").strip()
             requested_log_mode = api_module._normalize_log_mode(payload.get("log_mode") or request.query.get("log_mode") or "summary")
@@ -111,11 +103,7 @@ def register_routes(
     async def alexz_tools_module_install_requirements(request):
         """API route that returns manual-install advisory payload for selected modules."""
         try:
-            payload = {}
-            try:
-                payload = await request.json()
-            except Exception:
-                payload = {}
+            payload = await load_json_payload(request)
             modules = payload.get("modules")
             result = api_module._requirements_advisory_for_modules(modules if isinstance(modules, list) else [])
             return web.json_response(result)
@@ -137,8 +125,7 @@ def register_routes(
     async def alexz_tools_component_registry(request):
         """API route that returns extensibility registry snapshot (nodes/widgets/api)."""
         try:
-            refresh_raw = (request.query.get("refresh", "0") or "0").strip().lower()
-            force_refresh = refresh_raw not in {"0", "false", "no", "off"}
+            force_refresh = coerce_bool_flag(request.query.get("refresh", "0"), default=False)
             payload = api_module._component_registry_payload(force_refresh=force_refresh)
             return web.json_response({"status": "ok", "registry": payload})
         except Exception as exc:  # pragma: no cover - diagnostic
@@ -173,12 +160,9 @@ def register_routes(
         """API route that returns detailed information for one module."""
         group = (request.query.get("group", "") or "").strip().lower()
         module_name = (request.query.get("module", "") or "").strip()
-        refresh_raw = (request.query.get("refresh", "0") or "0").strip().lower()
-        sync_raw = (request.query.get("sync_upstream", "0") or "0").strip().lower()
-        cache_only_raw = (request.query.get("cache_only", "1") or "1").strip().lower()
-        force_refresh = refresh_raw not in {"0", "false", "no", "off"}
-        sync_upstream = sync_raw not in {"0", "false", "no", "off"}
-        cache_only = cache_only_raw not in {"0", "false", "no", "off"}
+        force_refresh = coerce_bool_flag(request.query.get("refresh", "0"), default=False)
+        sync_upstream = coerce_bool_flag(request.query.get("sync_upstream", "0"), default=False)
+        cache_only = coerce_bool_flag(request.query.get("cache_only", "1"), default=True)
         if force_refresh or sync_upstream:
             cache_only = False
         if not module_name:
@@ -210,10 +194,8 @@ def register_routes(
     async def alexz_tools_comfyui_info(request):
         """API route that returns ComfyUI update and version status."""
         try:
-            refresh_raw = (request.query.get("refresh", "1") or "1").strip().lower()
-            force_refresh = refresh_raw not in {"0", "false", "no", "off"}
-            ack_raw = (request.query.get("acknowledge", "1") or "1").strip().lower()
-            acknowledge = ack_raw not in {"0", "false", "no", "off"}
+            force_refresh = coerce_bool_flag(request.query.get("refresh", "1"), default=True)
+            acknowledge = coerce_bool_flag(request.query.get("acknowledge", "1"), default=True)
             mode = api_module._normalize_comfyui_mode(request.query.get("mode", ""))
             log_mode = api_module._normalize_log_mode(request.query.get("log_mode", "summary"))
             api_module._set_update_console_log_mode(log_mode)

@@ -215,6 +215,33 @@ class ModuleBrowserApiRoutesTests(unittest.TestCase):
         self.assertFalse(second)
         self.assertTrue(bool(getattr(self.api, "_ROUTES_REGISTERED", False)))
 
+    def test_register_routes_wires_expected_route_set(self):
+        """Route registration should publish the full expected HTTP surface."""
+        self.register_routes(
+            PromptServer=_DummyPromptServer,
+            web=_DummyWeb,
+            api_module=self.api,
+            logger=self.logger,
+        )
+        self.assertEqual(
+            set(_DummyPromptServer.instance.routes.handlers.keys()),
+            {
+                ("POST", self.api.ROUTE_MODULE_REFRESH),
+                ("GET", self.api.ROUTE_MODULE_REFRESH_STATUS),
+                ("POST", self.api.ROUTE_MODULE_ACKNOWLEDGE_ALL),
+                ("POST", self.api.ROUTE_MODULE_UPDATE),
+                ("GET", self.api.ROUTE_MODULE_UPDATE_STATUS),
+                ("POST", self.api.ROUTE_MODULE_INSTALL_REQUIREMENTS),
+                ("POST", self.api.ROUTE_COMFYUI_INSTALL_REQUIREMENTS),
+                ("GET", self.api.ROUTE_COMPONENT_REGISTRY),
+                ("GET", self.api.ROUTE_NODE_CATALOG),
+                ("GET", self.api.ROUTE_MODULE_INFO),
+                ("GET", self.api.ROUTE_COMFYUI_INFO),
+                ("GET", self.api.ROUTE_MODULE_LIST),
+                ("GET", self.api.ROUTE_MODULE_NODES),
+            },
+        )
+
     def test_module_refresh_uses_payload_sync_and_log_mode(self):
         """Refresh route should parse payload sync flag and pass normalized log mode."""
         observed = {"mode": None, "sync": None}
@@ -239,6 +266,26 @@ class ModuleBrowserApiRoutesTests(unittest.TestCase):
         self.assertEqual(observed["mode"], "verbose")
         self.assertFalse(bool(response.payload.get("sync_upstreams")))
 
+    def test_module_refresh_malformed_json_falls_back_to_query_flags(self):
+        """Refresh route should stay operational when request JSON cannot be parsed."""
+        observed = {"mode": None}
+        self.api._normalize_log_mode = lambda value: str(value or "summary").strip().lower()
+        self.api._set_update_console_log_mode = lambda mode: observed.__setitem__("mode", mode)
+
+        self.register_routes(
+            PromptServer=_DummyPromptServer,
+            web=_DummyWeb,
+            api_module=self.api,
+            logger=self.logger,
+        )
+        req = _DummyRequest(query={"sync_upstreams": "0"}, json_raises=True)
+        handler = self._handler("POST", self.api.ROUTE_MODULE_REFRESH)
+        response = asyncio.run(handler(req))
+
+        self.assertEqual(response.status, 200)
+        self.assertFalse(bool(response.payload.get("sync_upstreams")))
+        self.assertEqual(observed["mode"], "summary")
+
     def test_module_update_info_only_returns_403(self):
         """Info-only mode should reject module update route."""
         self.api._INFO_ONLY_WIDGET_MODE = True
@@ -253,6 +300,28 @@ class ModuleBrowserApiRoutesTests(unittest.TestCase):
         response = asyncio.run(handler(_DummyRequest(payload={"scope": "all"})))
         self.assertEqual(response.status, 403)
         self.assertEqual(response.payload.get("action"), "module_update")
+
+    def test_module_update_malformed_json_uses_query_fallback(self):
+        """Update route should use query params when JSON payload is malformed."""
+        self.register_routes(
+            PromptServer=_DummyPromptServer,
+            web=_DummyWeb,
+            api_module=self.api,
+            logger=self.logger,
+        )
+        handler = self._handler("POST", self.api.ROUTE_MODULE_UPDATE)
+        response = asyncio.run(
+            handler(
+                _DummyRequest(
+                    query={"scope": "all", "module": "modA", "log_mode": "verbose"},
+                    json_raises=True,
+                )
+            )
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.payload.get("scope"), "all")
+        self.assertEqual(response.payload.get("module"), "modA")
+        self.assertEqual(response.payload.get("log_mode"), "verbose")
 
     def test_module_requirements_route_returns_manual_advisory(self):
         """Requirements route should return manual-install advisory without pip execution."""
