@@ -129,7 +129,7 @@
 
 Срок: 2026-08-16 -> 2026-09-06
 Приоритет: `P1`
-Статус: 🔄 в работе
+Статус: ✅ выполнено (2026-07-20, `0.38.0`)
 
 ### Цели
 
@@ -141,19 +141,35 @@
 1. Дорезать `utils/module_node_browser_api.py`:
    - ✅ state/cache helpers
    - ✅ request parsing / module-info cache / catalog facade seams
-   - ⏳ network/release helpers
-   - ⏳ thin facade only
+   - ✅ network/release helpers
+   - ✅ thin facade only
 2. Просмотреть compatibility shims в `utils/module_browser/*`:
-   - отметить, какие еще реально нужны
-   - удалить неиспользуемые
+   - ✅ отмечены shim-ы, которые еще держатся как legacy import boundary
+   - ✅ удалены неиспользуемые shim-файлы
 3. Сузить `except Exception` там, где ошибка уже понятна по домену.
+   - ✅ выполнено для helper-слоев с явным IO/network/print/import доменом
 4. Дофиксировать contract boundaries:
    - ✅ routes
    - ✅ payload shape
-   - ⏳ runtime refresh/update jobs
+   - ✅ runtime refresh/update jobs
 5. Добавить smoke-check на route registration и info-only режимы.
    - ✅ базовый registration/info-only coverage уже зафиксирован тестами
      `tests/test_module_browser_api_routes.py`
+
+Результат:
+- ✅ `utils/module_node_browser_api.py` дополнительно ужат до более явного
+  facade-слоя с вынесенными catalog/request/cache/job seams.
+- ✅ Legacy shim layer сокращен: удалены неиспользуемые
+  `component_registry_payload_ops.py`, `manager_data_ops.py`,
+  `module_info_text.py`, `tracker_ops.py`; оставшиеся shim-paths удерживаются
+  только как совместимые import entry points и прикрыты targeted tests.
+- ✅ Runtime boundaries refresh/update зафиксированы отдельными handler-тестами:
+  `tests/test_module_browser_refresh_handler.py`,
+  `tests/test_module_browser_update_handler.py`,
+  `tests/test_module_browser_api_routes.py`.
+- ✅ Часть широких `except Exception` заменена на более узкие типы там, где
+  домен ошибки уже известен (`command_ops`, `health`, `state_store`,
+  `release_ops`, `logging_ops`, `module_identity`).
 
 ### Артефакты
 

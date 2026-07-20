@@ -26,7 +26,7 @@ def discover_custom_modules(*, custom_nodes_roots: Callable[[], list[Path]]) -> 
             continue
         try:
             entries = list(root.iterdir())
-        except Exception:
+        except OSError:
             continue
         for entry in entries:
             if not entry.is_dir():

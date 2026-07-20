@@ -31,7 +31,7 @@ def extract_git_repo_from_args(args: list[str]) -> str | None:
         return None
     try:
         return str(Path(str(args[idx + 1])).resolve())
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         return str(args[idx + 1])
 
 
@@ -63,7 +63,7 @@ def try_mark_git_safe_directory(
             env=env,
             check=False,
         )
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError) as exc:
         if logger is not None:
             logger.warning("Failed to add safe.directory for %s: %s", repo, exc)
         return False
@@ -104,7 +104,7 @@ def run_command(
             env=env,
             check=False,
         )
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError) as exc:
         return {"ok": False, "returncode": -1, "stdout": "", "stderr": str(exc)}
 
     result = {
@@ -142,7 +142,7 @@ def run_command(
             env=env,
             check=False,
         )
-    except Exception as exc:
+    except (OSError, subprocess.SubprocessError) as exc:
         return {"ok": False, "returncode": -1, "stdout": "", "stderr": str(exc)}
 
     return {
@@ -175,4 +175,3 @@ def tail_lines(text: str | None, max_lines: int = 80) -> str:
     if len(lines) <= max_lines:
         return "\n".join(lines)
     return "\n".join(["...", *lines[-max_lines:]])
-

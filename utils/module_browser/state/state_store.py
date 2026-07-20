@@ -30,7 +30,7 @@ def load_state_file(
         with state_path.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
         return ensure_schema(data if isinstance(data, dict) else {})
-    except Exception:
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return ensure_schema({})
 
 
@@ -46,7 +46,7 @@ def save_state_file(
     try:
         with state_path.open("w", encoding="utf-8") as handle:
             json.dump(normalized, handle, ensure_ascii=True, indent=2, sort_keys=True)
-    except Exception as exc:
+    except (OSError, TypeError, ValueError) as exc:
         if logger is not None:
             logger.debug("Failed to save module state cache: %s", exc)
     return normalized

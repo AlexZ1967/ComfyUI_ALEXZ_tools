@@ -49,7 +49,7 @@ def update_console_log(
         return
     try:
         print(f"ALEXZ_tools Module update: {text}", flush=True)
-    except Exception:
+    except (OSError, ValueError):
         pass
 
 
@@ -70,6 +70,5 @@ def refresh_console_log(
     state.refresh_console_log_last = text
     try:
         print(f"ALEXZ_tools Module refresh: {text}", flush=True)
-    except Exception:
+    except (OSError, ValueError):
         pass
-

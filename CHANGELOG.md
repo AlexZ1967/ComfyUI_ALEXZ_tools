@@ -1,5 +1,27 @@
 # Changelog — ALEXZ_tools
 
+## 0.38.0 — 2026-07-20
+- Completed `Phase 3: Module Node Picker Stabilization Pass`:
+  - reduced `utils/module_node_browser_api.py` further toward a thin facade by
+    finishing the split of catalog seams and keeping refresh/update entrypoints
+    behind extracted handler modules;
+  - added direct runtime-boundary coverage for update-job orchestration in
+    `tests/test_module_browser_update_handler.py`, complementing existing
+    refresh-handler and route-contract tests;
+  - reviewed legacy compatibility shims under `utils/module_browser/` and
+    removed unused wrappers:
+    `component_registry_payload_ops.py`, `manager_data_ops.py`,
+    `module_info_text.py`, `tracker_ops.py`;
+  - narrowed broad exception handling where the failure domain is already known
+    (`command_ops`, `health`, `state_store`, `release_ops`, `logging_ops`,
+    `module_identity`) to keep diagnostics clearer without weakening fallback
+    behavior.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_module_browser_update_handler.py tests/test_module_browser_refresh_handler.py tests/test_module_browser_api_routes.py tests/test_module_browser_command_ops.py tests/test_module_browser_release_ops.py tests/test_module_browser_state_store.py tests/test_module_browser_module_identity.py tests/test_module_browser_tracker.py`;
+  - `conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.38.0` in `pyproject.toml` and `README.md`.
+
 ## 0.37.2 — 2026-07-20
 - Phase 3 `Module Node Picker` stabilization continued without API changes:
   - extracted catalog orchestration seams from

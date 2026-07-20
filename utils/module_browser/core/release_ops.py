@@ -49,7 +49,7 @@ def github_latest_release(
         if exc.code in {403, 404, 429}:
             return {}
         return {}
-    except Exception:
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, TypeError):
         return {}
     if not isinstance(payload, dict):
         return {}
@@ -63,4 +63,3 @@ def github_latest_release(
         "name": str(payload.get("name") or "").strip(),
         "html_url": str(payload.get("html_url") or "").strip(),
     }
-

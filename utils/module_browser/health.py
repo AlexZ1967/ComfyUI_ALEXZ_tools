@@ -24,10 +24,10 @@ def _iter_node_specs() -> list[tuple[str, str, str, str]]:
     """Load node specs from canonical node registry using safe import fallback."""
     try:
         from ...nodes.node_registry import iter_node_specs  # type: ignore
-    except Exception:
+    except ImportError:
         try:
             from nodes.node_registry import iter_node_specs  # type: ignore
-        except Exception:
+        except ImportError:
             return []
     return [tuple(item) for item in iter_node_specs()]
 
