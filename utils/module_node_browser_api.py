@@ -13,16 +13,12 @@ Purpose:
 
 from __future__ import annotations
 
-
-import json
 import logging
 import re
 import subprocess
 import sys
 import threading
 import time
-from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -247,6 +243,14 @@ from .module_browser_api.state_cache_ops import (
     start_runtime_state_warmup as mb_api_start_runtime_state_warmup,
     sync_runtime_warmup_from_legacy as mb_api_sync_runtime_warmup_from_legacy,
     sync_runtime_warmup_to_legacy as mb_api_sync_runtime_warmup_to_legacy,
+)
+from .module_browser_api.manager_cache_ops import (
+    custom_module_aliases_cache as mb_api_custom_module_aliases_cache,
+    http_json_get as mb_api_http_json_get,
+    manager_github_stats_cache as mb_api_manager_github_stats_cache,
+    manager_index_cache as mb_api_manager_index_cache,
+    manager_installed_update_overrides as mb_api_manager_installed_update_overrides,
+    promptserver_base_url as mb_api_promptserver_base_url,
 )
 from .module_browser_api.routes import (
     register_routes as mb_api_register_routes,
@@ -533,15 +537,13 @@ def _normalize_module_token(name: str) -> str:
 def _custom_module_aliases() -> dict[str, str]:
     """Build alias map for custom module names and normalized tokens."""
     global _CUSTOM_MODULE_ALIAS_CACHE
-    if _CUSTOM_MODULE_ALIAS_CACHE is not None:
-        return _CUSTOM_MODULE_ALIAS_CACHE
-
-    aliases = mb_build_custom_module_aliases(
-        discovered_modules=_discover_custom_modules(),
+    _CUSTOM_MODULE_ALIAS_CACHE = mb_api_custom_module_aliases_cache(
+        _CUSTOM_MODULE_ALIAS_CACHE,
+        discover_custom_modules=_discover_custom_modules,
         normalize_token=_normalize_module_token,
+        build_custom_module_aliases=mb_build_custom_module_aliases,
     )
-    _CUSTOM_MODULE_ALIAS_CACHE = aliases
-    return aliases
+    return _CUSTOM_MODULE_ALIAS_CACHE
 
 
 def _canonical_custom_module_name(module_name: str) -> str:
@@ -656,8 +658,9 @@ def _github_latest_release(owner: str, repo: str, timeout: float = 8.0) -> dict[
 def _manager_github_stats() -> dict[str, dict[str, dict[str, Any]]]:
     """Load and cache module update timestamps from manager stats file."""
     global _MANAGER_GITHUB_STATS_CACHE
-    _MANAGER_GITHUB_STATS_CACHE = mb_load_manager_github_stats(
-        cache=_MANAGER_GITHUB_STATS_CACHE,
+    _MANAGER_GITHUB_STATS_CACHE = mb_api_manager_github_stats_cache(
+        _MANAGER_GITHUB_STATS_CACHE,
+        load_manager_github_stats=mb_load_manager_github_stats,
         manager_github_stats_path=_manager_github_stats_path,
         normalize_repo_url=_normalize_repo_url,
         github_id=_github_id,
@@ -669,8 +672,9 @@ def _manager_github_stats() -> dict[str, dict[str, dict[str, Any]]]:
 def _manager_index() -> dict[str, dict[str, dict[str, Any]]]:
     """Load and cache manager metadata index for custom modules."""
     global _MANAGER_INDEX_CACHE
-    _MANAGER_INDEX_CACHE = mb_load_manager_index(
-        cache=_MANAGER_INDEX_CACHE,
+    _MANAGER_INDEX_CACHE = mb_api_manager_index_cache(
+        _MANAGER_INDEX_CACHE,
+        load_manager_index=mb_load_manager_index,
         manager_custom_db_path=_manager_custom_db_path,
         pick_repo_url=_pick_repo_url,
         github_id=_github_id,
@@ -720,116 +724,30 @@ def _infer_update_from_manager_stats(
 
 def _promptserver_base_url() -> str | None:
     """Resolve PromptServer base URL for local in-process API probing."""
-    if PromptServer is None or getattr(PromptServer, "instance", None) is None:
-        return None
-    server = PromptServer.instance
-    address = str(getattr(server, "address", "127.0.0.1") or "127.0.0.1").strip()
-    if address in {"", "0.0.0.0", "::"}:
-        address = "127.0.0.1"
-    if ":" in address and not address.startswith("["):
-        address = f"[{address}]"
-    port = int(getattr(server, "port", 8188) or 8188)
-    return f"http://{address}:{port}"
+    return mb_api_promptserver_base_url(PromptServer)
 
 
 def _http_json_get(url: str, timeout: float = 20.0) -> dict[str, Any]:
     """Load JSON payload from local HTTP endpoint with strict timeouts."""
-    with urlopen(url, timeout=max(1.0, float(timeout))) as response:
-        raw = response.read().decode("utf-8", errors="replace")
-    payload = json.loads(raw)
-    return payload if isinstance(payload, dict) else {}
+    return mb_api_http_json_get(url, timeout=timeout)
 
 
 def _manager_installed_update_overrides(force_refresh: bool = False) -> dict[str, bool]:
     """Return installed-module update overrides derived from ComfyUI-Manager."""
     global _MANAGER_UPDATE_OVERRIDE_CACHE
     now_ts = time.time()
-    if not force_refresh and _MANAGER_UPDATE_OVERRIDE_CACHE is not None:
-        cached_ts, cached_payload = _MANAGER_UPDATE_OVERRIDE_CACHE
-        if (now_ts - cached_ts) < _MANAGER_UPDATE_OVERRIDE_TTL_SEC:
-            return dict(cached_payload)
-
-    base_url = _promptserver_base_url()
-    if not base_url:
-        return {}
-
-    try:
-        installed_payload = _http_json_get(f"{base_url}/customnode/installed?mode=default", timeout=20.0)
-        list_payload = _http_json_get(f"{base_url}/customnode/getlist?mode=local&skip_update=false", timeout=90.0)
-    except (TimeoutError, URLError, HTTPError, ValueError, json.JSONDecodeError) as exc:
-        _LOGGER.debug("ComfyUI-Manager update override probe failed: %s", exc)
-        _MANAGER_UPDATE_OVERRIDE_CACHE = (now_ts, {})
-        return {}
-
-    installed = installed_payload if isinstance(installed_payload, dict) else {}
-    node_packs = list_payload.get("node_packs") if isinstance(list_payload, dict) else {}
-    node_packs = node_packs if isinstance(node_packs, dict) else {}
-
-    by_id: dict[str, dict[str, Any]] = {}
-    by_github: dict[str, dict[str, Any]] = {}
-    by_repo_name: dict[str, dict[str, Any]] = {}
-    for pack_key, raw_meta in node_packs.items():
-        if not isinstance(raw_meta, dict):
-            continue
-        meta = raw_meta
-        id_candidates = {
-            str(meta.get("id") or "").strip().lower(),
-            str(pack_key or "").strip().lower(),
-        }
-        for candidate in id_candidates:
-            if candidate:
-                by_id[candidate] = meta
-
-        repo_sources = [
-            str(meta.get("repository") or "").strip(),
-            str(meta.get("reference") or "").strip(),
-        ]
-        files = meta.get("files")
-        if isinstance(files, list):
-            for item in files:
-                text = str(item or "").strip()
-                if text:
-                    repo_sources.append(text)
-        for source in repo_sources:
-            repo_norm = _normalize_repo_url(source)
-            if not repo_norm:
-                continue
-            gid = _github_id(repo_norm).lower()
-            if gid:
-                by_github[gid] = meta
-            repo_short = _repo_name(repo_norm).lower()
-            if repo_short:
-                by_repo_name[repo_short] = meta
-
-    overrides: dict[str, bool] = {}
-    for module_name, raw_meta in installed.items():
-        if not isinstance(raw_meta, dict):
-            continue
-        if not bool(raw_meta.get("enabled")):
-            continue
-        cnr_id = str(raw_meta.get("cnr_id") or "").strip().lower()
-        aux_id = str(raw_meta.get("aux_id") or "").strip().lower().strip("/")
-        module_l = str(module_name or "").strip().lower()
-
-        matched_meta = None
-        for candidate in (cnr_id, aux_id, module_l):
-            if candidate and candidate in by_id:
-                matched_meta = by_id[candidate]
-                break
-        if matched_meta is None and "/" in aux_id and aux_id in by_github:
-            matched_meta = by_github[aux_id]
-        if matched_meta is None and "/" in aux_id:
-            aux_repo = aux_id.split("/", 1)[1].strip().lower()
-            if aux_repo and aux_repo in by_repo_name:
-                matched_meta = by_repo_name[aux_repo]
-
-        if not isinstance(matched_meta, dict):
-            continue
-        update_state = str(matched_meta.get("update-state") or "").strip().lower()
-        if update_state == "true":
-            overrides[str(module_name)] = True
-
-    _MANAGER_UPDATE_OVERRIDE_CACHE = (now_ts, dict(overrides))
+    overrides, _MANAGER_UPDATE_OVERRIDE_CACHE = mb_api_manager_installed_update_overrides(
+        cache=_MANAGER_UPDATE_OVERRIDE_CACHE,
+        now_ts=now_ts,
+        ttl_sec=_MANAGER_UPDATE_OVERRIDE_TTL_SEC,
+        force_refresh=force_refresh,
+        promptserver_base_url_fn=_promptserver_base_url,
+        http_json_get_fn=_http_json_get,
+        normalize_repo_url=_normalize_repo_url,
+        github_id=_github_id,
+        repo_name=_repo_name,
+        logger_debug=_LOGGER.debug,
+    )
     return overrides
 
 
