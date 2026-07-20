@@ -34,6 +34,7 @@
 
 Срок: 2026-07-19 -> 2026-08-02
 Приоритет: `P0`
+Статус: ✅ выполнено (2026-07-19, `0.37.0`)
 
 ### Цели
 
@@ -56,6 +57,14 @@
 4. Подготовить `.comfyignore`, если в публикацию не должны попадать лишние heavy/dev assets.
 5. Актуализировать `README.md` под registry-style install flow.
 
+Результат:
+- ✅ Расширили `pyproject.toml` registry-метаданными: `requires-python`, `urls`, `classifiers`, `requires-comfyui`, `optional-dependencies`.
+  Выполнено: 2026-07-19 (`0.37.0`), `pyproject.toml`.
+- ✅ Подготовили registry assets и publication filters.
+  Выполнено: 2026-07-19 (`0.37.0`), `assets/registry/icon.svg`, `assets/registry/banner.svg`, `.comfyignore`.
+- ✅ Актуализировали install/update/dependency flow в `README.md` под registry-style публикацию.
+  Выполнено: 2026-07-19 (`0.37.0`), `README.md`.
+
 ### Артефакты
 
 - обновленный `pyproject.toml`
@@ -73,6 +82,7 @@
 
 Срок: 2026-08-02 -> 2026-08-16
 Приоритет: `P0`
+Статус: ✅ выполнено (2026-07-19, `0.37.0`)
 
 ### Цели
 
@@ -91,6 +101,16 @@
    - либо отдавать structured payload с инструкцией вместо инсталла
 4. Упростить `update_ops.py`, убрав фактическую установку зависимостей из runtime API.
 5. Обновить тесты и документацию под новый контракт.
+
+Результат:
+- ✅ Перевели `Module Node Picker` из install-mode в advisory/manual mode.
+  Выполнено: 2026-07-19 (`0.37.0`), backend routes и frontend follow-up payloads больше не инициируют runtime `pip install`.
+- ✅ Сохранили `requirements pending` как tracker/state сигнал с точным путем к `requirements.txt`.
+  Выполнено: 2026-07-19 (`0.37.0`), `utils/module_browser/tracker.py`, `utils/module_browser/update_status_payloads.py`.
+- ✅ Упростили runtime API и update flow до info-only контракта для dependency changes.
+  Выполнено: 2026-07-19 (`0.37.0`), `utils/module_browser_api/routes.py`, `utils/module_browser/jobs/update_ops.py`.
+- ✅ Обновили tests/docs под новый контракт и добавили helper для ручной UI-проверки.
+  Выполнено: 2026-07-19 (`0.37.0`), API/frontend tests, `scripts/module_picker_requirements_demo.py`, `CHANGELOG.md`.
 
 ### Артефакты
 
