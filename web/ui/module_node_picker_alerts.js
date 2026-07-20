@@ -56,14 +56,14 @@ export function renderComfyAlertCard(context) {
             comfyAlertText.textContent = `ComfyUI requires update: mode=${mode}, branch=${branch}, local=${local}, remote=${remote}.`;
         }
         if (requirementsPending) {
-            comfyAlertText.textContent += ` requirements.txt install is pending${requirementsPendingAt}.`;
+            comfyAlertText.textContent += ` requirements.txt changed; install dependencies manually${requirementsPendingAt}.`;
         }
         return;
     }
 
     if (requirementsPending) {
         comfyAlert.classList.add("alexz-mod-picker-status-card--warn");
-        comfyAlertText.textContent = `ComfyUI requirements.txt install is pending${requirementsPendingAt}.`;
+        comfyAlertText.textContent = `ComfyUI requirements.txt changed; install dependencies manually${requirementsPendingAt}.`;
         return;
     }
 

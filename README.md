@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.36.0
+Version: 0.37.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -10,15 +10,23 @@ Refactoring plan (RU): [PLAN_REFACTORING_ADOPTED_RU.md](refactoring_plan/PLAN_RE
 Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMAP_LOOK_MATCH_0_22_RU.md)
 
 ## Install
+### ComfyUI-Manager / Registry
+1. Установите `ALEXZ_tools` через ComfyUI-Manager или Registry.
+2. Минимальная заявленная совместимость ComfyUI: `0.28.0`.
+3. Если вам нужны `lpips_*` метрики в `Color Match To Reference`, `Find Closest Video Frame` или `Match Video Cut Point`, дополнительно установите:
+   `pip install lpips`
+4. Перезапустите ComfyUI.
+
+### Git checkout (full-feature local install)
 1. Клонируйте в `ComfyUI/custom_nodes/`:  
    `git clone https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools.git`
-2. Установите зависимости ноды:  
+2. Установите полный набор зависимостей:  
    `pip install -r requirements.txt`
 3. Перезапустите ComfyUI.
 
 ## Docs Check
 - Проверка синхронизации параметров/выходов нод и документации:  
-  `python utils/docs_check.py`
+  `conda run -n p313 python utils/docs_check.py`
 
 ## Development Environment
 - Для локальных проверок используйте Conda-окружение `p313`.
@@ -28,6 +36,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 ## Runtime notes
 - Pillow 13 compatibility: internal image conversions no longer rely on deprecated `mode=` in `Image.fromarray(...)` across the affected nodes/helpers, reducing future upgrade risk without changing node behavior.
 - `Color Match To Reference` preset `perceptual_vgg_fast` использует `torchvision` из базовой среды ComfyUI.
+- `lpips` не обязателен для базовой установки через Registry, но нужен для `lpips_*` метрик в `Color Match To Reference`, `Find Closest Video Frame` и `Match Video Cut Point`.
 - `Find Closest Video Frame` при `max_frames > 0` использует `ffmpeg` (должен быть в `PATH`).
   Linux: `sudo apt install ffmpeg`  
   Windows: `choco install ffmpeg`  
@@ -38,6 +47,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 
 ## UI Tool: Module Node Picker
 - Инструмент показывает ноды по модулям (`Core/Extras/API/Custom`), дает быстрый поиск, статус обновлений и вставку выбранной ноды в workflow.
+- `Module Node Picker` работает в monitoring/info-only режиме для update/dependency follow-up: если `requirements.txt` изменился, виджет подсказывает ручную команду, но не запускает `pip install` сам.
 - Подробное описание UI и всех кнопок: [GUIDE_MODULE_NODE_PICKER.md](guides/GUIDE_MODULE_NODE_PICKER.md)
 - Известные проблемы и обходные пути: [![Known Issue](https://img.shields.io/badge/Known%20Issue-red)](guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md) [GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md](guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md)
 

@@ -55,7 +55,7 @@ export async function runRefreshModuleInfoAction(moduleName, syncUpstream, conte
 }
 
 /**
- * Install requirements for one custom module and refresh its card state.
+ * Request manual requirements instructions for one custom module and refresh its card state.
  */
 export async function runInstallSingleModuleRequirementsAction(moduleName, context) {
     const normalized = String(moduleName || "").trim();
@@ -66,27 +66,35 @@ export async function runInstallSingleModuleRequirementsAction(moduleName, conte
         return;
     }
     context?.setProcessTarget?.("custom");
-    context?.setRefreshLine?.(`Installing requirements for ${normalized}...`, "neutral");
+    context?.setRefreshLine?.(`Loading manual dependency instructions for ${normalized}...`, "neutral");
     context?.setProcessAction?.("", "", null);
-    context?.setModuleInlineStatus?.(normalized, "Installing module requirements...", "neutral");
+    context?.setModuleInlineStatus?.(normalized, "Manual dependency install required.", "warn");
     context?.setActionBusy?.(true);
     try {
-        const install = await context?.installModuleRequirements?.([normalized]);
+        const advisory = await context?.installModuleRequirements?.([normalized]);
         if (!shouldContinueContext(context)) {
             return;
         }
-        const failed = Number(install?.failed || 0);
-        const installed = Number(install?.installed || 0);
-        if (failed > 0 || installed <= 0) {
-            context?.setModuleInlineStatus?.(normalized, "Module requirements install failed.", "warn");
+        if (String(advisory?.status || "") !== "advisory") {
+            context?.setModuleInlineStatus?.(normalized, "Failed to load manual dependency instructions.", "warn");
         } else {
-            context?.setModuleInlineStatus?.(normalized, "Module requirements installed.", "ok");
+            const commands = Array.isArray(advisory?.commands)
+                ? advisory.commands.map((item) => String(item || "").trim()).filter(Boolean)
+                : [];
+            context?.setProcessAction?.(
+                commands.length > 0
+                    ? `Run manually in the ComfyUI Python environment: ${commands.join(" ; ")}`
+                    : "Run dependency install manually in the ComfyUI Python environment or use ComfyUI-Manager.",
+                "",
+                null
+            );
+            context?.setRefreshLine?.(`Manual dependency install required for ${normalized}.`, "warn");
         }
     } catch (err) {
         if (!shouldContinueContext(context)) {
             return;
         }
-        context?.setModuleInlineStatus?.(normalized, `Module requirements install failed: ${String(err)}`, "warn");
+        context?.setModuleInlineStatus?.(normalized, `Failed to load manual dependency instructions: ${String(err)}`, "warn");
     } finally {
         if (!shouldContinueContext(context)) {
             return;
@@ -113,7 +121,6 @@ export async function runRefreshComfyUIInfoAction(context) {
     const comfyAlert = context?.comfyAlert;
     const comfyAlertText = context?.comfyAlertText;
     const comfyUpdateBtn = context?.comfyUpdateBtn;
-    const comfyInstallReqBtn = context?.comfyInstallReqBtn;
     const logMode = typeof context?.getLogMode === "function" ? context.getLogMode() : "summary";
     if (comfyAlert && comfyAlertText) {
         comfyAlert.style.display = "block";
@@ -151,9 +158,6 @@ export async function runRefreshComfyUIInfoAction(context) {
         }
         if (comfyUpdateBtn) {
             comfyUpdateBtn.style.display = "none";
-        }
-        if (comfyInstallReqBtn) {
-            comfyInstallReqBtn.style.display = "none";
         }
         context?.clearPendingComfyInfoRefresh?.();
     } finally {

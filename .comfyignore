@@ -1,0 +1,11 @@
+# Dev-only and planning artifacts
+.github/
+tests/
+refactoring_plan/
+scripts/
+AGENTS.md
+baseline.json
+subs.srt
+
+# Large documentation examples not needed at runtime
+guides/assets/color_match_examples/

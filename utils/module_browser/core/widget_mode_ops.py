@@ -34,6 +34,34 @@ def info_only_rejection_payload(feature: str) -> dict[str, Any]:
     }
 
 
+def requirements_advisory_payload(
+    *,
+    feature: str,
+    requirements_paths: list[str] | None,
+    headline: str = "",
+) -> dict[str, Any]:
+    """Build manual-follow-up payload for disabled runtime dependency installs."""
+    raw_paths = requirements_paths if isinstance(requirements_paths, list) else []
+    paths = [str(path).strip() for path in raw_paths if str(path).strip()]
+    paths = list(dict.fromkeys(paths))
+    commands = [f'python -m pip install -r "{path}"' for path in paths]
+    payload = {
+        "status": "advisory",
+        "feature": feature,
+        "mode": "manual",
+        "message": (
+            "Runtime dependency installation from Module Node Picker is disabled. "
+            "Run the command manually in your ComfyUI Python environment or use ComfyUI-Manager."
+        ),
+        "requirements_paths": paths,
+        "commands": commands,
+        "command": commands[0] if commands else "",
+    }
+    if headline:
+        payload["headline"] = str(headline)
+    return payload
+
+
 def set_custom_update_checked(
     *,
     checked: bool,
@@ -64,4 +92,3 @@ def normalize_log_mode(value: str | None) -> str:
     """Normalize console log mode to either `summary` or `verbose`."""
     text = str(value or "").strip().lower()
     return "verbose" if text in {"verbose", "debug", "full", "detailed"} else "summary"
-

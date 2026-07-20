@@ -31,6 +31,7 @@ from .release_ops import (
 from .widget_mode_ops import (
     custom_update_checked_flag,
     info_only_rejection_payload,
+    requirements_advisory_payload,
     normalize_log_mode,
     set_custom_update_checked,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "github_latest_release",
     "custom_update_checked_flag",
     "info_only_rejection_payload",
+    "requirements_advisory_payload",
     "set_custom_update_checked",
     "normalize_log_mode",
     "run_manifest_check",

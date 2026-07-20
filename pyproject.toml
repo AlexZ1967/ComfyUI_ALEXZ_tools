@@ -1,9 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "comfyui-alexz-tools"
-version = "0.36.0"
-description = "Custom nodes for ComfyUI."
+version = "0.37.0"
+description = "Custom nodes for ComfyUI: image prep, color/look matching, seam matching, video utilities, QR, JSON, and module browser tooling."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python>=4.8",
+    "qrcode>=7.4.2",
+]
+classifiers = [
+    "Operating System :: OS Independent",
+    "Environment :: GPU :: NVIDIA CUDA",
+]
+
+[project.optional-dependencies]
+metrics = [
+    "lpips>=0.1.4",
+]
+
+[project.urls]
+Repository = "https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools"
+Documentation = "https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools#readme"
+"Bug Tracker" = "https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools/issues"
 
 [tool.comfy]
 PublisherId = "ALEXZ"
 DisplayName = "ALEXZ_tools"
-Icon = ""
+Icon = "https://raw.githubusercontent.com/AlexZ1967/ComfyUI_ALEXZ_tools/main/assets/registry/icon.svg"
+Banner = "https://raw.githubusercontent.com/AlexZ1967/ComfyUI_ALEXZ_tools/main/assets/registry/banner.svg"
+requires-comfyui = ">=0.28.0"

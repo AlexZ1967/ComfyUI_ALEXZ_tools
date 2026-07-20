@@ -169,6 +169,7 @@ from .module_browser.catalog.catalog_payload_ops import (
 from .module_browser.core.widget_mode_ops import (
     custom_update_checked_flag as mb_custom_update_checked_flag,
     info_only_rejection_payload as mb_info_only_rejection_payload,
+    requirements_advisory_payload as mb_requirements_advisory_payload,
     normalize_log_mode as mb_normalize_log_mode,
     set_custom_update_checked as mb_set_custom_update_checked,
 )
@@ -305,6 +306,43 @@ def _custom_update_checked_flag(state: dict[str, Any] | None = None) -> bool:
 def _info_only_rejection_payload(feature: str) -> dict[str, Any]:
     """Build a consistent rejection payload for disabled mutate operations."""
     return mb_info_only_rejection_payload(feature)
+
+
+def _requirements_advisory_for_modules(modules: list[str]) -> dict[str, Any]:
+    """Return manual-install advisory payload for changed custom-module requirements."""
+    module_tokens = [str(item).strip() for item in (modules if isinstance(modules, list) else []) if str(item).strip()]
+    canonical = [_canonical_custom_module_name(name) for name in module_tokens]
+    canonical = [name for name in dict.fromkeys(canonical) if name and name != "unknown"]
+    requirement_paths: list[str] = []
+    for module_name in canonical:
+        module_dir = _module_dir(module_name)
+        if module_dir is None:
+            continue
+        requirements_path = module_dir / "requirements.txt"
+        if requirements_path.exists():
+            requirement_paths.append(str(requirements_path))
+    headline = "Manual dependency follow-up required for custom modules."
+    if canonical:
+        headline = f"Manual dependency follow-up required for: {', '.join(canonical)}."
+    payload = mb_requirements_advisory_payload(
+        feature="module_install_requirements",
+        requirements_paths=requirement_paths,
+        headline=headline,
+    )
+    payload["modules"] = canonical
+    return payload
+
+
+def _comfyui_requirements_advisory() -> dict[str, Any]:
+    """Return manual-install advisory payload for changed ComfyUI requirements."""
+    req = _comfyui_requirements_path()
+    payload = mb_requirements_advisory_payload(
+        feature="comfyui_install_requirements",
+        requirements_paths=[str(req)] if req is not None else [],
+        headline="Manual dependency follow-up required for ComfyUI.",
+    )
+    payload["module"] = "ComfyUI"
+    return payload
 
 
 def _set_custom_update_checked(checked: bool) -> None:

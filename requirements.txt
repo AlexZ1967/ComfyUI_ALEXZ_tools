@@ -1,3 +1,10 @@
+# Full-feature local install for git checkouts.
+# Registry metadata in pyproject.toml keeps feature-specific optional deps separate.
+
+# Core runtime dependencies
 opencv-python>=4.8
-lpips>=0.1.4
 qrcode>=7.4.2
+
+# Optional feature dependencies
+# Enables lpips_* metrics in Color Match / Find Closest Video Frame / Match Video Cut Point.
+lpips>=0.1.4

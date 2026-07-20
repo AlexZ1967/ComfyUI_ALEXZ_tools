@@ -125,8 +125,20 @@ def _build_api_stub():
     )
     mod._update_status_snapshot = lambda: {"running": False}
     mod._info_only_rejection_payload = lambda action: {"status": "info_only", "action": action}
-    mod._install_requirements_for_modules = lambda modules: {"status": "ok", "modules": list(modules or [])}
-    mod._install_comfyui_requirements = lambda: {"status": "installed"}
+    mod._requirements_advisory_for_modules = (
+        lambda modules: {
+            "status": "advisory",
+            "modules": list(modules or []),
+            "commands": ["python -m pip install -r /tmp/mod/requirements.txt"],
+        }
+    )
+    mod._comfyui_requirements_advisory = (
+        lambda: {
+            "status": "advisory",
+            "module": "ComfyUI",
+            "commands": ["python -m pip install -r /tmp/ComfyUI/requirements.txt"],
+        }
+    )
     mod._component_registry_payload = lambda force_refresh=False: {"force_refresh": bool(force_refresh)}
     mod._start_runtime_state_warmup = lambda: None
     mod._build_group_catalog = lambda: []
@@ -241,6 +253,34 @@ class ModuleBrowserApiRoutesTests(unittest.TestCase):
         response = asyncio.run(handler(_DummyRequest(payload={"scope": "all"})))
         self.assertEqual(response.status, 403)
         self.assertEqual(response.payload.get("action"), "module_update")
+
+    def test_module_requirements_route_returns_manual_advisory(self):
+        """Requirements route should return manual-install advisory without pip execution."""
+        self.register_routes(
+            PromptServer=_DummyPromptServer,
+            web=_DummyWeb,
+            api_module=self.api,
+            logger=self.logger,
+        )
+        handler = self._handler("POST", self.api.ROUTE_MODULE_INSTALL_REQUIREMENTS)
+        response = asyncio.run(handler(_DummyRequest(payload={"modules": ["modA"]})))
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.payload.get("status"), "advisory")
+        self.assertEqual(response.payload.get("modules"), ["modA"])
+
+    def test_comfyui_requirements_route_returns_manual_advisory(self):
+        """ComfyUI requirements route should return manual-install advisory without pip execution."""
+        self.register_routes(
+            PromptServer=_DummyPromptServer,
+            web=_DummyWeb,
+            api_module=self.api,
+            logger=self.logger,
+        )
+        handler = self._handler("POST", self.api.ROUTE_COMFYUI_INSTALL_REQUIREMENTS)
+        response = asyncio.run(handler(_DummyRequest()))
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.payload.get("status"), "advisory")
+        self.assertEqual(response.payload.get("module"), "ComfyUI")
 
     def test_module_info_requires_module_query(self):
         """Module info route should return 400 when module query is missing."""

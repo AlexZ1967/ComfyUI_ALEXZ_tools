@@ -1,5 +1,33 @@
 # Changelog — ALEXZ_tools
 
+## 0.37.0 — 2026-07-19
+- Improved Registry / packaging metadata for current ComfyUI publishing flow:
+  - expanded `pyproject.toml` with `requires-python`, project URLs,
+    classifiers, optional dependency grouping, and `requires-comfyui`;
+  - added registry-facing assets `assets/registry/icon.svg` and
+    `assets/registry/banner.svg`;
+  - added `.comfyignore` and clarified install/dependency flow in `README.md`.
+- Switched `Module Node Picker` requirements follow-up to advisory/manual mode:
+  - backend routes for module and ComfyUI requirements now return structured
+    manual-install payloads instead of attempting runtime `pip install`;
+  - update-status payloads now keep precise `requirements.txt` paths so the UI
+    can show the exact command to run manually in the ComfyUI Python
+    environment;
+  - frontend status cards and follow-up prompts now describe dependency
+    changes as manual actions instead of offering auto-install behavior.
+- Added operational follow-up artifacts for the new stabilization track:
+  - added roadmap document `refactoring_plan/ROADMAP_2026_H2_RU.md`;
+  - added helper script `scripts/module_picker_requirements_demo.py` for
+    seeding/clearing demo `requirements pending` markers during manual UI
+    validation.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_module_browser_api_routes.py tests/test_module_browser_widget_mode_ops.py`;
+  - `conda run -n p313 node tests/js/test_module_node_picker_frontend_behavior.mjs`;
+  - `conda run -n p313 pytest -q tests/test_module_browser_tracker.py -k "module_update_job_supports_comfyui_scope or install_requirements_for_modules_aggregates_results or install_comfyui_requirements_endpoint_helper"`;
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k seam_match`;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.37.0` in `pyproject.toml` and `README.md`.
+
 ## 0.36.0 — 2026-05-08
 - Added new `Silent Film Finish` video stylization node:
   - applies projection/print-era finishing such as monochrome toning, soft

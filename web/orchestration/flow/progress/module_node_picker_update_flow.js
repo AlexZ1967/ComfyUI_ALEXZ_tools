@@ -13,6 +13,22 @@
 import { shouldContinueContext } from "../../runtime/lifecycle/module_node_picker_lifecycle_guard.js";
 import { isCanceledRequestError } from "../../core/infra/module_node_picker_error_utils.js";
 
+function buildManualInstallHint(payload, fallbackLabel) {
+    const commands = Array.isArray(payload?.commands)
+        ? payload.commands.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+    if (commands.length > 0) {
+        return `Run manually in the ComfyUI Python environment: ${commands.join(" ; ")}`;
+    }
+    const paths = Array.isArray(payload?.requirements_paths)
+        ? payload.requirements_paths.map((item) => String(item || "").trim()).filter(Boolean)
+        : [];
+    if (paths.length > 0) {
+        return `Run manually in the ComfyUI Python environment: ${paths.map((path) => `python -m pip install -r "${path}"`).join(" ; ")}`;
+    }
+    return String(fallbackLabel || "Run dependency install manually in the ComfyUI Python environment or use ComfyUI-Manager.");
+}
+
 /**
  * Poll custom-module refresh status until completion or failure.
  */
@@ -119,7 +135,7 @@ export async function pollUpdateProgressLoop(context) {
 }
 
 /**
- * Install ComfyUI requirements and refresh ComfyUI status card.
+ * Request manual ComfyUI requirements instructions and refresh status card.
  */
 export async function runInstallComfyUIRequirementsFlow(context) {
     const setActionBusy = context?.setActionBusy;
@@ -141,13 +157,13 @@ export async function runInstallComfyUIRequirementsFlow(context) {
         if (!shouldContinueContext(context)) {
             return;
         }
-        setRefreshLine?.("Installing ComfyUI dependencies (pip)...", "neutral");
-        const install = await installComfyUIRequirements?.();
+        setRefreshLine?.("Requesting manual ComfyUI dependency instructions...", "neutral");
+        const advisory = await installComfyUIRequirements?.();
         if (!shouldContinueContext(context)) {
             return;
         }
-        if (String(install?.status || "") !== "installed") {
-            setRefreshLine?.("ComfyUI dependencies install failed.", "warn");
+        if (String(advisory?.status || "") !== "advisory") {
+            setRefreshLine?.("Failed to load manual ComfyUI dependency instructions.", "warn");
             return;
         }
         const comfyPayload = await fetchComfyUIInfo?.(false, false, getComfyMode?.());
@@ -155,8 +171,15 @@ export async function runInstallComfyUIRequirementsFlow(context) {
             return;
         }
         renderComfyAlert?.(comfyPayload?.comfyui || null);
-        setRefreshLine?.("ComfyUI dependencies installed.", "ok");
-        setProcessAction?.("", "", null);
+        setRefreshLine?.("ComfyUI dependency install must be run manually.", "warn");
+        setProcessAction?.(
+            buildManualInstallHint(
+                advisory,
+                "Run dependency install manually in the ComfyUI Python environment or use ComfyUI-Manager."
+            ),
+            "",
+            null
+        );
     } finally {
         if (!shouldContinueContext(context)) {
             return;
@@ -167,7 +190,7 @@ export async function runInstallComfyUIRequirementsFlow(context) {
 }
 
 /**
- * Handle requirements-install prompts after update completion.
+ * Handle manual requirements follow-up after update completion.
  */
 export async function maybeInstallChangedRequirementsFlow(update, context) {
     if (!shouldContinueContext(context)) {
@@ -175,20 +198,20 @@ export async function maybeInstallChangedRequirementsFlow(update, context) {
     }
     const setRefreshLine = context?.setRefreshLine;
     const setProcessAction = context?.setProcessAction;
-    const installComfyUIRequirementsFlow = context?.installComfyUIRequirementsFlow;
-    const installModuleRequirements = context?.installModuleRequirements;
-    const setActionBusy = context?.setActionBusy;
 
     const scope = String(update?.scope || "");
     if (scope === "comfyui") {
         if (!Boolean(update?.requirements_changed)) {
             return;
         }
-        setRefreshLine?.("ComfyUI requirements.txt changed. Install dependencies?", "warn");
+        setRefreshLine?.("ComfyUI requirements.txt changed. Manual dependency install required.", "warn");
         setProcessAction?.(
-            "ComfyUI requirements were updated after pull.",
-            "Install ComfyUI requirements",
-            installComfyUIRequirementsFlow
+            buildManualInstallHint(
+                update,
+                "Run dependency install manually in the ComfyUI Python environment or use ComfyUI-Manager."
+            ),
+            "",
+            null
         );
         return;
     }
@@ -197,27 +220,14 @@ export async function maybeInstallChangedRequirementsFlow(update, context) {
     if (!modules.length) {
         return;
     }
-    setRefreshLine?.("Custom module requirements changed. Install dependencies?", "warn");
+    setRefreshLine?.("Custom module requirements changed. Manual dependency install required.", "warn");
     setProcessAction?.(
-        `requirements.txt changed for: ${modules.join(", ")}.`,
-        "Install updated requirements",
-        async () => {
-            setActionBusy?.(true);
-            try {
-                setRefreshLine?.("Installing updated dependencies (pip)...", "neutral");
-                const install = await installModuleRequirements?.(modules);
-                const failed = Number(install?.failed || 0);
-                const installed = Number(install?.installed || 0);
-                if (failed > 0) {
-                    setRefreshLine?.(`Dependencies install finished with errors: ok=${installed}, failed=${failed}.`, "warn");
-                    return;
-                }
-                setRefreshLine?.(`Dependencies installed: ${installed} module(s).`, "ok");
-                setProcessAction?.("", "", null);
-            } finally {
-                setActionBusy?.(false);
-            }
-        }
+        buildManualInstallHint(
+            update,
+            `requirements.txt changed for: ${modules.join(", ")}. Run dependency install manually in the ComfyUI Python environment or use ComfyUI-Manager.`
+        ),
+        "",
+        null
     );
 }
 

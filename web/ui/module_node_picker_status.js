@@ -98,7 +98,7 @@ export function formatUpdateLine(update) {
                 return { text: "ComfyUI update finished with errors.", tone: "warn" };
             }
             if (updated > 0 && requirementsChanged) {
-                return { text: "ComfyUI updated. requirements.txt changed.", tone: "warn" };
+                return { text: "ComfyUI updated. requirements.txt changed; manual install required.", tone: "warn" };
             }
             if (updated > 0) {
                 return { text: "ComfyUI updated.", tone: "ok" };
@@ -112,7 +112,7 @@ export function formatUpdateLine(update) {
             return { text: `Update finished: updated=${updated}, failed=${failed}.`, tone: "warn" };
         }
         if (reqList.length > 0) {
-            return { text: `Update finished: ${updated} module(s) updated, requirements changed.`, tone: "warn" };
+            return { text: `Update finished: ${updated} module(s) updated, requirements changed; manual install required.`, tone: "warn" };
         }
         return { text: `Update finished: ${updated} module(s) updated.`, tone: "ok" };
     }

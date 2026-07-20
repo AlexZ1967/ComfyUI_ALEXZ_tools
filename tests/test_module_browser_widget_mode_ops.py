@@ -44,6 +44,25 @@ class ModuleBrowserWidgetModeOpsTests(unittest.TestCase):
         self.assertEqual(payload.get("feature"), "module_update")
         self.assertIn("info-only mode", str(payload.get("message") or ""))
 
+    def test_requirements_advisory_payload_builds_manual_commands(self):
+        """Requirements advisory should expose deduplicated manual commands."""
+        payload = self.ops.requirements_advisory_payload(
+            feature="module_install_requirements",
+            requirements_paths=["/tmp/a/requirements.txt", "/tmp/b/requirements.txt", "/tmp/a/requirements.txt"],
+            headline="Manual follow-up required.",
+        )
+        self.assertEqual(payload.get("status"), "advisory")
+        self.assertEqual(payload.get("feature"), "module_install_requirements")
+        self.assertEqual(
+            payload.get("commands"),
+            [
+                'python -m pip install -r "/tmp/a/requirements.txt"',
+                'python -m pip install -r "/tmp/b/requirements.txt"',
+            ],
+        )
+        self.assertEqual(payload.get("command"), 'python -m pip install -r "/tmp/a/requirements.txt"')
+        self.assertEqual(payload.get("headline"), "Manual follow-up required.")
+
     def test_custom_update_checked_flag_reads_meta(self):
         """Gate flag should be read from cache `__meta__.custom_update_checked`."""
         self.assertFalse(self.ops.custom_update_checked_flag({}))

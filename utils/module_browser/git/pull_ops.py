@@ -59,6 +59,7 @@ def pull_comfyui(
         "message": "",
         "updated": False,
         "requirements_changed": False,
+        "requirements_path": "",
         "before_commit": "",
         "after_commit": "",
     }
@@ -67,6 +68,7 @@ def pull_comfyui(
         result["message"] = "ComfyUI root not found"
         return result
     root_str = str(root)
+    result["requirements_path"] = str(root / "requirements.txt")
     update_console_log(f"ComfyUI pull: repo={root_str}", "verbose")
     is_git = run_git(["git", "-C", root_str, "rev-parse", "--is-inside-work-tree"], 2.0)
     if is_git != "true":
@@ -159,6 +161,7 @@ def pull_custom_module(
         "message": "",
         "updated": False,
         "requirements_changed": False,
+        "requirements_path": "",
         "stashed_local_changes": False,
         "stash_ref": "",
         "before_commit": "",
@@ -170,6 +173,7 @@ def pull_custom_module(
         return result
 
     update_console_log(f"{module}: repo={module_dir}", "verbose")
+    result["requirements_path"] = str(module_dir / "requirements.txt")
     is_git = run_git(["git", "-C", str(module_dir), "rev-parse", "--is-inside-work-tree"], 2.0)
     if is_git != "true":
         result["status"] = "no_git"

@@ -45,6 +45,7 @@ def run_module_update_job(
         uptodate_count = 1 if status == "up_to_date" else 0
         failed_count = 1 if status not in {"updated", "up_to_date"} else 0
         requirements_changed = bool(item.get("requirements_changed"))
+        requirements_path = str(item.get("requirements_path") or "").strip()
         set_update_status(
             phase="update",
             current=1,
@@ -56,6 +57,7 @@ def run_module_update_job(
             up_to_date=uptodate_count,
             failed=failed_count,
             requirements_changed=requirements_changed,
+            requirements_paths=[requirements_path] if requirements_changed and requirements_path else [],
             requirements_modules=[],
             results=[item],
         )
@@ -65,6 +67,9 @@ def run_module_update_job(
             phase="done",
             message="done",
             module="",
+            requirements_changed=requirements_changed,
+            requirements_paths=[requirements_path] if requirements_changed and requirements_path else [],
+            requirements_modules=[],
             finished_at=now_iso(),
         )
         update_console_log("job finished (scope=comfyui)", "summary")
@@ -98,6 +103,7 @@ def run_module_update_job(
     uptodate_count = 0
     failed_count = 0
     requirements_modules: list[str] = []
+    requirements_paths: list[str] = []
     results: list[dict[str, Any]] = []
 
     for idx, target in enumerate(targets, start=1):
@@ -142,6 +148,9 @@ def run_module_update_job(
             )
         if bool(item.get("requirements_changed")):
             requirements_modules.append(target)
+            req_path = str(item.get("requirements_path") or "").strip()
+            if req_path:
+                requirements_paths.append(req_path)
         set_update_status(
             phase="update",
             current=idx,
@@ -153,6 +162,7 @@ def run_module_update_job(
             up_to_date=uptodate_count,
             failed=failed_count,
             requirements_changed=bool(requirements_modules),
+            requirements_paths=list(dict.fromkeys(requirements_paths)),
             requirements_modules=requirements_modules,
             results=results,
         )
@@ -164,6 +174,9 @@ def run_module_update_job(
         phase="done",
         message="done",
         module="",
+        requirements_changed=bool(requirements_modules),
+        requirements_paths=list(dict.fromkeys(requirements_paths)),
+        requirements_modules=requirements_modules,
         finished_at=now_iso(),
     )
     update_console_log(

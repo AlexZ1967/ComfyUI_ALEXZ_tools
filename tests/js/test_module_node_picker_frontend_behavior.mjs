@@ -33,6 +33,7 @@ import {
 import { createModuleNodePickerPollingController } from "../../web/orchestration/flow/progress/module_node_picker_polling_controller.js";
 import { runRefreshCustomNodesInfoAction } from "../../web/orchestration/flow/actions/module_node_picker_actions.js";
 import {
+    maybeInstallChangedRequirementsFlow,
     pollRefreshProgressLoop,
     pollUpdateProgressLoop,
 } from "../../web/orchestration/flow/progress/module_node_picker_update_flow.js";
@@ -279,6 +280,31 @@ async function testBusyUiForceResetBypassesLifecycleGuard() {
     assert.equal(controls.nodeList.style.pointerEvents, "");
 }
 
+async function testRequirementsFollowupUsesManualAdvisoryText() {
+    const refreshLines = [];
+    const actions = [];
+
+    await maybeInstallChangedRequirementsFlow(
+        {
+            scope: "comfyui",
+            requirements_changed: true,
+            requirements_paths: ["/tmp/ComfyUI/requirements.txt"],
+        },
+        {
+            shouldContinue: () => true,
+            setRefreshLine: (text, tone) => refreshLines.push({ text, tone }),
+            setProcessAction: (label, btnText, onClick) => actions.push({ label, btnText, onClickType: typeof onClick }),
+        }
+    );
+
+    assert.equal(refreshLines.at(-1)?.tone, "warn");
+    assert.equal(refreshLines.at(-1)?.text.includes("Manual dependency install required"), true);
+    assert.equal(actions.length, 1);
+    assert.equal(actions[0].label.includes('python -m pip install -r "/tmp/ComfyUI/requirements.txt"'), true);
+    assert.equal(actions[0].btnText, "");
+    assert.equal(actions[0].onClickType, "object");
+}
+
 async function main() {
     const tests = [
         ["runtime state accessors", testRuntimeStateAccessors],
@@ -289,6 +315,7 @@ async function main() {
         ["canvas center placement", testCanvasCenterPlacement],
         ["custom refresh finalizes busy state", testCustomRefreshFlowFinalizesBusyState],
         ["busy ui force reset bypasses lifecycle guard", testBusyUiForceResetBypassesLifecycleGuard],
+        ["requirements follow-up uses manual advisory", testRequirementsFollowupUsesManualAdvisoryText],
     ];
 
     for (const [name, fn] of tests) {

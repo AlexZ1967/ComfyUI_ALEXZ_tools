@@ -288,7 +288,7 @@ export function renderModuleInfoCard(context) {
             reqLabel.className = "alexz-mod-picker-module-label";
             reqLabel.textContent = "Requirements:";
             const reqValue = document.createElement("span");
-            reqValue.textContent = `requirements.txt install pending${requirementsPendingAt}`;
+            reqValue.textContent = `requirements.txt changed; manual install required${requirementsPendingAt}`;
             reqRow.appendChild(reqLabel);
             reqRow.appendChild(reqValue);
             card.appendChild(reqRow);

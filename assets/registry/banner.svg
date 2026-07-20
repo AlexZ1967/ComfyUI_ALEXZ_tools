@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2100 900" role="img" aria-labelledby="title desc">
+  <title id="title">ALEXZ_tools banner</title>
+  <desc id="desc">Registry banner for ALEXZ_tools custom nodes for ComfyUI.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#0b1220" />
+      <stop offset="45%" stop-color="#153e75" />
+      <stop offset="100%" stop-color="#1e3a8a" />
+    </linearGradient>
+    <linearGradient id="panel" x1="0%" x2="100%" y1="0%" y2="0%">
+      <stop offset="0%" stop-color="#eff6ff" />
+      <stop offset="100%" stop-color="#dbeafe" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" x2="100%" y1="0%" y2="0%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#ef4444" />
+    </linearGradient>
+  </defs>
+  <rect width="2100" height="900" rx="72" fill="url(#bg)" />
+  <circle cx="1710" cy="210" r="220" fill="#60a5fa" opacity="0.12" />
+  <circle cx="1880" cy="670" r="280" fill="#f59e0b" opacity="0.12" />
+  <rect x="130" y="150" width="820" height="600" rx="48" fill="url(#panel)" opacity="0.98" />
+  <rect x="180" y="235" width="370" height="38" rx="19" fill="#0f172a" opacity="0.88" />
+  <rect x="180" y="320" width="520" height="30" rx="15" fill="#1e293b" opacity="0.82" />
+  <rect x="180" y="385" width="470" height="30" rx="15" fill="#1e293b" opacity="0.82" />
+  <rect x="180" y="450" width="320" height="30" rx="15" fill="#1e293b" opacity="0.82" />
+  <rect x="640" y="505" width="190" height="120" rx="26" fill="url(#accent)" />
+  <path d="M706 565l42 42 92-104" fill="none" stroke="#fff7ed" stroke-linecap="round" stroke-linejoin="round" stroke-width="24" />
+  <text x="1030" y="330" fill="#f8fafc" font-family="Verdana, DejaVu Sans, sans-serif" font-size="126" font-weight="700">ALEXZ_tools</text>
+  <text x="1030" y="445" fill="#dbeafe" font-family="Verdana, DejaVu Sans, sans-serif" font-size="58">Custom nodes for ComfyUI</text>
+  <text x="1030" y="550" fill="#bfdbfe" font-family="Verdana, DejaVu Sans, sans-serif" font-size="44">Image prep, color and look matching, seam tools, video utilities, QR, JSON</text>
+  <rect x="1030" y="615" width="520" height="18" rx="9" fill="#60a5fa" opacity="0.7" />
+  <rect x="1030" y="665" width="420" height="18" rx="9" fill="#f59e0b" opacity="0.78" />
+</svg>

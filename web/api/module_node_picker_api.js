@@ -195,7 +195,7 @@ export async function fetchModuleUpdateStatus(options = {}) {
 }
 
 /**
- * Install requirements.txt for selected custom modules.
+ * Request manual-install advisory for selected custom modules.
  */
 export async function installModuleRequirements(modules, options = {}) {
     return fetchApiJson("/alexz_tools/module_install_requirements", {
@@ -208,7 +208,7 @@ export async function installModuleRequirements(modules, options = {}) {
 }
 
 /**
- * Install ComfyUI requirements.txt in current runtime environment.
+ * Request manual-install advisory for ComfyUI requirements.
  */
 export async function installComfyUIRequirements(options = {}) {
     return fetchApiJson("/alexz_tools/comfyui_install_requirements", {

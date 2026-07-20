@@ -109,38 +109,26 @@ def register_routes(
 
     @routes.post(api_module.ROUTE_MODULE_INSTALL_REQUIREMENTS)
     async def alexz_tools_module_install_requirements(request):
-        """API route that installs Python requirements for selected modules."""
+        """API route that returns manual-install advisory payload for selected modules."""
         try:
-            if api_module._INFO_ONLY_WIDGET_MODE:
-                return web.json_response(
-                    api_module._info_only_rejection_payload("module_install_requirements"),
-                    status=403,
-                )
             payload = {}
             try:
                 payload = await request.json()
             except Exception:
                 payload = {}
             modules = payload.get("modules")
-            result = api_module._install_requirements_for_modules(modules if isinstance(modules, list) else [])
-            status_code = 200 if result.get("status") == "ok" else 400
-            return web.json_response(result, status=status_code)
+            result = api_module._requirements_advisory_for_modules(modules if isinstance(modules, list) else [])
+            return web.json_response(result)
         except Exception as exc:  # pragma: no cover - diagnostic
             logger.error("Module requirements install API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
 
     @routes.post(api_module.ROUTE_COMFYUI_INSTALL_REQUIREMENTS)
     async def alexz_tools_comfyui_install_requirements(request):
-        """API route that installs ComfyUI requirements in the active environment."""
+        """API route that returns manual-install advisory payload for ComfyUI requirements."""
         try:
-            if api_module._INFO_ONLY_WIDGET_MODE:
-                return web.json_response(
-                    api_module._info_only_rejection_payload("comfyui_install_requirements"),
-                    status=403,
-                )
-            result = api_module._install_comfyui_requirements()
-            status_code = 200 if result.get("status") == "installed" else 400
-            return web.json_response(result, status=status_code)
+            result = api_module._comfyui_requirements_advisory()
+            return web.json_response(result)
         except Exception as exc:  # pragma: no cover - diagnostic
             logger.error("ComfyUI requirements install API error: %s", exc, exc_info=True)
             return web.json_response({"error": str(exc)}, status=500)
