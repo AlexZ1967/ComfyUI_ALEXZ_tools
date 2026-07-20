@@ -252,6 +252,13 @@ from .module_browser_api.manager_cache_ops import (
     manager_installed_update_overrides as mb_api_manager_installed_update_overrides,
     promptserver_base_url as mb_api_promptserver_base_url,
 )
+from .module_browser_api.module_info_ops import (
+    apply_node_change_info as mb_api_apply_node_change_info,
+    module_local_readme_summary as mb_api_module_local_readme_summary,
+    remember_module_state as mb_api_remember_module_state,
+    resolve_module_info_cached as mb_api_resolve_module_info_cached,
+    sanitize_module_description as mb_api_sanitize_module_description,
+)
 from .module_browser_api.routes import (
     register_routes as mb_api_register_routes,
 )
@@ -966,7 +973,9 @@ def _pull_custom_module(module_name: str, timeout: float = 180.0) -> dict[str, A
     return mb_pull_custom_module(
         module_name,
         canonical_custom_module_name=_canonical_custom_module_name,
-        module_dir_resolver=_module_dir,
+        module_dir_resolver=lambda name: (
+            Path(module_dir) if (module_dir := _module_dir(name)) is not None else None
+        ),
         update_console_log=lambda message, level: _update_console_log(message, level=level),
         run_git=_run_git,
         git_pick_remote=_git_pick_remote,
@@ -1085,7 +1094,7 @@ def _comfyui_root() -> Path | None:
     return mb_comfyui_root(__file__)
 
 
-def _comfyui_git_status(force_refresh: bool = False, mode: str = "releases") -> dict[str, Any]:
+def _comfyui_git_status(force_refresh: bool = False, mode: str = "commits") -> dict[str, Any]:
     """Collect local/remote git status summary for ComfyUI repository."""
     global _COMFYUI_STATUS_CACHE
     now_ts = time.time()
@@ -1165,9 +1174,10 @@ def _save_module_state(state: dict[str, dict[str, Any]]) -> None:
 
 def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
     """Capture current module/node snapshot as baseline for next ComfyUI start."""
-    mb_remember_module_state(
+    mb_api_remember_module_state(
         module_name,
         result,
+        remember_module_state_impl=mb_remember_module_state,
         canonical_custom_module_name=_canonical_custom_module_name,
         load_module_state=_load_module_state,
         save_module_state=_save_module_state,
@@ -1178,10 +1188,11 @@ def _remember_module_state(module_name: str, result: dict[str, Any]) -> None:
 
 def _apply_node_change_info(result: dict[str, Any], group: str, module_name: str) -> None:
     """Attach node-level change markers to module info payload for UI rendering."""
-    mb_apply_node_change_info(
+    mb_api_apply_node_change_info(
         result,
         group,
         module_name,
+        apply_node_change_info_impl=mb_apply_node_change_info,
         load_module_state=_load_module_state,
     )
 
@@ -1227,15 +1238,20 @@ def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]
 
 def _module_local_readme_summary(module_name: str) -> str | None:
     """Read and extract short description snippet from module README file."""
-    return mb_module_local_readme_summary(
+    return mb_api_module_local_readme_summary(
         module_name=module_name,
+        module_local_readme_summary_impl=mb_module_local_readme_summary,
         custom_nodes_roots=_custom_nodes_roots,
     )
 
 
 def _sanitize_module_description(text: str) -> str:
     """Normalize module description text for UI card rendering."""
-    return mb_sanitize_module_description(text, _HTML_TAG_RE)
+    return mb_api_sanitize_module_description(
+        text,
+        sanitize_module_description_impl=mb_sanitize_module_description,
+        html_tag_re=_HTML_TAG_RE,
+    )
 
 
 def _resolve_module_info(
@@ -1247,40 +1263,31 @@ def _resolve_module_info(
     cache_only: bool = False,
 ) -> dict[str, Any]:
     """Build complete module info payload with metadata, git state, and change markers."""
-    group = (group or "").strip().lower()
-    module_name = (module_name or "").strip()
-    if group == "custom":
-        module_name = _canonical_custom_module_name(module_name)
-
-    key = (group or "", module_name or "", bool(cache_only))
-    if force_refresh:
-        _MODULE_INFO_CACHE.pop(key, None)
-    now_ts = time.time()
-    cached = _MODULE_INFO_CACHE.get(key)
-    if cached is not None and (now_ts - cached[0]) < _MODULE_INFO_TTL_SEC:
-        return dict(cached[1])
-    result = mb_resolve_module_info_uncached(
+    return mb_api_resolve_module_info_cached(
         group=group,
         module_name=module_name,
+        force_refresh=force_refresh,
         sync_upstream=sync_upstream,
         cache_only=cache_only,
+        now_ts=time.time(),
+        module_info_cache=_MODULE_INFO_CACHE,
+        ttl_sec=_MODULE_INFO_TTL_SEC,
         canonical_custom_module_name=_canonical_custom_module_name,
-        apply_node_change_info=_apply_node_change_info,
+        resolve_module_info_uncached=mb_resolve_module_info_uncached,
+        apply_node_change_info_fn=_apply_node_change_info,
         sync_module_upstream=_sync_module_upstream,
         load_module_state=_load_module_state,
         custom_update_checked_flag=_custom_update_checked_flag,
         module_git_state=_module_git_state,
         module_repo_url=_module_repo_url,
         manager_meta_for_module=_manager_meta_for_module,
-        module_local_readme_summary=_module_local_readme_summary,
-        sanitize_module_description=_sanitize_module_description,
+        module_local_readme_summary_fn=_module_local_readme_summary,
+        sanitize_module_description_fn=_sanitize_module_description,
         github_id=_github_id,
         infer_update_from_manager_stats=_infer_update_from_manager_stats,
         short_commit=_short_commit,
-        remember_module_state=_remember_module_state,
+        remember_module_state_fn=_remember_module_state,
     )
-    _MODULE_INFO_CACHE[key] = (now_ts, dict(result))
-    return result
 
 
 def _collect_nodes() -> list[dict[str, Any]]:
