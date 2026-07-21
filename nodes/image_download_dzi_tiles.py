@@ -1,7 +1,7 @@
 """
 Module: nodes/image_download_dzi_tiles.py
 Author: AlexZ1967
-Last updated: 2026-02-26
+Last updated: 2026-07-21
 
 Description:
     Download and assemble Deep Zoom (DZI) image tiles into a single image tensor.
@@ -36,6 +36,27 @@ import requests
 import torch
 from PIL import Image
 from ..utils.interrupt import check_interrupt, is_interrupt_exception
+from .image_download_dzi_tiles_ops import (
+    append_dzi_stable_id_to_stem as dzi_ops_append_dzi_stable_id_to_stem,
+    build_dzi_source_urls as dzi_ops_build_dzi_source_urls,
+    build_zoom_base_url as dzi_ops_build_zoom_base_url,
+    detect_dzi_provider as dzi_ops_detect_dzi_provider,
+    extract_html_title as dzi_ops_extract_html_title,
+    fallback_dzi_site_config as dzi_ops_fallback_dzi_site_config,
+    format_dzi_template as dzi_ops_format_dzi_template,
+    get_default_dzi_site_name as dzi_ops_get_default_dzi_site_name,
+    get_dzi_site_choice_names as dzi_ops_get_dzi_site_choice_names,
+    normalize_dzi_site_config as dzi_ops_normalize_dzi_site_config,
+    normalize_provider as dzi_ops_normalize_provider,
+    normalize_site_mw as dzi_ops_normalize_site_mw,
+    origin_from_url as dzi_ops_origin_from_url,
+    parse_dzi_ids_text as dzi_ops_parse_dzi_ids_text,
+    render_dzi_filename as dzi_ops_render_dzi_filename,
+    resolve_dzi_request_context as dzi_ops_resolve_dzi_request_context,
+    resolve_dzi_site as dzi_ops_resolve_dzi_site,
+    resolve_unique_output_path as dzi_ops_resolve_unique_output_path,
+    sanitize_filename_component as dzi_ops_sanitize_filename_component,
+)
 try:
     from tqdm.auto import tqdm
 except Exception:
@@ -79,47 +100,12 @@ _DZI_SITE_CONFIG_CACHE: dict[str, Any] | None = None
 
 def _fallback_dzi_site_config() -> dict[str, Any]:
     """Return built-in DZI site config when external JSON is unavailable."""
-    return {
-        "default_site": "National Portrait Gallery UK",
-        "sites": [
-            {
-                "key": "npg",
-                "name": "National Portrait Gallery UK",
-                "base_url": "https://collectionimages.npg.org.uk",
-                "provider": "npg",
-                "mw_prefix": "mw",
-                "default_mw": "mw207134",
-                "default_level": 11,
-                "mw_format": "mw<digits>",
-                "object_url_template": "{base_url}/zoom/{mw}",
-                "dzi_url_template": "{base_url}/zoom/{mw}/zoomXML.dzi",
-                "tile_url_template": "{base_url}/zoom/{mw}/zoomXML_files/{level}/{x}_{y}.{ext}",
-                "url_scheme": "{base_url}/zoom/{mw}/zoomXML_files/{level}/{x}_{y}.{ext}",
-            },
-            {
-                "key": "nla",
-                "name": "National Library of Australia",
-                "base_url": "https://nla.gov.au",
-                "provider": "nla",
-                "mw_prefix": "nla.obj-",
-                "default_mw": "nla.obj-138204672",
-                "default_level": 11,
-                "mw_format": "nla.obj-<digits>",
-                "object_url_template": "{base_url}/{mw}",
-                "dzi_url_template": "{base_url}/{mw}/dzi?tile=",
-                "tile_url_template": "{base_url}/{mw}/dzi?tile={level}/{x}_{y}.{ext}",
-                "url_scheme": "{base_url}/{mw}/dzi?tile={level}/{x}_{y}.{ext}",
-            },
-        ],
-    }
+    return dzi_ops_fallback_dzi_site_config()
 
 
 def _normalize_provider(provider: str | None) -> str:
     """Normalize provider selector into supported values."""
-    value = str(provider or "auto").strip().lower()
-    if value in {"npg", "nla"}:
-        return value
-    return "auto"
+    return dzi_ops_normalize_provider(provider)
 
 
 def _log(message: str) -> None:
@@ -136,41 +122,7 @@ def _load_dzi_site_config() -> dict[str, Any]:
     fallback = _fallback_dzi_site_config()
     try:
         payload = json.loads(_DZI_SITE_CONFIG_PATH.read_text(encoding="utf-8"))
-        sites = payload.get("sites")
-        if not isinstance(sites, list) or not sites:
-            raise ValueError("`sites` must be a non-empty list")
-        normalized_sites = []
-        for raw_site in sites:
-            if not isinstance(raw_site, dict):
-                continue
-            name = str(raw_site.get("name") or "").strip()
-            base_url = str(raw_site.get("base_url") or "").strip().rstrip("/")
-            provider = str(raw_site.get("provider") or "").strip().lower()
-            if not name or not base_url or not provider:
-                continue
-            normalized_sites.append(
-                {
-                    "key": str(raw_site.get("key") or provider).strip().lower(),
-                    "name": name,
-                    "base_url": base_url,
-                    "provider": provider,
-                    "mw_prefix": str(raw_site.get("mw_prefix") or "").strip(),
-                    "default_mw": str(raw_site.get("default_mw") or "").strip(),
-                    "default_level": int(raw_site.get("default_level") or 11),
-                    "mw_format": str(raw_site.get("mw_format") or "").strip(),
-                    "object_url_template": str(raw_site.get("object_url_template") or "").strip(),
-                    "dzi_url_template": str(raw_site.get("dzi_url_template") or "").strip(),
-                    "tile_url_template": str(raw_site.get("tile_url_template") or "").strip(),
-                    "url_scheme": str(raw_site.get("url_scheme") or "").strip(),
-                }
-            )
-        if not normalized_sites:
-            raise ValueError("no valid site entries found")
-        default_site = str(payload.get("default_site") or normalized_sites[0]["name"]).strip()
-        _DZI_SITE_CONFIG_CACHE = {
-            "default_site": default_site,
-            "sites": normalized_sites,
-        }
+        _DZI_SITE_CONFIG_CACHE = dzi_ops_normalize_dzi_site_config(payload)
     except Exception as exc:
         _log(
             f"Site config fallback: {_DZI_SITE_CONFIG_PATH} "
@@ -187,59 +139,23 @@ def _get_dzi_sites() -> list[dict[str, Any]]:
 
 def _get_dzi_site_choice_names() -> list[str]:
     """Return UI dropdown labels for configured DZI sites."""
-    sites = _get_dzi_sites()
-    names = [str(site.get("name") or "").strip() for site in sites]
-    return [name for name in names if name] or ["National Portrait Gallery UK"]
+    return dzi_ops_get_dzi_site_choice_names(_get_dzi_sites())
 
 
 def _get_default_dzi_site_name() -> str:
     """Return configured default site name for INPUT_TYPES."""
-    payload = _load_dzi_site_config()
-    default_name = str(payload.get("default_site") or "").strip()
-    names = _get_dzi_site_choice_names()
-    if default_name in names:
-        return default_name
-    return names[0]
+    return dzi_ops_get_default_dzi_site_name(_load_dzi_site_config())
 
 
 def _resolve_dzi_site(site: str | None, mw: str | None = None) -> dict[str, Any]:
     """Resolve a configured DZI site from dropdown label, key, URL, or legacy base URL."""
-    site_text = str(site or "").strip()
-    mw_text = str(mw or "").strip()
-    sites = _get_dzi_sites()
-
-    if site_text:
-        lowered = site_text.lower()
-        for candidate in sites:
-            if lowered in {
-                str(candidate.get("name") or "").strip().lower(),
-                str(candidate.get("key") or "").strip().lower(),
-                str(candidate.get("base_url") or "").strip().rstrip("/").lower(),
-            }:
-                return dict(candidate)
-        if "://" in site_text:
-            detected_provider = _detect_dzi_provider(site_text, mw_text, None)
-            return {
-                "key": detected_provider,
-                "name": site_text,
-                "base_url": site_text.rstrip("/"),
-                "provider": detected_provider,
-                "mw_prefix": "",
-                "default_mw": mw_text,
-                "default_level": 11,
-                "mw_format": "",
-                "object_url_template": "",
-                "dzi_url_template": "",
-                "tile_url_template": "",
-                "url_scheme": "",
-            }
-
-    detected_provider = _detect_dzi_provider(site_text, mw_text, None)
-    for candidate in sites:
-        if str(candidate.get("provider") or "").strip().lower() == detected_provider:
-            return dict(candidate)
-
-    return dict(sites[0]) if sites else dict(_fallback_dzi_site_config()["sites"][0])
+    return dzi_ops_resolve_dzi_site(
+        site,
+        mw,
+        sites=_get_dzi_sites(),
+        detect_provider_fn=_detect_dzi_provider,
+        fallback_site=dict(_fallback_dzi_site_config()["sites"][0]),
+    )
 
 
 def _log_fetch_error(transport: str, url: str, exc: Exception) -> None:
@@ -253,43 +169,12 @@ def _log_fetch_error(transport: str, url: str, exc: Exception) -> None:
 
 def _normalize_site_mw(mw: str | None, site_config: dict[str, Any]) -> str:
     """Normalize site object id: digits-only input gets site prefix, full ids pass through."""
-    raw_mw = str(mw or "").strip()
-    if not raw_mw:
-        return str(site_config.get("default_mw") or "").strip()
-    if not raw_mw.isdigit():
-        return raw_mw
-
-    prefix = str(site_config.get("mw_prefix") or "").strip()
-    if prefix:
-        return f"{prefix}{raw_mw}"
-
-    default_mw = str(site_config.get("default_mw") or "").strip()
-    match = re.match(r"^(.*?)(\d+)$", default_mw)
-    if match:
-        return f"{match.group(1)}{raw_mw}"
-    return raw_mw
+    return dzi_ops_normalize_site_mw(mw, site_config)
 
 
 def _build_zoom_base_url(base_url: str, mw: str) -> str:
     """Compose normalized zoom base URL from site root and image id."""
-    base = str(base_url or "").strip().rstrip("/")
-    module_id = str(mw or "").strip()
-    if not base:
-        raise ValueError("`base_url` must not be empty.")
-    if not module_id:
-        raise ValueError("`mw` must not be empty.")
-    lower_base = base.lower()
-    lower_mw = module_id.lower()
-    if lower_base.endswith(f"/zoom/{lower_mw}"):
-        return base
-    if lower_base.endswith("/zoom"):
-        return f"{base}/{module_id}"
-    if lower_base.endswith(f"/{lower_mw}"):
-        prefix = base[: -(len(module_id) + 1)].rstrip("/")
-        if prefix.lower().endswith("/zoom"):
-            return base
-        return f"{prefix}/zoom/{module_id}" if prefix else f"{base}/zoom/{module_id}"
-    return f"{base}/zoom/{module_id}"
+    return dzi_ops_build_zoom_base_url(base_url, mw)
 
 
 def _format_dzi_template(
@@ -303,33 +188,20 @@ def _format_dzi_template(
     ext: str | None = None,
 ) -> str:
     """Render URL template for configured DZI site."""
-    text = str(template or "").strip()
-    if not text:
-        raise ValueError("DZI URL template must not be empty.")
-    data = {
-        "base_url": str(base_url or "").strip().rstrip("/"),
-        "mw": str(mw or "").strip(),
-        "level": "" if level is None else int(level),
-        "x": "" if x is None else int(x),
-        "y": "" if y is None else int(y),
-        "ext": str(ext or "").strip().lstrip("."),
-    }
-    try:
-        return text.format(**data)
-    except KeyError as exc:
-        raise ValueError(f"Unknown placeholder in DZI URL template: {exc}") from exc
+    return dzi_ops_format_dzi_template(
+        template,
+        base_url=base_url,
+        mw=mw,
+        level=level,
+        x=x,
+        y=y,
+        ext=ext,
+    )
 
 
 def _detect_dzi_provider(base_url: str, mw: str, provider: str | None = None) -> str:
     """Detect supported DZI provider from explicit selection or URL/identifier hints."""
-    normalized = _normalize_provider(provider)
-    if normalized != "auto":
-        return normalized
-    base = str(base_url or "").strip().lower()
-    module_id = str(mw or "").strip().lower()
-    if "nla.gov.au" in base or module_id.startswith("nla.obj-"):
-        return "nla"
-    return "npg"
+    return dzi_ops_detect_dzi_provider(base_url, mw, provider)
 
 
 def _build_dzi_source_urls(
@@ -340,75 +212,19 @@ def _build_dzi_source_urls(
     site_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build normalized DZI/tile URL scheme from config templates or legacy providers."""
-    module_id = str(mw or "").strip()
-    if not module_id:
-        raise ValueError("`mw` must not be empty.")
-    cfg = dict(site_config or {})
-    base = str(base_url or cfg.get("base_url") or "").strip().rstrip("/")
-    if not base:
-        raise ValueError("`base_url` must not be empty.")
-
-    object_template = str(cfg.get("object_url_template") or "").strip()
-    dzi_template = str(cfg.get("dzi_url_template") or "").strip()
-    tile_template = str(cfg.get("tile_url_template") or "").strip()
-    provider_name = str(cfg.get("provider") or "").strip().lower() or _detect_dzi_provider(base, module_id, provider)
-
-    if dzi_template and tile_template:
-        zoom_base = _format_dzi_template(object_template or "{base_url}/{mw}", base_url=base, mw=module_id)
-        dzi_url = _format_dzi_template(dzi_template, base_url=base, mw=module_id, level=int(level))
-        first_tile_url = _format_dzi_template(
-            tile_template,
-            base_url=base,
-            mw=module_id,
-            level=int(level),
-            x=0,
-            y=0,
-            ext="jpg",
-        )
-        tiles_base = str(tile_template)
-        tile_url_mode = "template"
-        return {
-            "provider": provider_name or "custom",
-            "zoom_base": zoom_base,
-            "dzi_url": dzi_url,
-            "tiles_base": tiles_base,
-            "tile_url_mode": tile_url_mode,
-            "tile_url_template": tile_template,
-            "tile_example_url": first_tile_url,
-            "referer_root": _origin_from_url(base) or _DEFAULT_REFERER.rstrip("/"),
-        }
-
-    if provider_name == "nla":
-        dzi_base = f"{base}/{module_id}/dzi?tile="
-        return {
-            "provider": "nla",
-            "zoom_base": f"{base}/{module_id}",
-            "dzi_url": dzi_base,
-            "tiles_base": dzi_base,
-            "tile_url_mode": "query",
-            "referer_root": _origin_from_url(base) or _DEFAULT_REFERER.rstrip("/"),
-        }
-
-    zoom_base = _build_zoom_base_url(base, module_id)
-    return {
-        "provider": "npg",
-        "zoom_base": zoom_base,
-        "dzi_url": f"{zoom_base}/zoomXML.dzi",
-        "tiles_base": f"{zoom_base}/zoomXML_files/{int(level)}",
-        "tile_url_mode": "path",
-        "referer_root": _origin_from_url(zoom_base) or _DEFAULT_REFERER.rstrip("/"),
-    }
+    return dzi_ops_build_dzi_source_urls(
+        base_url,
+        mw,
+        level,
+        provider,
+        site_config=site_config,
+        default_referer=_DEFAULT_REFERER,
+    )
 
 
 def _origin_from_url(url_text: str) -> str:
     """Extract URL origin (`scheme://host[:port]`) for request headers."""
-    try:
-        parsed = urlsplit(str(url_text or "").strip())
-        if not parsed.scheme or not parsed.netloc:
-            return ""
-        return f"{parsed.scheme}://{parsed.netloc}"
-    except Exception:
-        return ""
+    return dzi_ops_origin_from_url(url_text)
 
 
 def _new_session(
@@ -1261,65 +1077,28 @@ def _image_to_tensor(image: Image.Image) -> torch.Tensor:
 
 def _resolve_dzi_request_context(site: str, mw: str, level: int) -> dict[str, Any]:
     """Resolve effective site/object request context for DZI download."""
-    site_config = _resolve_dzi_site(site, mw)
-    base_url = str(site_config.get("base_url") or "").strip()
-    provider_name = str(site_config.get("provider") or "npg").strip().lower()
-    effective_mw = _normalize_site_mw(mw, site_config)
-    if not effective_mw:
-        raise ValueError("`mw` is empty and selected site has no `default_mw` in config/dzi_sites.json.")
-    effective_level = int(level)
-    if effective_level < 0:
-        effective_level = int(site_config.get("default_level") or 11)
-    return {
-        "site_config": site_config,
-        "base_url": base_url,
-        "provider_name": provider_name,
-        "effective_mw": effective_mw,
-        "effective_level": effective_level,
-    }
+    return dzi_ops_resolve_dzi_request_context(
+        site,
+        mw,
+        level,
+        resolve_site_fn=_resolve_dzi_site,
+        normalize_site_mw_fn=_normalize_site_mw,
+    )
 
 
 def _parse_dzi_ids_text(ids_text: str) -> list[str]:
     """Parse multiline/comma-separated DZI ids, skipping blanks and comments."""
-    values: list[str] = []
-    for raw_line in str(ids_text or "").splitlines():
-        line = raw_line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        for part in re.split(r"[;,]+", line):
-            token = str(part or "").strip()
-            if token:
-                values.append(token)
-    return values
+    return dzi_ops_parse_dzi_ids_text(ids_text)
 
 
 def _sanitize_filename_component(text: str) -> str:
     """Normalize user-facing filename fragment into safe portable text."""
-    cleaned = re.sub(r"[\\/:*?\"<>|]+", "_", str(text or "").strip())
-    cleaned = re.sub(r"\s+", "_", cleaned)
-    cleaned = re.sub(r"_+", "_", cleaned).strip("._")
-    return cleaned or "item"
+    return dzi_ops_sanitize_filename_component(text)
 
 
 def _extract_html_title(html_text: str) -> str:
     """Extract human-readable title from HTML metadata with safe fallback."""
-    text = str(html_text or "")
-    patterns = [
-        r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
-        r'<meta[^>]+name=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
-        r'<meta[^>]+property=["\']twitter:title["\'][^>]+content=["\'](.*?)["\']',
-        r'<meta[^>]+name=["\']twitter:title["\'][^>]+content=["\'](.*?)["\']',
-        r"<title[^>]*>(.*?)</title>",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
-        if not match:
-            continue
-        value = html.unescape(str(match.group(1) or "")).strip()
-        value = re.sub(r"\s+", " ", value).strip()
-        if value:
-            return value
-    return ""
+    return dzi_ops_extract_html_title(html_text)
 
 
 def _fetch_dzi_object_title(
@@ -1359,57 +1138,25 @@ def _render_dzi_filename(
     title_stem: str | None = None,
 ) -> str:
     """Render output filename stem for one batch item."""
-    template = str(filename_template or "{mw}").strip() or "{mw}"
-    site_name = str(site_config.get("name") or "").strip()
-    site_key = str(site_config.get("key") or site_name).strip()
-    title_value = _sanitize_filename_component(title_stem or effective_mw)
-    data = {
-        "index": int(index),
-        "raw_id": _sanitize_filename_component(raw_id),
-        "mw": _sanitize_filename_component(effective_mw),
-        "id": _sanitize_filename_component(effective_mw),
-        "title": title_value,
-        "site": _sanitize_filename_component(site_name),
-        "site_key": _sanitize_filename_component(site_key),
-        "level": int(effective_level),
-    }
-    try:
-        rendered = template.format(**data)
-    except Exception:
-        rendered = data["title"] if "{title" in template else data["mw"]
-    return _sanitize_filename_component(rendered)
+    return dzi_ops_render_dzi_filename(
+        filename_template,
+        index=index,
+        raw_id=raw_id,
+        effective_mw=effective_mw,
+        site_config=site_config,
+        effective_level=effective_level,
+        title_stem=title_stem,
+    )
 
 
 def _append_dzi_stable_id_to_stem(stem: str, effective_mw: str) -> str:
     """Append stable object id to human-readable DZI stem unless already present."""
-    base = _sanitize_filename_component(stem)
-    stable = _sanitize_filename_component(effective_mw)
-    if not stable:
-        return base
-    if not base:
-        return stable
-    if stable.lower() in base.lower():
-        return base
-    return f"{base}_{stable}"
+    return dzi_ops_append_dzi_stable_id_to_stem(stem, effective_mw)
 
 
 def _resolve_unique_output_path(output_dir: str, stem: str, ext: str, overwrite_mode: str) -> tuple[str, str]:
     """Resolve final output path according to overwrite strategy."""
-    normalized_ext = str(ext or "png").strip().lower().lstrip(".") or "png"
-    base_path = os.path.join(output_dir, f"{stem}.{normalized_ext}")
-    mode = str(overwrite_mode or "skip").strip().lower()
-    if mode == "overwrite":
-        return base_path, "overwrite"
-    if mode == "unique":
-        if not os.path.exists(base_path):
-            return base_path, "unique_new"
-        index = 2
-        while True:
-            candidate = os.path.join(output_dir, f"{stem}_{index}.{normalized_ext}")
-            if not os.path.exists(candidate):
-                return candidate, "unique_suffix"
-            index += 1
-    return base_path, "skip"
+    return dzi_ops_resolve_unique_output_path(output_dir, stem, ext, overwrite_mode)
 
 
 def _tensor_image_to_pil(image_tensor: torch.Tensor) -> Image.Image:

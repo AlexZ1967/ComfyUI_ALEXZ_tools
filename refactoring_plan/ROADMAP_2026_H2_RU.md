@@ -187,6 +187,7 @@
 
 Срок: 2026-09-06 -> 2026-10-18
 Приоритет: `P1`
+Статус: 🔄 в работе
 
 ### Цели
 
@@ -221,6 +222,22 @@
    - retry/timeout helpers
    - file naming collision policy
    - network diagnostics payloads
+
+Промежуточный прогресс:
+- ✅ Стартован первый slice для `nodes/image_download_dzi_tiles.py`.
+- ✅ Вынесен чистый helper-layer в
+  `nodes/image_download_dzi_tiles_ops.py`:
+  - DZI site config normalization;
+  - site/provider resolution;
+  - DZI URL/template building;
+  - request-context normalization;
+  - filename/title/output-path policy.
+- ✅ Добавлены прямые unit tests:
+  `tests/test_dzi_tiles_ops.py`.
+- ✅ Сохранена совместимость текущей ноды:
+  `nodes/image_download_dzi_tiles.py` оставлен public adapter-слоем с
+  совместимыми module-level wrapper-функциями для существующих smoke-тестов и
+  monkeypatch сценариев.
 
 ### Артефакты
 
