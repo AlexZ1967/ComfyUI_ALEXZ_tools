@@ -226,6 +226,9 @@
 Промежуточный прогресс:
 - ✅ Завершена декомпозиция первого приоритетного файла
   `nodes/image_download_dzi_tiles.py` на pure helper-layers и Comfy node adapter.
+- ✅ Начат второй приоритетный файл `nodes/image_download_iiif.py`:
+  URL/service resolution и NYPL/Gallica ID parsing вынесены в
+  `nodes/image_download_iiif_ops.py` с сохранением совместимых wrapper-функций.
 - ✅ Стартован первый slice для `nodes/image_download_dzi_tiles.py`.
 - ✅ Вынесен чистый helper-layer в
   `nodes/image_download_dzi_tiles_ops.py`:

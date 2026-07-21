@@ -34,6 +34,18 @@ import torch
 from PIL import Image
 
 from ..utils.interrupt import check_interrupt, is_interrupt_exception
+from .image_download_iiif_ops import (
+    extract_first_generic_iiif_service_url as iiif_ops_extract_first_generic_iiif_service_url,
+    extract_first_london_museum_service_url as iiif_ops_extract_first_london_museum_service_url,
+    extract_forced_nypl_image_id_from_source_url as iiif_ops_extract_forced_nypl_image_id_from_source_url,
+    extract_gallica_service_url_from_source_url as iiif_ops_extract_gallica_service_url_from_source_url,
+    extract_nypl_image_id_from_html as iiif_ops_extract_nypl_image_id_from_html,
+    extract_nypl_image_ids_from_json_payload as iiif_ops_extract_nypl_image_ids_from_json_payload,
+    extract_nypl_image_ids_from_text as iiif_ops_extract_nypl_image_ids_from_text,
+    inject_nypl_image_id_into_source_url as iiif_ops_inject_nypl_image_id_into_source_url,
+    iter_nypl_item_page_candidates as iiif_ops_iter_nypl_item_page_candidates,
+    normalize_iiif_service_url as iiif_ops_normalize_iiif_service_url,
+)
 try:
     from tqdm.auto import tqdm
 except Exception:  # pragma: no cover - optional dependency
@@ -154,114 +166,32 @@ def _http_get(
 
 def _normalize_iiif_service_url(source_url: str) -> str:
     """Normalize direct IIIF service URL, info.json URL, or image request URL."""
-    text = str(source_url or "").strip()
-    if not text:
-        return ""
-    if text.endswith("/info.json"):
-        return text[: -len("/info.json")].rstrip("/")
-    match = re.match(r"^(https?://.+?)/full/[^/]+/[^/]+/default\.[A-Za-z0-9]+/?$", text)
-    if match:
-        return str(match.group(1)).rstrip("/")
-    return text.rstrip("/")
+    return iiif_ops_normalize_iiif_service_url(source_url)
 
 
 def _extract_first_london_museum_service_url(html: str) -> str:
     """Extract first IIIF service URL from London Museum object page HTML."""
-    patterns = (
-        r'data-src="(https://collections\.londonmuseum\.net/iiif/3/[^"]+)"',
-        r"(https://collections\.londonmuseum\.net/iiif/3/[^\s\"'<>]+/info\.json)",
-        r"(https://collections\.londonmuseum\.net/iiif/3/[^\s\"'<>]+)",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, str(html or ""), flags=re.I)
-        if match:
-            return _normalize_iiif_service_url(str(match.group(1)))
-    return ""
+    return iiif_ops_extract_first_london_museum_service_url(html)
 
 
 def _extract_first_generic_iiif_service_url(html: str) -> str:
     """Best-effort extraction of IIIF service URL from arbitrary HTML."""
-    patterns = (
-        r'data-src="(https?://[^"]+/iiif/[^"]+)"',
-        r'src="(https?://[^"]+/iiif/[^"]+/info\.json)"',
-        r"(https?://[^\s\"'<>]+/iiif/[^\s\"'<>]+/info\.json)",
-        r"(https?://[^\s\"'<>]+/iiif/[^\s\"'<>]+)",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, str(html or ""), flags=re.I)
-        if match:
-            return _normalize_iiif_service_url(str(match.group(1)))
-    return ""
+    return iiif_ops_extract_first_generic_iiif_service_url(html)
 
 
 def _extract_nypl_image_id_from_html(html: str) -> str:
     """Extract NYPL image id token from page HTML when available."""
-    text = str(html or "")
-    if not text:
-        return ""
-    patterns = (
-        r'id\s*=\s*["\']image-id["\'][^>]*>\s*([A-Za-z0-9_-]+)\s*<',
-        r'aria-label\s*=\s*["\']Image ID["\'][^>]*>\s*([A-Za-z0-9_-]+)\s*<',
-        r"https://iiif\.nypl\.org/iiif/3/([A-Za-z0-9_-]+)(?:/info\.json)?",
-        r'"imageId"\s*:\s*"?([A-Za-z0-9_-]+)"?',
-        r'"image_id"\s*:\s*"?([A-Za-z0-9_-]+)"?',
-        r"Image\s*ID[\s\S]{0,2048}?([A-Za-z0-9_-]+)",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if match:
-            image_id = str(match.group(1) or "").strip()
-            if image_id and _NYPL_IMAGE_ID_TOKEN_RE.match(image_id):
-                return image_id
-    return ""
+    return iiif_ops_extract_nypl_image_id_from_html(html)
 
 
 def _extract_nypl_image_ids_from_text(text: str) -> list[str]:
     """Extract NYPL image ids from generic text/JSON/XML payload."""
-    source = str(text or "")
-    if not source:
-        return []
-    patterns = (
-        r'"imageID"\s*:\s*"?(\d+)"?',
-        r'"imageId"\s*:\s*"?(\d+)"?',
-        r"<imageID>\s*(\d+)\s*</imageID>",
-        r"https://iiif\.nypl\.org/iiif/3/(\d+)(?:/info\.json)?",
-    )
-    ids: list[str] = []
-    for pattern in patterns:
-        for match in re.findall(pattern, source, flags=re.IGNORECASE):
-            value = str(match or "").strip()
-            if value and value not in ids:
-                ids.append(value)
-    return ids
+    return iiif_ops_extract_nypl_image_ids_from_text(text)
 
 
 def _extract_nypl_image_ids_from_json_payload(payload: Any) -> list[str]:
     """Walk arbitrary JSON payload and collect imageID-like numeric values."""
-    ids: list[str] = []
-
-    def _walk(node: Any) -> None:
-        if isinstance(node, dict):
-            for key, value in node.items():
-                key_text = str(key or "").strip().lower()
-                if key_text in {"imageid", "image_id"}:
-                    if isinstance(value, (list, tuple)):
-                        for item in value:
-                            item_text = str(item or "").strip()
-                            if item_text.isdigit() and item_text not in ids:
-                                ids.append(item_text)
-                    else:
-                        value_text = str(value or "").strip()
-                        if value_text.isdigit() and value_text not in ids:
-                            ids.append(value_text)
-                _walk(value)
-            return
-        if isinstance(node, (list, tuple)):
-            for item in node:
-                _walk(item)
-
-    _walk(payload)
-    return ids
+    return iiif_ops_extract_nypl_image_ids_from_json_payload(payload)
 
 
 def _fetch_nypl_image_id_from_api(
@@ -319,80 +249,22 @@ def _lookup_nypl_item_id_override(item_id: str) -> str:
 
 def _iter_nypl_item_page_candidates(source_url: str) -> list[str]:
     """Return candidate NYPL item page URLs for best-effort HTML extraction."""
-    text = str(source_url or "").strip()
-    if not text:
-        return []
-    split = urlsplit(text)
-    host = str(split.netloc or "").strip().lower()
-    path = str(split.path or "")
-    query = str(split.query or "")
-    candidates: list[str] = [text]
-    if host == "digitalcollections.nypl.org":
-        alt = f"https://rp-digitalcollections.nypl.org{path}"
-        if query:
-            alt = f"{alt}?{query}"
-        if alt not in candidates:
-            candidates.append(alt)
-    return candidates
+    return iiif_ops_iter_nypl_item_page_candidates(source_url)
 
 
 def _extract_forced_nypl_image_id_from_source_url(source_url: str) -> str:
     """Allow explicit NYPL image id override via source_url query/fragment."""
-    split = urlsplit(str(source_url or "").strip())
-    query_map = parse_qs(split.query or "")
-    fragment_map = parse_qs(split.fragment or "")
-    keys = ("image_id", "imageid", "nypl_image_id", "iiif_id")
-    for key in keys:
-        values = query_map.get(key) or query_map.get(key.upper()) or []
-        for value in values:
-            text = str(value or "").strip()
-            if text and _NYPL_IMAGE_ID_TOKEN_RE.match(text):
-                return text
-    for key in keys:
-        values = fragment_map.get(key) or fragment_map.get(key.upper()) or []
-        for value in values:
-            text = str(value or "").strip()
-            if text and _NYPL_IMAGE_ID_TOKEN_RE.match(text):
-                return text
-    return ""
+    return iiif_ops_extract_forced_nypl_image_id_from_source_url(source_url)
 
 
 def _inject_nypl_image_id_into_source_url(source_url: str, nypl_image_id: str) -> str:
     """Append or replace NYPL image_id override in source_url query string."""
-    source_text = str(source_url or "").strip()
-    image_id = str(nypl_image_id or "").strip()
-    if not source_text or not image_id or not _NYPL_IMAGE_ID_TOKEN_RE.match(image_id):
-        return source_text
-    split = urlsplit(source_text)
-    query_pairs = [
-        (key, value)
-        for key, value in parse_qsl(split.query or "", keep_blank_values=True)
-        if str(key).lower() not in {"image_id", "imageid", "nypl_image_id", "iiif_id"}
-    ]
-    query_pairs.append(("image_id", image_id))
-    return urlunsplit((split.scheme, split.netloc, split.path, urlencode(query_pairs), split.fragment))
+    return iiif_ops_inject_nypl_image_id_into_source_url(source_url, nypl_image_id)
 
 
 def _extract_gallica_service_url_from_source_url(source_url: str) -> str:
     """Build direct Gallica IIIF service URL from an ARK/object page URL."""
-    text = str(source_url or "").strip()
-    if not text:
-        return ""
-    split = urlsplit(text)
-    path = str(split.path or "").strip()
-    if not path:
-        return ""
-    ark_match = re.search(r"/ark:/12148/([A-Za-z0-9]+)", path, flags=re.IGNORECASE)
-    if not ark_match:
-        return ""
-    ark_id = str(ark_match.group(1) or "").strip()
-    if not ark_id:
-        return ""
-    ark_path = f"ark:/12148/{ark_id}"
-    tail = path[ark_match.end() :]
-    page_match = re.search(r"/(f\d+)(?:[./][^/?#]*)?", tail, flags=re.IGNORECASE)
-    page = str(page_match.group(1) or "").strip() if page_match else "f1"
-    return f"https://gallica.bnf.fr/iiif/{ark_path}/{page}"
+    return iiif_ops_extract_gallica_service_url_from_source_url(source_url)
 
 
 def _resolve_iiif_service_url(
