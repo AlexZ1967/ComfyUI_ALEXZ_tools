@@ -88,6 +88,72 @@ class DziTilesOpsTests(unittest.TestCase):
         self.assertEqual(source["tile_example_url"], "https://example.org/iiif/obj-42/9/0-0.jpg")
         self.assertEqual(source["referer_root"], "https://example.org")
 
+    def test_build_dzi_tile_url_supports_all_source_modes(self):
+        """Tile URL helper should preserve path, query, and template contracts."""
+        self.assertEqual(
+            self.ops.build_dzi_tile_url("https://example.org/tiles", 3, 4),
+            "https://example.org/tiles/3_4.jpg",
+        )
+        self.assertEqual(
+            self.ops.build_dzi_tile_url("https://example.org/dzi?tile=", 3, 4, level=9, mode="query"),
+            "https://example.org/dzi?tile=9/3_4.jpg",
+        )
+        self.assertEqual(
+            self.ops.build_dzi_tile_url(
+                "{base_url}/iiif/{mw}/{level}/{x}-{y}.{ext}",
+                3,
+                4,
+                "png",
+                level=9,
+                mode="template",
+                base_url="https://example.org",
+                mw="obj-42",
+            ),
+            "https://example.org/iiif/obj-42/9/3-4.png",
+        )
+
+    def test_parse_dzi_metadata_and_geometry(self):
+        """DZI XML parsing and level geometry should be usable without network state."""
+        info = self.ops.parse_dzi_metadata(
+            b'<Image TileSize="256" Overlap="1" Format="png"><Size Width="1000" Height="600"/></Image>'
+        )
+        self.assertEqual(
+            info,
+            {"tile_size": 256, "overlap": 1, "format": "png", "width": 1000, "height": 600},
+        )
+        self.assertEqual(self.ops.compute_dzi_level_geometry(info, 10), (1000, 600, 4, 3))
+        self.assertIsNone(self.ops.parse_dzi_metadata(b"<Image><Size Width='missing'/></Image>"))
+
+    def test_proxy_policy_helpers_normalize_and_order_profiles(self):
+        """Proxy policy should normalize inputs and retain deterministic fallback order."""
+        self.assertEqual(self.ops.normalize_proxy_url("proxy.example:8080"), "http://proxy.example:8080")
+        self.assertEqual(self.ops.normalize_proxy_url("DIRECT"), "")
+        self.assertEqual(self.ops.proxy_host_port("socks5://localhost:1080"), ("localhost", 1080))
+        self.assertEqual(
+            self.ops.parse_windows_proxy_server("http=proxy.example:8080;socks=localhost:1080"),
+            ["http://proxy.example:8080", "socks5h://localhost:1080"],
+        )
+        self.assertEqual(self.ops.parse_windows_proxy_server("proxy.example:3128"), ["http://proxy.example:3128"])
+        self.assertEqual(
+            self.ops.env_proxy_urls(
+                include_env=True,
+                environ={"HTTPS_PROXY": "secure.example:443", "https_proxy": "secure.example:443"},
+            ),
+            ["http://secure.example:443"],
+        )
+        self.assertEqual(
+            self.ops.build_proxy_profiles(
+                explicit_proxy="",
+                trust_env_primary=True,
+                auto_proxy_candidates=["proxy.example:8080", "proxy.example:8080"],
+            ),
+            [
+                {"name": "env_or_direct", "proxy_url": "", "trust_env": True},
+                {"name": "auto_proxy_1", "proxy_url": "http://proxy.example:8080", "trust_env": False},
+                {"name": "direct_no_env", "proxy_url": "", "trust_env": False},
+            ],
+        )
+
     def test_resolve_dzi_request_context_uses_default_level_and_prefix(self):
         """Request context should apply default id/level rules from resolved site config."""
         ctx = self.ops.resolve_dzi_request_context(

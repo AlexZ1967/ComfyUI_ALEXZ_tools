@@ -19,6 +19,7 @@ import tempfile
 import types
 import unittest
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -1504,6 +1505,35 @@ class SmokeTests(unittest.TestCase):
         finally:
             dzi_mod.ImageDownloadDZITiles.download = old_download
             dzi_mod._fetch_dzi_object_title = old_fetch_title
+
+    def test_dzi_tiles_diagnostics_are_short_in_console_and_verbose_on_disk(self):
+        """Verify DZI failures retain details in a separate, credential-safe log file."""
+        dzi_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.image_download_dzi_tiles")
+        old_log_path = dzi_mod._DZI_DIAGNOSTIC_LOG_PATH
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                dzi_mod._DZI_DIAGNOSTIC_LOG_PATH = Path(tmpdir) / "dzi.log"
+                reason = dzi_mod._summarize_tile_probe_failure(
+                    {"requests|explicit_proxy:http://user:secret@proxy.test:8080": 403}
+                )
+                self.assertEqual(reason, "Source denied the tile request (HTTP 403 across 1 attempts).")
+                self.assertEqual(
+                    dzi_mod._summarize_tile_probe_failure({"requests": 0, "curl": 0}),
+                    "Network connection failed across 2 attempts. Check proxy and DNS settings.",
+                )
+                log_path = dzi_mod._write_dzi_diagnostic_log(
+                    "First tile probe failed",
+                    dzi_mod._redact_proxy_credentials(
+                        "requests|explicit_proxy:http://user:secret@proxy.test:8080:403"
+                    ),
+                )
+                self.assertEqual(log_path, str(dzi_mod._DZI_DIAGNOSTIC_LOG_PATH))
+                contents = dzi_mod._DZI_DIAGNOSTIC_LOG_PATH.read_text(encoding="utf-8")
+                self.assertIn("First tile probe failed", contents)
+                self.assertIn("user:***@proxy.test", contents)
+                self.assertNotIn("secret", contents)
+        finally:
+            dzi_mod._DZI_DIAGNOSTIC_LOG_PATH = old_log_path
 
     def test_dzi_tiles_single_respects_interrupt(self):
         """Verify single DZI node propagates Comfy interrupt requests."""

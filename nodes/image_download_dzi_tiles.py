@@ -23,12 +23,11 @@ import shutil
 import subprocess
 import sys
 import traceback
-import xml.etree.ElementTree as ET
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, Request, build_opener, urlopen
 
 import numpy as np
@@ -38,7 +37,10 @@ from PIL import Image
 from ..utils.interrupt import check_interrupt, is_interrupt_exception
 from .image_download_dzi_tiles_ops import (
     append_dzi_stable_id_to_stem as dzi_ops_append_dzi_stable_id_to_stem,
+    build_proxy_profiles as dzi_ops_build_proxy_profiles,
     build_dzi_source_urls as dzi_ops_build_dzi_source_urls,
+    build_dzi_tile_url as dzi_ops_build_dzi_tile_url,
+    compute_dzi_level_geometry as dzi_ops_compute_dzi_level_geometry,
     build_zoom_base_url as dzi_ops_build_zoom_base_url,
     detect_dzi_provider as dzi_ops_detect_dzi_provider,
     extract_html_title as dzi_ops_extract_html_title,
@@ -48,14 +50,19 @@ from .image_download_dzi_tiles_ops import (
     get_dzi_site_choice_names as dzi_ops_get_dzi_site_choice_names,
     normalize_dzi_site_config as dzi_ops_normalize_dzi_site_config,
     normalize_provider as dzi_ops_normalize_provider,
+    normalize_proxy_url as dzi_ops_normalize_proxy_url,
     normalize_site_mw as dzi_ops_normalize_site_mw,
     origin_from_url as dzi_ops_origin_from_url,
+    parse_windows_proxy_server as dzi_ops_parse_windows_proxy_server,
     parse_dzi_ids_text as dzi_ops_parse_dzi_ids_text,
+    parse_dzi_metadata as dzi_ops_parse_dzi_metadata,
     render_dzi_filename as dzi_ops_render_dzi_filename,
     resolve_dzi_request_context as dzi_ops_resolve_dzi_request_context,
     resolve_dzi_site as dzi_ops_resolve_dzi_site,
     resolve_unique_output_path as dzi_ops_resolve_unique_output_path,
     sanitize_filename_component as dzi_ops_sanitize_filename_component,
+    env_proxy_urls as dzi_ops_env_proxy_urls,
+    proxy_host_port as dzi_ops_proxy_host_port,
 )
 try:
     from tqdm.auto import tqdm
@@ -95,6 +102,7 @@ _COMMON_LOCAL_PROXY_URLS = (
     "http://127.0.0.1:8889",
 )
 _DZI_SITE_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "dzi_sites.json"
+_DZI_DIAGNOSTIC_LOG_PATH = Path(__file__).resolve().parent.parent / "logs" / "image_download_dzi_tiles.log"
 _DZI_SITE_CONFIG_CACHE: dict[str, Any] | None = None
 
 
@@ -111,6 +119,41 @@ def _normalize_provider(provider: str | None) -> str:
 def _log(message: str) -> None:
     """Emit node logs to ComfyUI console."""
     print(f"[DZI] {message}")
+
+
+def _write_dzi_diagnostic_log(title: str, details: str) -> str:
+    """Append verbose DZI diagnostics outside the ComfyUI console stream."""
+    try:
+        _DZI_DIAGNOSTIC_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+        entry = f"[{timestamp}] {title}\n{details.rstrip()}\n\n"
+        with _DZI_DIAGNOSTIC_LOG_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(entry)
+        return str(_DZI_DIAGNOSTIC_LOG_PATH)
+    except OSError:
+        return ""
+
+
+def _summarize_tile_probe_failure(statuses: dict[str, int]) -> str:
+    """Convert a verbose transport matrix into an actionable one-line failure reason."""
+    values = [int(status) for status in statuses.values()]
+    attempts = len(values)
+    if values and all(status == 403 for status in values):
+        return f"Source denied the tile request (HTTP 403 across {attempts} attempts)."
+    if values and all(status == 404 for status in values):
+        return f"Tile was not found (HTTP 404 across {attempts} attempts). Check ID and level."
+    if values and all(status == 0 for status in values):
+        return f"Network connection failed across {attempts} attempts. Check proxy and DNS settings."
+    counts: dict[int, int] = {}
+    for status in values:
+        counts[status] = counts.get(status, 0) + 1
+    status_summary = ", ".join(f"HTTP {status}: {count}" for status, count in sorted(counts.items())) or "no status"
+    return f"First tile could not be loaded ({status_summary})."
+
+
+def _redact_proxy_credentials(text: str) -> str:
+    """Keep diagnostic profiles useful without writing proxy passwords to disk."""
+    return re.sub(r"(://[^:/\s]+):[^@/\s]+@", r"\1:***@", str(text or ""))
 
 
 def _load_dzi_site_config() -> dict[str, Any]:
@@ -332,51 +375,26 @@ def _tile_url(
     mw: str | None = None,
 ) -> str:
     """Build tile URL for one tile coordinate."""
-    ext = str(tile_ext or "jpg").strip().lower().lstrip(".") or "jpg"
-    normalized_mode = str(mode or "path").strip().lower()
-    if normalized_mode == "template":
-        return _format_dzi_template(
-            tiles_base,
-            base_url=str(base_url or "").strip(),
-            mw=str(mw or "").strip(),
-            level=level,
-            x=int(x),
-            y=int(y),
-            ext=ext,
-        )
-    if normalized_mode == "query":
-        if level is None:
-            raise ValueError("`level` is required for query tile mode.")
-        return f"{tiles_base}{int(level)}/{int(x)}_{int(y)}.{ext}"
-    return f"{tiles_base}/{int(x)}_{int(y)}.{ext}"
+    return dzi_ops_build_dzi_tile_url(
+        tiles_base,
+        x,
+        y,
+        tile_ext,
+        level=level,
+        mode=mode,
+        base_url=base_url,
+        mw=mw,
+    )
 
 
 def _normalize_proxy_url(proxy_url: str) -> str:
     """Normalize proxy URL into scheme://host:port form when possible."""
-    text = str(proxy_url or "").strip()
-    if not text:
-        return ""
-    if text.upper() == "DIRECT":
-        return ""
-    if "://" not in text:
-        text = f"http://{text}"
-    return text
+    return dzi_ops_normalize_proxy_url(proxy_url)
 
 
 def _proxy_host_port(proxy_url: str) -> tuple[str, int] | None:
     """Extract host/port from proxy URL."""
-    proxy_text = _normalize_proxy_url(proxy_url)
-    if not proxy_text:
-        return None
-    try:
-        parsed = urlsplit(proxy_text)
-        host = str(parsed.hostname or "").strip()
-        port = int(parsed.port or 0)
-        if not host or port <= 0:
-            return None
-        return host, port
-    except Exception:
-        return None
+    return dzi_ops_proxy_host_port(proxy_url)
 
 
 def _is_proxy_reachable(proxy_url: str, timeout: float = 0.2) -> bool:
@@ -394,22 +412,7 @@ def _is_proxy_reachable(proxy_url: str, timeout: float = 0.2) -> bool:
 
 def _env_proxy_urls(*, include_env: bool) -> list[str]:
     """Collect proxy URLs from common environment variables."""
-    if not include_env:
-        return []
-    keys = ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")
-    found: list[str] = []
-    for key in keys:
-        value = str(os.environ.get(key, "")).strip()
-        if value:
-            found.append(_normalize_proxy_url(value))
-    dedup: list[str] = []
-    seen: set[str] = set()
-    for value in found:
-        if value in seen:
-            continue
-        seen.add(value)
-        dedup.append(value)
-    return dedup
+    return dzi_ops_env_proxy_urls(include_env=include_env)
 
 
 def _read_cmd_stdout(cmd: list[str], timeout: float = 1.5) -> str:
@@ -429,27 +432,7 @@ def _read_cmd_stdout(cmd: list[str], timeout: float = 1.5) -> str:
 
 def _parse_windows_proxy_server(value: str) -> list[str]:
     """Parse WinINET ProxyServer string into proxy URLs."""
-    text = str(value or "").strip()
-    if not text:
-        return []
-    out: list[str] = []
-    chunks = [part.strip() for part in text.split(";") if str(part).strip()]
-    if not chunks:
-        return []
-    for chunk in chunks:
-        if "=" in chunk:
-            proto, addr = [p.strip() for p in chunk.split("=", 1)]
-        else:
-            proto, addr = "http", chunk.strip()
-        proto_l = str(proto).lower()
-        addr = str(addr).strip()
-        if not addr:
-            continue
-        if proto_l in {"socks", "socks4", "socks5"}:
-            out.append(f"socks5h://{addr}")
-        else:
-            out.append(_normalize_proxy_url(addr))
-    return out
+    return dzi_ops_parse_windows_proxy_server(value)
 
 
 def _linux_system_proxy() -> tuple[list[str], list[str]]:
@@ -652,39 +635,14 @@ def _build_proxy_profiles(
     target_url: str,
 ) -> list[dict[str, Any]]:
     """Build ordered connection profiles for proxy/direct attempts."""
-    proxy_text = _normalize_proxy_url(explicit_proxy)
-    profiles: list[dict[str, Any]] = []
-    if proxy_text:
-        profiles.append({"name": "explicit_proxy", "proxy_url": proxy_text, "trust_env": trust_env_primary})
-        if trust_env_primary:
-            profiles.append({"name": "explicit_proxy_no_env", "proxy_url": proxy_text, "trust_env": False})
-    else:
-        # Prefer explicit env/direct first, then concrete auto-proxy candidates, then strict direct.
-        if trust_env_primary:
-            profiles.append({"name": "env_or_direct", "proxy_url": "", "trust_env": True})
-        auto_proxy_candidates = _auto_proxy_candidates(
+    return dzi_ops_build_proxy_profiles(
+        explicit_proxy=explicit_proxy,
+        trust_env_primary=trust_env_primary,
+        auto_proxy_candidates=_auto_proxy_candidates(
             include_env=trust_env_primary,
             target_url=target_url,
-        )
-        for idx, detected_proxy in enumerate(auto_proxy_candidates, start=1):
-            profiles.append(
-                {
-                    "name": f"auto_proxy_{idx}",
-                    "proxy_url": str(detected_proxy),
-                    "trust_env": False,
-                }
-            )
-        profiles.append({"name": "direct_no_env", "proxy_url": "", "trust_env": False})
-
-    dedup: list[dict[str, Any]] = []
-    seen: set[tuple[str, bool]] = set()
-    for profile in profiles:
-        key = (str(profile.get("proxy_url") or "").strip(), bool(profile.get("trust_env")))
-        if key in seen:
-            continue
-        seen.add(key)
-        dedup.append(profile)
-    return dedup
+        ),
+    )
 
 
 def _fetch_bytes_requests(session: requests.Session, url: str, timeout: float) -> tuple[int, bytes | None]:
@@ -1024,30 +982,7 @@ def _parse_dzi(
         if int(status) != 200:
             _log(f"DZI metadata unavailable: {dzi_url} (status={int(status)})")
             return None
-        text = (content or b"").decode("utf-8", errors="replace")
-        root = ET.fromstring(text)
-        tile_size = int(root.attrib.get("TileSize", "256"))
-        overlap = int(root.attrib.get("Overlap", "0"))
-        image_format = str(root.attrib.get("Format", "jpg"))
-
-        size_el = None
-        for el in root.iter():
-            check_interrupt()
-            if str(el.tag).lower().endswith("size"):
-                size_el = el
-                break
-        if size_el is None:
-            return None
-
-        width = int(size_el.attrib["Width"])
-        height = int(size_el.attrib["Height"])
-        return {
-            "tile_size": tile_size,
-            "overlap": overlap,
-            "format": image_format,
-            "width": width,
-            "height": height,
-        }
+        return dzi_ops_parse_dzi_metadata(content)
     except Exception as exc:
         _log(f"DZI parse error: {dzi_url} ({type(exc).__name__}: {exc})")
         return None
@@ -1055,18 +990,7 @@ def _parse_dzi(
 
 def _compute_level_geometry_from_dzi(dzi_info: dict[str, Any], level: int) -> tuple[int, int, int, int]:
     """Compute level-specific output size and tile grid from DeepZoom metadata."""
-    tile_size = max(1, int(dzi_info["tile_size"]))
-    full_width = max(1, int(dzi_info["width"]))
-    full_height = max(1, int(dzi_info["height"]))
-    max_dim = max(full_width, full_height)
-    max_level = int(math.ceil(math.log2(float(max_dim)))) if max_dim > 1 else 0
-    level_i = int(level)
-    scale_div = float(2 ** max(0, max_level - level_i))
-    level_width = max(1, int(math.ceil(float(full_width) / scale_div)))
-    level_height = max(1, int(math.ceil(float(full_height) / scale_div)))
-    tiles_x = max(1, int(math.ceil(float(level_width) / float(tile_size))))
-    tiles_y = max(1, int(math.ceil(float(level_height) / float(tile_size))))
-    return level_width, level_height, tiles_x, tiles_y
+    return dzi_ops_compute_dzi_level_geometry(dzi_info, level)
 
 
 def _image_to_tensor(image: Image.Image) -> torch.Tensor:
@@ -1489,18 +1413,28 @@ class ImageDownloadDZITiles:
                     break
 
             if first_tile is None:
-                status_hint = ", ".join(f"{ext}:{code}" for ext, code in first_tile_statuses.items()) or "n/a"
-                proxy_hint = ""
-                if proxy_text:
-                    proxy_hint = (
-                        f" Proxy configured: `{proxy_text}`."
-                        " If statuses are 0, check proxy reachability from Comfy runtime"
-                        " (e.g. docker/local namespace mismatch)."
-                    )
+                reason = _summarize_tile_probe_failure(first_tile_statuses)
+                status_details = ", ".join(
+                    f"{_redact_proxy_credentials(attempt)}:{status}"
+                    for attempt, status in first_tile_statuses.items()
+                ) or "n/a"
+                diagnostic_path = _write_dzi_diagnostic_log(
+                    "First tile probe failed",
+                    "\n".join(
+                        [
+                            f"site={site_config.get('name')}",
+                            f"mw={effective_mw}",
+                            f"level={effective_level}",
+                            f"tile_url={preflight_url}",
+                            f"tile_extension={selected_tile_ext}",
+                            f"reason={reason}",
+                            f"attempts={status_details}",
+                        ]
+                    ),
+                )
+                log_hint = f" Details: {diagnostic_path}" if diagnostic_path else ""
                 raise RuntimeError(
-                    f"First tile is unavailable at `{tiles_base}`. "
-                    f"Tried extension [{selected_tile_ext}], statuses [{status_hint}]. "
-                    f"Check `site`, `mw`, `level`, and `tile_extension`.{proxy_hint}"
+                    f"{reason} Tile: {preflight_url}.{log_hint}"
                 )
             _log(f"Transport selected: {chosen_transport}")
             if chosen_proxy_url:
@@ -1677,7 +1611,9 @@ class ImageDownloadDZITiles:
                 _log("Node interrupted by ComfyUI.")
                 raise
             _log(f"Node failed: {type(exc).__name__}: {exc}")
-            _log(traceback.format_exc().rstrip())
+            diagnostic_path = _write_dzi_diagnostic_log("Node traceback", traceback.format_exc())
+            if diagnostic_path:
+                _log(f"Detailed diagnostic log: {diagnostic_path}")
             raise
 
 

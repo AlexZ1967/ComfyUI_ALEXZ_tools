@@ -224,6 +224,8 @@
    - network diagnostics payloads
 
 Промежуточный прогресс:
+- ✅ Завершена декомпозиция первого приоритетного файла
+  `nodes/image_download_dzi_tiles.py` на pure helper-layers и Comfy node adapter.
 - ✅ Стартован первый slice для `nodes/image_download_dzi_tiles.py`.
 - ✅ Вынесен чистый helper-layer в
   `nodes/image_download_dzi_tiles_ops.py`:
@@ -234,6 +236,17 @@
   - filename/title/output-path policy.
 - ✅ Добавлены прямые unit tests:
   `tests/test_dzi_tiles_ops.py`.
+- ✅ Вынесен DZI geometry helper-layer:
+  - формирование URL отдельного тайла для path/query/template-схем;
+  - разбор DZI XML-метаданных;
+  - расчёт размера canvas и tile-grid для выбранного уровня.
+  Public wrapper-функции в node adapter сохранены для текущих workflow и
+  monkeypatch smoke-сценариев.
+- ✅ Вынесен чистый proxy-policy helper-layer:
+  - нормализация proxy URL и извлечение host/port;
+  - разбор WinINET proxy-строк и env proxy-переменных;
+  - детерминированное построение и удаление дублей из connection profiles.
+  Сокеты, PAC и OS-specific discovery остаются в node adapter как IO-bound слой.
 - ✅ Сохранена совместимость текущей ноды:
   `nodes/image_download_dzi_tiles.py` оставлен public adapter-слоем с
   совместимыми module-level wrapper-функциями для существующих smoke-тестов и

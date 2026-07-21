@@ -15,10 +15,12 @@ Purpose:
 from __future__ import annotations
 
 import html
+import math
 import os
 import re
 from typing import Any, Callable
 from urllib.parse import urlsplit
+import xml.etree.ElementTree as ET
 
 
 def fallback_dzi_site_config() -> dict[str, Any]:
@@ -260,6 +262,93 @@ def origin_from_url(url_text: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
+def normalize_proxy_url(proxy_url: str) -> str:
+    """Normalize a proxy address into a usable URL, treating ``DIRECT`` as empty."""
+    text = str(proxy_url or "").strip()
+    if not text or text.upper() == "DIRECT":
+        return ""
+    return text if "://" in text else f"http://{text}"
+
+
+def proxy_host_port(proxy_url: str) -> tuple[str, int] | None:
+    """Extract host and positive port from a normalized proxy URL."""
+    proxy_text = normalize_proxy_url(proxy_url)
+    if not proxy_text:
+        return None
+    try:
+        parsed = urlsplit(proxy_text)
+        host = str(parsed.hostname or "").strip()
+        port = int(parsed.port or 0)
+        return (host, port) if host and port > 0 else None
+    except ValueError:
+        return None
+
+
+def env_proxy_urls(*, include_env: bool, environ: dict[str, str] | None = None) -> list[str]:
+    """Collect and deduplicate proxy URLs from standard environment variables."""
+    if not include_env:
+        return []
+    source = os.environ if environ is None else environ
+    keys = ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")
+    found = [normalize_proxy_url(str(source.get(key, "")).strip()) for key in keys]
+    return list(dict.fromkeys(value for value in found if value))
+
+
+def parse_windows_proxy_server(value: str) -> list[str]:
+    """Parse a WinINET ``ProxyServer`` value into normalized proxy URLs."""
+    text = str(value or "").strip()
+    if not text:
+        return []
+    proxies: list[str] = []
+    for chunk in (part.strip() for part in text.split(";") if part.strip()):
+        proto, separator, address = chunk.partition("=")
+        address = address.strip() if separator else proto.strip()
+        proto = proto.strip().lower() if separator else "http"
+        if not address:
+            continue
+        if proto in {"socks", "socks4", "socks5"}:
+            proxies.append(f"socks5h://{address}")
+        else:
+            proxies.append(normalize_proxy_url(address))
+    return proxies
+
+
+def build_proxy_profiles(
+    *,
+    explicit_proxy: str,
+    trust_env_primary: bool,
+    auto_proxy_candidates: list[str],
+) -> list[dict[str, Any]]:
+    """Build stable, deduplicated proxy/direct connection profiles."""
+    proxy_text = normalize_proxy_url(explicit_proxy)
+    profiles: list[dict[str, Any]] = []
+    if proxy_text:
+        profiles.append({"name": "explicit_proxy", "proxy_url": proxy_text, "trust_env": trust_env_primary})
+        if trust_env_primary:
+            profiles.append({"name": "explicit_proxy_no_env", "proxy_url": proxy_text, "trust_env": False})
+    else:
+        if trust_env_primary:
+            profiles.append({"name": "env_or_direct", "proxy_url": "", "trust_env": True})
+        profiles.extend(
+            {
+                "name": f"auto_proxy_{index}",
+                "proxy_url": normalize_proxy_url(proxy_url),
+                "trust_env": False,
+            }
+            for index, proxy_url in enumerate(auto_proxy_candidates, start=1)
+        )
+        profiles.append({"name": "direct_no_env", "proxy_url": "", "trust_env": False})
+
+    seen: set[tuple[str, bool]] = set()
+    deduplicated: list[dict[str, Any]] = []
+    for profile in profiles:
+        key = (str(profile["proxy_url"]), bool(profile["trust_env"]))
+        if key not in seen:
+            seen.add(key)
+            deduplicated.append(profile)
+    return deduplicated
+
+
 def build_dzi_source_urls(
     base_url: str,
     mw: str,
@@ -326,6 +415,75 @@ def build_dzi_source_urls(
         "tile_url_mode": "path",
         "referer_root": origin_from_url(zoom_base) or str(default_referer).rstrip("/"),
     }
+
+
+def build_dzi_tile_url(
+    tiles_base: str,
+    x: int,
+    y: int,
+    tile_ext: str = "jpg",
+    *,
+    level: int | None = None,
+    mode: str = "path",
+    base_url: str | None = None,
+    mw: str | None = None,
+) -> str:
+    """Build one tile URL for path, query, or template-backed DZI sources."""
+    ext = str(tile_ext or "jpg").strip().lower().lstrip(".") or "jpg"
+    normalized_mode = str(mode or "path").strip().lower()
+    if normalized_mode == "template":
+        return format_dzi_template(
+            tiles_base,
+            base_url=str(base_url or "").strip(),
+            mw=str(mw or "").strip(),
+            level=level,
+            x=int(x),
+            y=int(y),
+            ext=ext,
+        )
+    if normalized_mode == "query":
+        if level is None:
+            raise ValueError("`level` is required for query tile mode.")
+        return f"{tiles_base}{int(level)}/{int(x)}_{int(y)}.{ext}"
+    return f"{tiles_base}/{int(x)}_{int(y)}.{ext}"
+
+
+def parse_dzi_metadata(content: bytes | None) -> dict[str, Any] | None:
+    """Parse DZI XML bytes into tile dimensions, returning ``None`` when invalid."""
+    if not content:
+        return None
+    try:
+        root = ET.fromstring(content)
+        tile_size = int(root.attrib.get("TileSize", "256"))
+        overlap = int(root.attrib.get("Overlap", "0"))
+        image_format = str(root.attrib.get("Format", "jpg"))
+        size_el = next((el for el in root.iter() if str(el.tag).lower().endswith("size")), None)
+        if size_el is None:
+            return None
+        return {
+            "tile_size": tile_size,
+            "overlap": overlap,
+            "format": image_format,
+            "width": int(size_el.attrib["Width"]),
+            "height": int(size_el.attrib["Height"]),
+        }
+    except (ET.ParseError, KeyError, TypeError, ValueError):
+        return None
+
+
+def compute_dzi_level_geometry(dzi_info: dict[str, Any], level: int) -> tuple[int, int, int, int]:
+    """Compute level-specific output size and tile grid from DZI metadata."""
+    tile_size = max(1, int(dzi_info["tile_size"]))
+    full_width = max(1, int(dzi_info["width"]))
+    full_height = max(1, int(dzi_info["height"]))
+    max_dim = max(full_width, full_height)
+    max_level = int(math.ceil(math.log2(float(max_dim)))) if max_dim > 1 else 0
+    scale_div = float(2 ** max(0, max_level - int(level)))
+    level_width = max(1, int(math.ceil(float(full_width) / scale_div)))
+    level_height = max(1, int(math.ceil(float(full_height) / scale_div)))
+    tiles_x = max(1, int(math.ceil(float(level_width) / float(tile_size))))
+    tiles_y = max(1, int(math.ceil(float(level_height) / float(tile_size))))
+    return level_width, level_height, tiles_x, tiles_y
 
 
 def resolve_dzi_request_context(
