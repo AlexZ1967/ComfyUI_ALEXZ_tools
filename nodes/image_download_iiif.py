@@ -15,7 +15,6 @@ Purpose:
 from __future__ import annotations
 
 import html
-import hashlib
 import json
 import math
 import os
@@ -35,6 +34,8 @@ from PIL import Image
 
 from ..utils.interrupt import check_interrupt, is_interrupt_exception
 from .image_download_iiif_ops import (
+    append_stable_id_to_stem as iiif_ops_append_stable_id_to_stem,
+    derive_output_stem_from_source_url as iiif_ops_derive_output_stem_from_source_url,
     extract_first_generic_iiif_service_url as iiif_ops_extract_first_generic_iiif_service_url,
     extract_first_london_museum_service_url as iiif_ops_extract_first_london_museum_service_url,
     extract_forced_nypl_image_id_from_source_url as iiif_ops_extract_forced_nypl_image_id_from_source_url,
@@ -42,9 +43,24 @@ from .image_download_iiif_ops import (
     extract_nypl_image_id_from_html as iiif_ops_extract_nypl_image_id_from_html,
     extract_nypl_image_ids_from_json_payload as iiif_ops_extract_nypl_image_ids_from_json_payload,
     extract_nypl_image_ids_from_text as iiif_ops_extract_nypl_image_ids_from_text,
+    extract_gallica_query_title as iiif_ops_extract_gallica_query_title,
+    extract_html_title as iiif_ops_extract_html_title,
+    extract_iiif_label_text as iiif_ops_extract_iiif_label_text,
+    extract_iiif_stable_id as iiif_ops_extract_iiif_stable_id,
+    build_iiif_size_spec as iiif_ops_build_iiif_size_spec,
+    iiif_limit_from_max_area as iiif_ops_iiif_limit_from_max_area,
+    iiif_source_dimensions as iiif_ops_iiif_source_dimensions,
+    iiif_tile_profile as iiif_ops_iiif_tile_profile,
+    is_generic_source_title as iiif_ops_is_generic_source_title,
     inject_nypl_image_id_into_source_url as iiif_ops_inject_nypl_image_id_into_source_url,
     iter_nypl_item_page_candidates as iiif_ops_iter_nypl_item_page_candidates,
+    looks_like_raster_image_bytes as iiif_ops_looks_like_raster_image_bytes,
+    normalize_extracted_title as iiif_ops_normalize_extracted_title,
     normalize_iiif_service_url as iiif_ops_normalize_iiif_service_url,
+    resolve_iiif_cache_dir as iiif_ops_resolve_cache_dir,
+    resolve_iiif_tile_cache_scope as iiif_ops_resolve_tile_cache_scope,
+    sanitize_filename_component as iiif_ops_sanitize_filename_component,
+    iiif_tile_cache_path as iiif_ops_tile_cache_path,
 )
 try:
     from tqdm.auto import tqdm
@@ -360,11 +376,7 @@ def _fetch_iiif_info(
 
 def _build_iiif_size_spec(size_mode: str, requested_width: int) -> str:
     """Build IIIF Image API size segment."""
-    mode = str(size_mode or "max").strip().lower()
-    if mode == "max":
-        return "max"
-    width = max(1, int(requested_width))
-    return f"{width},"
+    return iiif_ops_build_iiif_size_spec(size_mode, requested_width)
 
 
 def _download_iiif_image_bytes(
@@ -397,7 +409,7 @@ def _download_iiif_image_bytes(
 
 def _iiif_source_dimensions(info: dict[str, Any]) -> tuple[int, int]:
     """Return declared source width/height from IIIF info.json."""
-    return max(1, int(info.get("width") or 1)), max(1, int(info.get("height") or 1))
+    return iiif_ops_iiif_source_dimensions(info)
 
 
 def _largest_listed_iiif_width(info: dict[str, Any]) -> int:
@@ -420,62 +432,27 @@ def _largest_listed_iiif_width(info: dict[str, Any]) -> int:
 
 def _iiif_limit_from_max_area(info: dict[str, Any]) -> dict[str, Any] | None:
     """Compute expected single-request limit when service exposes maxArea."""
-    max_area = int(info.get("maxArea") or 0)
-    if max_area <= 0:
-        return None
-    source_width, source_height = _iiif_source_dimensions(info)
-    area = float(source_width) * float(source_height)
-    if area <= 0:
-        return None
-    scale = math.sqrt(float(max_area) / area)
-    limited_width = max(1, int(math.floor(float(source_width) * scale)))
-    limited_height = max(1, int(math.floor(float(source_height) * scale)))
-    return {
-        "max_area": max_area,
-        "predicted_max_width": limited_width,
-        "predicted_max_height": limited_height,
-        "scale": scale,
-    }
+    return iiif_ops_iiif_limit_from_max_area(info)
 
 
 def _iiif_tile_profile(info: dict[str, Any], *, service_url: str = "") -> dict[str, int]:
     """Extract tile profile needed for full-res assembly."""
-    tiles = info.get("tiles") or []
-    if not isinstance(tiles, list) or not tiles:
-        raise RuntimeError("IIIF info.json does not expose `tiles`, full tile assembly is unavailable.")
-    tile = tiles[0] if isinstance(tiles[0], dict) else {}
-    scale_factors = tile.get("scaleFactors") or []
-    if 1 not in scale_factors:
-        raise RuntimeError("IIIF service does not expose scaleFactor=1, full-res tile assembly is unavailable.")
-    tile_width = max(1, int(tile.get("width") or 512))
-    tile_height = max(1, int(tile.get("height") or tile_width))
-    service_text = str(service_url or "").strip().lower()
-    if "iiif.nypl.org/iiif/3/" in service_text:
-        tile_width = min(tile_width, _NYPL_SAFE_TILE_MAX)
-        tile_height = min(tile_height, _NYPL_SAFE_TILE_MAX)
-    return {
-        "tile_width": tile_width,
-        "tile_height": tile_height,
-    }
+    return iiif_ops_iiif_tile_profile(info, service_url=service_url, nypl_safe_tile_max=_NYPL_SAFE_TILE_MAX)
 
 
 def _resolve_iiif_cache_dir(cache_dir: str | None) -> Path:
     """Resolve persistent cache directory for IIIF tile assembly."""
-    cache_text = str(cache_dir or "").strip()
-    if cache_text:
-        return Path(os.path.abspath(os.path.expanduser(cache_text)))
-    return _IIIF_TILE_CACHE_ROOT
+    return iiif_ops_resolve_cache_dir(cache_dir, default_root=_IIIF_TILE_CACHE_ROOT)
 
 
 def _resolve_iiif_tile_cache_scope(cache_dir: str | None, service_url: str, info: dict[str, Any]) -> Path:
     """Resolve per-assembly cache scope so completed runs can be cleaned safely."""
-    cache_base = _resolve_iiif_cache_dir(cache_dir)
-    source_width, source_height = _iiif_source_dimensions(info)
-    scope_key = hashlib.sha1(
-        f"{service_url.rstrip('/')}|{source_width}|{source_height}".encode("utf-8"),
-        usedforsecurity=False,
-    ).hexdigest()[:16]
-    return cache_base / scope_key
+    return iiif_ops_resolve_tile_cache_scope(
+        cache_dir,
+        service_url,
+        info,
+        default_root=_IIIF_TILE_CACHE_ROOT,
+    )
 
 
 def _clear_iiif_cache_dir(cache_root: Path | str | None) -> bool:
@@ -493,28 +470,12 @@ def _clear_iiif_cache_dir(cache_root: Path | str | None) -> bool:
 
 def _iiif_tile_cache_path(cache_root: Path, image_url: str) -> Path:
     """Map tile URL to stable cache file path."""
-    digest = hashlib.sha1(str(image_url or "").encode("utf-8"), usedforsecurity=False).hexdigest()
-    split = urlsplit(str(image_url or "").strip())
-    ext = Path(split.path).suffix or ".bin"
-    return cache_root / digest[:2] / f"{digest}{ext}"
+    return iiif_ops_tile_cache_path(cache_root, image_url)
 
 
 def _looks_like_raster_image_bytes(content: bytes) -> bool:
     """Cheap signature check for common raster formats returned by IIIF servers."""
-    blob = bytes(content or b"")
-    if len(blob) < 8:
-        return False
-    if blob.startswith(b"\xff\xd8\xff"):
-        return True
-    if blob.startswith(b"\x89PNG\r\n\x1a\n"):
-        return True
-    if blob.startswith((b"GIF87a", b"GIF89a")):
-        return True
-    if blob.startswith((b"II*\x00", b"MM\x00*")):
-        return True
-    if blob[:4] == b"RIFF" and blob[8:12] == b"WEBP":
-        return True
-    return False
+    return iiif_ops_looks_like_raster_image_bytes(content)
 
 
 def _load_iiif_tile_from_cache(cache_root: Path, image_url: str) -> bytes | None:
@@ -710,76 +671,27 @@ def _image_to_tensor(image: Image.Image) -> torch.Tensor:
 
 def _sanitize_filename_component(text: str) -> str:
     """Normalize user-facing filename fragment into a safe portable stem."""
-    cleaned = re.sub(r"[\\/:*?\"<>|]+", "_", str(text or "").strip())
-    cleaned = cleaned.replace("[", "").replace("]", "")
-    cleaned = cleaned.replace("(", "").replace(")", "")
-    cleaned = re.sub(r"\s+", "_", cleaned)
-    cleaned = re.sub(r"_+", "_", cleaned).strip("._")
-    return cleaned or "iiif_image"
+    return iiif_ops_sanitize_filename_component(text)
 
 
 def _normalize_extracted_title(text: str, source_url: str = "") -> str:
     """Clean human-readable titles before filename sanitization."""
-    value = html.unescape(str(text or "")).strip()
-    if not value:
-        return ""
-    if "gallica.bnf.fr" in str(source_url or "").lower():
-        value = re.sub(r"\s+[|:-]\s*Gallica.*$", "", value, flags=re.IGNORECASE)
-    value = value.replace("/", " ")
-    value = value.replace("\\", " ")
-    value = value.replace("[", "").replace("]", "")
-    value = value.replace("(", "").replace(")", "")
-    value = re.sub(r"\s+", " ", value).strip()
-    return value
+    return iiif_ops_normalize_extracted_title(text, source_url)
 
 
 def _is_generic_source_title(title: str, source_url: str = "") -> bool:
     """Return True when extracted page title is only a generic site label."""
-    value = str(title or "").strip().lower()
-    if not value:
-        return True
-    if "gallica.bnf.fr" in str(source_url or "").lower() and value in {"gallica", "bnf gallica"}:
-        return True
-    return False
+    return iiif_ops_is_generic_source_title(title, source_url)
 
 
 def _extract_gallica_query_title(source_url: str) -> str:
     """Extract human-readable fallback title from Gallica `.r=` segment."""
-    text = str(source_url or "").strip()
-    if "gallica.bnf.fr" not in text.lower():
-        return ""
-    path_text = unquote(str(urlsplit(text).path or ""))
-    match = re.search(r"\.r=([^/?#]+)", path_text, flags=re.IGNORECASE)
-    if not match:
-        return ""
-    value = str(match.group(1) or "").strip()
-    return _normalize_extracted_title(value, source_url)
+    return iiif_ops_extract_gallica_query_title(source_url)
 
 
 def _extract_iiif_label_text(value: Any) -> str:
     """Extract human-readable label text from IIIF v2/v3 manifest fields."""
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, dict):
-        for key in ("none", "fr", "en"):
-            field = value.get(key)
-            if isinstance(field, list):
-                for item in field:
-                    text = _extract_iiif_label_text(item)
-                    if text:
-                        return text
-            elif isinstance(field, str) and field.strip():
-                return field.strip()
-        for key in ("@value", "value"):
-            field = value.get(key)
-            if isinstance(field, str) and field.strip():
-                return field.strip()
-    if isinstance(value, list):
-        for item in value:
-            text = _extract_iiif_label_text(item)
-            if text:
-                return text
-    return ""
+    return iiif_ops_extract_iiif_label_text(value)
 
 
 def _fetch_gallica_manifest_title(
@@ -821,103 +733,27 @@ def _fetch_gallica_manifest_title(
 
 def _extract_html_title(html_text: str) -> str:
     """Extract best available human-readable title from HTML."""
-    text = str(html_text or "")
-    patterns = [
-        r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
-        r'<meta[^>]+name=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
-        r'<meta[^>]+property=["\']twitter:title["\'][^>]+content=["\'](.*?)["\']',
-        r'<meta[^>]+name=["\']twitter:title["\'][^>]+content=["\'](.*?)["\']',
-        r"<title[^>]*>(.*?)</title>",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
-        if not match:
-            continue
-        value = html.unescape(str(match.group(1) or "")).strip()
-        value = re.sub(r"\s+", " ", value).strip()
-        if value:
-            return value
-    return ""
+    return iiif_ops_extract_html_title(html_text)
 
 
 def _extract_gallica_html_title(html_text: str) -> str:
     """Extract Gallica object title from page content before falling back to document title."""
-    text = str(html_text or "")
-    patterns = [
-        r'<span[^>]+class=["\'][^"\']*\btitle\b[^"\']*["\'][^>]*>(.*?)</span>',
-        r'<div[^>]+class=["\'][^"\']*\btitle\b[^"\']*["\'][^>]*>(.*?)</div>',
-        r'<h1[^>]*>(.*?)</h1>',
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
-        if not match:
-            continue
-        value = re.sub(r"<[^>]+>", " ", str(match.group(1) or ""))
-        value = html.unescape(value)
-        value = re.sub(r"\s+", " ", value).strip()
-        if value:
-            return value
-    return _extract_html_title(text)
+    return iiif_ops_extract_html_title(html_text, gallica=True)
 
 
 def _extract_iiif_stable_id(source_url: str, service_url: str = "") -> str:
     """Extract stable object/service identifier for filename disambiguation."""
-    combined = " | ".join([str(source_url or "").strip(), str(service_url or "").strip()])
-    patterns = (
-        r"ark:/12148/([A-Za-z0-9]+)\b",
-        r"\b(btv[0-9a-z]+)\b",
-        r"\b(object-\d+)\b",
-        r"\b(nla\.obj-\d+)\b",
-        r"\b(mw\d+)\b",
-        r"/([A-Za-z]\d{3,}(?:\.ptif)?)\b",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, combined, flags=re.IGNORECASE)
-        if match:
-            value = re.sub(r"\.ptif$", "", str(match.group(1) or ""), flags=re.IGNORECASE)
-            value = _sanitize_filename_component(value)
-            if value:
-                return value
-    return ""
+    return iiif_ops_extract_iiif_stable_id(source_url, service_url)
 
 
 def _append_stable_id_to_stem(stem: str, stable_id: str) -> str:
     """Append stable id to stem unless it is already present."""
-    base = _sanitize_filename_component(stem)
-    stable = _sanitize_filename_component(stable_id)
-    if not stable:
-        return base or "iiif_image"
-    lowered_base = base.lower()
-    lowered_stable = stable.lower()
-    if lowered_stable in lowered_base:
-        return base or stable
-    if not base:
-        return stable
-    return f"{base}_{stable}"
+    return iiif_ops_append_stable_id_to_stem(stem, stable_id)
 
 
 def _derive_output_stem_from_source_url(source_url: str, service_url: str = "") -> str:
     """Derive filename stem from URL slug plus stable object/service id when available."""
-    path = str(urlsplit(str(source_url or "").strip()).path or "").strip("/")
-    segments = [segment for segment in path.split("/") if segment]
-    stable_id = _extract_iiif_stable_id(source_url, service_url)
-    if "gallica.bnf.fr" in str(source_url or "").lower():
-        page_match = re.search(r"/(f\d+)(?:[./][^/?#]*)?", f"/{path}", flags=re.IGNORECASE)
-        page = str(page_match.group(1) or "").strip() if page_match else ""
-        if stable_id:
-            gallica_base = stable_id if not page or page.lower() == "f1" else f"{stable_id}_{page}"
-            return _append_stable_id_to_stem(gallica_base, stable_id)
-    if not segments:
-        return _append_stable_id_to_stem("iiif_image", stable_id)
-    candidate = segments[-1]
-    candidate = unquote(candidate)
-    lowered = candidate.lower()
-    if lowered in {"info.json"} and len(segments) >= 2:
-        candidate = segments[-2]
-    elif lowered.startswith("default.") and len(segments) >= 2:
-        candidate = segments[-2]
-    candidate = re.sub(r"\.[A-Za-z0-9]+$", "", candidate)
-    return _append_stable_id_to_stem(candidate, stable_id)
+    return iiif_ops_derive_output_stem_from_source_url(source_url, service_url)
 
 
 def _derive_output_stem_from_source_title_or_url(

@@ -229,6 +229,12 @@
 - ✅ Начат второй приоритетный файл `nodes/image_download_iiif.py`:
   URL/service resolution и NYPL/Gallica ID parsing вынесены в
   `nodes/image_download_iiif_ops.py` с сохранением совместимых wrapper-функций.
+- ✅ В IIIF helper-layer вынесены metadata/tile-policy операции:
+  size selector, source dimensions, `maxArea` limit и tile profile с NYPL cap.
+- ✅ В IIIF helper-layer вынесены детерминированные cache-операции:
+  cache root/scope, URL-to-cache path и проверка сигнатур raster-ответов.
+- ✅ Завершена декомпозиция `nodes/image_download_iiif.py`: URL/metadata/cache и
+  title/filename policy вынесены в unit-tested helper-layer; node оставлена HTTP/ComfyUI adapter.
 - ✅ Стартован первый slice для `nodes/image_download_dzi_tiles.py`.
 - ✅ Вынесен чистый helper-layer в
   `nodes/image_download_dzi_tiles_ops.py`:
