@@ -91,7 +91,7 @@
         {"name": "apply_json", "type": "STRING", "links": [], "shape": 3, "slot_index": 1}
       ],
       "properties": {"Node name for S&R": "ImageLookMatchNukeApply"},
-      "widgets_values": [1.0, "cpu", false, 0.8, 0.2]
+      "widgets_values": ["", 1.0, "cpu", false, 0.8, 0.2]
     },
     {
       "id": 6,

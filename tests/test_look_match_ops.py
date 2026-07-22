@@ -16,6 +16,7 @@ class LookMatchOpsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         root = os.path.dirname(os.path.dirname(__file__))
+        cls.root = root
         if "ComfyUI_ALEXZ_tools" not in sys.modules:
             package = types.ModuleType("ComfyUI_ALEXZ_tools")
             package.__path__ = [root]
@@ -69,6 +70,13 @@ class LookMatchOpsTests(unittest.TestCase):
         self.assertIn("LUT_3D_SIZE 3", cube)
         self.assertEqual(len(cube.splitlines()), 29)
         self.assertIn("required", self.contract._build_resolve_input_types())
+
+    def test_workflow_preserves_linked_json_widget_value(self):
+        workflow_path = os.path.join(self.root, "workflows", "workflow_look_match_test.json")
+        with open(workflow_path, encoding="utf-8") as stream:
+            workflow = json.load(stream)
+        apply_node = next(node for node in workflow["nodes"] if node["type"] == "ImageLookMatchNukeApply")
+        self.assertEqual(apply_node["widgets_values"], ["", 1.0, "cpu", False, 0.8, 0.2])
 
 
 if __name__ == "__main__":
