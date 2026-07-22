@@ -239,6 +239,9 @@
   descreen-нод: tensor/ROI/resampling вынесены в base ops, FFT и tonal cleanup
   разделены по специализированным helper-модулям, orchestration вынесен в core,
   исходный файл оставлен компактным ComfyUI adapter-слоем.
+- ✅ Завершена декомпозиция `nodes/image_color_match.py`: color-space/matrix,
+  matching, quality/perceptual metrics и LUT export разделены по профильным
+  helper-модулям; adapter-level seams для auto-optimal/LPIPS fallback сохранены.
 - ✅ Стартован первый slice для `nodes/image_download_dzi_tiles.py`.
 - ✅ Вынесен чистый helper-layer в
   `nodes/image_download_dzi_tiles_ops.py`:

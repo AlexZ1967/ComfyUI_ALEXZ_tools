@@ -1,0 +1,151 @@
+{
+  "last_node_id": 8,
+  "last_link_id": 8,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [0, 0],
+      "size": [320, 310],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [1, 3, 5], "shape": 3, "slot_index": 0},
+        {"name": "MASK", "type": "MASK", "links": [], "shape": 3, "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "LoadImage"},
+      "widgets_values": ["color_match_reference.png", "input"]
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [0, 390],
+      "size": [320, 310],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [2, 4, 6], "shape": 3, "slot_index": 0},
+        {"name": "MASK", "type": "MASK", "links": [], "shape": 3, "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "LoadImage"},
+      "widgets_values": ["color_match_source.png", "input"]
+    },
+    {
+      "id": 3,
+      "type": "ImageColorMatchToReference",
+      "pos": [420, 0],
+      "size": [430, 570],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {"name": "reference", "type": "IMAGE", "link": 1},
+        {"name": "image", "type": "IMAGE", "link": 2}
+      ],
+      "outputs": [
+        {"name": "matched_image", "type": "IMAGE", "links": [7], "shape": 3, "slot_index": 0},
+        {"name": "match_json", "type": "STRING", "links": [], "shape": 3, "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "ImageColorMatchToReference"},
+      "widgets_values": [
+        "linear", 1.0,
+        true, true, "fast", "mse_ssim",
+        false, 0.75, 0.01,
+        false, 0.05, 0.001, "lab_cdf",
+        false, 0.6, 1,
+        false, 17, "", "color_match_linear_test"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "ImageColorMatchToReference",
+      "pos": [420, 640],
+      "size": [430, 570],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "reference", "type": "IMAGE", "link": 3},
+        {"name": "image", "type": "IMAGE", "link": 4}
+      ],
+      "outputs": [
+        {"name": "matched_image", "type": "IMAGE", "links": [8], "shape": 3, "slot_index": 0},
+        {"name": "match_json", "type": "STRING", "links": [], "shape": 3, "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "ImageColorMatchToReference"},
+      "widgets_values": [
+        "auto_optimal", 1.0,
+        true, true, "fast", "mse_ssim",
+        false, 0.75, 0.01,
+        true, 0.05, 0.001, "lab_cdf",
+        false, 0.6, 1,
+        false, 17, "", "color_match_auto_test"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "PreviewImage",
+      "pos": [930, -30],
+      "size": [340, 280],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 5}],
+      "properties": {"Node name for S&R": "PreviewImage"}
+    },
+    {
+      "id": 6,
+      "type": "PreviewImage",
+      "pos": [930, 290],
+      "size": [340, 280],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 6}],
+      "properties": {"Node name for S&R": "PreviewImage"}
+    },
+    {
+      "id": 7,
+      "type": "PreviewImage",
+      "pos": [930, 640],
+      "size": [340, 280],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 7}],
+      "properties": {"Node name for S&R": "PreviewImage"}
+    },
+    {
+      "id": 8,
+      "type": "PreviewImage",
+      "pos": [930, 960],
+      "size": [340, 280],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 8}],
+      "properties": {"Node name for S&R": "PreviewImage"}
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 0, "IMAGE"],
+    [2, 2, 0, 3, 1, "IMAGE"],
+    [3, 1, 0, 4, 0, "IMAGE"],
+    [4, 2, 0, 4, 1, "IMAGE"],
+    [5, 1, 0, 5, 0, "IMAGE"],
+    [6, 2, 0, 6, 0, "IMAGE"],
+    [7, 3, 0, 7, 0, "IMAGE"],
+    [8, 4, 0, 8, 0, "IMAGE"]
+  ],
+  "groups": [
+    {"title": "1. Load reference and source", "bounding": [-30, -50, 380, 800], "color": "#3f789e", "font_size": 24, "flags": {}},
+    {"title": "2. Linear baseline", "bounding": [390, -50, 500, 660], "color": "#3f789e", "font_size": 24, "flags": {}},
+    {"title": "3. Auto optimal with fallback", "bounding": [390, 590, 500, 660], "color": "#3f789e", "font_size": 24, "flags": {}},
+    {"title": "4. Reference, source, linear, auto", "bounding": [900, -80, 400, 1370], "color": "#3f789e", "font_size": 24, "flags": {}}
+  ],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
