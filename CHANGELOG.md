@@ -1,5 +1,28 @@
 # Changelog — ALEXZ_tools
 
+## 0.39.0 — 2026-07-22
+- Completed `Phase 4: Large Node Decomposition` without changing public node
+  type names or ComfyUI input/output contracts:
+  - split DZI and IIIF URL, metadata, geometry, cache, naming, and network-policy
+    helpers from their HTTP/ComfyUI adapter layers;
+  - split the four adaptive descreen nodes into shared tensor/ROI/resampling,
+    FFT, tonal-cleanup, and orchestration modules;
+  - split Color Match into color-space, matching, quality-metrics, and LUT
+    modules while preserving adapter-level fallback seams;
+  - split the three Look Match nodes into tensor/resize, Resolve fitting and
+    scoring, and JSON/LUT contract modules.
+- Added direct helper tests and ComfyUI verification workflows for the
+  decomposed image-processing node families, including regression coverage for
+  linked `STRING` widget serialization in Look Match Nuke Apply.
+- Updated the H2 roadmap to mark all Phase 4 priorities and completion criteria
+  as finished.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_smoke_nodes.py`;
+  - direct DZI, IIIF, adaptive descreen, Color Match, and Look Match helper tests;
+  - exact differential comparisons for the extracted computational nodes;
+  - `conda run -n p313 python utils/docs_check.py`.
+- Version updated to `0.39.0` in `pyproject.toml` and `README.md`.
+
 ## 0.38.0 — 2026-07-20
 - Completed `Phase 3: Module Node Picker Stabilization Pass`:
   - reduced `utils/module_node_browser_api.py` further toward a thin facade by
