@@ -235,6 +235,10 @@
   cache root/scope, URL-to-cache path и проверка сигнатур raster-ответов.
 - ✅ Завершена декомпозиция `nodes/image_download_iiif.py`: URL/metadata/cache и
   title/filename policy вынесены в unit-tested helper-layer; node оставлена HTTP/ComfyUI adapter.
+- ✅ Завершена декомпозиция `nodes/image_descreen_adaptive.py` и всех четырёх
+  descreen-нод: tensor/ROI/resampling вынесены в base ops, FFT и tonal cleanup
+  разделены по специализированным helper-модулям, orchestration вынесен в core,
+  исходный файл оставлен компактным ComfyUI adapter-слоем.
 - ✅ Стартован первый slice для `nodes/image_download_dzi_tiles.py`.
 - ✅ Вынесен чистый helper-layer в
   `nodes/image_download_dzi_tiles_ops.py`:
