@@ -187,7 +187,7 @@
 
 Срок: 2026-09-06 -> 2026-10-18
 Приоритет: `P1`
-Статус: 🔄 в работе
+Статус: ✅ выполнено (2026-07-22)
 
 ### Цели
 
@@ -242,6 +242,13 @@
 - ✅ Завершена декомпозиция `nodes/image_color_match.py`: color-space/matrix,
   matching, quality/perceptual metrics и LUT export разделены по профильным
   helper-модулям; adapter-level seams для auto-optimal/LPIPS fallback сохранены.
+- ✅ Завершена декомпозиция `nodes/image_look_match.py` и всех трёх
+  LookMatch-нод: tensor/resize helpers, Resolve fitting/scoring и JSON/LUT
+  contracts разделены по специализированным helper-модулям; исходный файл
+  сохранён как ComfyUI adapter с неизменными публичными контрактами.
+- ✅ Все пять приоритетных feature-family Phase 4 декомпозированы и снабжены
+  прямыми unit/smoke-тестами; для вычислительных нод добавлены проверочные
+  ComfyUI workflows.
 - ✅ Стартован первый slice для `nodes/image_download_dzi_tiles.py`.
 - ✅ Вынесен чистый helper-layer в
   `nodes/image_download_dzi_tiles_ops.py`:
@@ -276,9 +283,9 @@
 
 ### Критерии завершения
 
-- ни один из целевых файлов не остается “single-file subsystem”
-- pure logic отделена от Comfy adapter layer
-- regressions прикрыты тестами до merge
+- ✅ ни один из целевых файлов не остается “single-file subsystem”
+- ✅ pure logic отделена от Comfy adapter layer
+- ✅ regressions прикрыты тестами до merge
 
 ## Phase 5: Frontend Tooling Upgrade
 
