@@ -80,7 +80,7 @@ class ModuleBrowserManagerDataOpsTests(unittest.TestCase):
 
     def setUp(self):
         """Import helper module for each test case."""
-        from ComfyUI_ALEXZ_tools.utils.module_browser import manager_data_ops
+        from ComfyUI_ALEXZ_tools.utils.module_browser.comfyui import manager_data_ops
 
         self.ops = manager_data_ops
 
@@ -174,4 +174,3 @@ class ModuleBrowserManagerDataOpsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

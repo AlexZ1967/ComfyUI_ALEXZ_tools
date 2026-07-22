@@ -1,5 +1,26 @@
 # Changelog — ALEXZ_tools
 
+## 0.40.0 — 2026-07-22
+- Completed `Phase 5: Frontend Tooling Upgrade`:
+  - added recursive deterministic JS syntax validation for every `.js/.mjs`
+    file under `web/` via `scripts/check_js_syntax.mjs`;
+  - added `make js-check-all` and `make js-test`, while retaining `make js-check`
+    as a compatibility alias;
+  - added `make python-test` and a top-level `make test` that runs docs, the full
+    Python suite, all frontend syntax checks, and the Module Node Picker
+    behavioral test.
+- Updated `AGENTS.md`, `README.md`, and the new
+  `guides/GUIDE_FRONTEND_CHECKS.md` with the canonical local verification flow.
+- Fixed three stale test imports left after Phase 3 shim removal so the newly
+  standardized full Python suite targets the canonical catalog, ComfyUI, and
+  module helper packages.
+- Validation:
+  - `make test`: `318 passed`;
+  - JS syntax: `70` files checked;
+  - Module Node Picker behavior: `10` scenarios passed;
+  - `docs-check: OK`.
+- Version updated to `0.40.0` in `pyproject.toml` and `README.md`.
+
 ## 0.39.0 — 2026-07-22
 - Completed `Phase 4: Large Node Decomposition` without changing public node
   type names or ComfyUI input/output contracts:

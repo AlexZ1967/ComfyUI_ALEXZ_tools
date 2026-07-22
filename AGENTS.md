@@ -8,7 +8,9 @@
 - Docs check: `conda run -n p313 python utils/docs_check.py`
 - Seam smoke tests: `conda run -n p313 pytest -q tests/test_smoke_nodes.py -k seam_match`
 - Full smoke tests: `conda run -n p313 pytest -q tests/test_smoke_nodes.py`
-- JS syntax check: `conda run -n p313 node --check web/widget_visibility_profiles.js`
+- All JS syntax checks: `make js-check-all`
+- Module Node Picker behavior test: `make js-test`
+- Full Python, JS, and docs validation: `make test`
 
 ## Rule
 - If a command was run without `p313`, rerun it with `conda run -n p313` before reporting results.

@@ -36,7 +36,7 @@ class ModuleBrowserModuleInfoTextTests(unittest.TestCase):
 
     def setUp(self):
         """Import helper module for each test."""
-        from ComfyUI_ALEXZ_tools.utils.module_browser import module_info_text as mod
+        from ComfyUI_ALEXZ_tools.utils.module_browser.module import module_info_text as mod
 
         self.mod = mod
 

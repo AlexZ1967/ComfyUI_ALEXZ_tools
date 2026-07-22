@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.39.0
+Version: 0.40.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -31,7 +31,10 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 ## Development Environment
 - Для локальных проверок используйте Conda-окружение `p313`.
 - Рекомендуемый префикс команд: `conda run -n p313 ...`
-- Быстрые команды: `make docs-check`, `make seam-smoke`, `make smoke`, `make js-check`
+- Быстрые команды: `make docs-check`, `make seam-smoke`, `make smoke`,
+  `make js-check-all`, `make js-test`, `make test`.
+- Полный frontend verification flow:
+  [GUIDE_FRONTEND_CHECKS.md](guides/GUIDE_FRONTEND_CHECKS.md)
 
 ## Runtime notes
 - Pillow 13 compatibility: internal image conversions no longer rely on deprecated `mode=` in `Image.fromarray(...)` across the affected nodes/helpers, reducing future upgrade risk without changing node behavior.

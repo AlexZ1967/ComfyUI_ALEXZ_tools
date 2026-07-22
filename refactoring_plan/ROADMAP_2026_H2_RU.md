@@ -291,6 +291,7 @@
 
 Срок: 2026-10-18 -> 2026-11-01
 Приоритет: `P2`
+Статус: ✅ выполнено (2026-07-22, `0.40.0`)
 
 ### Цели
 
@@ -299,14 +300,23 @@
 
 ### Задачи
 
-1. Расширить `Makefile`:
-   - добавить `js-test`
-   - добавить `js-check-all`
-   - добавить общий `test` target
-2. Прогонять syntax check не по одному файлу, а по всему `web/`.
-3. Включить `tests/js/test_module_node_picker_frontend_behavior.mjs` в стандартный сценарий проверок.
-4. При необходимости добавить lightweight lint/format contract для JS.
-5. Добавить короткий guide для локального frontend-check workflow.
+1. ✅ Расширить `Makefile`:
+   - ✅ добавить `js-test`
+   - ✅ добавить `js-check-all`
+   - ✅ добавить общий `test` target
+2. ✅ Прогонять syntax check не по одному файлу, а по всему `web/`.
+3. ✅ Включить `tests/js/test_module_node_picker_frontend_behavior.mjs` в стандартный сценарий проверок.
+4. ✅ Зафиксировать lightweight JS contract без новой зависимости:
+   рекурсивный deterministic `node --check` runner с fail-fast диагностикой.
+5. ✅ Добавить короткий guide для локального frontend-check workflow.
+
+Промежуточный прогресс:
+- ✅ Добавлен `scripts/check_js_syntax.mjs`, который рекурсивно и в стабильном
+  порядке проверяет все `.js/.mjs` файлы выбранного frontend-каталога.
+- ✅ `make test` объединяет docs-check, полный Python pytest, JS syntax и
+  behavioral test `Module Node Picker` в одной штатной команде.
+- ✅ Команды синхронизированы в `AGENTS.md`, `README.md` и
+  `guides/GUIDE_FRONTEND_CHECKS.md`.
 
 ### Артефакты
 
@@ -316,9 +326,9 @@
 
 ### Критерии завершения
 
-- frontend behavior test запускается штатно
-- синтаксис проверяется по всему `web/`
-- стандартные команды разработки покрывают и Python, и JS слой
+- ✅ frontend behavior test запускается штатно
+- ✅ синтаксис проверяется по всему `web/`
+- ✅ стандартные команды разработки покрывают и Python, и JS слой
 
 ## Phase 6: Trove / Network Strategy Revision
 

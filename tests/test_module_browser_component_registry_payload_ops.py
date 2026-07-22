@@ -33,8 +33,8 @@ class ModuleBrowserComponentRegistryPayloadOpsTests(unittest.TestCase):
 
     def setUp(self):
         """Import helper modules under test."""
-        from ComfyUI_ALEXZ_tools.utils.module_browser import component_registry
-        from ComfyUI_ALEXZ_tools.utils.module_browser import component_registry_payload_ops
+        from ComfyUI_ALEXZ_tools.utils.module_browser.catalog import component_registry
+        from ComfyUI_ALEXZ_tools.utils.module_browser.catalog import component_registry_payload_ops
 
         self.registry = component_registry
         self.ops = component_registry_payload_ops
@@ -138,4 +138,3 @@ class ModuleBrowserComponentRegistryPayloadOpsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
