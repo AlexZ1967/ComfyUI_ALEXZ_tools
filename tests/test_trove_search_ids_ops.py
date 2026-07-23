@@ -43,7 +43,7 @@ class TroveSearchIdsOpsTests(unittest.TestCase):
 
         key, source = self.ops.resolve_trove_api_key("", {})
         self.assertEqual(key, "")
-        self.assertEqual(source, "missing")
+        self.assertEqual(source, "anonymous")
 
     def test_trove_extracts_ids_from_nested_api_payload(self):
         payload = {
@@ -132,3 +132,78 @@ class TroveSearchIdsOpsTests(unittest.TestCase):
         self.assertEqual(session.calls[0][0], self.ops.TROVE_API_RESULT_URL)
         self.assertEqual(session.calls[0][2], {"X-API-KEY": "secret"})
         self.assertNotIn("secret", self.ops.sanitize_trove_result(result).get("warning", ""))
+
+    def test_trove_api_search_without_key_uses_anonymous_request(self):
+        from ComfyUI_ALEXZ_tools.nodes import trove_search_ids as node_mod
+
+        class FakeResponse:
+            status_code = 200
+            reason = "OK"
+            text = ""
+
+            def json(self):
+                return {
+                    "category": [
+                        {
+                            "records": {
+                                "total": 1,
+                                "work": [{"troveUrl": "https://nla.gov.au/nla.obj-138204672"}],
+                            }
+                        }
+                    ]
+                }
+
+        class FakeSession:
+            def __init__(self):
+                self.calls = []
+
+            def get(self, url, *, params, headers, timeout):
+                self.calls.append((url, params, headers, timeout))
+                return FakeResponse()
+
+        session = FakeSession()
+        result = node_mod._search_trove_ids_via_api("Pavlova", session=session)
+
+        self.assertEqual(result["ids"], ["nla.obj-138204672"])
+        self.assertEqual(result["api_key_source"], "anonymous")
+        self.assertEqual(session.calls[0][2], {})
+
+    def test_trove_anonymous_rate_limit_has_actionable_diagnostic(self):
+        from ComfyUI_ALEXZ_tools.nodes import trove_search_ids as node_mod
+
+        class FakeResponse:
+            status_code = 429
+            reason = "Too Many Requests"
+            text = "rate limit"
+
+        class FakeSession:
+            def get(self, url, *, params, headers, timeout):
+                return FakeResponse()
+
+        result = node_mod._search_trove_ids_via_api("Pavlova", session=FakeSession())
+
+        self.assertEqual(result["status_code"], 429)
+        self.assertEqual(result["api_key_source"], "anonymous")
+        self.assertIn("TROVE_API_KEY", result["diagnostic"]["hint"])
+
+    def test_trove_anonymous_unauthorized_has_actionable_diagnostic(self):
+        from ComfyUI_ALEXZ_tools.nodes import trove_search_ids as node_mod
+
+        class FakeResponse:
+            status_code = 401
+            reason = "Unauthorized"
+            text = '{"message":"No API key found in request"}'
+
+        class FakeSession:
+            def get(self, url, *, params, headers, timeout):
+                self.headers = headers
+                return FakeResponse()
+
+        session = FakeSession()
+        result = node_mod._search_trove_ids_via_api("Pavlova", session=session)
+
+        self.assertEqual(session.headers, {})
+        self.assertEqual(result["status_code"], 401)
+        self.assertEqual(result["api_key_source"], "anonymous")
+        self.assertIn("Anonymous access was rejected", result["diagnostic"]["hint"])
+        self.assertIn("No API key found", result["diagnostic"]["detail"])

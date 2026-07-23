@@ -5,17 +5,23 @@
 
 Важно:
 - основной режим использует официальный Trove API v3 `/result`;
-- API key передается через HTTP header `X-API-KEY`, а не через URL;
+- без API key нода может попробовать запрос без авторизации, но текущий Trove API v3
+  отвечает на него `401 No API key found in request`;
+- если API key задан, он передается через HTTP header `X-API-KEY`, а не через URL;
 - legacy headless Chrome режим оставлен только как optional advanced fallback;
 - Chrome fallback зависит от публичного UI Trove и может ломаться из-за DOM/anti-bot/Chrome runtime.
 
 ## Когда использовать
 - Когда нужен стартовый список `nla.obj-...` по текстовому запросу, например `Pavlova`.
-- Когда есть Trove API key и нужен более стабильный путь, чем scraping публичного web UI.
+- Когда нужен API-поиск с ключом или явная диагностика доступности запроса без ключа.
 - Когда вы хотите быстро собрать IDs и затем передать их в `Download DZI Tiles Batch Save`.
 
 ## API key setup
-Рекомендуемый способ:
+Для диагностической проверки можно оставить `api_key` пустым и не задавать
+`TROVE_API_KEY`: нода отправит запрос без авторизации. На момент проверки
+2026-07-23 Trove API v3 требует ключ и возвращает `401`.
+
+Для более стабильных лимитов рекомендуется:
 
 1. Получите Trove API key в аккаунте Trove / National Library of Australia.
 2. Перед запуском ComfyUI задайте переменную окружения:
@@ -36,7 +42,7 @@ export TROVE_API_KEY="your_key_here"
 ## Параметры
 - `query` (`STRING`): поисковый запрос для Trove.
 - `search_mode` (`api_first|api_only|browser_only`): `api_first` сначала использует официальный API; `api_only` не запускает Chrome; `browser_only` включает legacy headless Chrome scraping публичной страницы.
-- `api_key` (`STRING`): опциональный Trove API key. Пусто = использовать `TROVE_API_KEY`.
+- `api_key` (`STRING`): опциональный Trove API key. Пусто = использовать `TROVE_API_KEY`, а если переменная не задана — попробовать запрос без авторизации.
 - `category` (`images`): UI-совместимое имя категории; для API автоматически нормализуется в `image`.
 - `max_results` (`INT`): максимум возвращаемых `nla.obj-...`.
 - `include_online_only` (`BOOLEAN`): добавляет API facet `l-availability=y/f`, чтобы предпочитать онлайн-доступные записи.
@@ -44,10 +50,11 @@ export TROVE_API_KEY="your_key_here"
 - `virtual_time_budget_ms` (`INT`): сколько времени дать headless Chrome на рендер страницы перед `dump-dom`; используется только в browser/fallback режиме.
 
 ## Decision helper
-- Если нужен стабильный поиск: используйте `api_first` или `api_only` с `TROVE_API_KEY`.
+- Для проверки поведения без ключа: используйте `api_first` или `api_only` с пустым `api_key`; ожидаемый текущий результат — диагностический `401`.
+- Если нужен более стабильный лимит запросов: задайте `TROVE_API_KEY`.
 - Если важно исключить Chrome и scraping полностью: используйте `api_only`.
-- Если API key недоступен и вы готовы к нестабильному результату: используйте `browser_only`.
-- Если `count=0`, посмотрите `result_json.warning`: API key мог отсутствовать/истечь, Trove API мог вернуть 401/429/5xx, browser mode мог упереться в anti-bot, или запрос мог не дать image results.
+- Если ключ недоступен и вы готовы к нестабильному результату: используйте `browser_only` или включите `enable_browser_fallback`.
+- Если `count=0`, посмотрите `result_json.warning`: API мог вернуть 401/403/429/5xx, browser mode мог упереться в anti-bot, или запрос мог не дать image results.
 
 ## Интерпретация выходов
 - `ids_text`: найденные `nla.obj-...`, по одному на строку.
@@ -55,9 +62,9 @@ export TROVE_API_KEY="your_key_here"
 - `count`: число найденных уникальных IDs.
 
 ## Типовые ошибки и решения
-- `TROVE_API_KEY is not configured`: задайте `TROVE_API_KEY` перед запуском ComfyUI или заполните `api_key`; для legacy проверки включите `browser_only` или `enable_browser_fallback`.
-- `status=401`: проверьте, что ключ не истек и относится к Trove API; перезапустите ComfyUI после изменения переменной окружения.
-- `status=429`: превышен лимит API key; уменьшите частоту запросов и повторите позже.
+- `status=401/403`, `api_key_source=anonymous`: Trove отклонил анонимный доступ; задайте `TROVE_API_KEY` или заполните `api_key`.
+- `status=401/403` с ключом: проверьте, что ключ действителен и относится к Trove API; перезапустите ComfyUI после изменения переменной окружения.
+- `status=429`: достигнут анонимный лимит или лимит API key; уменьшите частоту запросов и повторите позже.
 - `Chrome/Chromium binary was not found in PATH`: установите Chrome/Chromium или добавьте бинарник в `PATH`.
 - `count=0`, `warning=Trove anti-bot challenge...`: Trove заблокировал headless search flow; используйте API key или ручной список IDs.
 - `count=0`, `warning=results were not auto-expanded`: текущий UI Trove не раскрыл результаты без дополнительного клика/действия.

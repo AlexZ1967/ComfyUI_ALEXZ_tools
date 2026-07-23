@@ -28,7 +28,7 @@ def normalize_trove_api_category(category: str | None) -> str:
 
 
 def resolve_trove_api_key(explicit_api_key: str | None, environ: dict[str, str] | None = None) -> tuple[str, str]:
-    """Resolve Trove API key from node input first, then environment."""
+    """Resolve a Trove key and label missing credentials as anonymous."""
     explicit = str(explicit_api_key or "").strip()
     if explicit:
         return explicit, "input"
@@ -36,7 +36,7 @@ def resolve_trove_api_key(explicit_api_key: str | None, environ: dict[str, str] 
     value = str(env.get(TROVE_API_KEY_ENV, "") or "").strip()
     if value:
         return value, "env"
-    return "", "missing"
+    return "", "anonymous"
 
 
 def build_trove_api_params(

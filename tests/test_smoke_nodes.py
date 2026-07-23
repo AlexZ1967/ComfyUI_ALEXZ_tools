@@ -1484,27 +1484,36 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(ids_text, "nla.obj-138204672")
         self.assertEqual(payload["mode"], "browser")
 
-    def test_trove_search_ids_missing_api_key_does_not_fallback_by_default(self):
-        """Verify API-first missing key returns useful diagnostics without launching Chrome."""
+    def test_trove_search_ids_anonymous_api_does_not_fallback_by_default(self):
+        """Verify API-first anonymous success does not launch Chrome by default."""
         trove_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.trove_search_ids")
         node = trove_mod.SearchTroveImageIDs()
         old_chrome = trove_mod._search_trove_ids_via_chrome
-        old_resolve = trove_mod.resolve_trove_api_key
+        old_api = trove_mod._search_trove_ids_via_api
         try:
-            trove_mod.resolve_trove_api_key = lambda *args, **kwargs: ("", "missing")
+            trove_mod._search_trove_ids_via_api = lambda *args, **kwargs: {
+                "mode": "api",
+                "query": "Pavlova",
+                "category": "images",
+                "api_category": "image",
+                "api_url": "https://api.trove.nla.gov.au/v3/result",
+                "api_key_source": "anonymous",
+                "count": 1,
+                "ids": ["nla.obj-138204672"],
+                "warning": "",
+            }
             trove_mod._search_trove_ids_via_chrome = lambda *args, **kwargs: (_ for _ in ()).throw(
                 RuntimeError("browser fallback must be explicit")
             )
             ids_text, result_json, count = node.search("Pavlova")
         finally:
             trove_mod._search_trove_ids_via_chrome = old_chrome
-            trove_mod.resolve_trove_api_key = old_resolve
+            trove_mod._search_trove_ids_via_api = old_api
 
         payload = json.loads(result_json)
-        self.assertEqual(count, 0)
-        self.assertEqual(ids_text, "")
-        self.assertEqual(payload["api_key_source"], "missing")
-        self.assertIn("TROVE_API_KEY", payload["warning"])
+        self.assertEqual(count, 1)
+        self.assertEqual(ids_text, "nla.obj-138204672")
+        self.assertEqual(payload["api_key_source"], "anonymous")
 
     def test_dzi_tiles_batch_save_writes_files_and_manifest(self):
         """Verify batch DZI saver writes output files and returns manifest JSON."""

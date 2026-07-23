@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.41.0
+Version: 0.41.1
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -407,7 +407,7 @@ API-first поиск `nla.obj-...` в Trove Images через официальн
 - Category: image/io  
 Входы: `query`, `search_mode`, `api_key`, `category`, `max_results`, `include_online_only`, `enable_browser_fallback`, `virtual_time_budget_ms`.  
 Выходы: `ids_text`, `result_json`, `count`.  
-Рекомендуется задавать ключ через `TROVE_API_KEY`, чтобы не сохранять его в workflow JSON. Chrome fallback явно вторичный: он зависит от DOM публичного UI, anti-bot защиты и установленного Chrome/Chromium.  
+Без ключа нода пробует запрос без авторизации и показывает точную API-диагностику; текущий Trove API v3 требует ключ и возвращает `401`. Рекомендуется задавать ключ через `TROVE_API_KEY`, чтобы не сохранять его в workflow JSON. Chrome fallback явно вторичный: он зависит от DOM публичного UI, anti-bot защиты и установленного Chrome/Chromium.
 Guide: [GUIDE_TROVE_SEARCH_IDS.md](guides/GUIDE_TROVE_SEARCH_IDS.md)
 
 ---

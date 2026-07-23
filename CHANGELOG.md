@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.41.1 — 2026-07-23
+- Changed Trove API-first handling so a missing key no longer stops locally:
+  the node performs the unauthenticated request and reports the actual HTTP
+  response in `result_json`.
+- Added contextual diagnostics for unauthenticated and keyed `401`, `403`, and
+  `429` responses; explicit browser fallback remains available after API
+  failure.
+- Confirmed that the current Trove API v3 returns
+  `401 No API key found in request` without a key, and updated node tooltips,
+  guide, README, and the verification workflow accordingly.
+- Added regression coverage for requests without `X-API-KEY` and actionable
+  unauthenticated error diagnostics.
+- Validation:
+  - `make test`: `328 passed`;
+  - targeted Trove tests: `11 passed`.
+
 ## 0.41.0 — 2026-07-23
 - Completed `Phase 6: Trove / Network Strategy Revision`:
   - changed `Search Trove Image IDs` to an API-first flow using Trove API v3

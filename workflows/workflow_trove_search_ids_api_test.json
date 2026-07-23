@@ -41,7 +41,7 @@
   "config": {},
   "extra": {
     "ds": {"scale": 1, "offset": [0, 0]},
-    "alexz_notes": "Set TROVE_API_KEY before launching ComfyUI. Keep api_key empty so the key is not stored in workflow JSON. Connect ids_text/result_json to any local text display node if needed."
+    "alexz_notes": "Run with api_key empty to test unauthenticated diagnostics; current Trove API v3 is expected to return 401. To get results, set TROVE_API_KEY before launching ComfyUI and keep api_key empty so the key is not stored in workflow JSON. If no key is available, enable_browser_fallback can try the legacy Chrome path. Connect ids_text/result_json to any local text display node if needed."
   },
   "version": 0.4
 }

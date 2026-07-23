@@ -202,7 +202,7 @@ NODE_UI_METADATA = {
         "search_aliases": ["iiif", "download", "image", "london museum", "gallica", "bnf", "nypl", "new york public library", "viewer"],
     },
     "SearchTroveImageIDs": {
-        "description": "Ищет `nla.obj-...` id в Trove Images через API-first flow с optional headless Chrome fallback.",
+        "description": "Ищет `nla.obj-...` id в Trove Images через API-first flow, диагностирует запросы без ключа и поддерживает optional headless Chrome fallback.",
         "output_tooltips": ["IDs по одному на строку.", "JSON с API/browser диагностикой без раскрытия API key.", "Количество найденных ids."],
         "search_aliases": ["trove", "search", "nla", "ids", "images", "api"],
     },

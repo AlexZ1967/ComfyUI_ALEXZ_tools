@@ -97,20 +97,8 @@ def _search_trove_ids_via_api(
         "ids": [],
         "warning": "",
     }
-    if not resolved_key:
-        diagnostic = build_network_diagnostic(
-            family="Trove",
-            stage="API key",
-            url=TROVE_API_RESULT_URL,
-            reason=f"{TROVE_API_KEY_ENV} is not configured",
-            hint="Set TROVE_API_KEY or pass api_key in the node. Browser fallback is optional.",
-        )
-        base["warning"] = summarize_network_diagnostic(diagnostic)
-        base["diagnostic"] = diagnostic
-        return base
-
     active_session = session or requests.Session()
-    headers = {"X-API-KEY": resolved_key}
+    headers = {"X-API-KEY": resolved_key} if resolved_key else {}
     try:
         response = active_session.get(
             TROVE_API_RESULT_URL,
@@ -133,13 +121,29 @@ def _search_trove_ids_via_api(
 
     base["status_code"] = int(response.status_code)
     if int(response.status_code) != 200:
+        status_code = int(response.status_code)
+        if status_code == 429:
+            hint = (
+                "Anonymous Trove API request limit was reached; retry later or configure "
+                f"{TROVE_API_KEY_ENV} for higher limits."
+                if not resolved_key
+                else "Trove API key request limit was reached; reduce request frequency and retry later."
+            )
+        elif status_code in {401, 403}:
+            hint = (
+                f"Anonymous access was rejected; configure {TROVE_API_KEY_ENV} or pass api_key in the node."
+                if not resolved_key
+                else "The Trove API key may be invalid, expired, or unauthorized."
+            )
+        else:
+            hint = "Retry later and inspect the status and response excerpt in result_json."
         diagnostic = build_network_diagnostic(
             family="Trove",
             stage="API request",
             url=TROVE_API_RESULT_URL,
-            status_code=int(response.status_code),
+            status_code=status_code,
             reason=getattr(response, "reason", "") or "HTTP error",
-            hint="401 usually means the Trove API key is missing, expired, or invalid.",
+            hint=hint,
             detail=str(response.text or "")[:2000],
         )
         base["warning"] = summarize_network_diagnostic(diagnostic)
@@ -258,7 +262,7 @@ class SearchTroveImageIDs:
                     ["api_first", "api_only", "browser_only"],
                     {
                         "default": "api_first",
-                        "tooltip": "api_first = официальный Trove API v3 через X-API-KEY. api_only не запускает Chrome. browser_only = legacy headless Chrome режим.",
+                        "tooltip": "api_first = официальный Trove API v3, а при наличии ключа использует X-API-KEY. api_only не запускает Chrome. browser_only = legacy headless Chrome режим.",
                     },
                 ),
                 "api_key": (
@@ -266,7 +270,7 @@ class SearchTroveImageIDs:
                     {
                         "default": "",
                         "multiline": False,
-                        "tooltip": f"Опциональный Trove API key. Предпочтительно оставить пустым и задать переменную окружения {TROVE_API_KEY_ENV}, чтобы не сохранять ключ в workflow.",
+                        "tooltip": f"Опциональный Trove API key. Пустое поле использует {TROVE_API_KEY_ENV}, а без переменной пробует запрос без авторизации; Trove может отклонить его с 401.",
                     },
                 ),
                 "category": (
