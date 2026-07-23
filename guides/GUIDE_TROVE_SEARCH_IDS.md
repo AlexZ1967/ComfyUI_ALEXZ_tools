@@ -58,7 +58,7 @@ export TROVE_API_KEY="your_key_here"
 
 ## Интерпретация выходов
 - `ids_text`: найденные `nla.obj-...`, по одному на строку.
-- `result_json`: диагностический JSON с `mode`, `api_url`, `api_category`, `api_key_source`, `count`, `warning`, `diagnostic`; в browser-only режиме также будут `search_url`, `chrome_path`, `stdout_excerpt`, `stderr_excerpt`.
+- `result_json`: компактный диагностический JSON с `mode`, `count`, `warning` и `diagnostic`; API-режим также сообщает `api_url`, `api_category`, `api_key_source`, а browser-режим — `search_url`, `chrome_path`, `page_state`, размеры stdout/stderr и путь `diagnostic_log`.
 - `count`: число найденных уникальных IDs.
 
 ## Типовые ошибки и решения
@@ -68,6 +68,7 @@ export TROVE_API_KEY="your_key_here"
 - `Chrome/Chromium binary was not found in PATH`: установите Chrome/Chromium или добавьте бинарник в `PATH`.
 - `count=0`, `warning=Trove anti-bot challenge...`: Trove заблокировал headless search flow; используйте API key или ручной список IDs.
 - `count=0`, `warning=results were not auto-expanded`: текущий UI Trove не раскрыл результаты без дополнительного клика/действия.
+- `page_state=page_shell_only`: Chrome загрузил оболочку Trove, но динамические результаты не появились; полный DOM и stderr сохранены в `logs/trove_search_ids.log`.
 
 ## Производительность
 - API-first режим делает обычный HTTP-запрос и существенно быстрее Chrome.

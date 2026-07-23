@@ -203,7 +203,7 @@ NODE_UI_METADATA = {
     },
     "SearchTroveImageIDs": {
         "description": "Ищет `nla.obj-...` id в Trove Images через API-first flow, диагностирует запросы без ключа и поддерживает optional headless Chrome fallback.",
-        "output_tooltips": ["IDs по одному на строку.", "JSON с API/browser диагностикой без раскрытия API key.", "Количество найденных ids."],
+        "output_tooltips": ["IDs по одному на строку.", "Компактный JSON с API/browser диагностикой и путем к отдельному подробному логу.", "Количество найденных ids."],
         "search_aliases": ["trove", "search", "nla", "ids", "images", "api"],
     },
     "ALEXZTestNode": {

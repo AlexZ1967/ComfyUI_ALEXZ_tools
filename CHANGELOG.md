@@ -1,5 +1,21 @@
 # Changelog — ALEXZ_tools
 
+## 0.41.2 — 2026-07-23
+- Replaced verbose Trove `browser_only` JSON excerpts with compact browser
+  outcome diagnostics:
+  - added `page_state` values for successful results, page-shell-only,
+    interaction-required, anti-bot, Chrome failure, and unexpected-page cases;
+  - retained only stdout/stderr sizes in `result_json`;
+  - moved full rendered DOM and Chrome stderr into
+    `logs/trove_search_ids.log`, with `diagnostic_log` pointing to the file.
+- Updated the Trove guide and node metadata for the compact JSON and separate
+  diagnostic-log contract.
+- Added regression coverage for page-shell classification, concise JSON, and
+  verbose on-disk diagnostics.
+- Validation:
+  - `make test`: `329 passed`;
+  - targeted Trove tests: `12 passed`.
+
 ## 0.41.1 — 2026-07-23
 - Changed Trove API-first handling so a missing key no longer stops locally:
   the node performs the unauthenticated request and reports the actual HTTP

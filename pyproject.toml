@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "comfyui-alexz-tools"
-version = "0.41.1"
+version = "0.41.2"
 description = "Custom nodes for ComfyUI: image prep, color/look matching, seam matching, video utilities, QR, JSON, and module browser tooling."
 readme = "README.md"
 requires-python = ">=3.10"

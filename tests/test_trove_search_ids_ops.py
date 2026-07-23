@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import types
 import unittest
+from pathlib import Path
 
 
 class TroveSearchIdsOpsTests(unittest.TestCase):
@@ -207,3 +209,37 @@ class TroveSearchIdsOpsTests(unittest.TestCase):
         self.assertEqual(result["api_key_source"], "anonymous")
         self.assertIn("Anonymous access was rejected", result["diagnostic"]["hint"])
         self.assertIn("No API key found", result["diagnostic"]["detail"])
+
+    def test_trove_browser_failure_keeps_json_compact_and_writes_verbose_log(self):
+        from ComfyUI_ALEXZ_tools.nodes import trove_search_ids as node_mod
+
+        class FakeProcess:
+            returncode = 0
+            stdout = "<!DOCTYPE html><html><head><title>Trove</title></head><body>App shell</body></html>"
+            stderr = "ssl_client_socket_impl handshake failed"
+
+        old_find_chrome = node_mod._find_chrome_binary
+        old_run = node_mod.subprocess.run
+        old_log_path = node_mod._TROVE_DIAGNOSTIC_LOG_PATH
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                node_mod._find_chrome_binary = lambda: "/usr/bin/google-chrome"
+                node_mod.subprocess.run = lambda *args, **kwargs: FakeProcess()
+                node_mod._TROVE_DIAGNOSTIC_LOG_PATH = Path(tmpdir) / "trove.log"
+
+                result = node_mod._search_trove_ids_via_chrome("Pavlova")
+
+                self.assertEqual(result["page_state"], "page_shell_only")
+                self.assertIn("page shell loaded", result["warning"])
+                self.assertEqual(result["diagnostic_log"], str(node_mod._TROVE_DIAGNOSTIC_LOG_PATH))
+                self.assertNotIn("stdout_excerpt", result)
+                self.assertNotIn("stderr_excerpt", result)
+                contents = node_mod._TROVE_DIAGNOSTIC_LOG_PATH.read_text(encoding="utf-8")
+                self.assertIn("=== STDOUT ===", contents)
+                self.assertIn("App shell", contents)
+                self.assertIn("=== STDERR ===", contents)
+                self.assertIn("handshake failed", contents)
+        finally:
+            node_mod._find_chrome_binary = old_find_chrome
+            node_mod.subprocess.run = old_run
+            node_mod._TROVE_DIAGNOSTIC_LOG_PATH = old_log_path

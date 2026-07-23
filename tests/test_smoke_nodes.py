@@ -1469,11 +1469,12 @@ class SmokeTests(unittest.TestCase):
                 "search_url": "https://trove.nla.gov.au/search/category/images?keyword=Pavlova",
                 "chrome_path": "/usr/bin/google-chrome",
                 "returncode": 0,
+                "page_state": "results_found",
                 "count": 1,
                 "ids": ["nla.obj-138204672"],
                 "warning": "",
-                "stdout_excerpt": "",
-                "stderr_excerpt": "",
+                "stdout_size": 1000,
+                "stderr_size": 0,
             }
             ids_text, result_json, count = node.search("Pavlova", search_mode="browser_only")
         finally:
@@ -1483,6 +1484,8 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(ids_text, "nla.obj-138204672")
         self.assertEqual(payload["mode"], "browser")
+        self.assertNotIn("stdout_excerpt", payload)
+        self.assertNotIn("stderr_excerpt", payload)
 
     def test_trove_search_ids_anonymous_api_does_not_fallback_by_default(self):
         """Verify API-first anonymous success does not launch Chrome by default."""

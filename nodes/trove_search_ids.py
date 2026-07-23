@@ -16,6 +16,8 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -37,11 +39,60 @@ from .trove_search_ids_ops import (
 )
 
 _TROVE_API_TIMEOUT_SECONDS = 30.0
+_TROVE_DIAGNOSTIC_LOG_PATH = Path(__file__).resolve().parent.parent / "logs" / "trove_search_ids.log"
 
 
 def _log(message: str) -> None:
     """Emit Trove search logs to ComfyUI console."""
     print(f"[TroveSearch] {message}")
+
+
+def _write_trove_diagnostic_log(title: str, details: str) -> str:
+    """Append verbose Trove diagnostics outside result JSON and console output."""
+    try:
+        _TROVE_DIAGNOSTIC_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+        entry = f"[{timestamp}] {title}\n{details.rstrip()}\n\n"
+        with _TROVE_DIAGNOSTIC_LOG_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(entry)
+        return str(_TROVE_DIAGNOSTIC_LOG_PATH)
+    except OSError:
+        return ""
+
+
+def _classify_trove_browser_result(stdout: str, returncode: int, ids: list[str]) -> tuple[str, str, str]:
+    """Classify the useful browser outcome without exposing raw Chrome output."""
+    if ids:
+        return "results_found", "", ""
+    if int(returncode) != 0:
+        return (
+            "chrome_failed",
+            f"Headless Chrome exited with code {int(returncode)} before Trove results were available.",
+            "Inspect the Trove diagnostic log for Chrome stdout and stderr.",
+        )
+    if "Making sure you're not a bot!" in stdout or "Anubis" in stdout:
+        return (
+            "anti_bot",
+            "Trove anti-bot challenge intercepted the browser request.",
+            "Use the official API with a Trove key or retry later.",
+        )
+    if "Click the search button below to load results" in stdout:
+        return (
+            "interaction_required",
+            "Trove loaded, but search results require browser interaction.",
+            "The legacy headless Chrome flow cannot complete this search automatically.",
+        )
+    if "<html" in stdout.lower() and "trove" in stdout.lower():
+        return (
+            "page_shell_only",
+            "Trove page shell loaded, but search results were unavailable in headless Chrome.",
+            "Use the official API with a Trove key; the legacy browser flow is best-effort only.",
+        )
+    return (
+        "unexpected_page",
+        "Headless Chrome returned a page without Trove search results.",
+        "Inspect the Trove diagnostic log to identify the returned page.",
+    )
 
 
 def _find_chrome_binary() -> str:
@@ -212,32 +263,53 @@ def _search_trove_ids_via_chrome(
     stdout = str(proc.stdout or "")
     stderr = str(proc.stderr or "")
     ids = limit_ids(extract_nla_obj_ids(stdout), int(max_results))
+    page_state, warning, hint = _classify_trove_browser_result(stdout, int(proc.returncode), ids)
+    diagnostic_log = ""
+    if not ids or int(proc.returncode) != 0:
+        diagnostic_log = _write_trove_diagnostic_log(
+            f"Browser search: {page_state}",
+            "\n".join(
+                [
+                    f"query={str(query or '').strip()}",
+                    f"category={normalize_trove_ui_category(category)}",
+                    f"search_url={search_url}",
+                    f"chrome_path={chrome_path}",
+                    f"returncode={int(proc.returncode)}",
+                    "",
+                    "=== STDOUT ===",
+                    stdout,
+                    "",
+                    "=== STDERR ===",
+                    stderr,
+                ]
+            ),
+        )
 
-    warning = ""
-    if not ids:
-        if "Click the search button below to load results" in stdout:
-            warning = (
-                "Trove category page rendered, but results were not auto-expanded. "
-                "Current public UI flow may require extra interaction."
-            )
-        elif "Making sure you're not a bot!" in stdout or "Anubis" in stdout:
-            warning = "Trove anti-bot challenge intercepted the request."
-        else:
-            warning = "No `nla.obj-...` ids were found in rendered DOM."
-
-    return {
+    result: dict[str, Any] = {
         "mode": "browser",
         "query": str(query or "").strip(),
         "category": normalize_trove_ui_category(category),
         "search_url": search_url,
         "chrome_path": chrome_path,
         "returncode": int(proc.returncode),
+        "page_state": page_state,
         "count": len(ids),
         "ids": ids,
         "warning": warning,
-        "stdout_excerpt": stdout[:4000],
-        "stderr_excerpt": stderr[:2000],
+        "stdout_size": len(stdout.encode("utf-8")),
+        "stderr_size": len(stderr.encode("utf-8")),
     }
+    if warning:
+        result["diagnostic"] = build_network_diagnostic(
+            family="Trove",
+            stage="Browser search",
+            url=search_url,
+            reason=page_state,
+            hint=hint,
+        )
+    if diagnostic_log:
+        result["diagnostic_log"] = diagnostic_log
+    return result
 
 
 class SearchTroveImageIDs:
@@ -373,6 +445,8 @@ class SearchTroveImageIDs:
                 }
         if result.get("warning"):
             _log(str(result["warning"]))
+            if result.get("diagnostic_log"):
+                _log(f"Detailed diagnostic log: {result['diagnostic_log']}")
         result = sanitize_trove_result(result)
         ids = list(result.get("ids") or [])
         ids_text = "\n".join(ids)
