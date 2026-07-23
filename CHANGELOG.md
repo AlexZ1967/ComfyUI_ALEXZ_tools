@@ -1,5 +1,25 @@
 # Changelog — ALEXZ_tools
 
+## 0.41.0 — 2026-07-23
+- Completed `Phase 6: Trove / Network Strategy Revision`:
+  - changed `Search Trove Image IDs` to an API-first flow using Trove API v3
+    `/result` with `X-API-KEY`;
+  - added `TROVE_API_KEY` environment-key resolution and optional `api_key`
+    input, while keeping raw keys out of `result_json`;
+  - normalized the legacy UI category `images` to the Trove API category
+    `image`;
+  - kept headless Chrome search as explicit `browser_only` mode or optional
+    `enable_browser_fallback` for advanced best-effort usage;
+  - added compact shared network diagnostic helpers for user-facing short
+    reasons and structured JSON details.
+- Updated Trove guide, README node docs, registry metadata, and added
+  `workflows/workflow_trove_search_ids_api_test.json`.
+- Added direct helper coverage for Trove API parameter/key/id extraction and
+  updated smoke coverage for API-first, browser-only, and no-key diagnostics.
+- Validation:
+  - `conda run -n p313 pytest -q tests/test_trove_search_ids_ops.py tests/test_smoke_nodes.py -k trove`.
+- Version updated to `0.41.0` in `pyproject.toml` and `README.md`.
+
 ## 0.40.0 — 2026-07-22
 - Completed `Phase 5: Frontend Tooling Upgrade`:
   - added recursive deterministic JS syntax validation for every `.js/.mjs`

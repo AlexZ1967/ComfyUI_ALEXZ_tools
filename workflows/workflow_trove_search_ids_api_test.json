@@ -1,0 +1,47 @@
+{
+  "last_node_id": 1,
+  "last_link_id": 0,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "SearchTroveImageIDs",
+      "pos": [120, 120],
+      "size": [420, 300],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "outputs": [
+        {"name": "ids_text", "type": "STRING", "links": [], "shape": 3, "slot_index": 0},
+        {"name": "result_json", "type": "STRING", "links": [], "shape": 3, "slot_index": 1},
+        {"name": "count", "type": "INT", "links": [], "shape": 3, "slot_index": 2}
+      ],
+      "properties": {"Node name for S&R": "SearchTroveImageIDs"},
+      "widgets_values": [
+        "Pavlova",
+        "api_first",
+        "",
+        "images",
+        25,
+        true,
+        false,
+        20000
+      ]
+    }
+  ],
+  "links": [],
+  "groups": [
+    {
+      "title": "Trove API-first smoke test",
+      "bounding": [80, 80, 520, 330],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {"scale": 1, "offset": [0, 0]},
+    "alexz_notes": "Set TROVE_API_KEY before launching ComfyUI. Keep api_key empty so the key is not stored in workflow JSON. Connect ids_text/result_json to any local text display node if needed."
+  },
+  "version": 0.4
+}

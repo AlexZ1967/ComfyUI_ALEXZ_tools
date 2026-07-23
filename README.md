@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.40.0
+Version: 0.41.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -400,14 +400,14 @@ Guide: [GUIDE_IMAGE_DESCREEN_APPLY.md](guides/GUIDE_IMAGE_DESCREEN_APPLY.md)
 ---
 
 ## Search Trove Image IDs
-Best-effort поиск `nla.obj-...` в Trove Images через headless Chrome render публичной search-страницы.
+API-first поиск `nla.obj-...` в Trove Images через официальный Trove API v3, с optional headless Chrome fallback для legacy/best-effort сценариев.
 
 - Display name: Search Trove Image IDs  
 - Type name: SearchTroveImageIDs  
 - Category: image/io  
-Входы: `query`, `category`, `max_results`, `virtual_time_budget_ms`.  
+Входы: `query`, `search_mode`, `api_key`, `category`, `max_results`, `include_online_only`, `enable_browser_fallback`, `virtual_time_budget_ms`.  
 Выходы: `ids_text`, `result_json`, `count`.  
-Ограничение: это не официальный API-режим; Trove anti-bot/UI flow может мешать стабильному поиску без API key.  
+Рекомендуется задавать ключ через `TROVE_API_KEY`, чтобы не сохранять его в workflow JSON. Chrome fallback явно вторичный: он зависит от DOM публичного UI, anti-bot защиты и установленного Chrome/Chromium.  
 Guide: [GUIDE_TROVE_SEARCH_IDS.md](guides/GUIDE_TROVE_SEARCH_IDS.md)
 
 ---

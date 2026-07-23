@@ -334,6 +334,7 @@
 
 Срок: 2026-11-01 -> 2026-11-22
 Приоритет: `P2`
+Статус: ✅ выполнено (2026-07-23, `0.41.0`)
 
 ### Цели
 
@@ -343,27 +344,44 @@
 ### Задачи
 
 1. Добавить API-first режим для Trove:
-   - через официальный API key flow
-   - с ясной конфигурацией ключа
-2. Оставить browser fallback только как optional advanced mode.
-3. Явно маркировать ограничения:
-   - anti-bot
-   - нестабильность DOM
-   - необходимость Chrome
-4. Унифицировать сетевую диагностику для IIIF/DZI/Trove family.
-5. Обновить guide и node tooltips.
+   - ✅ через официальный API key flow
+   - ✅ с ясной конфигурацией ключа (`TROVE_API_KEY` или optional `api_key`)
+2. ✅ Оставить browser fallback только как optional advanced mode.
+3. ✅ Явно маркировать ограничения:
+   - ✅ anti-bot
+   - ✅ нестабильность DOM
+   - ✅ необходимость Chrome
+4. ✅ Унифицировать сетевую диагностику для IIIF/DZI/Trove family.
+5. ✅ Обновить guide и node tooltips.
+
+Результат:
+- ✅ `SearchTroveImageIDs` переведен на API-first flow через Trove API v3
+  `/result`, с передачей ключа через `X-API-KEY` и без сохранения raw key в
+  диагностическом JSON.
+- ✅ Legacy Chrome search сохранен как `browser_only` или явный
+  `enable_browser_fallback`, то есть больше не маскируется под основной путь.
+- ✅ Добавлен чистый helper-layer `nodes/trove_search_ids_ops.py` для API params,
+  key resolution, category normalization и extraction `nla.obj-...` из JSON.
+- ✅ Добавлен общий компактный helper сетевой диагностики
+  `utils/network_diagnostics.py`, используемый Trove-веткой для короткой
+  console-причины и подробного safe JSON payload.
+- ✅ Добавлен ручной smoke workflow
+  `workflows/workflow_trove_search_ids_api_test.json`.
+- ✅ Обновлены tests/docs/tooltips:
+  `tests/test_trove_search_ids_ops.py`, Trove smoke cases,
+  `guides/GUIDE_TROVE_SEARCH_IDS.md`, `README.md`, `nodes/node_registry.py`.
 
 ### Артефакты
 
-- улучшенный `nodes/trove_search_ids.py`
-- docs по API key setup
-- обновленные тесты для API-first ветки
+- ✅ улучшенный `nodes/trove_search_ids.py`
+- ✅ docs по API key setup
+- ✅ обновленные тесты для API-first ветки
 
 ### Критерии завершения
 
-- основной путь не зависит от headless Chrome
-- fallback путь явно вторичен и документирован
-- пользователь понимает, какой режим надежный, а какой best-effort
+- ✅ основной путь не зависит от headless Chrome
+- ✅ fallback путь явно вторичен и документирован
+- ✅ пользователь понимает, какой режим надежный, а какой best-effort
 
 ## Phase 7: Cleanup / Quality Sweep
 

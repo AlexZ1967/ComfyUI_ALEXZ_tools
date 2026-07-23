@@ -202,9 +202,9 @@ NODE_UI_METADATA = {
         "search_aliases": ["iiif", "download", "image", "london museum", "gallica", "bnf", "nypl", "new york public library", "viewer"],
     },
     "SearchTroveImageIDs": {
-        "description": "Ищет `nla.obj-...` id в Trove Images через best-effort headless Chrome search.",
-        "output_tooltips": ["IDs по одному на строку.", "JSON с URL поиска и диагностикой.", "Количество найденных ids."],
-        "search_aliases": ["trove", "search", "nla", "ids", "images"],
+        "description": "Ищет `nla.obj-...` id в Trove Images через API-first flow с optional headless Chrome fallback.",
+        "output_tooltips": ["IDs по одному на строку.", "JSON с API/browser диагностикой без раскрытия API key.", "Количество найденных ids."],
+        "search_aliases": ["trove", "search", "nla", "ids", "images", "api"],
     },
     "ALEXZTestNode": {
         "description": "Тестовая нода для проверки загрузки пакета и Module Nodes.",

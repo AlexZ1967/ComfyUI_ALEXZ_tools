@@ -1426,17 +1426,17 @@ class SmokeTests(unittest.TestCase):
         self.assertTrue(hasattr(qr_cls, "SEARCH_ALIASES"))
 
     def test_trove_search_ids_node_contract(self):
-        """Verify Trove search node returns newline-separated ids and diagnostic JSON."""
+        """Verify Trove API-first node returns newline-separated ids and diagnostic JSON."""
         trove_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.trove_search_ids")
         node = trove_mod.SearchTroveImageIDs()
-        old_search = trove_mod._search_trove_ids_via_chrome
+        old_search = trove_mod._search_trove_ids_via_api
         try:
-            trove_mod._search_trove_ids_via_chrome = lambda *args, **kwargs: {
+            trove_mod._search_trove_ids_via_api = lambda *args, **kwargs: {
+                "mode": "api",
                 "query": "Pavlova",
                 "category": "images",
-                "search_url": "https://trove.nla.gov.au/search/category/images?keyword=Pavlova",
-                "chrome_path": "/usr/bin/google-chrome",
-                "returncode": 0,
+                "api_category": "image",
+                "api_url": "https://api.trove.nla.gov.au/v3/result",
                 "count": 3,
                 "ids": [
                     "nla.obj-138204672",
@@ -1444,18 +1444,67 @@ class SmokeTests(unittest.TestCase):
                     "nla.obj-150139367",
                 ],
                 "warning": "",
-                "stdout_excerpt": "",
-                "stderr_excerpt": "",
             }
-            ids_text, result_json, count = node.search("Pavlova")
+            ids_text, result_json, count = node.search("Pavlova", api_key="secret")
         finally:
-            trove_mod._search_trove_ids_via_chrome = old_search
+            trove_mod._search_trove_ids_via_api = old_search
 
         payload = json.loads(result_json)
         self.assertEqual(count, 3)
         self.assertIn("nla.obj-138204672", ids_text)
         self.assertEqual(payload["count"], 3)
         self.assertEqual(payload["category"], "images")
+        self.assertEqual(payload["api_category"], "image")
+
+    def test_trove_search_ids_browser_only_contract(self):
+        """Verify legacy Trove browser mode stays available as explicit advanced mode."""
+        trove_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.trove_search_ids")
+        node = trove_mod.SearchTroveImageIDs()
+        old_search = trove_mod._search_trove_ids_via_chrome
+        try:
+            trove_mod._search_trove_ids_via_chrome = lambda *args, **kwargs: {
+                "mode": "browser",
+                "query": "Pavlova",
+                "category": "images",
+                "search_url": "https://trove.nla.gov.au/search/category/images?keyword=Pavlova",
+                "chrome_path": "/usr/bin/google-chrome",
+                "returncode": 0,
+                "count": 1,
+                "ids": ["nla.obj-138204672"],
+                "warning": "",
+                "stdout_excerpt": "",
+                "stderr_excerpt": "",
+            }
+            ids_text, result_json, count = node.search("Pavlova", search_mode="browser_only")
+        finally:
+            trove_mod._search_trove_ids_via_chrome = old_search
+
+        payload = json.loads(result_json)
+        self.assertEqual(count, 1)
+        self.assertEqual(ids_text, "nla.obj-138204672")
+        self.assertEqual(payload["mode"], "browser")
+
+    def test_trove_search_ids_missing_api_key_does_not_fallback_by_default(self):
+        """Verify API-first missing key returns useful diagnostics without launching Chrome."""
+        trove_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.trove_search_ids")
+        node = trove_mod.SearchTroveImageIDs()
+        old_chrome = trove_mod._search_trove_ids_via_chrome
+        old_resolve = trove_mod.resolve_trove_api_key
+        try:
+            trove_mod.resolve_trove_api_key = lambda *args, **kwargs: ("", "missing")
+            trove_mod._search_trove_ids_via_chrome = lambda *args, **kwargs: (_ for _ in ()).throw(
+                RuntimeError("browser fallback must be explicit")
+            )
+            ids_text, result_json, count = node.search("Pavlova")
+        finally:
+            trove_mod._search_trove_ids_via_chrome = old_chrome
+            trove_mod.resolve_trove_api_key = old_resolve
+
+        payload = json.loads(result_json)
+        self.assertEqual(count, 0)
+        self.assertEqual(ids_text, "")
+        self.assertEqual(payload["api_key_source"], "missing")
+        self.assertIn("TROVE_API_KEY", payload["warning"])
 
     def test_dzi_tiles_batch_save_writes_files_and_manifest(self):
         """Verify batch DZI saver writes output files and returns manifest JSON."""
