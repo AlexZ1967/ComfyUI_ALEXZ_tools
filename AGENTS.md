@@ -164,3 +164,19 @@
 - Do not place handwritten source files in `web/generated/`.
 - Commit runtime bundles and their source maps under `web/generated/` so custom node installations work without a local npm build; keep `frontend/dist/` and `node_modules/` untracked.
 - `make test` must validate TypeScript without generating runtime output.
+
+## Browser Validation with Playwright MCP
+- Use Playwright MCP for browser-level validation of ComfyUI frontend changes.
+- Prefer it for checking:
+  - console errors and warnings;
+  - failed module imports and 404 responses;
+  - extension registration;
+  - DOM rendering;
+  - interactive UI behavior;
+  - Module Node Picker behavior.
+- Use the local ComfyUI instance at `http://127.0.0.1:8188` unless the user specifies another address.
+- Do not install, update, or remove custom nodes during browser validation unless explicitly requested.
+- Diagnostic files created under `.playwright-mcp/` are local artifacts and must not be committed.
+- For serious JS/TS frontend changes, run the scenario in `tests/browser/alexz_tools_smoke.js` through Playwright MCP `browser_run_code_unsafe` using its `filename` parameter. Follow `guides/GUIDE_BROWSER_SMOKE.md` and report the returned PASS/FAIL; reading the scenario or running a syntax check is not a browser test.
+- Do not attribute third-party ComfyUI/extension errors to ALEXZ_tools without evidence in the message, URL, or stack. Keep unrelated errors as separate diagnostics.
+- Browser smoke must not click refresh/install/update/remove controls or node-insertion buttons. Its backend request guard must remain enabled.

@@ -1,7 +1,7 @@
 # Frontend Checks
 
 Все команды запускаются из корня `ComfyUI_ALEXZ_tools` и используют Conda
-environment `p313`, заданный в `Makefile`.
+environment `p313-torch214-cu132`, заданный в `Makefile`.
 
 ## Быстрые команды
 
@@ -9,7 +9,9 @@ environment `p313`, заданный в `Makefile`.
   в `web/` через текущий Node.js runtime.
 - `make js-test` запускает lightweight behavioral test для `Module Node Picker`.
 - `make test` последовательно запускает docs-check, полный Python pytest,
-  frontend syntax check и behavioral JS test.
+  frontend syntax check, behavioral JS test и TypeScript type checking.
+- Browser smoke выполняется отдельным стандартизированным запросом Codex через
+  Playwright MCP: [GUIDE_BROWSER_SMOKE.md](GUIDE_BROWSER_SMOKE.md).
 
 Старый target `make js-check` сохранён как совместимый alias для
 `make js-check-all`.

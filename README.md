@@ -43,6 +43,8 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
   generated-файлы вручную не редактируются. После изменения runtime TypeScript
   запускайте `make ts-check` и `make frontend-build`.
 - `make test` выполняет проверки без генерации runtime bundle.
+- Runtime browser smoke через Playwright MCP:
+  [GUIDE_BROWSER_SMOKE.md](guides/GUIDE_BROWSER_SMOKE.md).
 
 ## Runtime notes
 - Pillow 13 compatibility: internal image conversions no longer rely on deprecated `mode=` in `Image.fromarray(...)` across the affected nodes/helpers, reducing future upgrade risk without changing node behavior.

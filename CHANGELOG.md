@@ -1,5 +1,12 @@
 # Changelog — ALEXZ_tools
 
+## Unreleased
+- Добавлен воспроизводимый browser smoke через Playwright MCP: `tests/browser/alexz_tools_smoke.js` и инструкция `guides/GUIDE_BROWSER_SMOKE.md` со стандартным запросом Codex.
+- Проверяются загрузка локального ComfyUI, регистрация и setup `ALEXZ.Tools.Hello`, ресурсы расширения, открытие и DOM Module Node Picker, API каталога и информации о модуле.
+- Ошибки ALEXZ_tools отделяются от сторонних ошибок ComfyUI/extensions; backend request guard разрешает только чтение и блокирует остальные операции. Smoke не выполняет install/update/remove и не вставляет ноды.
+- В `AGENTS.md` закреплены правила browser validation, `.playwright-mcp/` исключён из Git; README и руководство frontend-проверок ссылаются на новый сценарий.
+- Проверки: `make test` — 340 Python-тестов, JS syntax/behavior, TypeScript и docs прошли; browser smoke — 7 проверок PASS и 71 загруженный JS-файл. Отрицательная проверка подтвердила обнаружение ошибки ALEXZ и блокировку запрещённого POST.
+
 ## 0.43.0 — 2026-10-05
 - Настроено окружение разработки Codex: Conda `p313-torch214-cu132`, русскоязычное общение и правила документации в `AGENTS.md`, границы проекта и локальный ComfyUI как read-only reference.
 - Добавлены TypeScript source в `frontend/src/`, строгая проверка типов и минимальные declarations API ComfyUI.

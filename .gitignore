@@ -12,3 +12,4 @@ node_modules/
 frontend/dist/
 make_test.log
 .vscode/
+.playwright-mcp/
