@@ -26,12 +26,12 @@ def node_source_file(node_cls: Any) -> str:
     source_file = ""
     try:
         source_file = inspect.getsourcefile(node_cls) or ""
-    except Exception:
+    except TypeError:
         source_file = ""
     if source_file:
         try:
             return str(Path(source_file).resolve())
-        except Exception:
+        except (OSError, RuntimeError):
             return source_file
 
     module_name = getattr(node_cls, "__module__", "") or ""
@@ -41,7 +41,7 @@ def node_source_file(node_cls: Any) -> str:
         return ""
     try:
         return str(Path(module_file).resolve())
-    except Exception:
+    except (OSError, RuntimeError):
         return module_file
 
 
@@ -51,12 +51,12 @@ def relative_to_custom_roots(path_text: str, *, custom_nodes_roots: Callable[[],
         return ""
     try:
         path_obj = Path(path_text).resolve()
-    except Exception:
+    except (OSError, RuntimeError):
         return path_text
     for root in custom_nodes_roots():
         try:
             return str(path_obj.relative_to(root.resolve()))
-        except Exception:
+        except (OSError, RuntimeError, ValueError):
             continue
     return str(path_obj)
 
@@ -68,7 +68,7 @@ def file_digest(path_text: str) -> str:
     try:
         data = Path(path_text).read_bytes()
         return sha1(data).hexdigest()[:12]
-    except Exception:
+    except OSError:
         return ""
 
 

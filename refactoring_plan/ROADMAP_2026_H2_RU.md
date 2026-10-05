@@ -387,6 +387,7 @@
 
 Срок: 2026-11-22 -> 2026-12-13
 Приоритет: `P2`
+Статус: ✅ выполнено (2026-07-23, `0.42.0`)
 
 ### Цели
 
@@ -395,27 +396,49 @@
 
 ### Задачи
 
-1. Пересмотреть широкие `except Exception` и сузить их там, где это возможно без потери UX.
-2. Удалить устаревшие compatibility shims, если на них больше нет живых импортов.
-3. Проверить consistency:
-   - docstrings
-   - metadata
-   - guide links
-   - changelog entries
-4. Пройтись по TODO/legacy comments в `propainter` и вспомогательных util-файлах.
-5. Подготовить release notes для следующей версии.
+1. ✅ Пересмотреть широкие `except Exception` и сузить их там, где это возможно без потери UX.
+   - ✅ deterministic JSON/date/path/classification/snapshot helpers;
+   - ✅ Manager file loading и component-registry imports;
+   - ✅ сетевые, worker, route и Comfy node execution boundaries
+     проаудированы и сохранены как защитные UX-границы.
+2. ✅ Удалить устаревшие compatibility shims, если на них больше нет живых импортов.
+   - ✅ подтверждено, что production-код не импортирует top-level shim layer;
+   - ✅ 27 wrappers сохранены как явно документированный внешний
+     backward-compatible surface до следующего major migration cycle.
+3. ✅ Проверить consistency:
+   - ✅ docstrings
+   - ✅ metadata
+   - ✅ guide links
+   - ✅ changelog/version entries
+4. ✅ Пройтись по TODO/legacy comments в `propainter` и вспомогательных util-файлах.
+5. ✅ Подготовить release notes для версии `0.42.0`.
+
+Промежуточный прогресс:
+- ✅ Ожидаемые parse/path ошибки в чистых helpers теперь перехватываются
+  конкретными типами; неожиданные программные ошибки не маскируются пустыми
+  значениями.
+- ✅ `utils/docs_check.py` проверяет синхронность версии в `pyproject.toml`,
+  `README.md`, верхней записи `CHANGELOG.md` и существование локальных
+  Markdown-ссылок в README/guides.
+- ✅ Добавлены прямые regression tests для version mismatch, broken links,
+  JSON parsing и invalid datetime behavior.
+- ✅ Закрыты TODO в `propainter/utils/image_utils.py`: outpaint config повторно
+  использует базовую инициализацию, upstream tensor converter документирован
+  как намеренный compatibility helper.
+- ✅ Политика exception boundaries и compatibility wrappers зафиксирована в
+  `refactoring_plan/PHASE7_QUALITY_AUDIT_RU.md`.
 
 ### Артефакты
 
-- cleanup commits
-- обновленный `CHANGELOG.md`
-- финальный stabilization pass
+- ✅ cleanup changes
+- ✅ обновленный `CHANGELOG.md`
+- ✅ финальный stabilization pass
 
 ### Критерии завершения
 
-- нет явно лишнего legacy слоя
-- документация и тесты синхронизированы
-- релизный diff читаем и объясним
+- ✅ нет явно лишнего legacy слоя
+- ✅ документация и тесты синхронизированы
+- ✅ релизный diff читаем и объясним
 
 ## Риски
 

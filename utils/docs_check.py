@@ -15,9 +15,13 @@ import ast
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
+PYPROJECT = ROOT / "pyproject.toml"
+CHANGELOG = ROOT / "CHANGELOG.md"
+NODE_REGISTRY = ROOT / "nodes" / "node_registry.py"
 
 NODE_DOCS = [
     {
@@ -248,6 +252,26 @@ def _parse_input_keys(class_node):
     return required, optional
 
 
+def _parse_function_name(class_node) -> str:
+    """Extract the ComfyUI FUNCTION method name from a class."""
+    for stmt in class_node.body:
+        if not isinstance(stmt, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "FUNCTION" for target in stmt.targets):
+            continue
+        if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+            return stmt.value.value
+    return ""
+
+
+def _class_method(class_node, method_name: str):
+    """Return a named method AST node from a class."""
+    for stmt in class_node.body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name == method_name:
+            return stmt
+    return None
+
+
 def _read(path: Path):
     """Read text file content using UTF-8 encoding."""
     return path.read_text(encoding="utf-8")
@@ -265,10 +289,90 @@ def _section(text: str, heading: str):
     return text[idx:end]
 
 
+def _first_match(text: str, pattern: str) -> str:
+    """Return the first captured regex value or an empty string."""
+    match = re.search(pattern, text, flags=re.MULTILINE)
+    return str(match.group(1)).strip() if match else ""
+
+
+def _check_version_consistency(issues: list[str], readme_text: str) -> None:
+    """Require package, README, and latest changelog versions to match."""
+    project_version = _first_match(_read(PYPROJECT), r'^version\s*=\s*"([^"]+)"\s*$')
+    readme_version = _first_match(readme_text, r"^Version:\s*(\S+)\s*$")
+    changelog_version = _first_match(_read(CHANGELOG), r"^##\s+(\d+\.\d+\.\d+)\b")
+
+    versions = {
+        "pyproject.toml": project_version,
+        "README.md": readme_version,
+        "CHANGELOG.md": changelog_version,
+    }
+    for source, version in versions.items():
+        if not version:
+            issues.append(f"{source}: version not found")
+    present = {version for version in versions.values() if version}
+    if len(present) > 1:
+        summary = ", ".join(f"{source}={version or 'missing'}" for source, version in versions.items())
+        issues.append(f"version mismatch: {summary}")
+
+
+def _check_local_markdown_links(issues: list[str]) -> None:
+    """Verify local links in README and guide Markdown files."""
+    markdown_files = [README, *sorted((ROOT / "guides").rglob("*.md"))]
+    link_re = re.compile(r"\[[^\]]*\]\((<[^>]+>|[^)\s]+)")
+    for markdown_path in markdown_files:
+        text = _read(markdown_path)
+        for raw_target in link_re.findall(text):
+            target = raw_target.strip("<>")
+            if not target or target.startswith(("#", "/", "http://", "https://", "mailto:", "data:")):
+                continue
+            relative_target = unquote(target.split("#", 1)[0].split("?", 1)[0])
+            if not relative_target:
+                continue
+            resolved = (markdown_path.parent / relative_target).resolve()
+            if not resolved.exists():
+                rel_source = markdown_path.relative_to(ROOT)
+                issues.append(f"{rel_source}: broken local link '{target}'")
+
+
+def _check_registry_metadata(issues: list[str]) -> None:
+    """Require every central NodeSpec to have a matching UI metadata entry."""
+    tree = ast.parse(_read(NODE_REGISTRY), filename=str(NODE_REGISTRY))
+    type_names: set[str] = set()
+    metadata_names: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "NodeSpec"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            type_names.add(node.args[0].value)
+    for stmt in tree.body:
+        if not isinstance(stmt, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "NODE_UI_METADATA" for target in stmt.targets):
+            continue
+        if isinstance(stmt.value, ast.Dict):
+            metadata_names.update(
+                key.value
+                for key in stmt.value.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            )
+    for type_name in sorted(type_names - metadata_names):
+        issues.append(f"nodes/node_registry.py: missing NODE_UI_METADATA for `{type_name}`")
+    for type_name in sorted(metadata_names - type_names):
+        issues.append(f"nodes/node_registry.py: orphan NODE_UI_METADATA for `{type_name}`")
+
+
 def main():
     """Run docs consistency checks and print a pass/fail report."""
     issues = []
     readme_text = _read(README)
+    _check_version_consistency(issues, readme_text)
+    _check_local_markdown_links(issues)
+    _check_registry_metadata(issues)
 
     for spec in NODE_DOCS:
         py_path = ROOT / spec["file"]
@@ -285,6 +389,17 @@ def main():
         if cls is None:
             issues.append(f"class not found: {spec['class']} in {spec['file']}")
             continue
+        if not ast.get_docstring(cls):
+            issues.append(f"{spec['file']}: class `{spec['class']}` missing docstring")
+
+        function_name = _parse_function_name(cls)
+        function_method = _class_method(cls, function_name) if function_name else None
+        if not function_name:
+            issues.append(f"{spec['file']}: class `{spec['class']}` missing FUNCTION")
+        elif function_method is None:
+            issues.append(f"{spec['file']}: FUNCTION method `{function_name}` not found in `{spec['class']}`")
+        elif not ast.get_docstring(function_method):
+            issues.append(f"{spec['file']}: FUNCTION method `{spec['class']}.{function_name}` missing docstring")
 
         required, optional = _parse_input_keys(cls)
         outputs = _parse_return_names(cls)
@@ -298,6 +413,9 @@ def main():
         for key in required:
             if f"`{key}`" not in guide_text:
                 issues.append(f"{spec['guide']}: missing required input `{key}`")
+        for key in optional:
+            if f"`{key}`" not in guide_text:
+                issues.append(f"{spec['guide']}: missing optional input `{key}`")
         for key in outputs:
             if f"`{key}`" not in guide_text:
                 issues.append(f"{spec['guide']}: missing output `{key}`")

@@ -37,7 +37,7 @@ def load_manager_github_stats(
     try:
         with db_path.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
-    except Exception as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         logger_warning("Failed to load ComfyUI-Manager github stats: %s", exc)
         return stats
 
@@ -78,7 +78,7 @@ def load_manager_index(
     try:
         with db_path.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
-    except Exception as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         logger_warning("Failed to load ComfyUI-Manager DB: %s", exc)
         return index
 
@@ -183,4 +183,3 @@ def infer_update_from_manager_stats(
     # Keep a small tolerance for second-level timestamp differences.
     needs_update = (remote_dt - local_dt).total_seconds() > 60.0
     return (needs_update, remote_updated_at)
-

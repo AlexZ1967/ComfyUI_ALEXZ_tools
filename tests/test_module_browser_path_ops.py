@@ -94,7 +94,10 @@ class ModuleBrowserPathOpsTests(unittest.TestCase):
             detected = self.ops.comfyui_root(fake_api_file)
             self.assertEqual(detected, root)
 
+    def test_comfyui_root_handles_shallow_path(self):
+        """Shallow paths should return no root instead of indexing missing parents."""
+        self.assertIsNone(self.ops.comfyui_root("/file.py"))
+
 
 if __name__ == "__main__":
     unittest.main()
-

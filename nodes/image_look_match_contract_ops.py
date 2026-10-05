@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+
 def _identity_cube_text(size: int) -> str:
     """Build identity LUT in .cube text format."""
     n = max(2, int(size))
@@ -34,7 +35,7 @@ def _safe_json_loads(text: Any) -> dict:
         return {}
     try:
         data = json.loads(text)
-    except Exception:
+    except json.JSONDecodeError:
         return {}
     return data if isinstance(data, dict) else {}
 

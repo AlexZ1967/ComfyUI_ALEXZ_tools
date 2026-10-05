@@ -25,6 +25,7 @@
 | `allow_rotation` | Разрешить поворот | Выкл, если поворот физически невозможен |
 | `color_mode` / `lab_channels` | Цветовое пространство для матчинга | `gray` быстрее, `lab` надёжнее на цвете |
 | `background_mask` / `overlay_mask` | Область матчинга | Белое = использовать |
+| `use_color` | Устаревший compatibility-флаг, который переключает `gray` на `lab` | Для новых workflow используйте `color_mode` |
 
 ## Decision helper
 - Лёгкий кейс, нужна скорость -> `orb`, `feature_count=1200`.

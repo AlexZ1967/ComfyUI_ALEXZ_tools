@@ -34,13 +34,9 @@ class ImageOutpaintConfig(ImageConfig):
     process_size: tuple[int, int] = field(init=False)
     outpaint_size: tuple[int, int] = field(init=False)
 
-    # TODO: Refactor
     def __post_init__(self) -> None:
         """Initialize output size for outpainting."""
-        self.process_size = (
-            self.width - self.width % 8,
-            self.height - self.height % 8,
-        )
+        super().__post_init__()
         pad_image_width = int(self.width_scale * self.width)
         pad_image_height = int(self.height_scale * self.height)
         self.outpaint_size = (
@@ -72,7 +68,7 @@ class Stack:
 class ToTorchFormatTensor:
     """Converts a PIL.Image (RGB) or numpy.ndarray (H x W x C) in the range [0, 255] to a torch FloatTensor of shape (C x H x W) in the range [0.0, 1.0]."""
 
-    # TODO: Check if this function is necessary with comfyUI workflow.
+    # Retained for compatibility with upstream ProPainter preprocessing helpers.
     def __init__(self, div=True):
         self.div = div
 

@@ -238,7 +238,7 @@ def module_git_state(
         try:
             if cnr_marker.is_file():
                 manager_cnr_id = cnr_marker.read_text(encoding="utf-8", errors="ignore").strip()
-        except Exception:
+        except OSError:
             manager_cnr_id = ""
         state: dict[str, Any] = {
             "module_path": str(module_dir),

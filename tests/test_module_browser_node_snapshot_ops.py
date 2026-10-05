@@ -67,6 +67,10 @@ class ModuleBrowserNodeSnapshotOpsTests(unittest.TestCase):
         self.assertTrue(node["sig"].startswith("_DummyNode:"))
         self.assertIn("source", node)
 
+    def test_file_digest_returns_empty_for_missing_file(self):
+        """Missing snapshot source should remain a normal empty-digest case."""
+        self.assertEqual(self.ops.file_digest("/missing/alexz-tools-node.py"), "")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,13 +41,13 @@ def _format_json_text(value):
     if isinstance(value, dict):
         try:
             return json.dumps(value, ensure_ascii=True, indent=2)
-        except Exception:
+        except (TypeError, ValueError):
             return json.dumps({"raw": value}, ensure_ascii=True, indent=2)
     if isinstance(value, list):
         parsed_items = [_parse_json_string(item) for item in value]
         try:
             return json.dumps(parsed_items, ensure_ascii=True, indent=2)
-        except Exception:
+        except (TypeError, ValueError):
             return json.dumps({"raw": value}, ensure_ascii=True, indent=2)
     parsed = _parse_json_string(value)
     if isinstance(parsed, (dict, list)):
@@ -61,7 +61,7 @@ def _parse_json_string(value):
         return value
     try:
         parsed = json.loads(value)
-    except Exception:
+    except json.JSONDecodeError:
         return value
     if isinstance(parsed, str):
         inner = parsed.strip()
@@ -70,7 +70,7 @@ def _parse_json_string(value):
         ):
             try:
                 return json.loads(inner)
-            except Exception:
+            except json.JSONDecodeError:
                 return parsed
     return parsed
 

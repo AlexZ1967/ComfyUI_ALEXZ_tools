@@ -41,13 +41,13 @@ def classify_by_source_path(
 
     try:
         src_path = Path(source).resolve()
-    except Exception:
+    except (OSError, RuntimeError):
         return None
 
     for root in custom_nodes_roots_fn():
         try:
             rel = src_path.relative_to(root.resolve())
-        except Exception:
+        except (OSError, RuntimeError, ValueError):
             continue
         if rel.parts:
             return ("custom", canonical_custom_module_name_fn(rel.parts[0]))
@@ -124,4 +124,3 @@ def fallback_annotation(node_cls: Any) -> str:
 
     outputs = ", ".join(output_items) or "unknown"
     return f"Категория: {category}. Выходы: {outputs}."
-

@@ -38,7 +38,7 @@ def module_local_readme_summary(
                 continue
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
-            except Exception:
+            except OSError:
                 continue
             for line in text.splitlines():
                 stripped = line.strip()

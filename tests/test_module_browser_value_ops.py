@@ -88,6 +88,7 @@ class ModuleBrowserValueOpsTests(unittest.TestCase):
         dt_ru = self.ops.parse_datetime("13.02.2026, 10:20:30")
         self.assertIsNotNone(dt_ru)
         self.assertEqual(self.ops.to_iso(dt_ru), "2026-02-13T10:20:30+00:00")
+        self.assertIsNone(self.ops.parse_datetime("not-a-date"))
 
     def test_now_iso_and_normalize_comfyui_mode(self):
         """Now timestamp should be UTC-ISO; mode normalization should map commit aliases."""

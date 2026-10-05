@@ -95,13 +95,13 @@ def parse_datetime(value: str | None) -> datetime | None:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt
-    except Exception:
+    except ValueError:
         pass
     formats = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y, %H:%M:%S")
     for fmt in formats:
         try:
             return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
-        except Exception:
+        except ValueError:
             continue
     return None
 

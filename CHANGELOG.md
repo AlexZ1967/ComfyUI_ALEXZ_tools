@@ -7,6 +7,31 @@
 - Добавлены команды `make ts-check`, `make ts-build`, `make frontend-build`; `make test` проверяет TypeScript без генерации runtime output.
 - Локальные зависимости `node_modules/`, compiler output `frontend/dist/`, временный лог и настройки VS Code исключены из Git.
 
+## 0.42.0 — 2026-07-23
+- Completed `Phase 7: Cleanup / Quality Sweep`:
+  - narrowed exception handling in deterministic JSON, date, path, snapshot,
+    Manager-data, and component-registry helpers;
+  - retained broad catches only at documented runtime, plugin, worker, route,
+    and network transport boundaries;
+  - audited 27 top-level Module Node Picker compatibility wrappers and retained
+    them as an external backward-compatible surface until a future major
+    migration.
+- Extended `utils/docs_check.py` to verify version synchronization, local
+  Markdown links, central node metadata, node and execution-method docstrings,
+  and required/optional guide inputs.
+- Fixed the missing deprecated `use_color` entry in the Align guide and closed
+  the remaining TODO markers in ProPainter utility code.
+- Added regression tests for documentation consistency, exception boundaries,
+  JSON parsing, path/date/snapshot edge cases, and ProPainter image config
+  initialization.
+- Added `refactoring_plan/PHASE7_QUALITY_AUDIT_RU.md` with the cleanup decisions
+  and compatibility policy.
+- Validation:
+  - `make test`: `340 passed`;
+  - JavaScript syntax: `70 files`;
+  - Module Node Picker frontend behavior: `10 scenarios`;
+  - documentation consistency: `OK`.
+
 ## 0.41.2 — 2026-07-23
 - Replaced verbose Trove `browser_only` JSON excerpts with compact browser
   outcome diagnostics:

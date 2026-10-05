@@ -66,12 +66,16 @@ def module_dir(
 
 def comfyui_root(module_file: str | Path) -> Path | None:
     """Resolve root path of currently running ComfyUI installation."""
-    base = Path(module_file).resolve()
-    for candidate in (base.parents[2], *base.parents):
+    try:
+        base = Path(module_file).resolve()
+    except (OSError, RuntimeError):
+        return None
+    parents = list(base.parents)
+    candidates = ([parents[2]] if len(parents) > 2 else []) + parents
+    for candidate in candidates:
         try:
             if (candidate / "nodes.py").exists() and (candidate / ".git").exists():
                 return candidate
-        except Exception:
+        except OSError:
             continue
     return None
-
