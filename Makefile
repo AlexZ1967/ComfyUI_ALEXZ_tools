@@ -1,8 +1,8 @@
-CONDA_ENV ?= p313
+CONDA_ENV ?= p313-torch214-cu132
 CONDA_RUN = conda run -n $(CONDA_ENV)
 BASELINE_OUTPUT ?= baseline.json
 
-.PHONY: docs-check seam-smoke smoke python-test js-check js-check-all js-test test save-baseline
+.PHONY: docs-check seam-smoke smoke python-test js-check js-check-all js-test ts-check ts-build frontend-build test save-baseline
 
 docs-check:
 	$(CONDA_RUN) python utils/docs_check.py
@@ -24,7 +24,16 @@ js-check-all:
 js-test:
 	$(CONDA_RUN) node tests/js/test_module_node_picker_frontend_behavior.mjs
 
-test: docs-check python-test js-check-all js-test
+ts-check:
+	$(CONDA_RUN) npm run ts-check
+
+ts-build:
+	$(CONDA_RUN) npm run ts-build
+
+frontend-build:
+	$(CONDA_RUN) npm run frontend-build
+
+test: docs-check python-test js-check-all js-test ts-check
 
 save-baseline:
 	bash scripts/save_baseline.sh --output "$(BASELINE_OUTPUT)"

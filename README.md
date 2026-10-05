@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.41.2
+Version: 0.43.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -26,15 +26,23 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 
 ## Docs Check
 - Проверка синхронизации параметров/выходов нод и документации:  
-  `conda run -n p313 python utils/docs_check.py`
+  `conda run -n p313-torch214-cu132 python utils/docs_check.py`
 
 ## Development Environment
-- Для локальных проверок используйте Conda-окружение `p313`.
-- Рекомендуемый префикс команд: `conda run -n p313 ...`
+- Для локальных проверок используйте Conda-окружение `p313-torch214-cu132`.
+- Рекомендуемый префикс команд: `conda run -n p313-torch214-cu132 ...`
 - Быстрые команды: `make docs-check`, `make seam-smoke`, `make smoke`,
   `make js-check-all`, `make js-test`, `make test`.
 - Полный frontend verification flow:
   [GUIDE_FRONTEND_CHECKS.md](guides/GUIDE_FRONTEND_CHECKS.md)
+- Зависимости TypeScript/esbuild: `conda run -n p313-torch214-cu132 npm ci`.
+- TypeScript source: `frontend/src/`; `make ts-check` проверяет типы,
+  `make ts-build` создаёт локальный compiler output в `frontend/dist/`.
+- `make frontend-build` собирает runtime bundle через esbuild в `web/generated/`.
+  Bundle и source map хранятся в Git, чтобы ComfyUI загружал extension без npm-сборки;
+  generated-файлы вручную не редактируются. После изменения runtime TypeScript
+  запускайте `make ts-check` и `make frontend-build`.
+- `make test` выполняет проверки без генерации runtime bundle.
 
 ## Runtime notes
 - Pillow 13 compatibility: internal image conversions no longer rely on deprecated `mode=` in `Image.fromarray(...)` across the affected nodes/helpers, reducing future upgrade risk without changing node behavior.

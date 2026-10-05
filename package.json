@@ -1,0 +1,31 @@
+{
+  "name": "comfyui_alexz_tools",
+  "version": "0.43.0",
+  "description": "Frontend development tooling for ComfyUI ALEXZ_tools",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "ts-check": "tsc -p frontend/tsconfig.json --noEmit",
+    "ts-build": "tsc -p frontend/tsconfig.json",
+    "frontend-build": "node scripts/frontend/build.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools/issues"
+  },
+  "homepage": "https://github.com/AlexZ1967/ComfyUI_ALEXZ_tools#readme",
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

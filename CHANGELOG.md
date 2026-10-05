@@ -1,5 +1,12 @@
 # Changelog — ALEXZ_tools
 
+## 0.43.0 — 2026-10-05
+- Настроено окружение разработки Codex: Conda `p313-torch214-cu132`, русскоязычное общение и правила документации в `AGENTS.md`, границы проекта и локальный ComfyUI как read-only reference.
+- Добавлены TypeScript source в `frontend/src/`, строгая проверка типов и минимальные declarations API ComfyUI.
+- Добавлена runtime-сборка через esbuild в `web/generated/` и демонстрационный extension `ALEXZ.Tools.Hello`; bundle хранится в Git для установки без локальной npm-сборки.
+- Добавлены команды `make ts-check`, `make ts-build`, `make frontend-build`; `make test` проверяет TypeScript без генерации runtime output.
+- Локальные зависимости `node_modules/`, compiler output `frontend/dist/`, временный лог и настройки VS Code исключены из Git.
+
 ## 0.41.2 — 2026-07-23
 - Replaced verbose Trove `browser_only` JSON excerpts with compact browser
   outcome diagnostics:

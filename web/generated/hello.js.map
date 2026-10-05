@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../frontend/src/hello.ts"],
+  "sourcesContent": ["import { app } from \"../../../scripts/app.js\";\n\napp.registerExtension({\n    name: \"ALEXZ.Tools.Hello\",\n\n    async setup() {\n        console.log(\"[ALEXZ_tools] TypeScript frontend extension loaded.\");\n    },\n});\n"],
+  "mappings": ";AAAA,SAAS,WAAW;AAEpB,IAAI,kBAAkB;AAAA,EAClB,MAAM;AAAA,EAEN,MAAM,QAAQ;AACV,YAAQ,IAAI,qDAAqD;AAAA,EACrE;AACJ,CAAC;",
+  "names": []
+}
