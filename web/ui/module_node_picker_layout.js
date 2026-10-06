@@ -12,14 +12,27 @@
  */
 
 /**
- * Build Module Node Picker layout and return key element references.
+ * Mount a fresh picker root without deleting another extension's DOM.
  */
-export function createModuleNodePickerLayout(container) {
-    container.innerHTML = "";
-
+export function createModuleNodePickerRoot(container) {
+    // ComfyUI переиспользует host между custom-панелями. Чужой DOM может
+    // принадлежать Vue renderer, поэтому удаляем только прежний root picker.
+    for (const child of Array.from(container.children)) {
+        if (child.classList.contains("alexz-mod-picker")) {
+            child.remove();
+        }
+    }
     const root = document.createElement("div");
     root.className = "alexz-mod-picker";
     container.appendChild(root);
+    return root;
+}
+
+/**
+ * Build Module Node Picker layout and return key element references.
+ */
+export function createModuleNodePickerLayout(container) {
+    const root = createModuleNodePickerRoot(container);
 
     const head = document.createElement("div");
     head.className = "alexz-mod-picker-head";

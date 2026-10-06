@@ -206,6 +206,7 @@ export function createModuleNodePickerTabRelayRuntime({ app, root, mountHost, si
                 window.clearTimeout(pendingSyncTimer);
                 pendingSyncTimer = 0;
             }
+            domOwnership.ensureDetached();
         },
 
         /**

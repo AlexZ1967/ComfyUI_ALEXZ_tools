@@ -38,6 +38,251 @@ import {
     pollUpdateProgressLoop,
 } from "../../web/orchestration/flow/progress/module_node_picker_update_flow.js";
 import { renderComfyAlertCard } from "../../web/ui/module_node_picker_alerts.js";
+import { createModuleNodePickerRoot } from "../../web/ui/module_node_picker_layout.js";
+import { createRelayDomOwnershipController } from "../../web/orchestration/relay/module_node_picker_tab_relay_dom_ownership.js";
+import {
+    createIsolatedSidebarRenderer,
+    installCustomSidebarHostIsolation,
+} from "../../web/orchestration/core/infra/module_node_picker_sidebar_hosts.js";
+
+async function testCustomSidebarMountIsolation() {
+    const documentObj = {
+        createElement() {
+            return {
+                ownerDocument: documentObj,
+                children: [], parentElement: null, dataset: {}, style: {},
+                get childElementCount() { return this.children.length; },
+                get firstElementChild() { return this.children[0] || null; },
+                appendChild(child) {
+                    if (child.parentElement) {
+                        const siblings = child.parentElement.children;
+                        siblings.splice(siblings.indexOf(child), 1);
+                    }
+                    this.children.push(child);
+                    child.parentElement = this;
+                    return child;
+                },
+                replaceChildren(...children) {
+                    for (const child of this.children) child.parentElement = null;
+                    this.children = [];
+                    for (const child of children) this.appendChild(child);
+                },
+            };
+        },
+    };
+    const shared = documentObj.createElement();
+    const receiver = {};
+    const token = {};
+    const mapMounts = new Set();
+    const mapRender = createIsolatedSidebarRenderer(function (mount, argument) {
+        assert.equal(this, receiver);
+        assert.equal(argument, token);
+        mapMounts.add(mount);
+        if (!mount._vnode) mount._vnode = { el: mount.appendChild(documentObj.createElement()) };
+        assert.equal(mount._vnode.el.parentElement, mount, "Vue DOM must survive other renderers");
+        return argument;
+    }, "nodes-map");
+    const pngElement = documentObj.createElement();
+    const pngRender = createIsolatedSidebarRenderer((mount) => mount.appendChild(pngElement), "png-info");
+    const pickerRender = createIsolatedSidebarRenderer((mount) => mount.replaceChildren(documentObj.createElement()), "picker");
+    const showMap = (host) => {
+        assert.equal(mapRender.call(receiver, host, token), token);
+        assert.equal(host.childElementCount, 1);
+        assert.equal(host.firstElementChild.dataset.alexzSidebarTab, "nodes-map");
+        assert.equal(pngElement.parentElement?.parentElement || null, null, "PNG Info must not overlap NodesMap");
+    };
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+        showMap(shared);
+        const mapMount = shared.firstElementChild;
+        pngRender(shared);
+        assert.equal(mapMount.parentElement, null);
+        assert.equal(shared.firstElementChild.dataset.alexzSidebarTab, "png-info");
+        showMap(shared);
+        pickerRender(shared);
+        assert.equal(mapMount.parentElement, null);
+        showMap(shared);
+    }
+    assert.equal(mapMounts.size, 1, "reuse renderer mount across custom-tab switches");
+    // После Apps ComfyUI создаёт новый внешний host, без чужого renderer state.
+    showMap(documentObj.createElement());
+    assert.equal(mapMounts.size, 2);
+    assert.equal(shared._vnode, undefined);
+
+    let cleanupCalls = 0;
+    let doctorMount;
+    const doctorTab = {
+        id: "doctor", type: "custom",
+        render(mount) {
+            doctorMount = mount;
+            shared.style.minWidth = "560px";
+            mount.replaceChildren(documentObj.createElement());
+        },
+        destroy() {
+            assert.equal(this, doctorTab, "preserve cleanup callback receiver");
+            assert.equal(doctorMount.parentElement, shared, "cleanup must precede incoming mount");
+            cleanupCalls += 1;
+            doctorMount.replaceChildren();
+            shared.style.minWidth = "";
+        },
+    };
+    let sidebarSubscription;
+    const sidebar = {
+        sidebarTabs: [doctorTab], activeSidebarTabId: "doctor",
+        $subscribe(callback) { sidebarSubscription = callback; },
+    };
+    installCustomSidebarHostIsolation({ extensionManager: { sidebarTab: sidebar } });
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+        doctorTab.render(shared);
+        doctorTab.render(shared);
+        assert.equal(cleanupCalls, cycle, "do not deactivate when rerendering the same tab");
+        assert.equal(shared.style.minWidth, "560px");
+        showMap(shared);
+        assert.equal(cleanupCalls, cycle + 1);
+        assert.equal(shared.style.minWidth, "", "restore layout on custom-tab takeover");
+        assert.equal(doctorMount.childElementCount, 0);
+        pngRender(shared);
+        assert.equal(cleanupCalls, cycle + 1, "do not repeat cleanup after takeover");
+    }
+    for (const nextId of ["apps", undefined]) {
+        sidebar.activeSidebarTabId = "doctor";
+        sidebarSubscription();
+        doctorTab.render(shared);
+        const before = cleanupCalls;
+        sidebar.activeSidebarTabId = nextId;
+        sidebarSubscription();
+        assert.equal(cleanupCalls, before + 1, "cleanup on Vue transition or sidebar closing");
+        assert.equal(shared.style.minWidth, "");
+        doctorTab.destroy();
+        assert.equal(cleanupCalls, before + 1, "ComfyUI unmount must not duplicate cleanup");
+        showMap(shared);
+        assert.equal(cleanupCalls, before + 1, "incoming custom mount must not duplicate cleanup");
+    }
+}
+
+async function testSidebarIsolationRegistrationLifecycle() {
+    let subscription;
+    let subscriptions = 0;
+    const originalRender = () => {};
+    const sidebar = {
+        sidebarTabs: [
+            { id: "custom", type: "custom", render: originalRender },
+            { id: "apps", type: "vue", render: originalRender },
+        ],
+        $subscribe(callback, options) {
+            subscription = callback;
+            subscriptions += 1;
+            assert.equal(options.flush, "sync");
+            assert.equal(options.detached, true);
+        },
+    };
+    const app = { extensionManager: { sidebarTab: sidebar } };
+    const sync = installCustomSidebarHostIsolation(app);
+    const wrapped = sidebar.sidebarTabs[0].render;
+    assert.notEqual(wrapped, originalRender);
+    assert.equal(sidebar.sidebarTabs[1].render, originalRender, "leave Vue panels unchanged");
+    assert.equal(installCustomSidebarHostIsolation(app), sync);
+    assert.equal(subscriptions, 1);
+    assert.equal(sidebar.sidebarTabs[0].render, wrapped, "do not stack wrappers");
+    const lateTab = { id: "late-easyuse", type: "custom", render: originalRender };
+    sidebar.sidebarTabs = [...sidebar.sidebarTabs, lateTab];
+    subscription();
+    assert.notEqual(lateTab.render, originalRender, "isolate late sidebar registrations");
+    const lateWrapped = lateTab.render;
+    subscription();
+    assert.equal(lateTab.render, lateWrapped);
+}
+
+async function testSharedSidebarPreservesForeignRenderer() {
+    const previousElement = globalThis.Element;
+    const previousDocument = globalThis.document;
+    class SidebarElement {
+        constructor() {
+            this.children = [];
+            this.parentElement = null;
+            this.className = "";
+            this.connected = false;
+            const properties = new Map();
+            this.style = {
+                getPropertyValue: (name) => properties.get(name)?.value || "",
+                getPropertyPriority: (name) => properties.get(name)?.priority || "",
+                setProperty: (name, value, priority = "") => properties.set(name, { value, priority }),
+                removeProperty: (name) => properties.delete(name),
+            };
+            this.classList = { contains: (name) => this.className.split(/\s+/).includes(name) };
+        }
+        get isConnected() {
+            return this.connected || Boolean(this.parentElement?.isConnected);
+        }
+        appendChild(child) {
+            child.remove();
+            this.children.push(child);
+            child.parentElement = this;
+            return child;
+        }
+        removeChild(child) {
+            this.children.splice(this.children.indexOf(child), 1);
+            child.parentElement = null;
+        }
+        remove() {
+            this.parentElement?.removeChild(this);
+        }
+    }
+    globalThis.Element = SidebarElement;
+    globalThis.document = { createElement: () => new SidebarElement() };
+    try {
+        const host = new SidebarElement();
+        host.connected = true;
+        const foreign = host.appendChild(new SidebarElement());
+        foreign.style.setProperty("display", "flex");
+        const alreadyHidden = host.appendChild(new SidebarElement());
+        alreadyHidden.style.setProperty("display", "none", "important");
+        const rendererState = { el: foreign };
+        host._vnode = rendererState;
+
+        // Vue должен сохранить тот же живой DOM после каждого custom-tab round trip.
+        for (let cycle = 0; cycle < 3; cycle += 1) {
+            const root = createModuleNodePickerRoot(host);
+            const ownership = createRelayDomOwnershipController({ root, mountHost: host });
+            ownership.ensureAttached();
+            ownership.ensureAttached();
+            assert.equal(foreign.isConnected, true, "foreign renderer DOM must stay connected");
+            assert.equal(host._vnode, rendererState, "foreign renderer state must remain untouched");
+            assert.equal(foreign.style.getPropertyValue("display"), "none");
+            assert.equal(foreign.style.getPropertyPriority("display"), "important");
+            ownership.ensureDetached();
+            assert.equal(foreign.style.getPropertyValue("display"), "flex");
+            assert.equal(foreign.style.getPropertyPriority("display"), "");
+            assert.equal(alreadyHidden.style.getPropertyValue("display"), "none");
+            assert.equal(alreadyHidden.style.getPropertyPriority("display"), "important");
+            assert.equal(rendererState.el.parentElement, host);
+            assert.equal(root.isConnected, false);
+        }
+
+        const staleRoot = createModuleNodePickerRoot(host);
+        const root = createModuleNodePickerRoot(host);
+        assert.equal(staleRoot.parentElement, null, "replace only the previous picker root");
+        assert.equal(foreign.isConnected, true);
+        const ownership = createRelayDomOwnershipController({ root, mountHost: host });
+        ownership.ensureAttached();
+        // ComfyUI может отключить host целиком при переходе custom -> Apps.
+        host.connected = false;
+        ownership.ensureDetached();
+        assert.equal(foreign.style.getPropertyValue("display"), "flex", "restore disconnected host styles");
+
+        const nextHost = new SidebarElement();
+        nextHost.connected = true;
+        const nextForeign = nextHost.appendChild(new SidebarElement());
+        nextHost.appendChild(root);
+        ownership.ensureAttached();
+        assert.equal(nextForeign.style.getPropertyValue("display"), "none");
+        ownership.ensureDetached();
+        assert.equal(nextForeign.style.getPropertyValue("display"), "", "restore absent inline display");
+        assert.equal(nextForeign.isConnected, true);
+    } finally {
+        globalThis.Element = previousElement;
+        globalThis.document = previousDocument;
+    }
+}
 
 function makeClassList() {
     const names = new Set();
@@ -336,6 +581,9 @@ async function testComfyReleaseCheckDegradedUsesNeutralWarningText() {
 
 async function main() {
     const tests = [
+        ["custom sidebar mount isolation", testCustomSidebarMountIsolation],
+        ["sidebar isolation registration lifecycle", testSidebarIsolationRegistrationLifecycle],
+        ["shared sidebar preserves foreign renderer", testSharedSidebarPreservesForeignRenderer],
         ["runtime state accessors", testRuntimeStateAccessors],
         ["relay state transitions", testRelayStateTransitions],
         ["refresh progress loop behavior", testRefreshProgressLoopBehavior],

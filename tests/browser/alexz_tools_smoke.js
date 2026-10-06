@@ -122,6 +122,93 @@ async (page) => {
             }
             await panel.locator(".alexz-mod-picker-node").first().waitFor({ state: "visible", timeout: remaining() });
         });
+        await check("Sidebar tab switching", async () => {
+            const pickerButton = page.getByTestId("alexz-module-nodes-tab-button");
+            const nodesMapButton = page.getByRole("button", { name: "NodesMap", exact: true });
+            const pngInfoButton = page.getByRole("button", { name: "PNG Info", exact: true });
+            const appsButton = page.getByRole("button", { name: "Apps", exact: true });
+            const doctorButton = page.getByTestId("comfyui-doctor-tab-button");
+            const picker = page.locator(".alexz-mod-picker");
+            const nodesMap = page.locator(".comfyui-easyuse-map");
+            const pngInfo = page.locator(".PNGInfo-popup");
+            report.sidebarSwitching = {
+                nodesMapInstalled: await nodesMapButton.count() > 0,
+                pngInfoInstalled: await pngInfoButton.count() > 0,
+                doctorInstalled: await doctorButton.count() > 0,
+                cycles: 0,
+                pngInfoCycles: 0,
+                doctorCycles: 0,
+            };
+            const openTab = async (button, id) => {
+                const active = await page.evaluate(() => window.comfyAPI.app.app.extensionManager.sidebarTab.activeSidebarTabId);
+                if (active !== id) await button.click({ timeout: remaining() });
+                await page.waitForFunction((tabId) => window.comfyAPI.app.app.extensionManager.sidebarTab.activeSidebarTabId === tabId,
+                    id, { timeout: remaining() });
+            };
+            // EasyUse необязателен: не устанавливаем его ради smoke.
+            // Если NodesMap доступна, custom -> custom проверяется до обхода через Apps.
+            for (let cycle = 0; cycle < 2; cycle += 1) {
+                if (report.sidebarSwitching.nodesMapInstalled) {
+                    await openTab(nodesMapButton, "easyuse_nodes_map");
+                    await nodesMap.waitFor({ state: "visible", timeout: remaining() });
+                    await picker.waitFor({ state: "hidden", timeout: remaining() });
+                    if (report.sidebarSwitching.pngInfoInstalled) {
+                        await openTab(pngInfoButton, "PNGInfo.SideBar");
+                        await pngInfo.waitFor({ state: "visible", timeout: remaining() });
+                        await nodesMap.waitFor({ state: "hidden", timeout: Math.min(remaining(), 3000) });
+                        await picker.waitFor({ state: "hidden", timeout: remaining() });
+                        await openTab(nodesMapButton, "easyuse_nodes_map");
+                        await nodesMap.waitFor({ state: "visible", timeout: remaining() });
+                        await pngInfo.waitFor({ state: "hidden", timeout: Math.min(remaining(), 3000) });
+                        report.sidebarSwitching.pngInfoCycles += 1;
+                    }
+                    await openTab(pickerButton, "alexz-module-nodes");
+                    await picker.waitFor({ state: "visible", timeout: remaining() });
+                    await nodesMap.waitFor({ state: "hidden", timeout: remaining() });
+                    await openTab(nodesMapButton, "easyuse_nodes_map");
+                    await nodesMap.waitFor({ state: "visible", timeout: remaining() });
+                    await picker.waitFor({ state: "hidden", timeout: remaining() });
+                }
+                await openTab(appsButton, "apps");
+                await page.getByTestId("apps-sidebar").waitFor({ state: "visible", timeout: remaining() });
+                await picker.waitFor({ state: "hidden", timeout: remaining() });
+                if (report.sidebarSwitching.nodesMapInstalled) {
+                    await openTab(nodesMapButton, "easyuse_nodes_map");
+                    await nodesMap.waitFor({ state: "visible", timeout: remaining() });
+                }
+                await openTab(pickerButton, "alexz-module-nodes");
+                await picker.waitFor({ state: "visible", timeout: remaining() });
+                if (report.sidebarSwitching.doctorInstalled) {
+                    const readLayout = () => page.evaluate(() => {
+                        const content = document.querySelector(".sidebar-content-container");
+                        const panel = content.closest(".side-bar-panel") || content.closest(".p-splitterpanel");
+                        return [content, panel].map((element) => element
+                            ? ["min-width", "width", "flex-basis"].map((property) => element.style.getPropertyValue(property))
+                            : null);
+                    });
+                    const layout = await readLayout();
+                    await openTab(doctorButton, "comfyui-doctor");
+                    await page.locator(".doctor-sidebar-content").waitFor({ state: "visible", timeout: remaining() });
+                    await picker.waitFor({ state: "hidden", timeout: remaining() });
+                    await openTab(pickerButton, "alexz-module-nodes");
+                    await picker.waitFor({ state: "visible", timeout: remaining() });
+                    await page.locator(".doctor-sidebar-content").waitFor({ state: "hidden", timeout: remaining() });
+                    require(JSON.stringify(await readLayout()) === JSON.stringify(layout),
+                        "Doctor layout was not restored after custom-tab takeover");
+                    await openTab(doctorButton, "comfyui-doctor");
+                    await page.locator(".doctor-sidebar-content").waitFor({ state: "visible", timeout: remaining() });
+                    await openTab(appsButton, "apps");
+                    await page.getByTestId("apps-sidebar").waitFor({ state: "visible", timeout: remaining() });
+                    await page.locator(".doctor-sidebar-content").waitFor({ state: "hidden", timeout: remaining() });
+                    require(JSON.stringify(await readLayout()) === JSON.stringify(layout),
+                        "Doctor layout was not restored after Vue-tab takeover");
+                    await openTab(pickerButton, "alexz-module-nodes");
+                    await picker.waitFor({ state: "visible", timeout: remaining() });
+                    report.sidebarSwitching.doctorCycles += 1;
+                }
+                report.sidebarSwitching.cycles += 1;
+            }
+        });
         await check("Catalog and module-info API", async () => {
             const result = await page.evaluate(async (module) => {
                 const api = window.comfyAPI.api.api;

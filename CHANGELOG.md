@@ -7,6 +7,13 @@
 - В `AGENTS.md` закреплены правила browser validation, `.playwright-mcp/` исключён из Git; README и руководство frontend-проверок ссылаются на новый сценарий.
 - Проверки: `make test` — 340 Python-тестов, JS syntax/behavior, TypeScript и docs прошли; browser smoke — 7 проверок PASS и 71 загруженный JS-файл. Отрицательная проверка подтвердила обнаружение ошибки ALEXZ и блокировку запрещённого POST.
 
+## 0.43.1 — 2026-10-06
+- Исправлены исчезновение NodesMap и наложение PNG Info при переходах между custom-панелями: ALEXZ_tools через публичные sidebar render callbacks выделяет каждой панели отдельный mount, сохраняя её DOM и renderer state. Vue-панели и файлы ComfyUI/сторонних extensions не изменяются.
+- Восстановлен cleanup custom-панелей при смене активной вкладки и закрытии sidebar. Существующий `destroy` вызывается до нового render и не дублируется при unmount; после Doctor восстанавливается ширина как при переходе в custom-панель, так и в штатную Vue-панель.
+- Добавлены JS-регрессии сохранения чужого renderer, изоляции mount, поздней регистрации панелей, порядка и однократности cleanup. Browser smoke проверяет повторные переходы Module Nodes/NodesMap/PNG Info/Apps, Doctor → Module Nodes/Apps и восстановление inline layout. Сторонние панели проверяются только при наличии, без установки.
+- Обновлены руководство browser smoke и статус known issue NodesMap; версия синхронизирована в Python/npm metadata и README.
+- Проверки: `make test` — 340 Python-тестов, синтаксис 72 JS-файлов, 13 JS behavior-сценариев, TypeScript и docs прошли; browser smoke — 8 проверок PASS, включая два цикла Doctor → Module Nodes/Apps с восстановлением layout. Дополнительная browser-проверка: 72/72 направленных перехода между 9 установленными sidebar-панелями, закрытие/повторное открытие каждой и 10 проверок Templates/Help/Console/Shortcuts/Settings поверх NodesMap и PNG Info — PASS. До исправлений browser-проверки обнаруживали наложение панелей и оставшуюся ширину Doctor.
+
 ## 0.43.0 — 2026-10-05
 - Настроено окружение разработки Codex: Conda `p313-torch214-cu132`, русскоязычное общение и правила документации в `AGENTS.md`, границы проекта и локальный ComfyUI как read-only reference.
 - Добавлены TypeScript source в `frontend/src/`, строгая проверка типов и минимальные declarations API ComfyUI.

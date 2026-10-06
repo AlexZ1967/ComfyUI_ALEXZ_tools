@@ -11,6 +11,8 @@
  *   so the main picker module remains a composition entry point.
  */
 
+import { installCustomSidebarHostIsolation } from "./module_node_picker_sidebar_hosts.js";
+
 /**
  * Register Module Node Picker extension once and wire sidebar/fallback mount.
  */
@@ -43,6 +45,7 @@ export function registerModuleNodePickerExtension(config = {}) {
             cleanupFallbackButtons?.(fallbackButtonId);
 
             if (app.extensionManager && typeof app.extensionManager.registerSidebarTab === "function") {
+                const syncSidebarHosts = installCustomSidebarHostIsolation(app);
                 app.extensionManager.registerSidebarTab({
                     id: sidebarTabId,
                     icon: "pi pi-th-large",
@@ -53,6 +56,7 @@ export function registerModuleNodePickerExtension(config = {}) {
                         renderPicker?.(container);
                     },
                 });
+                syncSidebarHosts();
                 return;
             }
 

@@ -34,7 +34,7 @@ install/update/remove. Сообщи status, checks, failures и сторонни
    MCP, а не самостоятельный CLI runner. Название инструмента `unsafe` означает
    возможность исполнения кода в процессе сервера; перед запуском читайте
    сценарий и выполняйте только этот проверенный файл.
-5. Успех — только возвращённый `status: "PASS"` со всеми семью `checks: PASS`.
+5. Успех — только возвращённый `status: "PASS"` со всеми восемью `checks: PASS`.
    Ошибка MCP, timeout, отсутствие подключения или `FAIL` не являются успехом.
    При failure сохраните console/network, snapshot и при необходимости screenshot
    средствами MCP в `.playwright-mcp/`. Не исправляйте сторонние extensions
@@ -53,6 +53,7 @@ browser smoke. При необходимости будущего автоном
 | ALEXZ.Tools.Hello setup | Extension зарегистрирован и получен setup log именно из `generated/hello.js` |
 | Module Node Picker opens | Кнопка sidebar видима, после клика панель `.alexz-mod-picker` видима |
 | Picker DOM and node list | Есть заголовок, Debug, mode select, три selection select, фильтр, карточка ALEXZ_tools и список нод |
+| Sidebar tab switching | Два цикла переходов между Module Nodes и Apps; при установленном EasyUse дополнительно NodesMap → Module Nodes → NodesMap → Apps → NodesMap, а при наличии PNG Info — NodesMap → PNG Info → NodesMap. При наличии Doctor проверяются Doctor → Module Nodes и Doctor → Apps с восстановлением inline layout. Активная панель видима, чужие панели скрыты |
 | Catalog and module-info API | GET через `api.fetchApi`, HTTP 2xx, JSON без `error`, каталог содержит ноды ALEXZ_tools, info соответствует модулю |
 | Extension resources loaded | Все JS URL ALEXZ_tools из `/extensions` наблюдались при загрузке без HTTP errors; Hello и picker присутствуют |
 | No ALEXZ errors or unsafe operations | Нет связанных console errors/pageerrors, failed requests или заблокированных опасных запросов |
@@ -74,7 +75,8 @@ browser smoke. При необходимости будущего автоном
 ## Безопасность и ограничения
 
 - Выполняются только навигация, открытие панели, выбор Custom/ALEXZ_tools и
-  раскрытие карточки модуля. Кнопки refresh, install, update, remove и нод
+  раскрытие карточки модуля и переключение sidebar Module Nodes/Apps/NodesMap/PNG Info/Doctor.
+  Кнопки refresh, install, update, remove и нод
   не нажимаются; workflow не запускается и не сохраняется.
 - Guard перехватывает `/alexz_tools/` и `/api/alexz_tools/`: разрешает только
   GET каталога с `cache_only=1`, GET module info с `cache_only=1` без refresh/sync,
@@ -88,5 +90,19 @@ browser smoke. При необходимости будущего автоном
   вычисления, upload и ошибки, появляющиеся значительно позже, не проверяются.
 - Проверка зависит от текущих DOM-классов picker и `data-testid` sidebar;
   при намеренном изменении этих контрактов обновите сценарий.
+- EasyUse/NodesMap и PNG Info — необязательные сторонние расширения. Проверка сообщает
+  их наличие и число циклов в `sidebarSwitching`; при отсутствии NodesMap
+  выполняются только переходы Module Nodes ↔ Apps. Отсутствие EasyUse не FAIL,
+  но пустая NodesMap после перехода из Module Nodes при наличии расширения — FAIL.
+  Одновременное отображение NodesMap и PNG Info при переключении между ними — FAIL.
+- Doctor также необязателен: сценарий сообщает `doctorInstalled` и `doctorCycles`.
+  Открывается только sidebar, без анализа, отправки сообщений AI или изменения настроек.
+  После ухода из Doctor проверяется восстановление `min-width`, `width`, `flex-basis`
+  у sidebar content и панели. Оставшиеся принудительные размеры означают FAIL.
+- При изменениях общего lifecycle sidebar дополнительно проверьте все направленные
+  переходы между установленными панелями в отдельной тестовой вкладке. Для каждой
+  пары откройте первую панель, затем вторую; проверьте содержимое, отсутствие чужого
+  DOM поверх него и восстановление layout. Переключайтесь только кнопками toolbar,
+  не нажимайте элементы вставки нод, загрузки workflow или операций backend.
 - `.playwright-mcp/` содержит локальные диагностику и screenshots, игнорируется
   Git и не коммитится. Настройки MCP также не добавляются в исходники проекта.

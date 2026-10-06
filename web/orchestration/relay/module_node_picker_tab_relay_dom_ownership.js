@@ -18,6 +18,44 @@ export function createRelayDomOwnershipController({ root, mountHost }) {
     const initialHomeContainer = root.parentElement instanceof Element ? root.parentElement : null;
     const explicitMountHost = mountHost instanceof Element ? mountHost : null;
     let homeContainer = initialHomeContainer || explicitMountHost || null;
+    let visibilityHost = null;
+    const hiddenSiblings = new Map();
+
+    /**
+     * Restore the original display rules of other extensions' elements.
+     */
+    const restoreSiblings = () => {
+        for (const [element, display] of hiddenSiblings) {
+            if (display.value) {
+                element.style.setProperty("display", display.value, display.priority);
+            } else {
+                element.style.removeProperty("display");
+            }
+        }
+        hiddenSiblings.clear();
+        visibilityHost = null;
+    };
+
+    /**
+     * Hide foreign content temporarily without invalidating its renderer.
+     */
+    const hideSiblings = (host) => {
+        if (visibilityHost !== host) {
+            restoreSiblings();
+            visibilityHost = host;
+        }
+        for (const child of Array.from(host.children)) {
+            if (child === root || !child.style || hiddenSiblings.has(child)) {
+                continue;
+            }
+            hiddenSiblings.set(child, {
+                value: child.style.getPropertyValue("display"),
+                priority: child.style.getPropertyPriority("display"),
+            });
+            // Сохраняем DOM и Vue-состояние соседней панели в общем host.
+            child.style.setProperty("display", "none", "important");
+        }
+    };
 
     /**
      * Re-attach picker root into active host when needed.
@@ -36,13 +74,16 @@ export function createRelayDomOwnershipController({ root, mountHost }) {
                 preferredHost.appendChild(root);
                 homeContainer = preferredHost;
             }
+            hideSiblings(homeContainer);
             return true;
         }
         if (preferredHost) {
             homeContainer = preferredHost;
             preferredHost.appendChild(root);
+            hideSiblings(preferredHost);
             return true;
         }
+        restoreSiblings();
         return false;
     };
 
@@ -50,6 +91,9 @@ export function createRelayDomOwnershipController({ root, mountHost }) {
      * Detach picker root from DOM.
      */
     const ensureDetached = () => {
+        // Host может быть уже отключён ComfyUI при переходе к Vue-панели.
+        // Восстанавливаем стили и в этом случае, а не только для живого root.
+        restoreSiblings();
         if (!root.isConnected) {
             return true;
         }

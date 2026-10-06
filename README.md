@@ -1,6 +1,6 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.43.0
+Version: 0.43.1
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
@@ -62,7 +62,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - Инструмент показывает ноды по модулям (`Core/Extras/API/Custom`), дает быстрый поиск, статус обновлений и вставку выбранной ноды в workflow.
 - `Module Node Picker` работает в monitoring/info-only режиме для update/dependency follow-up: если `requirements.txt` изменился, виджет подсказывает ручную команду, но не запускает `pip install` сам.
 - Подробное описание UI и всех кнопок: [GUIDE_MODULE_NODE_PICKER.md](guides/GUIDE_MODULE_NODE_PICKER.md)
-- Известные проблемы и обходные пути: [![Known Issue](https://img.shields.io/badge/Known%20Issue-red)](guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md) [GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md](guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md)
+- Исправления известных проблем и регрессионные проверки: [![Fixed 0.43.1](https://img.shields.io/badge/Fixed-0.43.1-green)](guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md) [GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md](guides/GUIDE_KNOWN_ISSUES_MODULE_NODE_PICKER.md)
 
 ## Nodes (jump to details)
 - [Image Prepare for QwenEdit Outpaint](#image-prepare-for-qwenedit-outpaint)
