@@ -27,6 +27,10 @@ ROUTE_MODULE_INFO = "/alexz_tools/module_info"
 ROUTE_COMFYUI_INFO = "/alexz_tools/comfyui_info"
 ROUTE_MODULE_LIST = "/alexz_tools/module_list"
 ROUTE_MODULE_NODES = "/alexz_tools/module_nodes"
+ROUTE_UPDATE_PLAN_STATUS = "/alexz_tools/update_plan_status"
+ROUTE_UPDATE_PLAN_CHECK = "/alexz_tools/update_plan_check"
+ROUTE_UPDATE_PLAN_APPLY = "/alexz_tools/update_plan_apply"
+ROUTE_UPDATE_PLAN_CANCEL = "/alexz_tools/update_plan_cancel"
 
 ALL_API_ROUTES: tuple[str, ...] = (
     ROUTE_MODULE_REFRESH,
@@ -42,6 +46,10 @@ ALL_API_ROUTES: tuple[str, ...] = (
     ROUTE_COMFYUI_INFO,
     ROUTE_MODULE_LIST,
     ROUTE_MODULE_NODES,
+    ROUTE_UPDATE_PLAN_STATUS,
+    ROUTE_UPDATE_PLAN_CHECK,
+    ROUTE_UPDATE_PLAN_APPLY,
+    ROUTE_UPDATE_PLAN_CANCEL,
 )
 
 # Component-facing API routes that should appear in component registry snapshots.
@@ -54,6 +62,10 @@ COMPONENT_API_ROUTES: tuple[str, ...] = (
     ROUTE_MODULE_REFRESH_STATUS,
     ROUTE_COMFYUI_INFO,
     ROUTE_COMPONENT_REGISTRY,
+    ROUTE_UPDATE_PLAN_STATUS,
+    ROUTE_UPDATE_PLAN_CHECK,
+    ROUTE_UPDATE_PLAN_APPLY,
+    ROUTE_UPDATE_PLAN_CANCEL,
 )
 
 

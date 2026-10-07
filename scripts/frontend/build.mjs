@@ -3,6 +3,7 @@ import * as esbuild from "esbuild";
 await esbuild.build({
   entryPoints: [
     "frontend/src/hello.ts",
+    "frontend/src/module_updates.ts",
   ],
 
   bundle: true,
@@ -18,5 +19,5 @@ await esbuild.build({
     "../../../scripts/api.js",
   ],
 
-  outfile: "web/generated/hello.js",
+  outdir: "web/generated",
 });

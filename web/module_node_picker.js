@@ -12,6 +12,7 @@
  */
 
 import { app } from "../../../scripts/app.js";
+import { api } from "../../../scripts/api.js";
 import {
     EXT_NAME,
     SIDEBAR_TAB_ID,
@@ -36,5 +37,8 @@ registerModuleNodePickerExtension({
     injectStyles: injectModuleNodePickerStyles,
     cleanupFallbackButtons: cleanupModuleNodePickerFallbackButtons,
     attachFallbackButton: attachModuleNodePickerFallbackButton,
-    renderPicker: (container) => renderModuleNodePicker(container, { appInstance: app }),
+    renderPicker: (container) => renderModuleNodePicker(container, {
+        appInstance: app,
+        fetchApi: (path, options) => api.fetchApi(path, options),
+    }),
 });

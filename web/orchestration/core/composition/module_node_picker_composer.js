@@ -55,6 +55,7 @@ import {
     formatUpdateLine,
 } from "../../../ui/module_node_picker_status.js";
 import { createModuleNodePickerLayout } from "../../../ui/module_node_picker_layout.js";
+import { mountModuleUpdates } from "../../../generated/module_updates.js";
 import {
     centerNodeInCanvas,
     createNodeFromCatalogInfo,
@@ -444,6 +445,13 @@ export function renderModuleNodePicker(container, options = {}) {
         defaultModule: DEFAULT_MODULE,
     });
 
+    const updateControls = mountModuleUpdates(root, {
+        fetchApi: options.fetchApi,
+        refreshButton: refreshBtn,
+        alert: customAlert,
+        alertText: customAlertText,
+        onPlanReady: () => flowStage.refreshCustomNodesInfoFlow({ syncUpstreams: false }),
+    });
     const runtimeBootstrap = initializeModuleNodePickerRuntime(buildRuntimeBootstrapContext({
         groupSelect,
         categorySelect,
@@ -471,7 +479,7 @@ export function renderModuleNodePicker(container, options = {}) {
         refreshComfyUIInfoFlow: runtimeBootstrapBindings.refreshComfyUIInfoFlow,
         saveComfyCheckMode,
         loadCatalog: runtimeBootstrapBindings.loadCatalog,
-        refreshCustomNodesInfoFlow: runtimeBootstrapBindings.refreshCustomNodesInfoFlow,
+        refreshCustomNodesInfoFlow: updateControls.refresh,
         setExpandedModule: runtimeBootstrapBindings.setExpandedModule,
         statusCards,
         hasPendingComfyInfoRefresh,
@@ -486,6 +494,9 @@ export function renderModuleNodePicker(container, options = {}) {
         resumePendingModuleUpdateFlow: runtimeBootstrapBindings.resumePendingModuleUpdateFlow,
         resumePendingComfyInfoRefreshFlow: runtimeBootstrapBindings.resumePendingComfyInfoRefreshFlow,
     }));
-    unbindPickerEvents = runtimeBootstrap.unbindPickerEvents;
+    unbindPickerEvents = () => {
+        updateControls.dispose();
+        runtimeBootstrap.unbindPickerEvents();
+    };
     cancelStartupLoad = runtimeBootstrap.cancelStartupLoad;
 }

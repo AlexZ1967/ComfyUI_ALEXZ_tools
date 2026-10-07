@@ -211,6 +211,7 @@ export async function runRefreshCustomNodesInfoAction(context) {
     try {
         await context?.refreshModuleRuntimeState?.({
             logMode: typeof context?.getLogMode === "function" ? context.getLogMode() : "summary",
+            syncUpstreams: context?.syncUpstreams !== false,
         });
         if (!shouldContinueContext(context)) {
             return;

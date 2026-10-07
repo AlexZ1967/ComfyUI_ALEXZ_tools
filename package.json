@@ -1,6 +1,6 @@
 {
   "name": "comfyui_alexz_tools",
-  "version": "0.43.1",
+  "version": "0.44.0",
   "description": "Frontend development tooling for ComfyUI ALEXZ_tools",
   "main": "index.js",
   "directories": {

@@ -13,3 +13,4 @@ frontend/dist/
 make_test.log
 .vscode/
 .playwright-mcp/
+.alexz-updates/

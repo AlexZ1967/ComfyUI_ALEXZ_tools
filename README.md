@@ -1,11 +1,12 @@
 # ALEXZ_tools (Custom Nodes for ComfyUI)
 
-Version: 0.43.1
+Version: 0.44.0
 
 ## Overview
 Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
 
 Changelog: [CHANGELOG.md](CHANGELOG.md)
+Проверка обновлений и зависимостей в Module Node Picker: [GUIDE_MODULE_UPDATES.md](guides/GUIDE_MODULE_UPDATES.md).
 Refactoring plan (RU): [PLAN_REFACTORING_ADOPTED_RU.md](refactoring_plan/PLAN_REFACTORING_ADOPTED_RU.md)
 Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMAP_LOOK_MATCH_0_22_RU.md)
 

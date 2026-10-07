@@ -122,6 +122,14 @@ async (page) => {
             }
             await panel.locator(".alexz-mod-picker-node").first().waitFor({ state: "visible", timeout: remaining() });
         });
+        await check("Update planner controls", async () => {
+            const planner = page.locator(".alexz-mod-picker .alexz-update-planner");
+            await planner.waitFor({ state: "attached", timeout: remaining() });
+            require(await page.locator(".alexz-mod-picker").getByRole("button", { name: "Refresh Custom Nodes Info", exact: true }).count() === 1,
+                "Unified refresh button missing");
+            require(await page.locator(".alexz-update-details-button").count() === 1, "Details control missing");
+            require(await planner.isHidden(), "Update details must initially be collapsed");
+        });
         await check("Sidebar tab switching", async () => {
             const pickerButton = page.getByTestId("alexz-module-nodes-tab-button");
             const nodesMapButton = page.getByRole("button", { name: "NodesMap", exact: true });

@@ -454,6 +454,7 @@ async function testCustomRefreshFlowFinalizesBusyState() {
     let syncUpdateCalls = 0;
     let clearPendingCalls = 0;
     let clearUpdatedSessionCalls = 0;
+    let refreshOptions = null;
 
     await runRefreshCustomNodesInfoAction({
         shouldContinue: () => true,
@@ -477,7 +478,8 @@ async function testCustomRefreshFlowFinalizesBusyState() {
         setProcessTarget: () => {},
         setProcessAction: () => {},
         setRefreshLine: () => {},
-        refreshModuleRuntimeState: async () => ({}),
+        syncUpstreams: false,
+        refreshModuleRuntimeState: async (options) => { refreshOptions = options; return {}; },
         pollRefreshProgress: async () => true,
         acknowledgeAllModuleNovelty: async () => ({}),
         loadCatalog: async () => ({ ok: true }),
@@ -488,6 +490,7 @@ async function testCustomRefreshFlowFinalizesBusyState() {
     assert.equal(syncUpdateCalls, 2);
     assert.equal(clearPendingCalls, 1);
     assert.equal(clearUpdatedSessionCalls, 1);
+    assert.equal(refreshOptions.syncUpstreams, false);
 }
 
 async function testBusyUiForceResetBypassesLifecycleGuard() {

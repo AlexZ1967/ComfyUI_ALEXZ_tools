@@ -474,6 +474,34 @@ const FALLBACK_STYLES = `
     }
 `;
 
+const UPDATE_PLANNER_STYLES = `
+    .alexz-update-planner {
+        border: 1px solid var(--border-color, #555);
+        border-radius: 6px;
+        padding: 8px;
+        font-size: 12px;
+    }
+    .alexz-update-planner-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 6px 0;
+    }
+    .alexz-update-planner-summary,
+    .alexz-update-planner-diagnostics,
+    .alexz-update-planner details > div { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .alexz-update-summary:not([style*="display: none"]) {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .alexz-update-details-button { flex-shrink: 0; }
+    .alexz-update-planner details { margin-top: 6px; }
+    .alexz-update-planner summary { cursor: pointer; overflow-wrap: anywhere; }
+    .alexz-update-planner pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; }
+`;
+
 /**
  * Return full CSS text for Module Node Picker.
  */
@@ -488,5 +516,6 @@ export function getModuleNodePickerStyleText() {
         CONTROLS_STYLES,
         NODE_LIST_STYLES,
         FALLBACK_STYLES,
+        UPDATE_PLANNER_STYLES,
     ].join("\n");
 }

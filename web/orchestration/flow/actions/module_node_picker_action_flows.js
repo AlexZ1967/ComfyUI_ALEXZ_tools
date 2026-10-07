@@ -192,7 +192,7 @@ export function createModuleNodePickerActionFlows(context = {}) {
         });
     };
 
-    const refreshCustomNodesInfoFlow = async () => {
+    const refreshCustomNodesInfoFlow = async (options = {}) => {
         return runRefreshCustomNodesInfoAction({
             shouldContinue,
             setActionBusy,
@@ -202,6 +202,7 @@ export function createModuleNodePickerActionFlows(context = {}) {
             customAlert,
             customAlertText,
             refreshModuleRuntimeState,
+            syncUpstreams: options.syncUpstreams !== false,
             getLogMode,
             pollRefreshProgress,
             acknowledgeAllModuleNovelty,

@@ -141,6 +141,7 @@ export async function refreshModuleRuntimeState(options = {}) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             log_mode: String(options?.logMode || "summary"),
+            sync_upstreams: options?.syncUpstreams !== false,
         }),
         signal: options?.signal,
     });
