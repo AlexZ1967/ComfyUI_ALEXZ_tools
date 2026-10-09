@@ -26,6 +26,8 @@ if (_module_node_browser_api.PromptServer is not None and _module_node_browser_a
         _module_node_browser_api.web,
         _module_node_browser_api._custom_nodes_roots,
         Path(__file__).resolve().parent,
+        capture_module=_module_node_browser_api._capture_module_update_tracking,
+        finalize_tracking=_module_node_browser_api._finalize_module_update_tracking,
     )
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 

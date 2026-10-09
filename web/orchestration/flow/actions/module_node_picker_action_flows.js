@@ -203,6 +203,7 @@ export function createModuleNodePickerActionFlows(context = {}) {
             customAlertText,
             refreshModuleRuntimeState,
             syncUpstreams: options.syncUpstreams !== false,
+            skipRuntimeRefresh: options.skipRuntimeRefresh === true,
             getLogMode,
             pollRefreshProgress,
             acknowledgeAllModuleNovelty,

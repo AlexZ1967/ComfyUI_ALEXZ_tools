@@ -193,12 +193,14 @@ export async function runRefreshCustomNodesInfoAction(context) {
     context?.setCustomStatusChecked?.(true);
     context?.setPendingCustomRefresh?.(true);
     context?.setActionBusy?.(true);
-    context?.setProcessTarget?.("custom");
-    context?.setProcessAction?.("", "", null);
-    context?.setRefreshLine?.("Refreshing Custom Nodes info...", "neutral");
+    if (!context?.skipRuntimeRefresh) {
+        context?.setProcessTarget?.("custom");
+        context?.setProcessAction?.("", "", null);
+        context?.setRefreshLine?.("Refreshing Custom Nodes info...", "neutral");
+    }
     const customAlert = context?.customAlert;
     const customAlertText = context?.customAlertText;
-    if (customAlert && customAlertText) {
+    if (!context?.skipRuntimeRefresh && customAlert && customAlertText) {
         customAlert.style.display = "block";
         customAlert.classList.remove(
             "alexz-mod-picker-status-card--warn",
@@ -209,14 +211,16 @@ export async function runRefreshCustomNodesInfoAction(context) {
         customAlertText.textContent = "Refreshing Custom Nodes info...";
     }
     try {
-        await context?.refreshModuleRuntimeState?.({
-            logMode: typeof context?.getLogMode === "function" ? context.getLogMode() : "summary",
-            syncUpstreams: context?.syncUpstreams !== false,
-        });
+        if (!context?.skipRuntimeRefresh) {
+            await context?.refreshModuleRuntimeState?.({
+                logMode: typeof context?.getLogMode === "function" ? context.getLogMode() : "summary",
+                syncUpstreams: context?.syncUpstreams !== false,
+            });
+        }
         if (!shouldContinueContext(context)) {
             return;
         }
-        const ok = await context?.pollRefreshProgress?.();
+        const ok = context?.skipRuntimeRefresh ? true : await context?.pollRefreshProgress?.();
         if (!shouldContinueContext(context)) {
             return;
         }
@@ -224,11 +228,11 @@ export async function runRefreshCustomNodesInfoAction(context) {
             context?.setRefreshLine?.("Custom Nodes refresh finished with errors.", "warn");
         } else {
             try {
-                await context?.acknowledgeAllModuleNovelty?.();
+                if (!context?.skipRuntimeRefresh) await context?.acknowledgeAllModuleNovelty?.();
                 if (!shouldContinueContext(context)) {
                     return;
                 }
-                context?.clearUpdatedModulesSession?.();
+                if (!context?.skipRuntimeRefresh) context?.clearUpdatedModulesSession?.();
             } catch (err) {
                 if (!shouldContinueContext(context)) {
                     return;

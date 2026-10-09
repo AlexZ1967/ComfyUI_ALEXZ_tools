@@ -494,8 +494,10 @@ const UPDATE_PLANNER_STYLES = `
         display: flex !important;
         align-items: center;
         justify-content: space-between;
+        flex-wrap: wrap;
         gap: 8px;
     }
+    .alexz-update-summary > .alexz-update-planner { border: 0; padding: 0; flex-basis: 100%; }
     .alexz-update-details-button { flex-shrink: 0; }
     .alexz-update-planner details { margin-top: 6px; }
     .alexz-update-planner summary { cursor: pointer; overflow-wrap: anywhere; }

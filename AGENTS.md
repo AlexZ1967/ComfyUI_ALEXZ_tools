@@ -85,12 +85,14 @@
 
 ## Validation
 
-- Run the smallest relevant validation first.
-- For frontend JavaScript changes, run `make js-check-all` and relevant JS behavior tests.
-- For TypeScript changes, run `make ts-check`; run `make ts-build` when generated output or build validity matters.
-- For Python changes, run the relevant targeted pytest tests before the full test suite.
-- Before reporting substantial work as complete, prefer `make test` when practical.
-- Report failing tests accurately and do not hide unrelated pre-existing failures.
+- Между коммитами запускайте только проверки, непосредственно связанные с изменённым поведением: целевые pytest-тесты, соответствующие JS behavior-сценарии или проверки изменённых frontend-файлов.
+- Полную проверку `make test` запускайте перед коммитом, а не после каждого промежуточного изменения. Повторяйте её только если после успешного прогона изменился код или появились новые основания для проверки.
+- Для чисто косметических изменений без влияния на поведение тесты не требуются.
+- Промежуточный результат можно передать пользователю для ручной проверки; явно сообщите, что проверено автоматически и что осталось проверить вручную. Не выдавайте непроверенное поведение за подтверждённое.
+- При изменении runtime TypeScript выполняйте `make ts-check` и `make frontend-build`, чтобы браузер получил актуальный bundle. Это не требует запуска полной проверки проекта.
+- Для frontend проверяйте затронутое взаимодействие через Playwright MCP либо передавайте его пользователю на ручную проверку. Полный browser smoke выполняйте перед коммитом серьёзных JS/TS изменений, а не после каждой правки.
+- Не повторяйте уже успешные проверки без новых изменений, ошибок или нерешённых вопросов, относящихся к этим проверкам.
+- Сообщайте об ошибках проверок точно и не скрывайте сторонние или ранее существовавшие failures.
 
 ## Generated and Local Files
 
@@ -177,6 +179,6 @@
 - Use the local ComfyUI instance at `http://127.0.0.1:8188` unless the user specifies another address.
 - Do not install, update, or remove custom nodes during browser validation unless explicitly requested.
 - Diagnostic files created under `.playwright-mcp/` are local artifacts and must not be committed.
-- For serious JS/TS frontend changes, run the scenario in `tests/browser/alexz_tools_smoke.js` through Playwright MCP `browser_run_code_unsafe` using its `filename` parameter. Follow `guides/GUIDE_BROWSER_SMOKE.md` and report the returned PASS/FAIL; reading the scenario or running a syntax check is not a browser test.
+- Перед коммитом серьёзных JS/TS изменений выполните сценарий `tests/browser/alexz_tools_smoke.js` через Playwright MCP `browser_run_code_unsafe` с параметром `filename`, если актуального успешного прогона для этих изменений ещё нет. Следуйте `guides/GUIDE_BROWSER_SMOKE.md` и сообщайте полученный PASS/FAIL; чтение сценария или проверка синтаксиса не являются browser test. Между коммитами достаточно проверки затронутого взаимодействия либо ручной проверки пользователем.
 - Do not attribute third-party ComfyUI/extension errors to ALEXZ_tools without evidence in the message, URL, or stack. Keep unrelated errors as separate diagnostics.
 - Browser smoke must not click refresh/install/update/remove controls or node-insertion buttons. Its backend request guard must remain enabled.

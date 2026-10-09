@@ -37,7 +37,7 @@ import {
     pollRefreshProgressLoop,
     pollUpdateProgressLoop,
 } from "../../web/orchestration/flow/progress/module_node_picker_update_flow.js";
-import { renderComfyAlertCard } from "../../web/ui/module_node_picker_alerts.js";
+import { renderComfyAlertCard, renderCustomAlertCard } from "../../web/ui/module_node_picker_alerts.js";
 import { createModuleNodePickerRoot } from "../../web/ui/module_node_picker_layout.js";
 import { createRelayDomOwnershipController } from "../../web/orchestration/relay/module_node_picker_tab_relay_dom_ownership.js";
 import {
@@ -448,13 +448,17 @@ async function testCanvasCenterPlacement() {
     assert.deepEqual(node.pos, [240, 310]);
 }
 
-async function testCustomRefreshFlowFinalizesBusyState() {
+async function testCustomRefreshFlowFinalizesBusyState(skipRuntimeRefresh = false) {
     let busySetCalls = 0;
     let resetBusyCalls = 0;
     let syncUpdateCalls = 0;
     let clearPendingCalls = 0;
     let clearUpdatedSessionCalls = 0;
     let refreshOptions = null;
+    let polls = 0;
+    let acknowledgments = 0;
+    let catalogs = 0;
+    let processLines = 0;
 
     await runRefreshCustomNodesInfoAction({
         shouldContinue: () => true,
@@ -477,20 +481,26 @@ async function testCustomRefreshFlowFinalizesBusyState() {
         },
         setProcessTarget: () => {},
         setProcessAction: () => {},
-        setRefreshLine: () => {},
+        setRefreshLine: () => { processLines += 1; },
         syncUpstreams: false,
+        skipRuntimeRefresh,
         refreshModuleRuntimeState: async (options) => { refreshOptions = options; return {}; },
-        pollRefreshProgress: async () => true,
-        acknowledgeAllModuleNovelty: async () => ({}),
-        loadCatalog: async () => ({ ok: true }),
+        pollRefreshProgress: async () => { polls += 1; return true; },
+        acknowledgeAllModuleNovelty: async () => { acknowledgments += 1; return {}; },
+        loadCatalog: async () => { catalogs += 1; return { ok: true }; },
     });
 
     assert.equal(busySetCalls, 1);
     assert.equal(resetBusyCalls, 2);
     assert.equal(syncUpdateCalls, 2);
     assert.equal(clearPendingCalls, 1);
-    assert.equal(clearUpdatedSessionCalls, 1);
-    assert.equal(refreshOptions.syncUpstreams, false);
+    assert.equal(clearUpdatedSessionCalls, skipRuntimeRefresh ? 0 : 1);
+    if (skipRuntimeRefresh) assert.equal(refreshOptions, null);
+    else assert.equal(refreshOptions.syncUpstreams, false);
+    assert.equal(polls, skipRuntimeRefresh ? 0 : 1);
+    assert.equal(acknowledgments, skipRuntimeRefresh ? 0 : 1);
+    assert.equal(catalogs, 1);
+    assert.equal(processLines, skipRuntimeRefresh ? 0 : 1);
 }
 
 async function testBusyUiForceResetBypassesLifecycleGuard() {
@@ -594,9 +604,19 @@ async function main() {
         ["polling invalidation", testPollingControllerInvalidation],
         ["canvas center placement", testCanvasCenterPlacement],
         ["custom refresh finalizes busy state", testCustomRefreshFlowFinalizesBusyState],
+        ["plan completion skips duplicate backend refresh", () => testCustomRefreshFlowFinalizesBusyState(true)],
         ["busy ui force reset bypasses lifecycle guard", testBusyUiForceResetBypassesLifecycleGuard],
         ["requirements follow-up uses manual advisory", testRequirementsFollowupUsesManualAdvisoryText],
         ["comfy release-check degraded text", testComfyReleaseCheckDegradedUsesNeutralWarningText],
+        ["catalog preserves planner status and actions", () => {
+            const customAlert = { style: { display: "block" }, classList: { contains: () => true } };
+            const customAlertText = { textContent: "Обновление завершено. Перезапустите ComfyUI." };
+            for (const customStatusChecked of [false, true]) {
+                renderCustomAlertCard({ customAlert, customAlertText, customStatusChecked });
+                assert.equal(customAlert.style.display, "block");
+                assert.equal(customAlertText.textContent, "Обновление завершено. Перезапустите ComfyUI.");
+            }
+        }],
     ];
 
     for (const [name, fn] of tests) {

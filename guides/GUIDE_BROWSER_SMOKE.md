@@ -53,7 +53,7 @@ browser smoke. При необходимости будущего автоном
 | ALEXZ.Tools.Hello setup | Extension зарегистрирован и получен setup log именно из `generated/hello.js` |
 | Module Node Picker opens | Кнопка sidebar видима, после клика панель `.alexz-mod-picker` видима |
 | Picker DOM and node list | Есть заголовок, Debug, mode select, три selection select, фильтр, карточка ALEXZ_tools и список нод |
-| Update planner controls | Есть единая Refresh Custom Nodes Info и кнопка Подробнее; подробности изначально скрыты, проверка и обновление не запускаются |
+| Update planner controls | Есть единая Refresh Custom Nodes Info и кнопка Обновить модули, показываемая после завершения проверки; отдельной кнопки Подробнее нет, проверка и обновление не запускаются |
 | Sidebar tab switching | Два цикла переходов между Module Nodes и Apps; при установленном EasyUse дополнительно NodesMap → Module Nodes → NodesMap → Apps → NodesMap, а при наличии PNG Info — NodesMap → PNG Info → NodesMap. При наличии Doctor проверяются Doctor → Module Nodes и Doctor → Apps с восстановлением inline layout. Активная панель видима, чужие панели скрыты |
 | Catalog and module-info API | GET через `api.fetchApi`, HTTP 2xx, JSON без `error`, каталог содержит ноды ALEXZ_tools, info соответствует модулю |
 | Extension resources loaded | Все JS URL ALEXZ_tools из `/extensions` наблюдались при загрузке без HTTP errors; Hello и picker присутствуют |

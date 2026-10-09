@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import difflib
 import json
+import logging
 import os
 import subprocess
 import sys
 import tempfile
 import time
+import threading
+import tomllib
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
 from .dependencies import DependencyRisk, Uncheckable, dependency_conflicts, project_report, read_requirements
+from .worktree import inspect_worktree
 
 
 def run(command: list[str], timeout: float = 30) -> str:
@@ -22,7 +27,8 @@ def run(command: list[str], timeout: float = 30) -> str:
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C", "PIP_CONFIG_FILE": os.devnull}
     result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, env=env)
     if result.returncode:
-        raise Uncheckable((result.stderr or result.stdout or "Команда завершилась с ошибкой")[-5000:])
+        output = "\n".join(part.strip() for part in (result.stdout, result.stderr) if part.strip())
+        raise Uncheckable((output or "Команда завершилась с ошибкой")[-5000:])
     return result.stdout.strip()
 
 
@@ -43,7 +49,7 @@ def read_commit_file(repo: Path, commit: str, path: str) -> str | None:
 
 def resolve_dependencies(snapshot: dict, requirements: list[str], constraints: list[str]) -> dict:
     """Resolve wheels while pinning all existing distributions, without installing."""
-    baseline = dependency_conflicts(snapshot["packages"], snapshot["markers"])
+    baseline = snapshot["baseline"] if "baseline" in snapshot else dependency_conflicts(snapshot["packages"], snapshot["markers"])
     installed_constraints = [raw for raw in constraints if canonicalize_name(Requirement(raw).name) in snapshot["packages"]]
     current = dependency_conflicts(snapshot["packages"], snapshot["markers"], requirements + installed_constraints)
     for raw in requirements + constraints:
@@ -51,10 +57,11 @@ def resolve_dependencies(snapshot: dict, requirements: list[str], constraints: l
         if req.marker and not req.marker.evaluate({**snapshot["markers"], "extra": ""}):
             continue
         installed = snapshot["packages"].get(canonicalize_name(req.name))
-        if installed and req.specifier and not req.specifier.contains(installed["version"], prereleases=True):
+        if (not snapshot.get("force_dry_run") and installed and req.specifier
+                and not req.specifier.contains(installed["version"], prereleases=True)):
             raise DependencyRisk(f"Нужен {req.name}{req.specifier}; защищена установленная версия {installed['version']}")
     # Даже изменённые requirements могут уже удовлетворяться текущим окружением.
-    if not set(current) - set(baseline):
+    if not snapshot.get("force_dry_run") and not set(current) - set(baseline):
         return {"additions": [], "baseline": baseline, "conflicts": [], "report": {"version": "1", "install": []}}
     with tempfile.TemporaryDirectory(prefix="alexz-update-check-") as directory:
         root = Path(directory)
@@ -77,6 +84,7 @@ def resolve_dependencies(snapshot: dict, requirements: list[str], constraints: l
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise Uncheckable("Истекло время разрешения зависимостей")
+                logging.info("[ALEXZ update] Dry-run зависимостей: %s", ", ".join(sorted(expanded)))
                 run(command, timeout=remaining)
             except Uncheckable as exc:
                 if "ResolutionImpossible" in str(exc):
@@ -110,7 +118,7 @@ def resolve_dependencies(snapshot: dict, requirements: list[str], constraints: l
     return projected
 
 
-def analyze_module(name: str, repo: Path, snapshot: dict, *, fetch: bool = True) -> dict:
+def analyze_module(name: str, repo: Path, snapshot: dict, *, fetch: bool = True, resolver=None) -> dict:
     """Inspect an upstream commit without updating a repository's working tree."""
     result = {"module": name, "status": "unknown", "reasons": [], "additions": [],
               "requirements_changed": None, "diff": "", "path": str(repo)}
@@ -123,10 +131,6 @@ def analyze_module(name: str, repo: Path, snapshot: dict, *, fetch: bool = True)
         remote_ref = git(repo, "config", "--get", f"branch.{branch}.merge")
         if remote.startswith("-") or remote == "." or not remote_ref.startswith("refs/heads/"):
             raise Uncheckable("Нужен настроенный upstream удалённой ветки")
-        if git(repo, "status", "--porcelain", "--untracked-files=all"):
-            result["status"] = "blocked"
-            result["reasons"] = ["Есть локальные изменения; автоматический stash запрещён"]
-            return result
         if fetch:
             tracking_ref = git(repo, "rev-parse", "--symbolic-full-name", "@{u}")
             if not tracking_ref.startswith("refs/remotes/"):
@@ -139,6 +143,11 @@ def analyze_module(name: str, repo: Path, snapshot: dict, *, fetch: bool = True)
             result["status"] = "up_to_date"
             return result
         git(repo, "merge-base", "--is-ancestor", result["before"], result["target"])
+        working = inspect_worktree(repo, result["before"], result["target"])
+        if working["blockers"]:
+            result["status"] = "blocked"
+            result["reasons"] = working["blockers"]
+            return result
         before = read_requirements(lambda path: read_commit_file(repo, result["before"], path))
         after = read_requirements(lambda path: read_commit_file(repo, result["target"], path))
         result["requirements_changed"] = before["files"] != after["files"]
@@ -148,21 +157,31 @@ def analyze_module(name: str, repo: Path, snapshot: dict, *, fetch: bool = True)
             json.dumps(before["files"], indent=2, ensure_ascii=False).splitlines(),
             json.dumps(after["files"], indent=2, ensure_ascii=False).splitlines(),
             fromfile="installed", tofile="upstream", lineterm=""))
-        changed = git(repo, "diff", "--name-only", result["before"], result["target"]).splitlines()
-        metadata = [path for path in changed if Path(path).name in {"install.py", "setup.py", "setup.cfg", "pyproject.toml"}]
-        # Новый install script может менять окружение вне pip requirements.
-        if metadata or (result["requirements_changed"] and read_commit_file(repo, result["target"], "install.py") is not None):
-            result["status"] = "risk"
-            result["reasons"] = ["Изменён packaging/install script: нужна отдельная проверка"]
+        if not result["requirements_changed"]:
+            result.update(status="safe", reasons=["Обновится только код; зависимости не изменятся. Install scripts не запускаются."],
+                          report={"version": "1", "install": []}, conflicts=[], baseline=snapshot.get("baseline", []))
             return result
-        resolved = resolve_dependencies(snapshot, after["requirements"], after["constraints"])
+        changed = git(repo, "diff", "--name-only", result["before"], result["target"]).splitlines()
+        resolved = (resolver or resolve_dependencies)({**snapshot, "force_dry_run": True},
+                                                     after["requirements"], after["constraints"])
         result.update(resolved)
         if resolved["conflicts"]:
             result["status"] = "risk"
             result["reasons"] = resolved["conflicts"]
         else:
-            result["status"] = "safe"
-            result["reasons"] = ["Конфликтов зависимостей не обнаружено; существующие пакеты сохраняются"]
+            executable_changes = [path for path in changed if Path(path).name in {"install.py", "setup.py", "setup.cfg"}]
+            if "pyproject.toml" in changed:
+                old = tomllib.loads(read_commit_file(repo, result["before"], "pyproject.toml") or "")
+                new = tomllib.loads(read_commit_file(repo, result["target"], "pyproject.toml") or "")
+                if old.get("build-system") != new.get("build-system"):
+                    executable_changes.append("pyproject.toml: build-system")
+            if executable_changes:
+                result["status"] = "risk"
+                result["reasons"] = ["Dry-run зависимостей пройден, но изменены install/build файлы: "
+                                     + ", ".join(executable_changes) + ". Они не запускаются автоматически."]
+            else:
+                result["status"] = "safe"
+                result["reasons"] = ["Dry-run зависимостей пройден; существующие пакеты сохраняются"]
     except DependencyRisk as exc:
         result["status"] = "risk"
         result["reasons"] = [str(exc)]
@@ -173,21 +192,53 @@ def analyze_module(name: str, repo: Path, snapshot: dict, *, fetch: bool = True)
     return result
 
 
-def analyze_batch(modules: dict[str, Path], snapshot: dict, *, fetch: bool = True, progress=None) -> dict:
+def analyze_batch(modules: dict[str, Path], snapshot: dict, *, fetch: bool = True, progress=None,
+                  module_callback=None, workers: int = 4) -> dict:
     """Validate individual updates and the union selected for the batch action."""
     results = []
-    for name, repo in sorted(modules.items()):
-        if progress:
-            progress(name, len(results), len(modules))
-        results.append(analyze_module(name, repo, snapshot, fetch=fetch))
+    snapshot = {**snapshot, "baseline": dependency_conflicts(snapshot["packages"], snapshot["markers"])}
+    cache = {}
+    cache_lock = threading.Lock()
+
+    def resolve_once(environment, requirements, constraints):
+        """Share one result or exception for an identical dependency request."""
+        key = (tuple(sorted(requirements)), tuple(sorted(constraints)))
+        with cache_lock:
+            owner = key not in cache
+            future = cache.setdefault(key, Future())
+        if owner:
+            try:
+                future.set_result(resolve_dependencies(environment, requirements, constraints))
+            except Exception as exc:
+                future.set_exception(exc)
+        return future.result()
+
+    def inspect(name, repo):
+        """Collect analysis and legacy tracking data during the same module visit."""
+        item = analyze_module(name, repo, snapshot, fetch=fetch, resolver=resolve_once)
+        if module_callback:
+            module_callback(item)
+        return item
+
+    if progress:
+        progress("", 0, len(modules))
+    with ThreadPoolExecutor(max_workers=min(4, max(1, workers)), thread_name_prefix="alexz-check") as pool:
+        futures = [pool.submit(inspect, name, repo) for name, repo in sorted(modules.items())]
+        for future in as_completed(futures):
+            item = future.result()
+            results.append(item)
+            if progress:
+                progress(item["module"], len(results), len(modules))
+    results.sort(key=lambda item: item["module"])
     candidates = [item for item in results if item["status"] == "safe"]
-    requirements = sorted({req for item in candidates for req in item["requirements"]})
-    constraints = sorted({req for item in candidates for req in item["constraints"]})
+    dependency_candidates = [item for item in candidates if item.get("requirements_changed") is not False]
+    requirements = sorted({req for item in dependency_candidates for req in item["requirements"]})
+    constraints = sorted({req for item in dependency_candidates for req in item["constraints"]})
     batch = {"additions": [], "conflicts": [], "baseline": [], "report": {"version": "1", "install": []}}
     batch_error = ""
-    if candidates:
+    if dependency_candidates:
         try:
-            batch = resolve_dependencies(snapshot, requirements, constraints)
+            batch = resolve_once(snapshot, requirements, constraints)
             if batch["conflicts"]:
                 batch_error = "\n".join(batch["conflicts"])
         except (Uncheckable, subprocess.TimeoutExpired, OSError, ValueError, KeyError) as exc:
@@ -197,4 +248,4 @@ def analyze_batch(modules: dict[str, Path], snapshot: dict, *, fetch: bool = Tru
     return {"results": results, "counts": counts, "batch": batch,
             "batch_error": batch_error, "batch_count": 0 if batch_error else len(candidates),
             "environment": {key: snapshot[key] for key in ("python", "prefix", "fingerprint")},
-            "baseline": dependency_conflicts(snapshot["packages"], snapshot["markers"])}
+            "baseline": snapshot["baseline"]}

@@ -212,6 +212,10 @@ export function renderModuleNodePicker(container, options = {}) {
     const moduleNodeDiffs = runtimeProjection.moduleNodeDiffs;
     const moduleInlineStatus = runtimeProjection.moduleInlineStatus;
     const updatedModulesSession = runtimeProjection.updatedModulesSession;
+    const formatTrackedModuleOption = (name, count, badges, marks) => formatModuleOption(name, count, {
+        ...badges,
+        updatedBetweenRuns: Boolean(badges?.updatedBetweenRuns) || updatedModulesSession.has(name),
+    }, marks);
     const isPickerAlive = runtimeProjection.isPickerAlive;
     const fetchNodeCatalogApi = runtimeProjection.fetchNodeCatalogApi;
     const fetchModuleInfoApi = runtimeProjection.fetchModuleInfoApi;
@@ -256,7 +260,7 @@ export function renderModuleNodePicker(container, options = {}) {
         moduleBadges,
         moduleNodeDiffs,
         moduleBadgesFromModuleEntry,
-        formatModuleOption,
+        formatModuleOption: formatTrackedModuleOption,
         marks: {
             updatedMark: MODULE_MARK_UPDATED,
             remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
@@ -360,7 +364,7 @@ export function renderModuleNodePicker(container, options = {}) {
         moduleOptions,
         moduleBadges,
         moduleNodeDiffs,
-        formatModuleOption,
+        formatModuleOption: formatTrackedModuleOption,
         marks: {
             updatedMark: MODULE_MARK_UPDATED,
             remoteUpdateMark: MODULE_MARK_REMOTE_UPDATE,
@@ -450,8 +454,15 @@ export function renderModuleNodePicker(container, options = {}) {
         refreshButton: refreshBtn,
         alert: customAlert,
         alertText: customAlertText,
-        onPlanReady: () => flowStage.refreshCustomNodesInfoFlow({ syncUpstreams: false }),
+        onPlanReady: () => flowStage.refreshCustomNodesInfoFlow({ skipRuntimeRefresh: true }),
+        onModulesUpdated: (modules) => {
+            for (const name of modules) {
+                updatedModulesSession.add(name);
+                catalogController.setModuleOptionText(name);
+            }
+        },
     });
+    modulePanelController.setUpdateRenderer(updateControls.renderModuleCard);
     const runtimeBootstrap = initializeModuleNodePickerRuntime(buildRuntimeBootstrapContext({
         groupSelect,
         categorySelect,

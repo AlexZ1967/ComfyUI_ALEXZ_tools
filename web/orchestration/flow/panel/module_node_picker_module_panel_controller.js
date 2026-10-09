@@ -55,6 +55,7 @@ export function createModuleNodePickerModulePanelController(context = {}) {
     const onInstallModuleRequirements = context?.onInstallModuleRequirements || (async () => {});
 
     let expandedModule = "";
+    let updateRenderer = () => {};
 
     const setExpandedModule = (value) => {
         expandedModule = String(value || "").trim();
@@ -119,6 +120,7 @@ export function createModuleNodePickerModulePanelController(context = {}) {
             onUpdateModule,
             onInstallModuleRequirements,
         });
+        updateRenderer(info?.group === "custom" ? moduleInfo?.querySelector(".alexz-mod-picker-module-card") : null, selectedModule);
     };
 
     return {
@@ -126,5 +128,6 @@ export function createModuleNodePickerModulePanelController(context = {}) {
         clearExpandedModule,
         renderNodeList,
         renderModuleInfo,
+        setUpdateRenderer: (renderer) => { updateRenderer = renderer; },
     };
 }

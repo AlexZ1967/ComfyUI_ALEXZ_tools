@@ -227,7 +227,7 @@ export function renderModuleInfoCard(context) {
     const formatDate = typeof fmtDate === "function"
         ? fmtDate
         : (value) => String(value || "n/a");
-    const hasInstalledMeta = Boolean(info.installed_updated_at || info.installed_commit_short);
+    const hasInstalledMeta = Boolean(info.installed_updated_at);
     if (hasInstalledMeta) {
         const installedRow = document.createElement("div");
         installedRow.className = "alexz-mod-picker-module-row";
@@ -235,7 +235,7 @@ export function renderModuleInfoCard(context) {
         labelEl.className = "alexz-mod-picker-module-label";
         labelEl.textContent = "Installed:";
         const valueEl = document.createElement("span");
-        valueEl.textContent = `${info.installed_commit_short ? `${info.installed_commit_short} · ` : ""}${formatDate(info.installed_updated_at)}`;
+        valueEl.textContent = formatDate(info.installed_updated_at);
         installedRow.appendChild(labelEl);
         installedRow.appendChild(valueEl);
         card.appendChild(installedRow);
@@ -262,7 +262,7 @@ export function renderModuleInfoCard(context) {
             : "";
 
         const statusRow = document.createElement("div");
-        statusRow.className = "alexz-mod-picker-module-row";
+        statusRow.className = "alexz-mod-picker-module-row alexz-module-runtime-status";
         const labelEl = document.createElement("span");
         labelEl.className = "alexz-mod-picker-module-label";
         labelEl.textContent = "Status:";
@@ -335,14 +335,8 @@ export function renderModuleInfoCard(context) {
         labelEl.className = "alexz-mod-picker-module-label";
         labelEl.textContent = "Updated between runs:";
         const valueEl = document.createElement("span");
-        const prev = info.startup_prev_commit_short || "unknown";
-        const next = info.startup_new_commit_short || "unknown";
         const at = info.startup_update_at ? ` (${formatDate(info.startup_update_at)})` : "";
-        if (info.startup_prev_commit_short || info.startup_new_commit_short) {
-            valueEl.textContent = `${prev} -> ${next}${at}`;
-        } else {
-            valueEl.textContent = `local changes detected${at}`;
-        }
+        valueEl.textContent = `module updated${at}`;
         updateRow.appendChild(labelEl);
         updateRow.appendChild(valueEl);
         card.appendChild(updateRow);

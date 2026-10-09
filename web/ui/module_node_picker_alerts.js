@@ -110,6 +110,10 @@ export function renderCustomAlertCard(context) {
     if (!customAlert || !customAlertText) {
         return;
     }
+    // Плашкой и её кнопками управляет planner; каталог не должен скрывать их.
+    if (customAlert.classList.contains("alexz-update-summary")) {
+        return;
+    }
 
     if (!customStatusChecked) {
         customAlert.style.display = "none";

@@ -7,6 +7,7 @@ import importlib.metadata
 import json
 import posixpath
 import sys
+import sysconfig
 from pathlib import PurePosixPath
 from typing import Callable
 
@@ -26,7 +27,11 @@ class DependencyRisk(Uncheckable):
 def environment_snapshot() -> dict:
     """Read installed distribution metadata without importing third-party packages."""
     packages = {}
-    for dist in importlib.metadata.distributions():
+    # ComfyUI/extensions могут добавлять setuptools/_vendor в sys.path.
+    # Сравниваем установленные пакеты окружения, а не эти встроенные копии.
+    paths = sysconfig.get_paths()
+    installation_paths = list(dict.fromkeys([paths["purelib"], paths["platlib"]]))
+    for dist in importlib.metadata.distributions(path=installation_paths):
         name = dist.metadata.get("Name")
         if name:
             packages[canonicalize_name(name)] = {
@@ -161,7 +166,7 @@ def project_report(snapshot: dict, report: dict, roots: list[str]) -> dict:
             raise Uncheckable(f"Непроверенный источник пакета {name}")
         packages[name] = {"version": version, "requires_dist": metadata.get("requires_dist", [])}
         additions.append({"name": name, "version": version})
-    baseline = dependency_conflicts(snapshot["packages"], snapshot["markers"])
+    baseline = snapshot["baseline"] if "baseline" in snapshot else dependency_conflicts(snapshot["packages"], snapshot["markers"])
     projected = dependency_conflicts(packages, snapshot["markers"], roots)
     return {"additions": additions, "baseline": baseline,
             "conflicts": sorted(set(projected) - set(baseline))}

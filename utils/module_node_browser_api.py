@@ -1228,22 +1228,47 @@ def _acknowledge_all_novelty() -> dict[str, Any]:
     )
 
 
-def _announce_tracked_module_updates(local_only: bool = False) -> dict[str, Any]:
+def _announce_tracked_module_updates(local_only: bool = False, precomputed: dict | None = None) -> dict[str, Any]:
     """Build per-module node-change info by comparing saved and current snapshots."""
+    saved = _load_module_state() if precomputed is not None else None
+
+    def cached_git(name):
+        """Preserve unchecked modules during a selectively requested analysis."""
+        if name in precomputed:
+            return precomputed[name].get("git", {})
+        entry = saved.get(name, {})
+        available = entry.get("update_available")
+        return {**entry, "behind": int(available) if isinstance(available, bool) else None}
+
     return mb_announce_tracked_module_updates(
         local_only=local_only,
-        load_module_state=_load_module_state,
+        load_module_state=_load_module_state if precomputed is None else lambda: saved,
         save_module_state=_save_module_state,
         now_iso=_now_iso,
         discover_custom_modules=_discover_custom_modules,
         canonical_custom_module_name=_canonical_custom_module_name,
-        module_git_state=_module_git_state,
+        module_git_state=_module_git_state if precomputed is None else cached_git,
         manager_meta_for_module=_manager_meta_for_module,
         infer_update_from_manager_stats=_infer_update_from_manager_stats,
-        manager_update_overrides=lambda: _manager_installed_update_overrides(force_refresh=not local_only),
-        module_worktree_signature=_module_worktree_signature,
+        manager_update_overrides=(lambda: _manager_installed_update_overrides(force_refresh=not local_only)) if precomputed is None else lambda: {},
+        module_worktree_signature=_module_worktree_signature if precomputed is None else lambda name: precomputed.get(name, {}).get("worktree", saved.get(name, {}).get("worktree_signature", "")),
         build_node_snapshots=_build_node_snapshots,
     )
+
+
+def _capture_module_update_tracking(item: dict) -> dict:
+    """Collect legacy marker inputs in the module's existing analysis task."""
+    name = item["module"]
+    return {"git": _module_git_state(name), "worktree": _module_worktree_signature(name)}
+
+
+def _finalize_module_update_tracking(captured: dict) -> None:
+    """Publish cached module facts without a second Git scan or ComfyUI check."""
+    _MODULE_INFO_CACHE.clear()
+    _announce_tracked_module_updates(precomputed=captured)
+    _set_custom_update_checked(True)
+    _API_STATE.lazy_refresh_done = True
+    _sync_runtime_warmup_to_legacy()
 
 
 def _module_local_readme_summary(module_name: str) -> str | None:

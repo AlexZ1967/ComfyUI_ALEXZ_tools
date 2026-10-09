@@ -55,7 +55,7 @@ async (page) => {
             endpoint === "/alexz_tools/node_catalog" && query.get("cache_only") === "1"
             || endpoint === "/alexz_tools/module_info" && query.get("cache_only") === "1"
                 && !["refresh", "sync_upstream"].some((key) => query.has(key) && query.get(key) !== "0")
-            || ["/alexz_tools/module_refresh_status", "/alexz_tools/module_update_status"].includes(endpoint)
+            || ["/alexz_tools/module_refresh_status", "/alexz_tools/module_update_status", "/alexz_tools/update_plan_status"].includes(endpoint)
         );
         if (allowed) return route.continue();
         report.failures.push(`Blocked backend operation: ${request.method()} ${request.url()}`);
@@ -127,8 +127,8 @@ async (page) => {
             await planner.waitFor({ state: "attached", timeout: remaining() });
             require(await page.locator(".alexz-mod-picker").getByRole("button", { name: "Refresh Custom Nodes Info", exact: true }).count() === 1,
                 "Unified refresh button missing");
-            require(await page.locator(".alexz-update-details-button").count() === 1, "Details control missing");
-            require(await planner.isHidden(), "Update details must initially be collapsed");
+            require(await page.locator(".alexz-mod-picker").getByRole("button", { name: /^Обновить модули/, includeHidden: true }).count() === 1, "Update button missing");
+            require(await page.locator(".alexz-mod-picker").getByRole("button", { name: "Подробнее", exact: true }).count() === 0, "Separate details remain");
         });
         await check("Sidebar tab switching", async () => {
             const pickerButton = page.getByTestId("alexz-module-nodes-tab-button");
