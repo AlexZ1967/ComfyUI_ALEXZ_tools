@@ -14,13 +14,16 @@ Purpose:
 from __future__ import annotations
 
 import json
+import logging
 import math
 import random
 from bisect import bisect_right
+from time import perf_counter
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
 try:
     import cv2
 except Exception:  # pragma: no cover - runtime dependency check
@@ -29,6 +32,7 @@ except Exception:  # pragma: no cover - runtime dependency check
 
 # Передаточное отношение фиксировано; скорость ручки определяется каденсом.
 _CRANK_FRAMES_PER_TURN = 8
+_LOGGER = logging.getLogger("VideoSilentFilmCadence")
 
 
 def _validate_video_batch(images: torch.Tensor) -> torch.Tensor:
@@ -199,7 +203,8 @@ def _temporal_exposure_sample(
     if blur_samples <= 1 or exposure_frames <= 1e-4:
         return sample_fn(center_position)
 
-    offsets = torch.linspace(-0.5, 0.5, steps=int(blur_samples), dtype=frame_template.dtype, device=frame_template.device)
+    # Коэффициенты малы и нужны как Python-числа: не создаём синхронизацию с GPU на каждом кадре.
+    offsets = torch.linspace(-0.5, 0.5, steps=int(blur_samples), dtype=frame_template.dtype)
     weights = 1.0 - offsets.abs() * 2.0
     weights = torch.clamp(weights, min=1e-4)
     weights = weights / weights.sum()
@@ -209,6 +214,137 @@ def _temporal_exposure_sample(
         sample = sample_fn(center_position + offset * exposure_frames)
         acc = acc + sample * float(weight)
     return acc
+
+
+def _select_compute_device(mode: str, height: int, width: int) -> torch.device:
+    """Select CUDA with a bounded working-set budget while respecting ComfyUI's device."""
+    if mode not in {"auto", "cpu", "cuda"}:
+        raise ValueError(f"Unsupported compute_device: {mode}")
+    if mode == "cpu" or (mode == "auto" and height * width < 256 * 256):
+        return torch.device("cpu")
+    if not torch.cuda.is_available():
+        if mode == "cuda":
+            _LOGGER.warning("[Silent Film Cadence] CUDA недоступна: используется CPU.")
+        return torch.device("cpu")
+    try:
+        from comfy import model_management
+    except ImportError:
+        device = torch.device("cuda", torch.cuda.current_device())
+    else:
+        device = model_management.get_torch_device()
+    if device.type != "cuda":
+        return torch.device("cpu")
+    free, _ = torch.cuda.mem_get_info(device)
+    available = free + torch.cuda.memory_reserved(device) - torch.cuda.memory_allocated(device)
+    required = height * width * 384 + 512 * 1024**2
+    if available < required:
+        _LOGGER.warning("[Silent Film Cadence] Недостаточно свободной VRAM для рабочего кэша: используется CPU.")
+        return torch.device("cpu")
+    return device
+
+
+def _trim_frame_caches(*caches: dict, limit: int = 4) -> None:
+    """Bound sequential frame and flow caches without changing sampling results."""
+    for cache in caches:
+        while len(cache) > limit:
+            del cache[next(iter(cache))]
+
+
+class _TorchExposureSampler:
+    """Warp and blend on a torch device using the existing CPU Farneback estimator."""
+
+    def __init__(self, images, device, frame_cache, flow_cache, confidence_cache):
+        """Allocate reusable sampling grids and bounded per-pair device caches."""
+        self.images = images
+        self.device = device
+        self.frame_cache = frame_cache
+        self.flow_cache = flow_cache
+        self.confidence_cache = confidence_cache
+        self.tensor_frames = {}
+        self.tensor_pairs = {}
+        height, width = images.shape[1:3]
+        yy, xx = torch.meshgrid(
+            torch.arange(height, device=device, dtype=torch.float32),
+            torch.arange(width, device=device, dtype=torch.float32), indexing="ij",
+        )
+        self.pixel_grid = torch.stack((xx, yy), dim=0).unsqueeze(0)
+        self.scale = torch.tensor([2.0 / width, 2.0 / height], device=device, dtype=torch.float32).view(1, 2, 1, 1)
+        kernel = torch.tensor([1, 4, 6, 4, 1], device=device, dtype=torch.float32) / 16.0
+        self.blur_kernel = (kernel[:, None] * kernel[None, :]).view(1, 1, 5, 5)
+
+    def _frame(self, index):
+        """Upload only a small window of source frames."""
+        if index not in self.tensor_frames:
+            self.tensor_frames[index] = self.images[index].to(self.device).permute(2, 0, 1).unsqueeze(0)
+            _trim_frame_caches(self.tensor_frames)
+        return self.tensor_frames[index]
+
+    def _warp(self, frame, flow, amount):
+        """Match OpenCV's linear remap coordinate quantization on the torch device."""
+        coords = torch.round((self.pixel_grid - flow * amount) * 32.0) / 32.0
+        grid = ((coords + 0.5) * self.scale - 1.0).permute(0, 2, 3, 1)
+        return F.grid_sample(frame, grid, mode="bilinear", padding_mode="border", align_corners=False)
+
+    def _confidence(self, flow, reverse):
+        """Evaluate forward/backward consistency on the same device as the warps."""
+        reverse_at_destination = self._warp(reverse, flow, -1.0)
+        residual = (flow + reverse_at_destination).square().sum(dim=1, keepdim=True)
+        magnitude = (flow.square() + reverse_at_destination.square()).sum(dim=1, keepdim=True)
+        confidence = torch.exp(-residual / (0.5 + 0.01 * magnitude))
+        coords = self.pixel_grid + flow
+        height, width = flow.shape[-2:]
+        valid = (coords[:, 0:1] >= 0) & (coords[:, 0:1] <= width - 1)
+        valid &= (coords[:, 1:2] >= 0) & (coords[:, 1:2] <= height - 1)
+        return confidence * valid
+
+    def sample(self, position: float, use_flow: bool) -> torch.Tensor:
+        """Sample a fractional frame with bounded device caches and flow confidence."""
+        pos = max(0.0, min(float(position), float(len(self.images) - 1)))
+        left = int(math.floor(pos))
+        right = min(len(self.images) - 1, left + 1)
+        frac = pos - left
+        first = self._frame(left)
+        if left == right or frac <= 1e-6:
+            return first[0].permute(1, 2, 0)
+        second = self._frame(right)
+        simple = first * (1.0 - frac) + second * frac
+        if not use_flow:
+            return simple[0].permute(1, 2, 0)
+        if left not in self.tensor_pairs:
+            for index in (left, right):
+                if index not in self.frame_cache:
+                    self.frame_cache[index] = _frame_to_numpy(self.images, index)
+            if left not in self.flow_cache:
+                self.flow_cache[left] = _dense_pair_flow(self.frame_cache[left], self.frame_cache[right])
+            forward, backward = self.flow_cache[left]
+            def upload(array):
+                """Convert HWC or HW flow data to a device tensor."""
+                if array.ndim == 2:
+                    array = array[..., None]
+                return torch.from_numpy(array).to(self.device).permute(2, 0, 1).unsqueeze(0)
+
+            forward_tensor, backward_tensor = upload(forward), upload(backward)
+            self.tensor_pairs[left] = (
+                forward_tensor, backward_tensor,
+                self._confidence(forward_tensor, backward_tensor),
+                self._confidence(backward_tensor, forward_tensor),
+                (first[:, :3] - second[:, :3]).abs().mean(dim=1, keepdim=True),
+            )
+            _trim_frame_caches(self.tensor_pairs, self.frame_cache, self.flow_cache, self.confidence_cache)
+        forward, backward, conf_left, conf_right, original_difference = self.tensor_pairs[left]
+        warped_left = self._warp(first, forward, frac)
+        warped_right = self._warp(second, backward, 1.0 - frac)
+        confidence = torch.minimum(
+            self._warp(conf_left, forward, frac), self._warp(conf_right, backward, 1.0 - frac),
+        )
+        confidence = torch.minimum(confidence, torch.minimum(conf_left, conf_right))
+        disagreement = (warped_left[:, :3] - warped_right[:, :3]).abs().mean(dim=1, keepdim=True)
+        confidence *= torch.exp(-torch.clamp(disagreement - original_difference, min=0.0) / 0.03)
+        padding = "reflect" if min(confidence.shape[-2:]) > 2 else "replicate"
+        confidence = F.conv2d(F.pad(confidence, (2, 2, 2, 2), mode=padding), self.blur_kernel)
+        warped = warped_left * (1.0 - frac) + warped_right * frac
+        blended = warped * confidence + simple * (1.0 - confidence)
+        return blended[0].permute(1, 2, 0)
 
 
 def _build_capture_intervals(
@@ -516,6 +652,13 @@ class VideoSilentFilmCadence:
                         "tooltip": "Только hand_crank. Покачивание камеры при съёмке, связанное с ручкой и учитываемое внутри экспозиции: 0 = выключено; 0.15–0.30 = небольшое; 1 = сильное. Не заменяет дрожание проектора gate_weave_px в Finish.",
                     },
                 ),
+                "compute_device": (
+                    ["auto", "cpu", "cuda"],
+                    {
+                        "default": "auto",
+                        "tooltip": "auto = GPU для крупных кадров при наличии свободной VRAM; cpu = прежняя обработка; cuda = запрос GPU. Optical flow Farneback остаётся на CPU, деформации, смешивание и покачивание ускоряются на GPU. При нехватке VRAM используется CPU.",
+                    },
+                ),
             },
         }
 
@@ -541,8 +684,11 @@ class VideoSilentFilmCadence:
         crank_frames_per_turn=8,
         crank_irregularity=0.15,
         camera_shake_strength=0.0,
+        compute_device="auto",
     ):
         """Apply virtual capture cadence, exposure blur, and optional crank-locked shake."""
+        started_at = perf_counter()
+        _LOGGER.info("[Silent Film Cadence] Этап 1/4: проверка входных кадров и параметров.")
         images = _validate_video_batch(image)
         camera_shake_strength = float(camera_shake_strength)
         if not math.isfinite(camera_shake_strength) or not 0.0 <= camera_shake_strength <= 1.0:
@@ -567,7 +713,12 @@ class VideoSilentFilmCadence:
             raise ValueError("target_fps_min must be <= target_fps_max.")
 
         frame_count = int(images.size(0))
+        _LOGGER.info(
+            "[Silent Film Cadence] Вход: %d кадров, %dx%d, source_fps=%.2f; режим=%s, модель=%s.",
+            frame_count, images.size(2), images.size(1), source_fps, playback_mode, cadence_model,
+        )
         total_duration = float(frame_count) / source_fps
+        _LOGGER.info("[Silent Film Cadence] Этап 2/4: построение виртуального каденса и экспозиций.")
         starts, fps_values, phase_biases = _build_capture_intervals(
             total_duration=total_duration,
             target_fps_min=target_fps_min,
@@ -590,19 +741,51 @@ class VideoSilentFilmCadence:
         confidence_cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         if blur_mode == "flow_integrated" and cv2 is None:
             actual_blur_mode = "simple_fallback_no_cv2"
+            _LOGGER.warning("[Silent Film Cadence] OpenCV недоступен: вместо flow_integrated используется simple.")
         actual_camera_shake = camera_shake_strength if cadence_model == "hand_crank" else 0.0
         initial_crank_phase = random.Random(int(seed)).random()
-        capture_grid = None
-        if actual_camera_shake > 0.0:
-            height, width, channels = images.shape[1:]
-            identity = torch.eye(2, 3, device=images.device, dtype=images.dtype).unsqueeze(0)
-            capture_grid = F.affine_grid(identity, (1, channels, height, width), align_corners=False)
+        work_device = _select_compute_device(str(compute_device), images.size(1), images.size(2))
+
+        def _prepare_sampling(device):
+            """Prepare only per-frame device storage, not the entire video batch."""
+            sampler = _TorchExposureSampler(images, device, frame_cache, flow_cache, confidence_cache) if device.type == "cuda" else None
+            template = images[0].to(device)
+            grid = None
+            if actual_camera_shake > 0.0:
+                height, width, channels = images.shape[1:]
+                identity = torch.eye(2, 3, device=device, dtype=images.dtype).unsqueeze(0)
+                grid = F.affine_grid(identity, (1, channels, height, width), align_corners=False)
+            return sampler, template, grid
+
+        try:
+            torch_sampler, frame_template, capture_grid = _prepare_sampling(work_device)
+        except torch.OutOfMemoryError:
+            if work_device.type != "cuda":
+                raise
+            _LOGGER.warning("[Silent Film Cadence] Не удалось выделить VRAM: используется CPU.")
+            work_device = torch.device("cpu")
+            torch_sampler, frame_template, capture_grid = _prepare_sampling(work_device)
+        _LOGGER.info(
+            "[Silent Film Cadence] Обработка: %s; optical flow: %s.",
+            work_device, "CPU Farneback" if actual_blur_mode == "flow_integrated" else "не используется",
+        )
+
+        output_count = len(starts) - 1 if playback_mode == "undercrank_projected_25fps" else frame_count
+        _LOGGER.info(
+            "[Silent Film Cadence] Этап 3/4: экспозиционное размытие и движение камеры; "
+            "blur=%s, отсчётов=%d, покачивание=%.2f, выходных кадров=%d.",
+            actual_blur_mode, blur_samples, actual_camera_shake, output_count,
+        )
 
         def _sample_position(position: float) -> torch.Tensor:
-            if actual_blur_mode == "flow_integrated":
+            if torch_sampler is not None:
+                sample = torch_sampler.sample(position, actual_blur_mode == "flow_integrated")
+            elif actual_blur_mode == "flow_integrated":
                 sample = _lerp_frame_flow(images, position, frame_cache, flow_cache, confidence_cache)
             else:
                 sample = _lerp_frame(images, position)
+            sample = sample.to(work_device)
+            _trim_frame_caches(frame_cache, flow_cache, confidence_cache)
             if actual_camera_shake > 0.0:
                 sample_time = (position + 0.5) / source_fps
                 crank_phase = _crank_phase_at_time(starts, sample_time, initial_crank_phase)
@@ -627,33 +810,52 @@ class VideoSilentFilmCadence:
                 )
             return _temporal_exposure_sample(
                 sample_fn=_sample_position,
-                frame_template=images[0],
+                frame_template=frame_template,
                 center_position=center_pos,
                 exposure_frames=exposure_frames,
                 blur_samples=blur_samples,
             )
 
-        if playback_mode == "undercrank_projected_25fps":
-            output_frames = []
-            for group_idx in range(len(starts) - 1):
-                output_frames.append(_sample_group_frame(group_idx, phase=0.5))
-            intra_group_motion = 0.0
-        else:
-            output_times = ((torch.arange(frame_count, dtype=torch.float32) + 0.5) / float(source_fps)).tolist()
-            output_frames = []
-            group_idx = 0
-            intra_group_motion = min(0.45, 0.35 * blur_scale)
-            for t in output_times:
-                while group_idx + 1 < len(starts) - 1 and t >= starts[group_idx + 1] - 1e-9:
-                    group_idx += 1
-                start_t = starts[group_idx]
-                end_t = starts[group_idx + 1]
-                interval_duration = max(1e-6, end_t - start_t)
-                phase = (t - start_t) / interval_duration
-                phase = 0.5 + (phase - 0.5) * intra_group_motion
-                output_frames.append(_sample_group_frame(group_idx, phase=phase))
+        def _render_frame(group_idx, phase):
+            """Retry only the current exposure on CPU after a CUDA allocation failure."""
+            nonlocal work_device, torch_sampler, frame_template, capture_grid
+            try:
+                result = _sample_group_frame(group_idx, phase)
+            except torch.OutOfMemoryError:
+                if work_device.type != "cuda":
+                    raise
+                _LOGGER.warning("[Silent Film Cadence] VRAM закончилась: текущий кадр и остаток батча рассчитываются на CPU.")
+                torch_sampler = capture_grid = frame_template = None
+                work_device = torch.device("cpu")
+                torch_sampler, frame_template, capture_grid = _prepare_sampling(work_device)
+                result = _sample_group_frame(group_idx, phase)
+            return result.to(images.device)
 
-        output = torch.stack(output_frames, dim=0).clamp(0.0, 1.0)
+        # Заполняем один батч сразу: список кадров плюс stack/clamp удваивали пиковую RAM.
+        output_frames = torch.empty((output_count, *images.shape[1:]), dtype=images.dtype, device=images.device)
+        with tqdm(total=output_count, desc="[Silent Film Cadence] Экспозиция", unit="кадр", dynamic_ncols=True, mininterval=0.5) as progress:
+            if playback_mode == "undercrank_projected_25fps":
+                for group_idx in range(len(starts) - 1):
+                    output_frames[group_idx].copy_(_render_frame(group_idx, phase=0.5))
+                    progress.update(1)
+                intra_group_motion = 0.0
+            else:
+                output_times = ((torch.arange(frame_count, dtype=torch.float32) + 0.5) / float(source_fps)).tolist()
+                group_idx = 0
+                intra_group_motion = min(0.45, 0.35 * blur_scale)
+                for output_index, t in enumerate(output_times):
+                    while group_idx + 1 < len(starts) - 1 and t >= starts[group_idx + 1] - 1e-9:
+                        group_idx += 1
+                    start_t = starts[group_idx]
+                    end_t = starts[group_idx + 1]
+                    interval_duration = max(1e-6, end_t - start_t)
+                    phase = (t - start_t) / interval_duration
+                    phase = 0.5 + (phase - 0.5) * intra_group_motion
+                    output_frames[output_index].copy_(_render_frame(group_idx, phase=phase))
+                    progress.update(1)
+
+        _LOGGER.info("[Silent Film Cadence] Этап 4/4: сборка выходного батча и cadence_json.")
+        output = output_frames.clamp_(0.0, 1.0)
 
         avg_effective_fps = float((len(starts) - 1) / total_duration) if total_duration > 0 else 0.0
         output_duration_seconds = float(len(output_frames) / source_fps) if source_fps > 0 else 0.0
@@ -666,6 +868,8 @@ class VideoSilentFilmCadence:
             "playback_mode": playback_mode,
             "blur_mode": blur_mode,
             "actual_blur_mode": actual_blur_mode,
+            "compute_device": str(compute_device),
+            "actual_compute_device": str(work_device),
             "target_fps_min": float(target_fps_min),
             "target_fps_max": float(target_fps_max),
             "fps_drift_strength": float(fps_drift_strength),
@@ -700,4 +904,9 @@ class VideoSilentFilmCadence:
             "intra_group_motion": float(intra_group_motion),
             "recommended_video_combine_fps": float(source_fps),
         }
-        return (output, json.dumps(payload, ensure_ascii=False, indent=2))
+        cadence_json = json.dumps(payload, ensure_ascii=False, indent=2)
+        _LOGGER.info(
+            "[Silent Film Cadence] Готово: %d → %d кадров за %.1f с; виртуальный fps=%.2f.",
+            frame_count, len(output_frames), perf_counter() - started_at, avg_effective_fps,
+        )
+        return (output, cadence_json)

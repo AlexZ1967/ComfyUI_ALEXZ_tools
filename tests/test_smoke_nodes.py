@@ -1048,6 +1048,144 @@ class SmokeTests(unittest.TestCase):
         self.assertGreater(phases[8] - phases[0], 0.05)
         self.assertTrue(np.all(np.diff(phases[:9]) >= 0))
 
+    def test_video_silent_film_cadence_logs_stages_and_bounded_progress(self):
+        """Show one terminal progress bar with actual output counts and flow fallback."""
+        from unittest.mock import patch
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        from io import StringIO
+        real_tqdm = mod.tqdm
+        for mode in ("preserve_duration_25fps", "undercrank_projected_25fps"):
+            with self.subTest(mode=mode):
+                terminal = StringIO()
+
+                def make_progress(**kwargs):
+                    """Capture the real terminal bar without relying on a TTY."""
+                    return real_tqdm(**{**kwargs, "file": terminal, "mininterval": 0, "dynamic_ncols": False})
+
+                with patch.object(mod, "cv2", None), patch.object(mod, "perf_counter", return_value=0.0):
+                    with self.assertLogs("VideoSilentFilmCadence", level="INFO") as logs, patch.object(mod, "tqdm", side_effect=make_progress) as bar:
+                        out, payload = mod.VideoSilentFilmCadence().apply(
+                            torch.zeros(60, 4, 4, 3), 24.0, mode, 16.0, 16.0,
+                            0.0, 0.65, 0.8, "flow_integrated", 5, 1925,
+                        )
+                messages = [record.getMessage() for record in logs.records]
+                stages = [message for message in messages if "Этап " in message]
+                self.assertEqual(len(stages), 4)
+                for index, message in enumerate(stages, 1):
+                    self.assertIn(f"Этап {index}/4", message)
+                bar.assert_called_once()
+                self.assertEqual(bar.call_args.kwargs["total"], len(out))
+                self.assertIn(f"0/{len(out)}", terminal.getvalue())
+                self.assertIn(f"{len(out)}/{len(out)}", terminal.getvalue())
+                self.assertIn("100%", terminal.getvalue())
+                self.assertFalse(any("Кадры:" in message for message in messages))
+                self.assertTrue(any(record.levelname == "WARNING" and "OpenCV" in record.getMessage() for record in logs.records))
+                self.assertIn("Готово:", messages[-1])
+                self.assertEqual(json.loads(payload)["actual_blur_mode"], "simple_fallback_no_cv2")
+
+    def test_video_silent_film_cadence_torch_sampler_matches_cpu_warps(self):
+        """Preserve confidence fallback and remap results with bounded tensor caches."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        if mod.cv2 is None:
+            self.skipTest("OpenCV is required for optical flow")
+        images = torch.rand(9, 24, 32, 4, generator=torch.Generator().manual_seed(7))
+        images[..., 3] = 0.7
+        sampler = mod._TorchExposureSampler(images, torch.device("cpu"), {}, {}, {})
+        for position in [0.25, 0.5, 1.75, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 0.5]:
+            result = sampler.sample(position, use_flow=True)
+            expected = mod._lerp_frame_flow(images, position, {}, {})
+            torch.testing.assert_close(result, expected, atol=5e-5, rtol=1e-5)
+            for cache in (sampler.tensor_frames, sampler.tensor_pairs, sampler.flow_cache, sampler.confidence_cache, sampler.frame_cache):
+                self.assertLessEqual(len(cache), 4)
+        torch.testing.assert_close(sampler.sample(2.25, use_flow=False), mod._lerp_frame(images, 2.25))
+
+    def test_video_silent_film_cadence_gpu_matches_cpu_and_returns_input_device(self):
+        """Exercise real CUDA exposure processing, alpha, shake, and both playback modes."""
+        from unittest.mock import patch
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA is unavailable")
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        if mod.cv2 is None:
+            self.skipTest("OpenCV is required for optical flow")
+        images = torch.rand(6, 32, 48, 4, generator=torch.Generator().manual_seed(7))
+        images[..., 3] = 0.7
+        for mode in ("preserve_duration_25fps", "undercrank_projected_25fps"):
+            for blur in ("simple", "flow_integrated"):
+                with self.subTest(mode=mode, blur=blur):
+                    args = (images, 24.0, mode, 16.0, 20.0, 0.65, 0.65, 0.8, blur, 5, 1925)
+                    cpu, _ = mod.VideoSilentFilmCadence().apply(*args, cadence_model="hand_crank", camera_shake_strength=0.25, compute_device="cpu")
+                    with patch.object(mod, "_select_compute_device", return_value=torch.device("cuda")):
+                        gpu, payload = mod.VideoSilentFilmCadence().apply(*args, cadence_model="hand_crank", camera_shake_strength=0.25, compute_device="cuda")
+                    torch.testing.assert_close(gpu, cpu, atol=1e-4, rtol=1e-5)
+                    self.assertEqual(gpu.device, images.device)
+                    self.assertEqual(json.loads(payload)["actual_compute_device"], "cuda")
+
+    def test_video_silent_film_cadence_device_validation_and_oom_fallback(self):
+        """Keep CPU support and retry when CUDA working storage cannot be allocated."""
+        from unittest.mock import patch
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        self.assertEqual(mod._select_compute_device("cpu", 1000, 1000).type, "cpu")
+        self.assertEqual(mod._select_compute_device("auto", 4, 4).type, "cpu")
+        with self.assertRaises(ValueError):
+            mod._select_compute_device("unknown", 4, 4)
+        with patch.object(torch.cuda, "is_available", return_value=False):
+            self.assertEqual(mod._select_compute_device("cuda", 1000, 1000).type, "cpu")
+        args = (torch.zeros(6, 8, 8, 3), 24.0, "preserve_duration_25fps", 16.0, 20.0, 0.65, 0.65, 0.8, "simple", 5, 1925)
+        baseline, _ = mod.VideoSilentFilmCadence().apply(*args, compute_device="cpu")
+        with patch.object(mod, "_select_compute_device", return_value=torch.device("cuda")):
+            with patch.object(mod, "_TorchExposureSampler", side_effect=torch.OutOfMemoryError("test OOM")):
+                actual, payload = mod.VideoSilentFilmCadence().apply(*args)
+        torch.testing.assert_close(actual, baseline)
+        self.assertEqual(json.loads(payload)["actual_compute_device"], "cpu")
+        if torch.cuda.is_available():
+            with patch.object(mod, "_select_compute_device", return_value=torch.device("cuda")):
+                with patch.object(mod._TorchExposureSampler, "sample", side_effect=torch.OutOfMemoryError("test OOM")):
+                    actual, payload = mod.VideoSilentFilmCadence().apply(*args)
+            torch.testing.assert_close(actual, baseline)
+            self.assertEqual(json.loads(payload)["actual_compute_device"], "cpu")
+
+    def test_video_silent_film_finish_logs_stages_and_completion(self):
+        """Report batch processing stages and the actual synchronization mode."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        node = mod.VideoSilentFilmFinish()
+        parameters = {
+            key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key != "image"
+        }
+        with self.assertLogs("VideoSilentFilmFinish", level="INFO") as logs:
+            out, payload = node.apply(torch.zeros(4, 8, 8, 3), **parameters, cadence_json="invalid")
+        messages = [record.getMessage() for record in logs.records]
+        stages = [message for message in messages if "Этап " in message]
+        self.assertEqual(len(stages), 7)
+        for index, message in enumerate(stages, 1):
+            self.assertIn(f"Этап {index}/7", message)
+        self.assertTrue(any("Синхронизация: invalid_json" in message for message in messages))
+        self.assertIn("Готово: 4 кадров", messages[-1])
+        self.assertEqual(out.shape, (4, 8, 8, 3))
+        self.assertEqual(json.loads(payload)["sync_mode"], "invalid_json")
+
+    def test_video_silent_film_logs_do_not_claim_completion_on_failure(self):
+        """Do not report successful completion when an image-processing stage fails."""
+        from unittest.mock import patch
+        cadence = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        finish = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        with self.assertLogs("VideoSilentFilmCadence", level="INFO") as logs:
+            with patch.object(cadence, "_temporal_exposure_sample", side_effect=RuntimeError("test failure")):
+                with self.assertRaisesRegex(RuntimeError, "test failure"):
+                    cadence.VideoSilentFilmCadence().apply(
+                        torch.zeros(4, 8, 8, 3), 24.0, "preserve_duration_25fps", 16.0, 18.0,
+                        0.5, 0.65, 0.8, "simple", 5, 1925,
+                    )
+        self.assertFalse(any("Готово:" in message or "(100%)" in message for message in logs.output))
+        parameters = {
+            key: spec[1]["default"] for key, spec in finish.VideoSilentFilmFinish.INPUT_TYPES()["required"].items() if key != "image"
+        }
+        with self.assertLogs("VideoSilentFilmFinish", level="INFO") as logs:
+            with patch.object(finish, "_apply_grain", side_effect=RuntimeError("test failure")):
+                with self.assertRaisesRegex(RuntimeError, "test failure"):
+                    finish.VideoSilentFilmFinish().apply(torch.zeros(4, 8, 8, 3), **parameters)
+        self.assertTrue(any("Этап 6/7" in message for message in logs.output))
+        self.assertFalse(any("Готово:" in message or "Этап 7/7" in message for message in logs.output))
+
     def test_video_silent_film_cadence_rejects_inconsistent_flow(self):
         """Keep static details intact when the estimated flows disagree."""
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
@@ -1116,6 +1254,92 @@ class SmokeTests(unittest.TestCase):
         self.assertGreaterEqual(float(out[..., 3].min().item()), 0.0)
         self.assertLessEqual(float(out[..., 3].max().item()), 1.0)
         self.assertEqual(data["sync_mode"], "none")
+
+    def test_video_silent_film_finish_chunks_preserve_signals_and_frame_grain(self):
+        """Keep normalized output, synchronization, and grain independent of chunk size."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        node = mod.VideoSilentFilmFinish()
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key != "image"}
+        image = torch.rand(7, 19, 17, 4, generator=torch.Generator().manual_seed(7)) * 1.4 - 0.2
+        original = image.clone()
+        self.assertEqual(mod._validate_video_batch(image, normalize=False).data_ptr(), image.data_ptr())
+        gray = image[..., 0:1].clamp(0.0, 1.0)
+        focus = torch.linspace(-0.5, 0.5, len(image))
+        torch.testing.assert_close(
+            mod._apply_focus_drift(gray, 0.15, focus, 0.04),
+            mod._apply_focus_drift(gray.repeat(1, 1, 1, 3), 0.15, focus, 0.04)[..., 0:1],
+        )
+        meta = json.dumps({
+            "schema_name": "alexz.video_silent_film_cadence", "output_group_ids": [0, 0, 1, 1, 2, 2, 3],
+            "fps_values_full": [16, 18, 16, 20], "phase_biases_full": [0.1, -0.1, 0, 0.03],
+        })
+        for grain_mode in ("emulsion_luma", "overlay_fast"):
+            with self.subTest(grain_mode=grain_mode):
+                parameters["grain_mode"] = grain_mode
+                baseline, base_payload = node.apply(image, **parameters, cadence_json=meta, compute_device="cpu", batch_size=1)
+                for size in (3, 7):
+                    actual, payload = node.apply(image, **parameters, cadence_json=meta, compute_device="cpu", batch_size=size)
+                    torch.testing.assert_close(actual, baseline, atol=1e-6, rtol=1e-5)
+                    data = json.loads(payload)
+                    self.assertEqual(data["sync_mode"], "cadence_locked")
+                    self.assertEqual(data["focus_preview"], json.loads(base_payload)["focus_preview"])
+                    self.assertEqual(data["grain_seed_mode"], "per_frame")
+                torch.testing.assert_close(image, original, atol=0, rtol=0)
+        repeated = torch.full((5, 19, 17, 3), 0.5)
+        grain = mod._apply_grain(repeated, "emulsion_luma", 0.03, 2, 1925, frame_offset=0)
+        self.assertGreater(float((grain[0] - grain[1]).abs().mean()), 1e-4)
+        torch.testing.assert_close(grain[2:4], mod._apply_grain(repeated[2:4], "emulsion_luma", 0.03, 2, 1925, frame_offset=2))
+
+    def test_video_silent_film_finish_cuda_matches_chunked_cpu(self):
+        """Run real CUDA finishing with the same frame grain and CPU output contract."""
+        from unittest.mock import patch
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA is unavailable")
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        node = mod.VideoSilentFilmFinish()
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key != "image"}
+        image = torch.rand(5, 32, 48, 4, generator=torch.Generator().manual_seed(7))
+        for mode in ("emulsion_luma", "overlay_fast"):
+            with self.subTest(grain_mode=mode):
+                parameters["grain_mode"] = mode
+                baseline, _ = node.apply(image, **parameters, compute_device="cpu", batch_size=1)
+                with patch.object(mod, "_finish_processing_plan", return_value=(torch.device("cuda"), 2, 2)):
+                    result, payload = node.apply(image, **parameters, compute_device="cuda", batch_size=2)
+                torch.testing.assert_close(result, baseline, atol=1e-4, rtol=1e-5)
+                self.assertEqual(result.device, image.device)
+                self.assertEqual(json.loads(payload)["actual_compute_device"], "cuda")
+
+    def test_video_silent_film_finish_oom_retries_and_ram_guard(self):
+        """Reduce CUDA chunks and fall back without losing frames or changing grain."""
+        from unittest.mock import patch
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        node = mod.VideoSilentFilmFinish()
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key != "image"}
+        image = torch.rand(7, 16, 20, 4, generator=torch.Generator().manual_seed(7))
+        baseline, _ = node.apply(image, **parameters, compute_device="cpu", batch_size=1)
+        run_chunk = mod._run_finish_chunk
+        attempts = []
+
+        def simulate_oom(images, start, end, device, *args):
+            """Fail CUDA requests before allocating and execute CPU retries normally."""
+            attempts.append((start, end, device.type))
+            if device.type == "cuda":
+                raise torch.OutOfMemoryError("test OOM")
+            return run_chunk(images, start, end, device, *args)
+
+        with patch.object(mod, "_finish_processing_plan", return_value=(torch.device("cuda"), 4, 2)):
+            with patch.object(mod, "_run_finish_chunk", side_effect=simulate_oom):
+                result, payload = node.apply(image, **parameters)
+        torch.testing.assert_close(result, baseline)
+        self.assertEqual(attempts[:3], [(0, 4, "cuda"), (0, 2, "cuda"), (0, 1, "cuda")])
+        self.assertEqual(json.loads(payload)["actual_compute_device"], "cpu")
+        self.assertEqual(json.loads(payload)["chunk_count"], 4)
+        with patch.object(mod, "_available_finish_ram", return_value=0):
+            with self.assertRaisesRegex(MemoryError, "RAM"):
+                node.apply(image, **parameters)
+        for size in (0, 17, 2.5):
+            with self.subTest(batch_size=size), self.assertRaises(ValueError):
+                node.apply(image, **parameters, batch_size=size)
 
     def test_video_silent_film_finish_can_lock_to_cadence_json(self):
         """Ensure finish node can synchronize flicker/weave to cadence metadata."""

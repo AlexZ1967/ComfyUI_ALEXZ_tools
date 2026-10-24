@@ -14,12 +14,19 @@ Purpose:
 from __future__ import annotations
 
 import json
+import logging
+from time import perf_counter
 
 import torch
 import torch.nn.functional as F
+import psutil
+from tqdm import tqdm
 
 
-def _validate_video_batch(images: torch.Tensor) -> torch.Tensor:
+_LOGGER = logging.getLogger("VideoSilentFilmFinish")
+
+
+def _validate_video_batch(images: torch.Tensor, normalize: bool = True) -> torch.Tensor:
     """Validate Comfy image batch contract and clamp to normalized range."""
     if not isinstance(images, torch.Tensor):
         raise TypeError("image must be a torch.Tensor batch in THWC layout.")
@@ -29,7 +36,8 @@ def _validate_video_batch(images: torch.Tensor) -> torch.Tensor:
         raise ValueError("Silent film finish requires at least one frame.")
     if images.size(-1) not in (3, 4):
         raise ValueError(f"Expected 3 or 4 channels, got {images.size(-1)}.")
-    return images.detach().float().clamp(0.0, 1.0)
+    images = images.detach()
+    return images.float().clamp(0.0, 1.0) if normalize else images
 
 
 def _temporal_signal(
@@ -218,8 +226,9 @@ def _scaled_noise(
     small_h = max(1, int(round(height / scale_divisor)))
     small_w = max(1, int(round(width / scale_divisor)))
     noise = torch.randn((frame_count, 1, small_h, small_w), generator=generator, dtype=torch.float32)
+    noise = noise.to(device=device, dtype=dtype)
     noise = F.interpolate(noise, size=(height, width), mode="bilinear", align_corners=False)
-    return noise.to(device=device, dtype=dtype)
+    return noise
 
 
 def _build_emulsion_grain_field(
@@ -270,8 +279,8 @@ def _apply_grain_overlay(
     generator = torch.Generator(device="cpu")
     generator.manual_seed(int(seed))
     noise = torch.randn((frame_count, 1, small_h, small_w), generator=generator, dtype=torch.float32)
-    noise = F.interpolate(noise, size=(height, width), mode="bilinear", align_corners=False)
     noise = noise.to(device=image_rgb.device, dtype=image_rgb.dtype)
+    noise = F.interpolate(noise, size=(height, width), mode="bilinear", align_corners=False)
     noise = noise.permute(0, 2, 3, 1)
     out = image_rgb + noise * grain_strength
     return torch.clamp(out, 0.0, 1.0)
@@ -283,11 +292,22 @@ def _apply_grain(
     grain_strength: float,
     grain_size: int,
     seed: int,
+    frame_offset: int | None = None,
 ) -> torch.Tensor:
     """Apply either fast overlay grain or a more film-like emulsion grain model."""
     grain_strength = max(0.0, float(grain_strength))
     if grain_strength <= 1e-8:
         return image_rgb
+
+    if frame_offset is not None:
+        # Каждый кадр имеет свой seed: размер порции и повтор после OOM не меняют зерно.
+        output = torch.empty_like(image_rgb)
+        for index in range(len(image_rgb)):
+            frame_seed = (int(seed) + (frame_offset + index) * 1000003) % (2**63 - 1)
+            output[index:index + 1] = _apply_grain(
+                image_rgb[index:index + 1], grain_mode, grain_strength, grain_size, frame_seed,
+            )
+        return output
 
     if grain_mode == "overlay_fast":
         return _apply_grain_overlay(image_rgb, grain_strength, grain_size, seed)
@@ -371,6 +391,100 @@ def _expand_group_series(
     """Expand one value per cadence group to one value per output frame."""
     index = torch.tensor([int(x) for x in group_ids], device=device, dtype=torch.long)
     return group_values.to(device=device, dtype=dtype)[index]
+
+
+def _available_finish_ram() -> int:
+    """Use ComfyUI's cgroup-aware RAM availability when it is available."""
+    try:
+        from comfy.system_memory import virtual_memory_available
+    except ImportError:
+        return int(psutil.virtual_memory().available)
+    return int(virtual_memory_available())
+
+
+def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int) -> tuple[torch.device, int, int]:
+    """Budget bounded CPU/CUDA chunks and reserve space for the required output batch."""
+    if mode not in {"auto", "cpu", "cuda"}:
+        raise ValueError(f"Unsupported compute_device: {mode}")
+    if int(batch_size) != batch_size or not 1 <= batch_size <= 16:
+        raise ValueError("batch_size must be an integer between 1 and 16.")
+    frame_count, height, width, channels = images.shape
+    output_bytes = frame_count * height * width * channels * 4
+    reserve = 512 * 1024**2
+    per_frame = height * width * 512
+    cpu_output_bytes = output_bytes if images.device.type == "cpu" else 0
+    cpu_budget = _available_finish_ram() - cpu_output_bytes - reserve
+    if cpu_budget < per_frame:
+        raise MemoryError(
+            "Silent Film Finish: недостаточно свободной RAM для выходного батча и одного рабочего кадра. "
+            "Уменьшите число кадров или разрешение либо освободите память ComfyUI."
+        )
+    cpu_batch = min(int(batch_size), max(1, cpu_budget // per_frame))
+    if mode == "cpu" or (mode == "auto" and height * width < 256 * 256):
+        return torch.device("cpu"), cpu_batch, cpu_batch
+    if not torch.cuda.is_available():
+        if mode == "cuda":
+            _LOGGER.warning("[Silent Film Finish] CUDA недоступна: используется CPU.")
+        return torch.device("cpu"), cpu_batch, cpu_batch
+    try:
+        from comfy import model_management
+    except ImportError:
+        device = torch.device("cuda", torch.cuda.current_device())
+    else:
+        device = model_management.get_torch_device()
+    if device.type != "cuda":
+        return torch.device("cpu"), cpu_batch, cpu_batch
+    free, _ = torch.cuda.mem_get_info(device)
+    available = free + torch.cuda.memory_reserved(device) - torch.cuda.memory_allocated(device)
+    gpu_output_bytes = output_bytes if images.device == device else 0
+    gpu_batch = min(int(batch_size), (available - gpu_output_bytes - reserve) // per_frame)
+    if gpu_batch < 1:
+        _LOGGER.warning("[Silent Film Finish] Недостаточно свободной VRAM: используется CPU.")
+        return torch.device("cpu"), cpu_batch, cpu_batch
+    return device, int(gpu_batch), cpu_batch
+
+
+def _finish_chunk(images, gate_x, gate_y, focus_signal, exposure, parameters, frame_offset, log_stages=False):
+    """Process one bounded chunk while preserving clip-global signals and frame seeds."""
+    alpha = images[..., 3:4] if images.size(-1) == 4 else None
+    rgb = images[..., :3]
+    if log_stages:
+        _LOGGER.info("[Silent Film Finish] Этап 3/7: дрожание проектора; первая порция.")
+    woven_rgb = _apply_gate_weave(rgb, gate_x, gate_y)
+    woven_alpha = _apply_gate_weave(alpha, gate_x, gate_y) if alpha is not None else None
+    if log_stages:
+        _LOGGER.info("[Silent Film Finish] Этап 4/7: ЧБ, контраст, света, мягкость и фокус; первая порция.")
+    gray = woven_rgb[..., 0:1] * 0.299 + woven_rgb[..., 1:2] * 0.587 + woven_rgb[..., 2:3] * 0.114
+    gray = torch.pow(torch.clamp(gray, 0.0, 1.0), max(0.3, float(parameters["midtone_gamma"])))
+    gray = (gray - 0.5) * float(parameters["contrast"]) + 0.5 + float(parameters["black_lift"])
+    gray = _soft_clip_highlights(torch.clamp(gray, 0.0, 1.0), parameters["highlight_rolloff"])
+    # До тонировки каналы одинаковы: фокус достаточно считать один раз по яркости.
+    gray = _apply_focus_drift(
+        gray, parameters["softness"], focus_signal, parameters["focus_drift_strength"],
+    )
+    if log_stages:
+        _LOGGER.info("[Silent Film Finish] Этап 5/7: экспозиция и тонировка; первая порция.")
+    gray = torch.clamp(gray * exposure.view(-1, 1, 1, 1), 0.0, 1.0)
+    toned = _tone_gray(gray, parameters["tone_mode"])
+    if log_stages:
+        _LOGGER.info("[Silent Film Finish] Этап 6/7: зерно %s; затем повтор этапов 3–6 для остальных порций.", parameters["grain_mode"])
+    toned = _apply_grain(
+        toned, parameters["grain_mode"], parameters["grain_strength"], parameters["grain_size"],
+        parameters["seed"] + 1001, frame_offset=frame_offset,
+    )
+    if woven_alpha is not None:
+        toned = torch.cat([toned, torch.clamp(woven_alpha, 0.0, 1.0)], dim=-1)
+    return torch.clamp(toned, 0.0, 1.0)
+
+
+def _run_finish_chunk(images, start, end, device, gate_x, gate_y, focus_signal, exposure, parameters):
+    """Keep all temporary chunk tensors inside a scope released before OOM retries."""
+    chunk = images[start:end].to(device=device, dtype=torch.float32).clamp(0.0, 1.0)
+    return _finish_chunk(
+        chunk, gate_x[start:end].to(device), gate_y[start:end].to(device),
+        focus_signal[start:end].to(device), exposure[start:end].to(device),
+        parameters, start, log_stages=start == 0,
+    )
 
 
 class VideoSilentFilmFinish:
@@ -525,6 +639,20 @@ class VideoSilentFilmFinish:
                         "tooltip": "Опциональный cadence_json из Silent Film Cadence. Если подключен, flicker, gate weave и focus drift будут синхронизированы с виртуальной скоростью ручной съемки.",
                     },
                 ),
+                "compute_device": (
+                    ["auto", "cpu", "cuda"],
+                    {
+                        "default": "auto",
+                        "tooltip": "auto = CUDA для крупных кадров при наличии VRAM; cpu = порционная обработка на CPU; cuda = запрос GPU. При нехватке VRAM порция уменьшается, затем используется CPU.",
+                    },
+                ),
+                "batch_size": (
+                    "INT",
+                    {
+                        "default": 4, "min": 1, "max": 16, "step": 1,
+                        "tooltip": "Максимум кадров в рабочей порции. 4 — старт; 1–2 — меньше RAM/VRAM. Фактический размер автоматически ограничивается доступной памятью. На число выходных кадров и рисунок зерна не влияет.",
+                    },
+                ),
             },
         }
 
@@ -551,17 +679,31 @@ class VideoSilentFilmFinish:
         grain_size,
         seed,
         cadence_json="",
+        compute_device="auto",
+        batch_size=4,
     ):
         """Apply silent-film print/projection finishing to a video batch."""
-        images = _validate_video_batch(image)
-        alpha = images[..., 3:4] if images.size(-1) == 4 else None
-        rgb = images[..., :3]
+        started_at = perf_counter()
+        _LOGGER.info("[Silent Film Finish] Этап 1/7: проверка входного батча.")
+        # Нормализуем только рабочую порцию: здесь не создаём копию всего ролика.
+        images = _validate_video_batch(image, normalize=False)
 
-        frame_count = int(rgb.size(0))
-        device = rgb.device
-        dtype = rgb.dtype
+        frame_count = int(images.size(0))
+        device = torch.device("cpu")
+        dtype = torch.float32
+        work_device, current_batch_size, cpu_batch_size = _finish_processing_plan(images, str(compute_device), batch_size)
+        _LOGGER.info(
+            "[Silent Film Finish] Вход: %d кадров, %dx%d; тон=%s, зерно=%s.",
+            frame_count, images.size(2), images.size(1), tone_mode, grain_mode,
+        )
+        _LOGGER.info("[Silent Film Finish] Обработка: %s; рабочая порция: %d кадров.", work_device, current_batch_size)
 
+        _LOGGER.info("[Silent Film Finish] Этап 2/7: синхронизация и подготовка сигналов проекции.")
         sync_mode, cadence_meta = _parse_cadence_json(cadence_json, frame_count=frame_count)
+        _LOGGER.info(
+            "[Silent Film Finish] Синхронизация: %s; %s.",
+            sync_mode, "используется cadence_json" if cadence_meta is not None else "независимые сигналы проекции",
+        )
         if cadence_meta is not None:
             group_ids = [int(x) for x in cadence_meta.get("output_group_ids", [])]
             group_count = max(group_ids) + 1 if group_ids else 0
@@ -593,35 +735,44 @@ class VideoSilentFilmFinish:
             flicker_slow = _temporal_signal(frame_count, seed + 211, breathing_strength, 0.92, device, dtype)
             focus_signal = torch.tanh(_temporal_signal(frame_count, seed + 307, 1.0, 0.48, device, dtype))
 
-        woven_rgb = _apply_gate_weave(rgb, gate_x, gate_y)
-        woven_alpha = _apply_gate_weave(alpha, gate_x, gate_y) if alpha is not None else None
-
-        gray = (
-            woven_rgb[..., 0:1] * 0.299
-            + woven_rgb[..., 1:2] * 0.587
-            + woven_rgb[..., 2:3] * 0.114
-        )
-        gamma = max(0.3, float(midtone_gamma))
-        gray = torch.pow(torch.clamp(gray, 0.0, 1.0), gamma)
-        gray = (gray - 0.5) * float(contrast) + 0.5 + float(black_lift)
-        gray = torch.clamp(gray, 0.0, 1.0)
-        gray = _soft_clip_highlights(gray, highlight_rolloff)
-        gray_rgb = gray.repeat(1, 1, 1, 3)
-        gray_rgb = _apply_focus_drift(gray_rgb, softness, focus_signal, focus_drift_strength)
-        gray = gray_rgb[..., 0:1]
-
         exposure = 1.0 + flicker_fast + flicker_slow
-        exposure = exposure.view(frame_count, 1, 1, 1)
-        gray = torch.clamp(gray * exposure, 0.0, 1.0)
-
-        toned = _tone_gray(gray, tone_mode)
-        toned = _apply_grain(toned, grain_mode, grain_strength, grain_size, seed + 1001)
-
-        if woven_alpha is not None:
-            output = torch.cat([toned, torch.clamp(woven_alpha, 0.0, 1.0)], dim=-1)
-        else:
-            output = toned
-        output = torch.clamp(output, 0.0, 1.0)
+        parameters = {
+            "tone_mode": tone_mode, "contrast": contrast, "midtone_gamma": midtone_gamma,
+            "black_lift": black_lift, "highlight_rolloff": highlight_rolloff,
+            "softness": softness, "focus_drift_strength": focus_drift_strength,
+            "grain_mode": grain_mode, "grain_strength": grain_strength,
+            "grain_size": grain_size, "seed": seed,
+        }
+        # Один выходной батч вместо списка порций и последующего удвоения памяти через cat.
+        output = torch.empty(images.shape, dtype=torch.float32, device=images.device)
+        start = 0
+        chunk_count = 0
+        with tqdm(total=frame_count, desc="[Silent Film Finish] Обработка", unit="кадр", dynamic_ncols=True, mininterval=0.5) as progress:
+            while start < frame_count:
+                end = min(frame_count, start + current_batch_size)
+                result = None
+                try:
+                    result = _run_finish_chunk(
+                        images, start, end, work_device, gate_x, gate_y, focus_signal, exposure, parameters,
+                    )
+                    output[start:end].copy_(result)
+                except torch.OutOfMemoryError:
+                    result = None
+                    if work_device.type != "cuda":
+                        raise
+                    if current_batch_size > 1:
+                        current_batch_size = max(1, current_batch_size // 2)
+                        _LOGGER.warning("[Silent Film Finish] VRAM закончилась: повтор порции с %d кадров, начиная с кадра %d.", current_batch_size, start + 1)
+                    else:
+                        work_device = torch.device("cpu")
+                        current_batch_size = cpu_batch_size
+                        _LOGGER.warning("[Silent Film Finish] Один кадр не помещается в VRAM: остаток батча рассчитывается на CPU.")
+                    continue
+                del result
+                chunk_count += 1
+                progress.update(end - start)
+                start = end
+        _LOGGER.info("[Silent Film Finish] Этап 7/7: завершение выходного батча и finish_json.")
 
         payload = {
             "schema_name": "alexz.video_silent_film_finish",
@@ -642,10 +793,18 @@ class VideoSilentFilmFinish:
             "grain_size": int(grain_size),
             "seed": int(seed),
             "frame_count": frame_count,
+            "compute_device": str(compute_device),
+            "actual_compute_device": str(work_device),
+            "batch_size": int(batch_size),
+            "actual_batch_size": current_batch_size,
+            "chunk_count": chunk_count,
+            "grain_seed_mode": "per_frame",
             "sync_mode": sync_mode,
             "focus_preview": [round(float(x), 4) for x in focus_signal[:16].tolist()],
             "gate_x_preview": [round(float(x), 4) for x in gate_x[:16].tolist()],
             "gate_y_preview": [round(float(y), 4) for y in gate_y[:16].tolist()],
             "exposure_preview": [round(float(x), 4) for x in exposure.view(-1)[:16].tolist()],
         }
-        return (output, json.dumps(payload, ensure_ascii=False, indent=2))
+        finish_json = json.dumps(payload, ensure_ascii=False, indent=2)
+        _LOGGER.info("[Silent Film Finish] Готово: %d кадров за %.1f с.", frame_count, perf_counter() - started_at)
+        return (output, finish_json)
