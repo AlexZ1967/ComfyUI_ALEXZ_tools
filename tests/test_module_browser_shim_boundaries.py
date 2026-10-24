@@ -72,7 +72,8 @@ class ModuleBrowserShimBoundariesTests(unittest.TestCase):
         offenders: list[str] = []
         for path in sorted(self.repo_root.rglob("*.py")):
             rel = path.relative_to(self.repo_root)
-            if rel.parts[0] == "tests":
+            # Локальные резервные копии окружения и npm-зависимости не являются исходниками проекта.
+            if rel.parts[0] in {"tests", ".alexz-updates", "node_modules"}:
                 continue
             if rel.parts[:2] == ("utils", "module_browser"):
                 # The shim package itself is allowed to reference shim names.

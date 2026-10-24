@@ -247,16 +247,16 @@ Guide: [GUIDE_VIDEO_CUT_MATCH.md](guides/GUIDE_VIDEO_CUT_MATCH.md)
 ---
 
 ## Silent Film Cadence
-Снижает эффективную кадровую плотность батча до диапазона немого кино (`16-20 fps`), оставляя длительность и количество выходных кадров как у исходного 25 fps клипа. Для каждого виртуального low-fps кадра строится hold-группа и, при необходимости, добавляется темпоральный motion blur за счет усреднения соседних исходных кадров.
+Моделирует виртуальную съёмку с пониженным fps и экспозиционным motion blur. Может сохранять число кадров или возвращать укороченный батч для ускоренной проекции.
 
 - Display name: Silent Film Cadence
 - Type name: VideoSilentFilmCadence
 - Category: video/stylize
 
-Ключевые входы: `image`, `source_fps`, `playback_mode`, `target_fps_min`, `target_fps_max`, `fps_drift_strength`, `shutter_fraction`, `motion_blur_strength`, `blur_mode`, `blur_samples`, `seed`.
+Ключевые входы: `image`, `source_fps`, `playback_mode`, `target_fps_min`, `target_fps_max`, `fps_drift_strength`, `shutter_fraction`, `motion_blur_strength`, `blur_mode`, `blur_samples`, `seed`. Дополнительные настройки ручки: `cadence_model`, `crank_irregularity`, `camera_shake_strength`.
 `playback_mode=preserve_duration_25fps` сохраняет длину клипа и только меняет пластику движения. `playback_mode=undercrank_projected_25fps` делает аутентичное ускорение движения и возвращает более короткий батч, который нужно собирать в `Video Combine` на `25 fps`.
 `blur_mode=simple` быстрее и подходит для preview. `blur_mode=flow_integrated` использует optical-flow-based motion-compensated smear и заметно лучше имитирует длинную экспозицию, уменьшая сдвоенность/строенность.
-Типовой старт для имитации середины 1920-х: `source_fps=25`, `playback_mode=undercrank_projected_25fps`, `target_fps_min=16`, `target_fps_max=18`, `fps_drift_strength=0.8`, `shutter_fraction=1.0`, `motion_blur_strength=1.2`.
+Для циклической модели ручки выберите `cadence_model=hand_crank`: скорость пульсирует по фазе оборота, а не по случайному таймеру. Старт: `crank_irregularity=0.15`, `fps_drift_strength=0.65`, `camera_shake_strength=0.25`; диапазон `target_fps_min/max` задаёт границы скорости. `crank_irregularity=0` даёт точно повторяющиеся обороты. Передаточное отношение фиксировано: 8 кадров на оборот. Покачивание камеры рассчитывается внутри экспозиции по той же фазе ручки; `gate_weave_px` в Finish независимо моделирует проекцию. Прежний `legacy_random` остаётся по умолчанию для совместимости workflow, покачивание в нём отключено.
 Выходы: `image`, `cadence_json` (`actual_blur_mode`, `average_effective_fps`, `group_count`, `output_duration_seconds`, `group_sizes_preview`, `fps_values_preview`).
 Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADENCE.md)
 

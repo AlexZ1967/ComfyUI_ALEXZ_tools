@@ -876,6 +876,209 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(tuple(out_flow.shape), (25, 4, 4, 3))
         self.assertIn(flow_data["actual_blur_mode"], {"flow_integrated", "simple_fallback_no_cv2"})
 
+    def test_video_silent_film_cadence_legacy_sequence_is_unchanged(self):
+        """Preserve cadence values for workflows without the new optional controls."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        implicit = mod._build_capture_intervals(1.0, 16.0, 20.0, 0.65, 1925)
+        explicit = mod._build_capture_intervals(1.0, 16.0, 20.0, 0.65, 1925, "legacy_random")
+        self.assertEqual(implicit, explicit)
+        np.testing.assert_allclose(implicit[1][:6], [
+            17.082349221558694, 17.845202704709344, 18.518135002643014,
+            18.18944047428344, 19.425655123078222, 19.10878271446584,
+        ], rtol=0, atol=1e-12)
+
+    def test_video_silent_film_cadence_crank_repeats_per_revolution(self):
+        """Tie cyclic speed to film advance and shorten turns as speed increases."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        for frames_per_turn in (4, 8, 16):
+            with self.subTest(frames_per_turn=frames_per_turn):
+                starts, fps, biases = mod._build_capture_intervals(
+                    4.0, 16.0, 20.0, 1.0, 1925, "hand_crank", frames_per_turn, 0.0,
+                )
+                np.testing.assert_allclose(fps[frames_per_turn:], fps[:-frames_per_turn], atol=1e-12)
+                self.assertGreater(max(fps) - min(fps), 2.0)
+                np.testing.assert_allclose(np.diff(starts)[:-1], 1.0 / np.array(fps[:-1]))
+                self.assertEqual(biases, [0.0] * len(fps))
+                faster_starts, faster_fps, _ = mod._build_capture_intervals(
+                    2.0, 32.0, 40.0, 1.0, 1925, "hand_crank", frames_per_turn, 0.0,
+                )
+                np.testing.assert_allclose(faster_fps, np.array(fps) * 2.0)
+                np.testing.assert_allclose(faster_starts, np.array(starts) / 2.0)
+
+    def test_video_silent_film_cadence_crank_drift_is_bounded_and_repeatable(self):
+        """Keep seeded irregularity bounded and disable all drift at zero strength."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        for irregularity in (0.0, 0.15, 1.0):
+            with self.subTest(irregularity=irregularity):
+                args = (5.0, 16.0, 20.0, 0.8, 1925, "hand_crank", 8, irregularity)
+                result = mod._build_capture_intervals(*args)
+                self.assertEqual(result, mod._build_capture_intervals(*args))
+                starts, fps, _ = result
+                self.assertEqual(starts[-1], 5.0)
+                self.assertTrue(np.all(np.diff(starts) > 0))
+                self.assertGreaterEqual(min(fps), 16.4 - 1e-12)
+                self.assertLessEqual(max(fps), 19.6 + 1e-12)
+                if irregularity:
+                    self.assertGreater(float(np.max(np.abs(np.array(fps[8:]) - fps[:-8]))), 0.01)
+        for low, high, strength in [(16.0, 20.0, 0.0), (18.0, 18.0, 1.0)]:
+            _, fps, _ = mod._build_capture_intervals(2.0, low, high, strength, 1, "hand_crank")
+            np.testing.assert_allclose(fps, 18.0)
+        first = mod._build_capture_intervals(2.0, 16.0, 20.0, 0.8, 1, "hand_crank")
+        second = mod._build_capture_intervals(2.0, 16.0, 20.0, 0.8, 2, "hand_crank")
+        self.assertNotEqual(first, second)
+
+    def test_video_silent_film_cadence_crank_validates_controls(self):
+        """Reject invalid crank controls before generating intervals."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        for model, frames_per_turn, irregularity in [
+            ("unknown", 8, 0.15), ("hand_crank", 1, 0.15),
+            ("hand_crank", 8.5, 0.15), ("hand_crank", 33, 0.15),
+            ("hand_crank", 8, -0.1), ("hand_crank", 8, 1.1),
+            ("hand_crank", 8, float("nan")),
+        ]:
+            with self.subTest(model=model, frames_per_turn=frames_per_turn, irregularity=irregularity):
+                with self.assertRaises(ValueError):
+                    mod._build_capture_intervals(1.0, 16.0, 20.0, 0.8, 1, model, frames_per_turn, irregularity)
+
+    def test_video_silent_film_cadence_crank_supports_both_playback_modes(self):
+        """Keep image and metadata contracts in both playback modes with cyclic cadence."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        images = torch.linspace(0.0, 1.0, 48).view(48, 1, 1, 1).expand(48, 4, 4, 4)
+        for mode in ("preserve_duration_25fps", "undercrank_projected_25fps"):
+            with self.subTest(mode=mode):
+                out, payload = mod.VideoSilentFilmCadence().apply(
+                    images, 24.0, mode, 16.0, 20.0, 0.65, 0.65, 0.8, "simple", 5, 1925,
+                    cadence_model="hand_crank", crank_frames_per_turn=8, crank_irregularity=0.15,
+                    camera_shake_strength=0.25,
+                )
+                data = json.loads(payload)
+                self.assertEqual(data["cadence_model"], "hand_crank")
+                self.assertEqual(data["crank_frames_per_turn"], 8)
+                self.assertEqual(len(data["output_group_ids"]), len(out))
+                self.assertEqual(len(data["fps_values_full"]), data["group_count"])
+                self.assertEqual(mod._validate_video_batch(out).shape, out.shape)
+                self.assertTrue(torch.isfinite(out).all())
+                if mode == "preserve_duration_25fps":
+                    self.assertEqual(out.shape, images.shape)
+                else:
+                    self.assertLess(len(out), len(images))
+
+    def test_video_silent_film_capture_phase_follows_capture_intervals(self):
+        """Use capture timing for camera phase, including variable-speed intervals."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        starts, _, _ = mod._build_capture_intervals(3.0, 16.0, 20.0, 0.8, 1925, "hand_crank")
+        initial_phase = 0.25
+        for index in range(len(starts) - 1):
+            self.assertAlmostEqual(mod._crank_phase_at_time(starts, starts[index], initial_phase), initial_phase + index / 8)
+            middle = (starts[index] + starts[index + 1]) / 2
+            self.assertAlmostEqual(mod._crank_phase_at_time(starts, middle, initial_phase), initial_phase + (index + 0.5) / 8)
+        self.assertEqual(mod._crank_phase_at_time(starts, -1, initial_phase), initial_phase)
+        self.assertAlmostEqual(mod._crank_phase_at_time(starts, 10, initial_phase), initial_phase + (len(starts) - 1) / 8)
+
+    def test_video_silent_film_capture_shake_is_periodic_and_integrated(self):
+        """Blur static detail along the camera trajectory during exposure."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        frame = torch.zeros(64, 96, 4)
+        frame[::4, :, :3] = 1.0
+        frame[:, ::4, :3] = 1.0
+        frame[..., 3] = 0.7
+        self.assertIs(mod._apply_capture_shake(frame, 0.2, 0.0), frame)
+        shifted = mod._apply_capture_shake(frame, 0.2, 1.0)
+        torch.testing.assert_close(shifted, mod._apply_capture_shake(frame, 1.2, 1.0))
+        self.assertGreater(float(torch.mean(torch.abs(shifted - frame))), 0.01)
+        torch.testing.assert_close(shifted[..., 3], frame[..., 3])
+        integrated = mod._temporal_exposure_sample(
+            lambda position: mod._apply_capture_shake(frame, position / 8, 1.0),
+            frame, 1.6, 2.0, 9,
+        )
+        self.assertGreater(float(torch.mean(torch.abs(integrated - shifted))), 0.001)
+        self.assertTrue(torch.isfinite(integrated).all())
+        self.assertEqual(integrated.shape, frame.shape)
+
+    def test_video_silent_film_capture_shake_node_preserves_compatibility(self):
+        """Keep zero-shake and legacy output unchanged and repeat camera motion per turn."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        frame = torch.zeros(32, 48, 4)
+        frame[:, ::3, :3] = 1.0
+        frame[..., 3] = 0.7
+        images = frame.unsqueeze(0).repeat(48, 1, 1, 1)
+        node = mod.VideoSilentFilmCadence()
+        args = (images, 24.0, "undercrank_projected_25fps", 18.0, 18.0, 0.0, 0.0, 0.0, "simple", 1, 1925)
+        baseline, _ = node.apply(*args)
+        legacy, legacy_json = node.apply(*args, camera_shake_strength=1.0)
+        torch.testing.assert_close(legacy, baseline, atol=0, rtol=0)
+        self.assertEqual(json.loads(legacy_json)["actual_camera_shake_strength"], 0.0)
+        zero, _ = node.apply(*args, cadence_model="hand_crank", camera_shake_strength=0.0)
+        torch.testing.assert_close(zero, baseline, atol=0, rtol=0)
+        shaken, payload = node.apply(*args, cadence_model="hand_crank", camera_shake_strength=1.0)
+        again, _ = node.apply(*args, cadence_model="hand_crank", camera_shake_strength=1.0)
+        torch.testing.assert_close(shaken, again, atol=0, rtol=0)
+        torch.testing.assert_close(shaken[2], shaken[10])
+        self.assertGreater(float(torch.mean(torch.abs(shaken - zero))), 0.001)
+        torch.testing.assert_close(shaken[..., 3], zero[..., 3])
+        data = json.loads(payload)
+        self.assertEqual(data["capture_motion_model"], "crank_locked")
+        self.assertEqual(data["actual_camera_shake_strength"], 1.0)
+        old_field, old_payload = node.apply(*args, cadence_model="hand_crank", crank_frames_per_turn=12, camera_shake_strength=1.0)
+        torch.testing.assert_close(old_field, shaken, atol=0, rtol=0)
+        self.assertEqual(json.loads(old_payload)["crank_frames_per_turn"], 8)
+        for strength in (-0.1, 1.1, float("nan"), float("inf")):
+            with self.subTest(strength=strength):
+                with self.assertRaises(ValueError):
+                    node.apply(*args, camera_shake_strength=strength)
+
+    def test_video_silent_film_capture_shake_runs_inside_node_exposure(self):
+        """Apply camera transforms to exposure subsamples rather than the final frame."""
+        from unittest.mock import patch
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        phases = []
+
+        def record_sample(frame, phase, strength, base_grid):
+            """Record capture phase for each exposure subsample."""
+            phases.append(phase)
+            return frame
+
+        with patch.object(mod, "_apply_capture_shake", side_effect=record_sample):
+            out, _ = mod.VideoSilentFilmCadence().apply(
+                torch.ones(24, 4, 4, 3), 24.0, "undercrank_projected_25fps", 16.0, 20.0,
+                0.65, 1.0, 1.0, "simple", 9, 1925,
+                cadence_model="hand_crank", camera_shake_strength=0.25,
+            )
+        self.assertEqual(len(phases), len(out) * 9)
+        self.assertGreater(phases[8] - phases[0], 0.05)
+        self.assertTrue(np.all(np.diff(phases[:9]) >= 0))
+
+    def test_video_silent_film_cadence_rejects_inconsistent_flow(self):
+        """Keep static details intact when the estimated flows disagree."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        if mod.cv2 is None:
+            self.skipTest("OpenCV is required for optical flow")
+        frame = np.zeros((48, 64, 4), dtype=np.float32)
+        frame[:, ::4, :3] = 1.0
+        frame[..., 3] = 0.7
+        images = torch.from_numpy(np.stack([frame, frame]))
+        invalid = np.zeros((48, 64, 2), dtype=np.float32)
+        invalid[..., 0] = 6.0
+        out = mod._lerp_frame_flow(images, 0.5, {}, {0: (invalid, invalid)})
+        torch.testing.assert_close(out, images[0], atol=1e-6, rtol=0)
+        self.assertTrue(torch.isfinite(out).all())
+
+    def test_video_silent_film_cadence_flow_preserves_reliable_translation(self):
+        """Retain motion compensation when forward and backward flows agree."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        if mod.cv2 is None:
+            self.skipTest("OpenCV is required for optical flow")
+        first = np.zeros((48, 64, 3), dtype=np.float32)
+        first[12:36, 16:32] = 1.0
+        second = np.roll(first, 4, axis=1)
+        expected = torch.from_numpy(np.roll(first, 2, axis=1))
+        images = torch.from_numpy(np.stack([first, second]))
+        forward = np.zeros((48, 64, 2), dtype=np.float32)
+        forward[..., 0] = 4.0
+        out = mod._lerp_frame_flow(images, 0.5, {}, {0: (forward, -forward)})
+        torch.testing.assert_close(out[:, 8:-8], expected[:, 8:-8], atol=1e-6, rtol=0)
+        self.assertGreater(float(torch.mean(torch.abs(out - images.mean(dim=0)))), 0.01)
+
     def test_video_silent_film_finish_preserves_shape_and_alpha(self):
         """Ensure silent-film finish keeps batch shape and preserves alpha channel contract."""
         video_mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
@@ -935,6 +1138,8 @@ class SmokeTests(unittest.TestCase):
             blur_mode="simple",
             blur_samples=9,
             seed=1925,
+            cadence_model="hand_crank",
+            camera_shake_strength=0.25,
         )
         finished, payload = finish_node.apply(
             cadence_out,

@@ -24,6 +24,19 @@ const CONVERTED_WIDGET_TYPE = "converted-widget";
  */
 const VISIBILITY_PROFILES = [
     {
+        id: "silent_film_capture_params",
+        targetNodes: ["VideoSilentFilmCadence", "Silent Film Cadence"],
+        controllerWidget: "cadence_model",
+        groups: {
+            crank: ["crank_irregularity", "camera_shake_strength"],
+            compatibility: ["crank_frames_per_turn"],
+        },
+        modes: {
+            legacy_random: { showGroups: [] },
+            hand_crank: { showGroups: ["crank"] },
+        },
+    },
+    {
         id: "seam_match_model_params",
         targetNodes: ["ImageSeamMatchToReference", "Seam Match To Reference"],
         controllerWidget: "seam_model",

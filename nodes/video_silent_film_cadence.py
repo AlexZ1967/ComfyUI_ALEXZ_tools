@@ -16,13 +16,19 @@ from __future__ import annotations
 import json
 import math
 import random
+from bisect import bisect_right
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 try:
     import cv2
 except Exception:  # pragma: no cover - runtime dependency check
     cv2 = None
+
+
+# Передаточное отношение фиксировано; скорость ручки определяется каденсом.
+_CRANK_FRAMES_PER_TURN = 8
 
 
 def _validate_video_batch(images: torch.Tensor) -> torch.Tensor:
@@ -114,11 +120,31 @@ def _warp_np_with_flow(frame_np: np.ndarray, flow_np: np.ndarray, amount: float)
     return warped.astype(np.float32, copy=False)
 
 
+def _flow_consistency_confidence(flow: np.ndarray, reverse_flow: np.ndarray) -> np.ndarray:
+    """Return source-space confidence from forward/backward flow consistency."""
+    height, width = flow.shape[:2]
+    grid_x, grid_y = np.meshgrid(
+        np.arange(width, dtype=np.float32),
+        np.arange(height, dtype=np.float32),
+    )
+    map_x = grid_x + flow[..., 0]
+    map_y = grid_y + flow[..., 1]
+    reverse_at_destination = cv2.remap(
+        reverse_flow, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
+    )
+    residual = np.sum((flow + reverse_at_destination) ** 2, axis=-1)
+    magnitude = np.sum(flow ** 2 + reverse_at_destination ** 2, axis=-1)
+    confidence = np.exp(-residual / (0.5 + 0.01 * magnitude))
+    valid = (map_x >= 0) & (map_x <= width - 1) & (map_y >= 0) & (map_y <= height - 1)
+    return (confidence * valid).astype(np.float32)
+
+
 def _lerp_frame_flow(
     images: torch.Tensor,
     position: float,
     frame_cache: dict[int, np.ndarray],
     flow_cache: dict[int, tuple[np.ndarray, np.ndarray]],
+    confidence_cache: dict[int, tuple[np.ndarray, np.ndarray]] | None = None,
 ) -> torch.Tensor:
     """Sample one frame at a fractional index using dense-flow intermediate warps."""
     frame_count = int(images.size(0))
@@ -137,7 +163,28 @@ def _lerp_frame_flow(
     flow_fw, flow_bw = flow_cache[left]
     warped_left = _warp_np_with_flow(frame_cache[left], flow_fw, frac)
     warped_right = _warp_np_with_flow(frame_cache[right], flow_bw, 1.0 - frac)
-    blended = warped_left * (1.0 - frac) + warped_right * frac
+    if confidence_cache is not None and left in confidence_cache:
+        confidence_left, confidence_right = confidence_cache[left]
+    else:
+        confidence_left = _flow_consistency_confidence(flow_fw, flow_bw)
+        confidence_right = _flow_consistency_confidence(flow_bw, flow_fw)
+        if confidence_cache is not None:
+            confidence_cache[left] = (confidence_left, confidence_right)
+    confidence = np.minimum(
+        _warp_np_with_flow(confidence_left, flow_fw, frac),
+        _warp_np_with_flow(confidence_right, flow_bw, 1.0 - frac),
+    )
+    # Несогласованные контуры и перекрытия не должны деформировать исходные детали.
+    confidence = np.minimum(confidence, np.minimum(confidence_left, confidence_right))
+    disagreement = np.mean(np.abs(warped_left[..., :3] - warped_right[..., :3]), axis=-1)
+    original_difference = np.mean(
+        np.abs(frame_cache[left][..., :3] - frame_cache[right][..., :3]), axis=-1
+    )
+    confidence *= np.exp(-np.maximum(0.0, disagreement - original_difference) / 0.03)
+    confidence = cv2.GaussianBlur(confidence, (5, 5), 0)[..., None]
+    flow_blended = warped_left * (1.0 - frac) + warped_right * frac
+    simple_blended = frame_cache[left] * (1.0 - frac) + frame_cache[right] * frac
+    blended = flow_blended * confidence + simple_blended * (1.0 - confidence)
     return torch.from_numpy(blended).to(device=images.device, dtype=images.dtype)
 
 
@@ -170,8 +217,18 @@ def _build_capture_intervals(
     target_fps_max: float,
     fps_drift_strength: float,
     seed: int,
+    cadence_model: str = "legacy_random",
+    crank_frames_per_turn: int = 8,
+    crank_irregularity: float = 0.15,
 ) -> tuple[list[float], list[float], list[float]]:
     """Build interval boundaries for the virtual low-fps capture cadence."""
+    if cadence_model == "hand_crank":
+        return _build_hand_crank_intervals(
+            total_duration, target_fps_min, target_fps_max, fps_drift_strength,
+            seed, crank_frames_per_turn, crank_irregularity,
+        )
+    if cadence_model != "legacy_random":
+        raise ValueError(f"Unsupported cadence_model: {cadence_model}")
     rng = random.Random(int(seed))
     starts = [0.0]
     fps_values = []
@@ -200,6 +257,56 @@ def _build_capture_intervals(
     return starts, fps_values, phase_biases
 
 
+def _build_hand_crank_intervals(
+    total_duration: float,
+    target_fps_min: float,
+    target_fps_max: float,
+    fps_drift_strength: float,
+    seed: int,
+    crank_frames_per_turn: int,
+    crank_irregularity: float,
+) -> tuple[list[float], list[float], list[float]]:
+    """Build bounded cyclic cadence tied to film advance per crank revolution."""
+    if int(crank_frames_per_turn) != crank_frames_per_turn or not 2 <= crank_frames_per_turn <= 32:
+        raise ValueError("crank_frames_per_turn must be an integer between 2 and 32.")
+    if not math.isfinite(float(crank_irregularity)) or not 0.0 <= crank_irregularity <= 1.0:
+        raise ValueError("crank_irregularity must be between 0 and 1.")
+    rng = random.Random(int(seed))
+    initial_phase = rng.random()
+    previous_tempo = rng.uniform(-1.0, 1.0)
+    next_tempo = rng.uniform(-1.0, 1.0)
+    midpoint = 0.5 * (target_fps_min + target_fps_max)
+    amplitude = 0.5 * (target_fps_max - target_fps_min) * max(0.0, min(1.0, float(fps_drift_strength)))
+    irregularity = float(crank_irregularity)
+    starts = [0.0]
+    fps_values = []
+    current_time = 0.0
+    frame_index = 0
+    previous_turn = 0
+    while current_time < total_duration - 1e-9:
+        # Оборот связан с продвижением плёнки, а не с независимым таймером.
+        revolutions = initial_phase + frame_index / float(crank_frames_per_turn)
+        turn = int(math.floor(revolutions))
+        if turn > previous_turn:
+            previous_tempo = next_tempo
+            next_tempo = rng.uniform(-1.0, 1.0)
+            previous_turn = turn
+        phase = revolutions - turn
+        smooth_phase = 0.5 - 0.5 * math.cos(math.tau * phase / 2.0)
+        tempo = previous_tempo * (1.0 - smooth_phase) + next_tempo * smooth_phase
+        cycle = math.sin(math.tau * phase)
+        # Даже при максимальной нерегулярности основой остаётся цикл ручки.
+        drift_mix = 0.35 * irregularity
+        variation = cycle * (1.0 - drift_mix) + tempo * drift_mix
+        fps = max(target_fps_min, min(target_fps_max, midpoint + amplitude * variation))
+        fps_values.append(float(fps))
+        current_time = min(total_duration, current_time + 1.0 / fps)
+        starts.append(current_time)
+        frame_index += 1
+    # Не добавляем независимое случайное смещение экспозиции поверх физического каденса.
+    return starts, fps_values, [0.0] * len(fps_values)
+
+
 def _assign_frames_to_groups(frame_count: int, output_fps: float, starts: list[float]) -> list[int]:
     """Assign each output frame center to one virtual capture interval."""
     output_times = ((torch.arange(frame_count, dtype=torch.float32) + 0.5) / float(output_fps)).tolist()
@@ -210,6 +317,44 @@ def _assign_frames_to_groups(frame_count: int, output_fps: float, starts: list[f
             group_idx += 1
         group_ids.append(group_idx)
     return group_ids
+
+
+def _crank_phase_at_time(starts: list[float], time_seconds: float, initial_phase: float) -> float:
+    """Interpolate crank revolutions from the same intervals used for capture."""
+    time_seconds = max(starts[0], min(starts[-1], float(time_seconds)))
+    index = min(len(starts) - 2, max(0, bisect_right(starts, time_seconds) - 1))
+    duration = max(1e-9, starts[index + 1] - starts[index])
+    fraction = (time_seconds - starts[index]) / duration
+    return initial_phase + (index + fraction) / _CRANK_FRAMES_PER_TURN
+
+
+def _apply_capture_shake(
+    frame: torch.Tensor,
+    crank_phase: float,
+    strength: float,
+    base_grid: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Apply small crank-locked image-plane camera translation and roll."""
+    if strength <= 0.0:
+        return frame
+    height, width, channels = frame.shape
+    angle = math.tau * (crank_phase % 1.0)
+    shift_x = strength * 0.003 * width * (0.8 * math.sin(angle) + 0.2 * math.sin(2.0 * angle))
+    shift_y = strength * 0.002 * height * (0.8 * math.cos(angle) + 0.2 * math.sin(2.0 * angle))
+    roll = math.radians(0.08) * strength * math.sin(angle + math.pi / 4.0)
+    if base_grid is None:
+        identity = torch.eye(2, 3, device=frame.device, dtype=frame.dtype).unsqueeze(0)
+        base_grid = F.affine_grid(identity, (1, channels, height, width), align_corners=False)
+    x, y = base_grid[..., 0], base_grid[..., 1]
+    cosine, sine = math.cos(roll), math.sin(roll)
+    # Учитываем пропорции кадра, чтобы наклон не превращался в растяжение.
+    grid = torch.stack((
+        cosine * x + sine * (height / width) * y - 2.0 * shift_x / width,
+        -sine * (width / height) * x + cosine * y - 2.0 * shift_y / height,
+    ), dim=-1)
+    batch = frame.permute(2, 0, 1).unsqueeze(0)
+    sampled = F.grid_sample(batch, grid, mode="bilinear", padding_mode="border", align_corners=False)
+    return sampled[0].permute(1, 2, 0)
 
 
 def _summarize_group_sizes(group_ids: list[int]) -> list[int]:
@@ -292,7 +437,7 @@ class VideoSilentFilmCadence:
                         "min": 0.0,
                         "max": 1.0,
                         "step": 0.01,
-                        "tooltip": "Сколько плавания разрешать внутри диапазона target_fps_min/max.",
+                        "tooltip": "Сила изменения скорости внутри target_fps_min/max: 0 = ровный темп, 1 = полный диапазон. В hand_crank управляет пульсацией ручки; в legacy_random — случайным дрейфом.",
                     },
                 ),
                 "shutter_fraction": (
@@ -342,7 +487,36 @@ class VideoSilentFilmCadence:
                     },
                 ),
             },
-            "optional": {},
+            "optional": {
+                "cadence_model": (
+                    ["legacy_random", "hand_crank"],
+                    {
+                        "default": "legacy_random",
+                        "tooltip": "hand_crank = циклическая неравномерность вращения ручки. legacy_random = прежний случайный дрейф для совместимости старых workflow.",
+                    },
+                ),
+                "crank_frames_per_turn": (
+                    "INT",
+                    {
+                        "default": 8, "min": 2, "max": 32, "step": 1,
+                        "tooltip": "Устаревшее поле совместимости, скрыто в интерфейсе. Модель использует фиксированные 8 кадров на оборот; сохранённое значение игнорируется.",
+                    },
+                ),
+                "crank_irregularity": (
+                    "FLOAT",
+                    {
+                        "default": 0.15, "min": 0.0, "max": 1.0, "step": 0.01,
+                        "tooltip": "Только hand_crank. Неровность темпа между оборотами: 0 = точно повторяющийся цикл; 0.1–0.25 = небольшая живая нерегулярность; 1 = заметный дрейф с сохранением цикла.",
+                    },
+                ),
+                "camera_shake_strength": (
+                    "FLOAT",
+                    {
+                        "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01,
+                        "tooltip": "Только hand_crank. Покачивание камеры при съёмке, связанное с ручкой и учитываемое внутри экспозиции: 0 = выключено; 0.15–0.30 = небольшое; 1 = сильное. Не заменяет дрожание проектора gate_weave_px в Finish.",
+                    },
+                ),
+            },
         }
 
     RETURN_TYPES = ("IMAGE", "STRING")
@@ -363,9 +537,18 @@ class VideoSilentFilmCadence:
         blur_mode,
         blur_samples,
         seed,
+        cadence_model="legacy_random",
+        crank_frames_per_turn=8,
+        crank_irregularity=0.15,
+        camera_shake_strength=0.0,
     ):
-        """Apply silent-film cadence emulation while keeping output length unchanged."""
+        """Apply virtual capture cadence, exposure blur, and optional crank-locked shake."""
         images = _validate_video_batch(image)
+        camera_shake_strength = float(camera_shake_strength)
+        if not math.isfinite(camera_shake_strength) or not 0.0 <= camera_shake_strength <= 1.0:
+            raise ValueError("camera_shake_strength must be between 0 and 1.")
+        # Сохраняем аргумент и место виджета для старых workflow, но механизм теперь фиксирован.
+        crank_frames_per_turn = _CRANK_FRAMES_PER_TURN
 
         source_fps = float(source_fps)
         playback_mode = str(playback_mode)
@@ -391,6 +574,9 @@ class VideoSilentFilmCadence:
             target_fps_max=target_fps_max,
             fps_drift_strength=fps_drift_strength,
             seed=seed,
+            cadence_model=cadence_model,
+            crank_frames_per_turn=crank_frames_per_turn,
+            crank_irregularity=crank_irregularity,
         )
         group_ids = _assign_frames_to_groups(frame_count=frame_count, output_fps=source_fps, starts=starts)
         group_sizes = _summarize_group_sizes(group_ids)
@@ -401,13 +587,27 @@ class VideoSilentFilmCadence:
         actual_blur_mode = blur_mode
         frame_cache: dict[int, np.ndarray] = {}
         flow_cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        confidence_cache: dict[int, tuple[np.ndarray, np.ndarray]] = {}
         if blur_mode == "flow_integrated" and cv2 is None:
             actual_blur_mode = "simple_fallback_no_cv2"
+        actual_camera_shake = camera_shake_strength if cadence_model == "hand_crank" else 0.0
+        initial_crank_phase = random.Random(int(seed)).random()
+        capture_grid = None
+        if actual_camera_shake > 0.0:
+            height, width, channels = images.shape[1:]
+            identity = torch.eye(2, 3, device=images.device, dtype=images.dtype).unsqueeze(0)
+            capture_grid = F.affine_grid(identity, (1, channels, height, width), align_corners=False)
 
         def _sample_position(position: float) -> torch.Tensor:
             if actual_blur_mode == "flow_integrated":
-                return _lerp_frame_flow(images, position, frame_cache, flow_cache)
-            return _lerp_frame(images, position)
+                sample = _lerp_frame_flow(images, position, frame_cache, flow_cache, confidence_cache)
+            else:
+                sample = _lerp_frame(images, position)
+            if actual_camera_shake > 0.0:
+                sample_time = (position + 0.5) / source_fps
+                crank_phase = _crank_phase_at_time(starts, sample_time, initial_crank_phase)
+                sample = _apply_capture_shake(sample, crank_phase, actual_camera_shake, capture_grid)
+            return sample
         
         def _sample_group_frame(group_idx: int, phase: float) -> torch.Tensor:
             start_t = starts[group_idx]
@@ -469,6 +669,12 @@ class VideoSilentFilmCadence:
             "target_fps_min": float(target_fps_min),
             "target_fps_max": float(target_fps_max),
             "fps_drift_strength": float(fps_drift_strength),
+            "cadence_model": str(cadence_model),
+            "crank_frames_per_turn": int(crank_frames_per_turn),
+            "crank_irregularity": float(crank_irregularity),
+            "camera_shake_strength": camera_shake_strength,
+            "actual_camera_shake_strength": actual_camera_shake,
+            "capture_motion_model": "crank_locked" if actual_camera_shake > 0.0 else "none",
             "shutter_fraction": float(shutter_fraction),
             "motion_blur_strength": float(motion_blur_strength),
             "blur_samples": int(blur_samples),

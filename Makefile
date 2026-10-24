@@ -23,6 +23,7 @@ js-check-all:
 
 js-test:
 	$(CONDA_RUN) node tests/js/test_module_node_picker_frontend_behavior.mjs
+	$(CONDA_RUN) node tests/js/test_silent_film_cadence_visibility.mjs
 
 ts-check:
 	$(CONDA_RUN) npm run ts-check
