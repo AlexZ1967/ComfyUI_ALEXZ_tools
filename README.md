@@ -264,6 +264,14 @@ Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADEN
 
 ---
 
+## Silent Film Pipeline
+
+Поэтапный процесс: **Silent Film Camera → Silent Film Negative → Silent Film Print → Silent Film Projector**. Съёмка и оптика отделены от проявленного негатива, печати позитива и финальной проекции. Зерно двух эмульсий независимо, дефекты можно вставлять в IMAGE-связи между этапами. В примере один общий seed управляет всеми этапами; случайные последовательности разделены по этапу и эффекту. `film_json` сохраняет этап и сведения о кадрах; `Projector.fps` подключается к `Video Combine.frame_rate`.
+
+Негатив представлен пропусканием плёнки, позитив действительно печатается с этого изображения. Модель художественная; отдельные ноды пыли и царапин пока не добавлены. Кэш нескольких IMAGE-батчей требует больше RAM, чем компактные Cadence + Finish. Старые ноды и workflow сохранены.
+
+Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md). Пример: [Видео-в-Хронику-по-этапам.json](workflows/Видео-в-Хронику-по-этапам.json).
+
 ## Silent Film Finish
 Финальный слой под немое кино: перевод в ЧБ или легкую тонировку, глобальный flicker, медленное exposure breathing, gate weave, мягкость и умеренное зерно. Нода рассчитана как пост-процесс после `Silent Film Cadence`, но может использоваться и отдельно.
 

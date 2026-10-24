@@ -44,6 +44,10 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("VideoCutMatch", "Match Video Cut Point", ".video_cut_match", "VideoCutMatch"),
     NodeSpec("VideoSilentFilmCadence", "Silent Film Cadence", ".video_silent_film_cadence", "VideoSilentFilmCadence"),
     NodeSpec("VideoSilentFilmFinish", "Silent Film Finish", ".video_silent_film_finish", "VideoSilentFilmFinish"),
+    NodeSpec("VideoSilentFilmCamera", "Silent Film Camera", ".video_silent_film_pipeline", "VideoSilentFilmCamera"),
+    NodeSpec("VideoSilentFilmNegative", "Silent Film Negative", ".video_silent_film_pipeline", "VideoSilentFilmNegative"),
+    NodeSpec("VideoSilentFilmPrint", "Silent Film Print", ".video_silent_film_pipeline", "VideoSilentFilmPrint"),
+    NodeSpec("VideoSilentFilmProjector", "Silent Film Projector", ".video_silent_film_pipeline", "VideoSilentFilmProjector"),
     NodeSpec("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
     NodeSpec("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
     NodeSpec("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
@@ -61,6 +65,26 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
 
 
 NODE_UI_METADATA = {
+    "VideoSilentFilmCamera": {
+        "description": "Съёмочный аппарат: ручной каденс, экспозиция, движение камеры и съёмочная оптика.",
+        "output_tooltips": ["Изображение после съёмки.", "Метаданные этапа camera и виртуальных кадров."],
+        "search_aliases": ["silent film", "pipeline", "camera"],
+    },
+    "VideoSilentFilmNegative": {
+        "description": "Негатив: экспозиция и проявка, оптическая плотность и зерно съёмочной плёнки.",
+        "output_tooltips": ["Негатив как пропускание плёнки, не позитивный preview.", "Метаданные этапа negative."],
+        "search_aliases": ["silent film", "pipeline", "negative"],
+    },
+    "VideoSilentFilmPrint": {
+        "description": "Печать позитива через негатив: отдельная эмульсия, зерно и тонировка.",
+        "output_tooltips": ["Позитивная копия.", "Метаданные этапа print."],
+        "search_aliases": ["silent film", "pipeline", "print"],
+    },
+    "VideoSilentFilmProjector": {
+        "description": "Показ позитивной копии: кадровое окно, оптика проектора, лампа и частота показа.",
+        "output_tooltips": ["Проекция позитивной копии.", "Подключите к frame_rate в Video Combine.", "Метаданные этапа projector."],
+        "search_aliases": ["silent film", "pipeline", "projector"],
+    },
     "ImagePrepare_for_QwenEdit_outpaint": {
         "description": "Подготавливает изображение и latent под QwenEdit Outpaint.",
         "output_tooltips": ["Подготовленное изображение.", "Пустой latent для KSampler."],

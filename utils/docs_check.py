@@ -188,6 +188,7 @@ TEMPLATE_SECTIONS = [
 ]
 
 EXTRA_GUIDES = [
+    "guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md",
     "guides/GUIDE_COLOR_MATCH.md",
 ]
 
