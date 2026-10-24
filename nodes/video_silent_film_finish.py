@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from time import perf_counter
 
 import torch
@@ -24,6 +25,12 @@ from tqdm import tqdm
 
 
 _LOGGER = logging.getLogger("VideoSilentFilmFinish")
+
+
+def _log_during_progress(level, message, *args):
+    """Clear active progress bars before logging and redraw them afterwards."""
+    with tqdm.external_write_mode():
+        _LOGGER.log(level, message, *args)
 
 
 def _validate_video_batch(images: torch.Tensor, normalize: bool = True) -> torch.Tensor:
@@ -105,6 +112,81 @@ def _apply_gate_weave(
         align_corners=False,
     )
     return woven.permute(0, 2, 3, 1).contiguous().view(frame_count, height, width, channels)
+
+
+def _lens_edge_mask(height, width, edge_start, device, dtype, edge_end=1.0):
+    """Build a circular falloff using half the frame width as the unit radius."""
+    # Единый масштаб обеих осей сохраняет круговые контуры на прямоугольном кадре.
+    half_width, half_height = (width - 1) / 2.0, (height - 1) / 2.0
+    width_radius = max(half_width, 1.0)
+    x = (torch.arange(width, device=device, dtype=dtype) - half_width) / width_radius
+    y = (torch.arange(height, device=device, dtype=dtype) - half_height) / width_radius
+    radius = torch.sqrt(y[:, None].square() + x[None, :].square())
+    transition = ((radius - edge_start) / (edge_end - edge_start)).clamp(0.0, 1.0)
+    mask = transition.square() * (3.0 - 2.0 * transition)
+    return mask.view(1, height, width, 1)
+
+
+def _lens_gaussian_blur(rgb, sigma):
+    """Blur at one radius using a bounded kernel and a reduced working resolution."""
+    _count, height, width, channels = rgb.shape
+    batch = rgb.permute(0, 3, 1, 2)
+    scale = min(1.0, 3.0 / sigma)
+    if scale < 1.0:
+        blur_size = (max(1, round(height * scale)), max(1, round(width * scale)))
+        batch = F.interpolate(batch, size=blur_size, mode="area")
+        sigma *= scale
+    radius = math.ceil(3.0 * sigma)
+    axis = torch.arange(-radius, radius + 1, device=rgb.device, dtype=rgb.dtype)
+    kernel = torch.exp(-0.5 * (axis / sigma).square())
+    kernel = kernel / kernel.sum()
+    padding = "reflect" if min(batch.shape[-2:]) > radius else "replicate"
+    horizontal = kernel.view(1, 1, 1, -1).expand(channels, 1, 1, -1)
+    vertical = kernel.view(1, 1, -1, 1).expand(channels, 1, -1, 1)
+    blurred = F.conv2d(F.pad(batch, (radius, radius, 0, 0), mode=padding), horizontal, groups=channels)
+    blurred = F.conv2d(F.pad(blurred, (0, 0, radius, radius), mode=padding), vertical, groups=channels)
+    if scale < 1.0:
+        blurred = F.interpolate(blurred, size=(height, width), mode="bilinear", align_corners=False)
+    blurred = blurred.permute(0, 2, 3, 1)
+    return blurred
+
+
+def _apply_variable_lens_blur(rgb, mask, maximum_sigma):
+    """Approximate a spatially varying Gaussian by interpolating adjacent radius levels."""
+    # Маска задаёт локальный радиус, а не прозрачность одинаково размытой копии.
+    sigma_map = mask * maximum_sigma
+    levels = [0.0]
+    sigma = min(0.5, maximum_sigma)
+    while sigma < maximum_sigma:
+        levels.append(sigma)
+        sigma *= 2.0
+    levels.append(maximum_sigma)
+    output = torch.zeros_like(rgb)
+    for index, sigma in enumerate(levels):
+        if index == 0:
+            weight = (1.0 - sigma_map / levels[1]).clamp(0.0, 1.0)
+        else:
+            weight = ((sigma_map - levels[index - 1]) / (sigma - levels[index - 1])).clamp(0.0, 1.0)
+            if index + 1 < len(levels):
+                weight = torch.minimum(weight, ((levels[index + 1] - sigma_map) / (levels[index + 1] - sigma)).clamp(0.0, 1.0))
+        blurred = rgb if index == 0 else _lens_gaussian_blur(rgb, sigma)
+        output.addcmul_(blurred, weight)
+    return torch.where(mask == 0.0, rgb, output)
+
+
+def _apply_lens_edges(rgb, vignette_strength, edge_softness, edge_start, mask=None, edge_end=1.0):
+    """Apply time-invariant lens falloff and peripheral blur before projection and grain."""
+    if vignette_strength == 0.0 and edge_softness == 0.0:
+        return rgb
+    _count, height, width, channels = rgb.shape
+    if mask is None:
+        mask = _lens_edge_mask(height, width, edge_start, rgb.device, rgb.dtype, edge_end)
+    if edge_softness > 0.0:
+        maximum_sigma = width / 960.0 * 24.0 * edge_softness
+        rgb = _apply_variable_lens_blur(rgb, mask, maximum_sigma)
+    if vignette_strength > 0.0:
+        rgb = rgb * (1.0 - mask * vignette_strength)
+    return rgb
 
 
 def _build_blur_levels(gray: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -222,7 +304,7 @@ def _scaled_noise(
     dtype: torch.dtype,
 ) -> torch.Tensor:
     """Generate a correlated noise field by upscaling lower-resolution noise."""
-    scale_divisor = int(max(1, scale_divisor))
+    scale_divisor = max(1.0, float(scale_divisor))
     small_h = max(1, int(round(height / scale_divisor)))
     small_w = max(1, int(round(width / scale_divisor)))
     noise = torch.randn((frame_count, 1, small_h, small_w), generator=generator, dtype=torch.float32)
@@ -244,11 +326,11 @@ def _build_emulsion_grain_field(
     generator = torch.Generator(device="cpu")
     generator.manual_seed(int(seed))
 
-    grain_size = int(max(1, grain_size))
+    grain_size = max(1.0, float(grain_size))
     fine = _scaled_noise(frame_count, height, width, grain_size, generator, device, dtype)
-    mid = _scaled_noise(frame_count, height, width, max(1, int(round(grain_size * 2.0))), generator, device, dtype)
-    coarse = _scaled_noise(frame_count, height, width, max(1, int(round(grain_size * 4.0))), generator, device, dtype)
-    envelope = _scaled_noise(frame_count, height, width, max(1, int(round(grain_size * 6.0))), generator, device, dtype)
+    mid = _scaled_noise(frame_count, height, width, grain_size * 2.0, generator, device, dtype)
+    coarse = _scaled_noise(frame_count, height, width, grain_size * 4.0, generator, device, dtype)
+    envelope = _scaled_noise(frame_count, height, width, grain_size * 6.0, generator, device, dtype)
 
     fine = _normalize_field(fine)
     mid = _normalize_field(mid)
@@ -273,9 +355,9 @@ def _apply_grain_overlay(
         return image_rgb
 
     frame_count, height, width, _channels = image_rgb.shape
-    grain_size = int(max(1, grain_size))
-    small_h = max(1, height // grain_size)
-    small_w = max(1, width // grain_size)
+    grain_size = max(1.0, float(grain_size))
+    small_h = max(1, int(height // grain_size))
+    small_w = max(1, int(width // grain_size))
     generator = torch.Generator(device="cpu")
     generator.manual_seed(int(seed))
     noise = torch.randn((frame_count, 1, small_h, small_w), generator=generator, dtype=torch.float32)
@@ -444,16 +526,22 @@ def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int) ->
     return device, int(gpu_batch), cpu_batch
 
 
-def _finish_chunk(images, gate_x, gate_y, focus_signal, exposure, parameters, frame_offset, log_stages=False):
+def _finish_chunk(images, gate_x, gate_y, focus_signal, exposure, parameters, frame_offset):
     """Process one bounded chunk while preserving clip-global signals and frame seeds."""
     alpha = images[..., 3:4] if images.size(-1) == 4 else None
     rgb = images[..., :3]
-    if log_stages:
-        _LOGGER.info("[Silent Film Finish] Этап 3/7: дрожание проектора; первая порция.")
+    vignette_strength = parameters.get("vignette_strength", 0.0)
+    edge_softness = parameters.get("edge_softness", 0.0)
+    edge_start = parameters.get("edge_start", 0.6)
+    edge_end = parameters.get("edge_end", 1.0)
+    if vignette_strength > 0.0 or edge_softness > 0.0:
+        masks = parameters.setdefault("_lens_masks", {})
+        key = (rgb.device, rgb.dtype, rgb.size(1), rgb.size(2), edge_start, edge_end)
+        if key not in masks:
+            masks[key] = _lens_edge_mask(rgb.size(1), rgb.size(2), edge_start, rgb.device, rgb.dtype, edge_end)
+        rgb = _apply_lens_edges(rgb, vignette_strength, edge_softness, edge_start, masks[key])
     woven_rgb = _apply_gate_weave(rgb, gate_x, gate_y)
     woven_alpha = _apply_gate_weave(alpha, gate_x, gate_y) if alpha is not None else None
-    if log_stages:
-        _LOGGER.info("[Silent Film Finish] Этап 4/7: ЧБ, контраст, света, мягкость и фокус; первая порция.")
     gray = woven_rgb[..., 0:1] * 0.299 + woven_rgb[..., 1:2] * 0.587 + woven_rgb[..., 2:3] * 0.114
     gray = torch.pow(torch.clamp(gray, 0.0, 1.0), max(0.3, float(parameters["midtone_gamma"])))
     gray = (gray - 0.5) * float(parameters["contrast"]) + 0.5 + float(parameters["black_lift"])
@@ -462,14 +550,16 @@ def _finish_chunk(images, gate_x, gate_y, focus_signal, exposure, parameters, fr
     gray = _apply_focus_drift(
         gray, parameters["softness"], focus_signal, parameters["focus_drift_strength"],
     )
-    if log_stages:
-        _LOGGER.info("[Silent Film Finish] Этап 5/7: экспозиция и тонировка; первая порция.")
     gray = torch.clamp(gray * exposure.view(-1, 1, 1, 1), 0.0, 1.0)
     toned = _tone_gray(gray, parameters["tone_mode"])
-    if log_stages:
-        _LOGGER.info("[Silent Film Finish] Этап 6/7: зерно %s; затем повтор этапов 3–6 для остальных порций.", parameters["grain_mode"])
+    effective_size = float(parameters["grain_size"])
+    grain_strength = parameters["grain_strength"]
+    if parameters.get("grain_size_mode", "pixels") == "relative_width":
+        effective_size *= toned.size(2) / 1920.0
+        # Субпиксельное зерно ослабевает при усреднении по площади пикселя.
+        grain_strength *= min(1.0, effective_size)
     toned = _apply_grain(
-        toned, parameters["grain_mode"], parameters["grain_strength"], parameters["grain_size"],
+        toned, parameters["grain_mode"], grain_strength, effective_size,
         parameters["seed"] + 1001, frame_offset=frame_offset,
     )
     if woven_alpha is not None:
@@ -483,7 +573,7 @@ def _run_finish_chunk(images, start, end, device, gate_x, gate_y, focus_signal, 
     return _finish_chunk(
         chunk, gate_x[start:end].to(device), gate_y[start:end].to(device),
         focus_signal[start:end].to(device), exposure[start:end].to(device),
-        parameters, start, log_stages=start == 0,
+        parameters, start,
     )
 
 
@@ -553,6 +643,32 @@ class VideoSilentFilmFinish:
                         "tooltip": "Легкая оптическая мягкость.",
                     },
                 ),
+                "vignette_strength": (
+                    "FLOAT",
+                    {
+                        "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01,
+                        "tooltip": "Плавное затемнение углов объективом до тональной обработки: 0 = выключено, 0.12 = до 12% по RGB в углах. Старт 0.10–0.15. Центр сохраняется; эффект постоянен во времени.",
+                    },
+                ),
+                "edge_softness": (
+                    "FLOAT",
+                    {
+                        "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01,
+                        "tooltip": "Расфокус по краям: маска задаёт локальный радиус размытия, edge_softness — максимальный радиус. 0 = выключено, 0.15 = лёгкий, 0.5 = заметный, 1 = сильный (радиус sigma около 42 px при ширине 1664). Для широкой области уменьшите edge_start до 0.35–0.45. Центр и альфа-канал сохраняются; зерно добавляется после оптики.",
+                    },
+                ),
+                "edge_start": (
+                    "FLOAT",
+                    {
+                        "default": 0.6, "min": 0.0, "max": 4.0, "step": 0.01,
+                        "tooltip": "Начало плавного усиления виньетки и мягкости: 0 = от центра, 0.6 = 60% половины ширины от центра; 1 соответствует середине бокового края. Полная сила достигается на edge_end; разность edge_end − edge_start задаёт ширину перехода. Старт 0.6.",
+                    },
+                ),
+                "edge_end": (
+                    "FLOAT",
+                    {"default": 1.0, "min": 0.01, "max": 4.0, "step": 0.01,
+                     "tooltip": "Радиус полной силы виньетки и расфокуса; должен быть больше edge_start. 1 = половина ширины кадра. Пример: start 0.8, end 1.2 — переход от 40% до 60% ширины от центра. Больше разность — мягче и шире переход."},
+                ),
                 "focus_drift_strength": (
                     "FLOAT",
                     {
@@ -600,15 +716,9 @@ class VideoSilentFilmFinish:
                         "tooltip": "Режим зерна. emulsion_luma не просто шумит картинку, а слегка съедает микродеталь и сильнее проявляется в полутонах.",
                     },
                 ),
-                "grain_strength": (
-                    "FLOAT",
-                    {
-                        "default": 0.032,
-                        "min": 0.0,
-                        "max": 0.2,
-                        "step": 0.005,
-                        "tooltip": "Сила монохромного зерна. В emulsion_luma влияет и на зернистость, и на потерю микродетали.",
-                    },
+                "grain_size_mode": (
+                    ["pixels", "relative_width"],
+                    {"default": "pixels", "tooltip": "pixels сохраняет прежний масштаб в пикселях. relative_width масштабирует grain_size относительно ширины 1920 px: размер 3 даёт около 6 px при 3840 и 1 px при 640. Субпиксельное зерно ослабевает. Для новых видео рекомендуется relative_width."},
                 ),
                 "grain_size": (
                     "INT",
@@ -620,6 +730,16 @@ class VideoSilentFilmFinish:
                         "tooltip": "Размер зерна: 1 мельче, больше значения грубее.",
                     },
                 ),
+                "grain_strength": (
+                    "FLOAT",
+                    {
+                        "default": 0.032,
+                        "min": 0.0,
+                        "max": 0.2,
+                        "step": 0.005,
+                        "tooltip": "Сила монохромного зерна. В emulsion_luma влияет и на зернистость, и на потерю микродетали.",
+                    },
+                ),
                 "seed": (
                     "INT",
                     {
@@ -627,16 +747,6 @@ class VideoSilentFilmFinish:
                         "min": 0,
                         "max": 2**31 - 1,
                         "tooltip": "Seed для flicker, weave и grain.",
-                    },
-                ),
-            },
-            "optional": {
-                "cadence_json": (
-                    "STRING",
-                    {
-                        "default": "",
-                        "multiline": True,
-                        "tooltip": "Опциональный cadence_json из Silent Film Cadence. Если подключен, flicker, gate weave и focus drift будут синхронизированы с виртуальной скоростью ручной съемки.",
                     },
                 ),
                 "compute_device": (
@@ -651,6 +761,16 @@ class VideoSilentFilmFinish:
                     {
                         "default": 4, "min": 1, "max": 16, "step": 1,
                         "tooltip": "Максимум кадров в рабочей порции. 4 — старт; 1–2 — меньше RAM/VRAM. Фактический размер автоматически ограничивается доступной памятью. На число выходных кадров и рисунок зерна не влияет.",
+                    },
+                ),
+            },
+            "optional": {
+                "cadence_json": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "tooltip": "Опциональный cadence_json из Silent Film Cadence. Если подключен, flicker, gate weave и focus drift будут синхронизированы с виртуальной скоростью ручной съемки.",
                     },
                 ),
             },
@@ -681,12 +801,32 @@ class VideoSilentFilmFinish:
         cadence_json="",
         compute_device="auto",
         batch_size=4,
+        vignette_strength=0.0,
+        edge_softness=0.0,
+        edge_start=0.6,
+        grain_size_mode="pixels",
+        edge_end=1.0,
     ):
         """Apply silent-film print/projection finishing to a video batch."""
+        if grain_size_mode not in ("pixels", "relative_width"):
+            raise ValueError("grain_size_mode must be pixels or relative_width")
         started_at = perf_counter()
         _LOGGER.info("[Silent Film Finish] Этап 1/7: проверка входного батча.")
         # Нормализуем только рабочую порцию: здесь не создаём копию всего ролика.
         images = _validate_video_batch(image, normalize=False)
+        vignette_strength, edge_softness, edge_start = float(vignette_strength), float(edge_softness), float(edge_start)
+        edge_end = float(edge_end)
+        for name, value, maximum in (
+            ("vignette_strength", vignette_strength, 1.0),
+            ("edge_softness", edge_softness, 1.0),
+            ("edge_start", edge_start, 4.0),
+            ("edge_end", edge_end, 4.0),
+        ):
+            if not math.isfinite(value) or not 0.0 <= value <= maximum:
+                raise ValueError(f"{name} must be between 0 and {maximum}.")
+
+        if edge_end <= edge_start:
+            raise ValueError("edge_end must be greater than edge_start.")
 
         frame_count = int(images.size(0))
         device = torch.device("cpu")
@@ -697,6 +837,8 @@ class VideoSilentFilmFinish:
             frame_count, images.size(2), images.size(1), tone_mode, grain_mode,
         )
         _LOGGER.info("[Silent Film Finish] Обработка: %s; рабочая порция: %d кадров.", work_device, current_batch_size)
+        if vignette_strength > 0.0 or edge_softness > 0.0:
+            _LOGGER.info("[Silent Film Finish] Оптика: виньетка=%.2f, мягкость краёв=%.2f, начало=%.2f, конец=%.2f.", vignette_strength, edge_softness, edge_start, edge_end)
 
         _LOGGER.info("[Silent Film Finish] Этап 2/7: синхронизация и подготовка сигналов проекции.")
         sync_mode, cadence_meta = _parse_cadence_json(cadence_json, frame_count=frame_count)
@@ -741,12 +883,17 @@ class VideoSilentFilmFinish:
             "black_lift": black_lift, "highlight_rolloff": highlight_rolloff,
             "softness": softness, "focus_drift_strength": focus_drift_strength,
             "grain_mode": grain_mode, "grain_strength": grain_strength,
-            "grain_size": grain_size, "seed": seed,
+            "grain_size": grain_size, "grain_size_mode": grain_size_mode, "seed": seed,
+            "vignette_strength": vignette_strength, "edge_softness": edge_softness, "edge_start": edge_start, "edge_end": edge_end,
         }
         # Один выходной батч вместо списка порций и последующего удвоения памяти через cat.
         output = torch.empty(images.shape, dtype=torch.float32, device=images.device)
         start = 0
         chunk_count = 0
+        _LOGGER.info( "[Silent Film Finish] Этап 3/7: оптика и дрожание проектора; в каждой порции.")
+        _LOGGER.info( "[Silent Film Finish] Этап 4/7: ЧБ, контраст, света, мягкость и фокус; в каждой порции.")
+        _LOGGER.info( "[Silent Film Finish] Этап 5/7: экспозиция и тонировка; в каждой порции.")
+        _LOGGER.info( "[Silent Film Finish] Этап 6/7: зерно %s; в каждой порции.", parameters["grain_mode"])
         with tqdm(total=frame_count, desc="[Silent Film Finish] Обработка", unit="кадр", dynamic_ncols=True, mininterval=0.5) as progress:
             while start < frame_count:
                 end = min(frame_count, start + current_batch_size)
@@ -762,11 +909,11 @@ class VideoSilentFilmFinish:
                         raise
                     if current_batch_size > 1:
                         current_batch_size = max(1, current_batch_size // 2)
-                        _LOGGER.warning("[Silent Film Finish] VRAM закончилась: повтор порции с %d кадров, начиная с кадра %d.", current_batch_size, start + 1)
+                        _log_during_progress(logging.WARNING, "[Silent Film Finish] VRAM закончилась: повтор порции с %d кадров, начиная с кадра %d.", current_batch_size, start + 1)
                     else:
                         work_device = torch.device("cpu")
                         current_batch_size = cpu_batch_size
-                        _LOGGER.warning("[Silent Film Finish] Один кадр не помещается в VRAM: остаток батча рассчитывается на CPU.")
+                        _log_during_progress(logging.WARNING, "[Silent Film Finish] Один кадр не помещается в VRAM: остаток батча рассчитывается на CPU.")
                     continue
                 del result
                 chunk_count += 1
@@ -791,6 +938,11 @@ class VideoSilentFilmFinish:
             "grain_mode": grain_mode,
             "grain_strength": float(grain_strength),
             "grain_size": int(grain_size),
+            "grain_size_mode": grain_size_mode,
+            "effective_grain_size_px": float(grain_size) * (images.size(2) / 1920.0 if grain_size_mode == "relative_width" else 1.0),
+            "vignette_strength": vignette_strength,
+            "edge_softness": edge_softness,
+            "edge_start": edge_start, "edge_end": edge_end,
             "seed": int(seed),
             "frame_count": frame_count,
             "compute_device": str(compute_device),

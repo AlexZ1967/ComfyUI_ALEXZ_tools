@@ -975,28 +975,50 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(mod._crank_phase_at_time(starts, -1, initial_phase), initial_phase)
         self.assertAlmostEqual(mod._crank_phase_at_time(starts, 10, initial_phase), initial_phase + (len(starts) - 1) / 8)
 
-    def test_video_silent_film_capture_shake_is_periodic_and_integrated(self):
-        """Blur static detail along the camera trajectory during exposure."""
+    def test_video_silent_film_capture_motion_is_smooth_seeded_and_nonperiodic(self):
+        """Vary poses between revolutions without jumps, unbounded drift, or sampling-order dependence."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
+        motion = mod._CaptureCameraMotion(1925)
+        phases = np.linspace(0.0, 12.0, 1201)
+        poses = np.array([motion.pose(float(phase)) for phase in phases])
+        self.assertTrue(np.isfinite(poses).all())
+        self.assertLessEqual(float(np.abs(poses).max()), 1.0)
+        self.assertLess(float(np.abs(np.diff(poses, axis=0)).max()), 0.15)
+        self.assertGreater(float(np.abs(poses[100:] - poses[:-100]).mean()), 0.05)
+        repeated = mod._CaptureCameraMotion(1925)
+        np.testing.assert_array_equal(poses, [repeated.pose(float(phase)) for phase in phases])
+        reverse = np.array([motion.pose(float(phase)) for phase in phases[::-1]])
+        np.testing.assert_array_equal(poses, reverse[::-1])
+        other = mod._CaptureCameraMotion(1926)
+        self.assertGreater(float(np.abs(poses - [other.pose(float(phase)) for phase in phases]).mean()), 0.05)
+        for turn in range(1, 12):
+            np.testing.assert_allclose(motion.pose(turn - 1e-6), motion.pose(turn + 1e-6), atol=1e-4, rtol=0)
+        self.assertLessEqual(len(motion.turn_events), 8)
+        self.assertLessEqual(len(motion.aim_points), 8)
+
+    def test_video_silent_film_capture_shake_is_nonperiodic_and_integrated(self):
+        """Blur static detail along a nonperiodic camera trajectory during exposure."""
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
         frame = torch.zeros(64, 96, 4)
         frame[::4, :, :3] = 1.0
         frame[:, ::4, :3] = 1.0
         frame[..., 3] = 0.7
         self.assertIs(mod._apply_capture_shake(frame, 0.2, 0.0), frame)
-        shifted = mod._apply_capture_shake(frame, 0.2, 1.0)
-        torch.testing.assert_close(shifted, mod._apply_capture_shake(frame, 1.2, 1.0))
+        shifted = mod._apply_capture_shake(frame, 0.6, 1.0)
+        torch.testing.assert_close(shifted, mod._apply_capture_shake(frame, 0.6, 1.0))
+        self.assertGreater(float(torch.mean(torch.abs(shifted - mod._apply_capture_shake(frame, 1.6, 1.0)))), 0.001)
         self.assertGreater(float(torch.mean(torch.abs(shifted - frame))), 0.01)
         torch.testing.assert_close(shifted[..., 3], frame[..., 3])
         integrated = mod._temporal_exposure_sample(
             lambda position: mod._apply_capture_shake(frame, position / 8, 1.0),
-            frame, 1.6, 2.0, 9,
+            frame, 4.8, 6.0, 9,
         )
         self.assertGreater(float(torch.mean(torch.abs(integrated - shifted))), 0.001)
         self.assertTrue(torch.isfinite(integrated).all())
         self.assertEqual(integrated.shape, frame.shape)
 
     def test_video_silent_film_capture_shake_node_preserves_compatibility(self):
-        """Keep zero-shake and legacy output unchanged and repeat camera motion per turn."""
+        """Keep zero-shake and legacy output unchanged while varying camera effort per turn."""
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
         frame = torch.zeros(32, 48, 4)
         frame[:, ::3, :3] = 1.0
@@ -1013,7 +1035,7 @@ class SmokeTests(unittest.TestCase):
         shaken, payload = node.apply(*args, cadence_model="hand_crank", camera_shake_strength=1.0)
         again, _ = node.apply(*args, cadence_model="hand_crank", camera_shake_strength=1.0)
         torch.testing.assert_close(shaken, again, atol=0, rtol=0)
-        torch.testing.assert_close(shaken[2], shaken[10])
+        self.assertGreater(float(torch.mean(torch.abs(shaken[2] - shaken[10]))), 0.001)
         self.assertGreater(float(torch.mean(torch.abs(shaken - zero))), 0.001)
         torch.testing.assert_close(shaken[..., 3], zero[..., 3])
         data = json.loads(payload)
@@ -1033,7 +1055,7 @@ class SmokeTests(unittest.TestCase):
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_cadence")
         phases = []
 
-        def record_sample(frame, phase, strength, base_grid):
+        def record_sample(frame, phase, strength, base_grid, motion=None):
             """Record capture phase for each exposure subsample."""
             phases.append(phase)
             return frame
@@ -1146,13 +1168,21 @@ class SmokeTests(unittest.TestCase):
 
     def test_video_silent_film_finish_logs_stages_and_completion(self):
         """Report batch processing stages and the actual synchronization mode."""
+        from unittest.mock import patch
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
         node = mod.VideoSilentFilmFinish()
         parameters = {
-            key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key != "image"
+            key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key not in {"image", "compute_device", "batch_size", "vignette_strength", "edge_softness", "edge_start", "edge_end", "grain_size_mode"}
         }
+        real_tqdm = mod.tqdm
         with self.assertLogs("VideoSilentFilmFinish", level="INFO") as logs:
-            out, payload = node.apply(torch.zeros(4, 8, 8, 3), **parameters, cadence_json="invalid")
+            def start_progress(*args, **kwargs):
+                """Require the full processing plan before rendering the progress bar."""
+                for stage in (3, 4, 5, 6):
+                    self.assertTrue(any(f"Этап {stage}/7" in record.getMessage() for record in logs.records))
+                return real_tqdm(*args, **kwargs)
+            with patch.object(mod, "tqdm", side_effect=start_progress):
+                out, payload = node.apply(torch.zeros(4, 8, 8, 3), **parameters, cadence_json="invalid", batch_size=1)
         messages = [record.getMessage() for record in logs.records]
         stages = [message for message in messages if "Этап " in message]
         self.assertEqual(len(stages), 7)
@@ -1177,7 +1207,7 @@ class SmokeTests(unittest.TestCase):
                     )
         self.assertFalse(any("Готово:" in message or "(100%)" in message for message in logs.output))
         parameters = {
-            key: spec[1]["default"] for key, spec in finish.VideoSilentFilmFinish.INPUT_TYPES()["required"].items() if key != "image"
+            key: spec[1]["default"] for key, spec in finish.VideoSilentFilmFinish.INPUT_TYPES()["required"].items() if key not in {"image", "compute_device", "batch_size", "vignette_strength", "edge_softness", "edge_start", "edge_end", "grain_size_mode"}
         }
         with self.assertLogs("VideoSilentFilmFinish", level="INFO") as logs:
             with patch.object(finish, "_apply_grain", side_effect=RuntimeError("test failure")):
@@ -1259,7 +1289,7 @@ class SmokeTests(unittest.TestCase):
         """Keep normalized output, synchronization, and grain independent of chunk size."""
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
         node = mod.VideoSilentFilmFinish()
-        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key != "image"}
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key not in {"image", "compute_device", "batch_size", "vignette_strength", "edge_softness", "edge_start", "edge_end", "grain_size_mode"}}
         image = torch.rand(7, 19, 17, 4, generator=torch.Generator().manual_seed(7)) * 1.4 - 0.2
         original = image.clone()
         self.assertEqual(mod._validate_video_batch(image, normalize=False).data_ptr(), image.data_ptr())
@@ -1290,6 +1320,35 @@ class SmokeTests(unittest.TestCase):
         self.assertGreater(float((grain[0] - grain[1]).abs().mean()), 1e-4)
         torch.testing.assert_close(grain[2:4], mod._apply_grain(repeated[2:4], "emulsion_luma", 0.03, 2, 1925, frame_offset=2))
 
+    def test_video_silent_film_finish_relative_grain_size(self):
+        """Scale grain continuously with width and retain chunk and legacy compatibility."""
+        from unittest.mock import patch
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        node = mod.VideoSilentFilmFinish()
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key not in {"image", "compute_device", "batch_size", "vignette_strength", "edge_softness", "edge_start", "edge_end", "grain_size_mode"}}
+        parameters.update(grain_size=3, grain_strength=0.1, gate_weave_px=0)
+        for mode in ("overlay_fast", "emulsion_luma"):
+            parameters["grain_mode"] = mode
+            for width in (320, 640, 960):
+                image = torch.full((3, 9, width, 3), 0.5)
+                with patch.object(mod, "_apply_grain", wraps=mod._apply_grain) as grain:
+                    actual, payload = node.apply(image, **parameters, grain_size_mode="relative_width", compute_device="cpu", batch_size=1)
+                    self.assertEqual(grain.call_args_list[0].args[3], 3 * width / 1920)
+                    self.assertAlmostEqual(grain.call_args_list[0].args[2], 0.1 * min(1, 3 * width / 1920))
+                data = json.loads(payload)
+                self.assertEqual(data["effective_grain_size_px"], 3 * width / 1920)
+                self.assertEqual(data["grain_size_mode"], "relative_width")
+                chunked, _ = node.apply(image, **parameters, grain_size_mode="relative_width", compute_device="cpu", batch_size=3)
+                torch.testing.assert_close(actual, chunked)
+                if torch.cuda.is_available():
+                    gpu, _ = node.apply(image, **parameters, grain_size_mode="relative_width", compute_device="cuda", batch_size=2)
+                    torch.testing.assert_close(actual, gpu, atol=1e-4, rtol=1e-4)
+            legacy, _ = node.apply(image, **parameters, compute_device="cpu")
+            explicit, _ = node.apply(image, **parameters, grain_size_mode="pixels", compute_device="cpu")
+            torch.testing.assert_close(legacy, explicit, atol=0, rtol=0)
+        with self.assertRaises(ValueError):
+            node.apply(image, **parameters, grain_size_mode="invalid")
+
     def test_video_silent_film_finish_cuda_matches_chunked_cpu(self):
         """Run real CUDA finishing with the same frame grain and CPU output contract."""
         from unittest.mock import patch
@@ -1297,7 +1356,7 @@ class SmokeTests(unittest.TestCase):
             self.skipTest("CUDA is unavailable")
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
         node = mod.VideoSilentFilmFinish()
-        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key != "image"}
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key not in {"image", "compute_device", "batch_size", "vignette_strength", "edge_softness", "edge_start", "edge_end", "grain_size_mode"}}
         image = torch.rand(5, 32, 48, 4, generator=torch.Generator().manual_seed(7))
         for mode in ("emulsion_luma", "overlay_fast"):
             with self.subTest(grain_mode=mode):
@@ -1314,7 +1373,7 @@ class SmokeTests(unittest.TestCase):
         from unittest.mock import patch
         mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
         node = mod.VideoSilentFilmFinish()
-        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key != "image"}
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key not in {"image", "compute_device", "batch_size", "vignette_strength", "edge_softness", "edge_start", "edge_end", "grain_size_mode"}}
         image = torch.rand(7, 16, 20, 4, generator=torch.Generator().manual_seed(7))
         baseline, _ = node.apply(image, **parameters, compute_device="cpu", batch_size=1)
         run_chunk = mod._run_finish_chunk
@@ -1340,6 +1399,145 @@ class SmokeTests(unittest.TestCase):
         for size in (0, 17, 2.5):
             with self.subTest(batch_size=size), self.assertRaises(ValueError):
                 node.apply(image, **parameters, batch_size=size)
+
+    def test_video_silent_film_lens_edges_preserve_center_and_uniform_blur(self):
+        """Darken corners smoothly and keep constant images free of convolution halos."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        uniform = torch.full((3, 65, 97, 3), 0.6)
+        self.assertIs(mod._apply_lens_edges(uniform, 0.0, 0.0, 0.6), uniform)
+        vignette = mod._apply_lens_edges(uniform, 0.12, 0.0, 0.6)
+        torch.testing.assert_close(vignette[:, 32, 48], uniform[:, 32, 48], atol=0, rtol=0)
+        torch.testing.assert_close(vignette[:, 0, 0], torch.full((3, 3), 0.6 * 0.88))
+        torch.testing.assert_close(vignette[0], vignette[1], atol=0, rtol=0)
+        torch.testing.assert_close(mod._apply_lens_edges(uniform, 0.0, 1.0, 0.6), uniform)
+        mask = mod._lens_edge_mask(65, 97, 0.6, uniform.device, uniform.dtype)
+        self.assertTrue(torch.isfinite(mask).all())
+        self.assertTrue(torch.all(mask[:, 0, 1:49] <= mask[:, 0, :48]))
+        checker = torch.zeros_like(uniform)
+        checker[:, ::2] = 1.0
+        softened = mod._apply_lens_edges(checker, 0.0, 0.4, 0.6)
+        torch.testing.assert_close(softened[:, 25:40, 40:57], checker[:, 25:40, 40:57], atol=0, rtol=0)
+        self.assertGreater(float((softened[:, :5, :5] - checker[:, :5, :5]).abs().mean()), 0.01)
+
+    def test_video_silent_film_lens_mask_is_circular(self):
+        """Use equal falloff at equal pixel radii on rectangular and degenerate frames."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        mask = mod._lens_edge_mask(65, 129, 0.1, torch.device("cpu"), torch.float32)[0, ..., 0]
+        torch.testing.assert_close(mask[32, 88], mask[56, 64], atol=0, rtol=0)
+        self.assertGreater(float(mask[32, 0]), float(mask[0, 64]))
+        torch.testing.assert_close(mask, mask.flip((0, 1)), atol=0, rtol=0)
+        self.assertAlmostEqual(float(mask[0, 0]), 1.0, places=6)
+        larger = mod._lens_edge_mask(129, 257, 0.1, torch.device("cpu"), torch.float32)[0, ..., 0]
+        torch.testing.assert_close(larger[::2, ::2], mask)
+        taller = mod._lens_edge_mask(129, 129, 0.1, torch.device("cpu"), torch.float32)[0, ..., 0]
+        torch.testing.assert_close(taller[32:97], mask)
+        self.assertAlmostEqual(float(mask[32, 0]), 1.0, places=6)
+        for height, width in ((1, 1), (1, 9), (9, 1)):
+            small = mod._lens_edge_mask(height, width, 0.6, torch.device("cpu"), torch.float32)
+            self.assertTrue(torch.isfinite(small).all())
+        if torch.cuda.is_available():
+            actual = mod._lens_edge_mask(65, 129, 0.1, torch.device("cuda"), torch.float32).cpu()
+            torch.testing.assert_close(actual[0, ..., 0], mask)
+
+    def test_video_silent_film_lens_transition_end(self):
+        """Control transition width independently and reject inverted radii."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        mask = mod._lens_edge_mask(129, 201, 0.8, torch.device("cpu"), torch.float32, 1.2)[0, ..., 0]
+        self.assertEqual(float(mask[64, 180]), 0.0)
+        self.assertAlmostEqual(float(mask[64, 200]), 0.5, places=5)
+        # Точка 3–4–5: смещения 72 и 96 дают радиус 1.2 на маске шириной 201.
+        full = mod._lens_edge_mask(201, 201, 0.8, torch.device("cpu"), torch.float32, 1.2)[0, ..., 0]
+        self.assertAlmostEqual(float(full[172, 196]), 1.0, places=5)
+        node = mod.VideoSilentFilmFinish()
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key not in {"image", "compute_device", "batch_size", "vignette_strength", "edge_softness", "edge_start", "edge_end", "grain_size_mode"}}
+        image = torch.full((2, 33, 49, 3), 0.5)
+        for end in (0.6, 0.2, float("nan"), 5.0):
+            with self.assertRaises(ValueError):
+                node.apply(image, **parameters, edge_start=0.6, edge_end=end)
+        implicit, _ = node.apply(image, **parameters, vignette_strength=0.3)
+        explicit, _ = node.apply(image, **parameters, vignette_strength=0.3, edge_end=1.0)
+        torch.testing.assert_close(implicit, explicit, atol=0, rtol=0)
+        actual, payload = node.apply(image, **parameters, edge_start=1.1, edge_end=1.5, vignette_strength=0.3)
+        self.assertTrue(torch.isfinite(actual).all())
+        self.assertEqual(json.loads(payload)["edge_end"], 1.5)
+
+    def test_video_silent_film_lens_mask_controls_blur_radius(self):
+        """Use the mask as local sigma rather than alpha over a sharp image."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        image = (torch.arange(65) % 2).float().view(1, 65, 1, 1).expand(1, 65, 97, 3).clone()
+        mask = torch.full((1, 65, 97, 1), 0.5)
+        actual = mod._apply_variable_lens_blur(image, mask, 4.0)
+        expected = mod._lens_gaussian_blur(image, 2.0)
+        torch.testing.assert_close(actual, expected)
+        overlay = torch.lerp(image, mod._lens_gaussian_blur(image, 4.0), mask)
+        self.assertGreater(float((actual[:, 10:-10] - overlay[:, 10:-10]).abs().mean()), 0.2)
+        # Пространственно разные значения должны выбирать соответствующие радиусы.
+        mask[:, :, :32] = 0.0
+        mask[:, :, 64:] = 1.0
+        actual = mod._apply_variable_lens_blur(image, mask, 4.0)
+        torch.testing.assert_close(actual[:, :, :32], image[:, :, :32], atol=0, rtol=0)
+        torch.testing.assert_close(actual[:, :, 32:64], expected[:, :, 32:64])
+        torch.testing.assert_close(actual[:, :, 64:], mod._lens_gaussian_blur(image, 4.0)[:, :, 64:])
+        if torch.cuda.is_available():
+            gpu = mod._apply_variable_lens_blur(image.cuda(), mask.cuda(), 4.0).cpu()
+            torch.testing.assert_close(gpu, actual, atol=1e-4, rtol=1e-4)
+
+    def test_video_silent_film_lens_edges_strong_defocus(self):
+        """Suppress broad peripheral detail at maximum strength while retaining the center."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        stripes = ((torch.arange(257) // 8) % 2).float()
+        image = stripes.view(1, 257, 1, 1).expand(1, 257, 257, 3).clone()
+        weak = mod._apply_lens_edges(image, 0.0, 0.15, 0.4)
+        strong = mod._apply_lens_edges(image, 0.0, 1.0, 0.4)
+        region = (slice(None), slice(8, 40), slice(0, 16))
+        self.assertLess(float((strong[region] - 0.5).square().mean()),
+                        float((weak[region] - 0.5).square().mean()) * 0.4)
+        torch.testing.assert_close(strong[:, 115:140, 115:140], image[:, 115:140, 115:140], atol=0, rtol=0)
+        torch.testing.assert_close(mod._apply_lens_edges(torch.full_like(image, 0.6), 0.0, 1.0, 0.4), torch.full_like(image, 0.6))
+        if torch.cuda.is_available():
+            actual = mod._apply_lens_edges(image.cuda(), 0.0, 1.0, 0.4).cpu()
+            torch.testing.assert_close(actual, strong, atol=1e-4, rtol=1e-4)
+
+    def test_video_silent_film_lens_edges_move_with_projection(self):
+        """Apply optical falloff before projector displacement without affecting alpha."""
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        parameters = {
+            "tone_mode": "neutral_bw", "contrast": 1.0, "midtone_gamma": 1.0, "black_lift": 0.0,
+            "highlight_rolloff": 0.0, "softness": 0.0, "focus_drift_strength": 0.0,
+            "grain_mode": "emulsion_luma", "grain_strength": 0.0, "grain_size": 2, "seed": 1925,
+            "vignette_strength": 0.3, "edge_softness": 0.2, "edge_start": 0.4,
+        }
+        image = torch.full((2, 33, 49, 4), 0.6)
+        image[..., 3] = 0.7
+        x, y = torch.tensor([2.0, -1.0]), torch.tensor([-1.0, 2.0])
+        actual = mod._finish_chunk(image, x, y, torch.zeros(2), torch.ones(2), parameters, 0)
+        optical = mod._apply_lens_edges(image[..., :3], 0.3, 0.2, 0.4)
+        torch.testing.assert_close(actual[..., :3], mod._apply_gate_weave(optical, x, y))
+        torch.testing.assert_close(actual[..., 3:4], mod._apply_gate_weave(image[..., 3:4], x, y))
+
+    def test_video_silent_film_lens_edges_keep_chunks_and_cuda_consistent(self):
+        """Preserve disabled behavior and deterministic optical output across chunk sizes and devices."""
+        from unittest.mock import patch
+        mod = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+        node = mod.VideoSilentFilmFinish()
+        parameters = {key: spec[1]["default"] for key, spec in node.INPUT_TYPES()["required"].items() if key not in {"image", "compute_device", "batch_size", "vignette_strength", "edge_softness", "edge_start", "edge_end", "grain_size_mode"}}
+        image = torch.rand(5, 33, 49, 4, generator=torch.Generator().manual_seed(7))
+        baseline, _ = node.apply(image, **parameters, compute_device="cpu", batch_size=2)
+        disabled, _ = node.apply(image, **parameters, compute_device="cpu", batch_size=2, vignette_strength=0, edge_softness=0, edge_start=0.9)
+        torch.testing.assert_close(disabled, baseline, atol=0, rtol=0)
+        options = dict(vignette_strength=0.12, edge_softness=0.15, edge_start=0.6)
+        cpu, payload = node.apply(image, **parameters, compute_device="cpu", batch_size=1, **options)
+        batched, _ = node.apply(image, **parameters, compute_device="cpu", batch_size=3, **options)
+        torch.testing.assert_close(cpu, batched)
+        torch.testing.assert_close(cpu[..., 3], baseline[..., 3])
+        self.assertEqual(json.loads(payload)["vignette_strength"], 0.12)
+        if torch.cuda.is_available():
+            with patch.object(mod, "_finish_processing_plan", return_value=(torch.device("cuda"), 2, 2)):
+                gpu, _ = node.apply(image, **parameters, compute_device="cuda", batch_size=2, **options)
+            torch.testing.assert_close(gpu, cpu, atol=1e-4, rtol=1e-5)
+        for name, value in [("vignette_strength", -0.1), ("vignette_strength", float("nan")), ("edge_softness", 1.1), ("edge_start", 5.0)]:
+            with self.subTest(name=name, value=value), self.assertRaises(ValueError):
+                node.apply(image, **parameters, **{name: value})
 
     def test_video_silent_film_finish_can_lock_to_cadence_json(self):
         """Ensure finish node can synchronize flicker/weave to cadence metadata."""

@@ -464,20 +464,86 @@ def _crank_phase_at_time(starts: list[float], time_seconds: float, initial_phase
     return initial_phase + (index + fraction) / _CRANK_FRAMES_PER_TURN
 
 
+class _CaptureCameraMotion:
+    """Generate bounded nonperiodic camera poses from seeded crank effort pulses."""
+
+    def __init__(self, seed: int):
+        """Keep small deterministic event caches independent of sampling order."""
+        self.seed = int(seed)
+        self.turn_events = {}
+        self.aim_points = {}
+
+    @staticmethod
+    def _ease(value: float) -> float:
+        """Interpolate with zero first and second derivatives at both endpoints."""
+        value = max(0.0, min(1.0, value))
+        return value**3 * (value * (value * 6.0 - 15.0) + 10.0)
+
+    def _events(self, turn: int):
+        """Vary effort timing, direction, attack, and recovery on every revolution."""
+        if turn not in self.turn_events:
+            rng = random.Random(f"capture-effort:{self.seed}:{turn}")
+            events = []
+            if rng.random() > 0.15:
+                onset = turn + rng.uniform(0.05, 0.75)
+                count = 1 + int(rng.random() < 0.35)
+                for _ in range(count):
+                    events.append((
+                        onset, rng.uniform(0.12, 0.24), rng.uniform(0.35, 0.85),
+                        (rng.uniform(-0.75, 0.75), rng.uniform(-0.8, 0.5), rng.uniform(-0.7, 0.7)),
+                    ))
+                    onset += rng.uniform(0.3, 0.65)
+            self.turn_events[turn] = events
+            _trim_frame_caches(self.turn_events, limit=8)
+        return self.turn_events[turn]
+
+    def _aim(self, index: int):
+        """Provide slow grip adjustments without an unbounded random walk."""
+        if index not in self.aim_points:
+            rng = random.Random(f"capture-aim:{self.seed}:{index}")
+            self.aim_points[index] = tuple(rng.uniform(-1.0, 1.0) for _ in range(3))
+            _trim_frame_caches(self.aim_points, limit=8)
+        return self.aim_points[index]
+
+    def pose(self, crank_phase: float) -> tuple[float, float, float]:
+        """Sample smooth normalized translation and roll at an absolute crank phase."""
+        slow_position = crank_phase / 3.0
+        anchor = math.floor(slow_position)
+        blend = self._ease(slow_position - anchor)
+        first, second = self._aim(anchor), self._aim(anchor + 1)
+        pose = [0.6 * (a * (1.0 - blend) + b * blend) for a, b in zip(first, second)]
+        # Каждый оборот лишь создаёт возможность толчка: одинаковый цикл не повторяется.
+        turn = math.floor(crank_phase)
+        for event_turn in range(turn - 2, turn + 1):
+            for onset, attack, recovery, amplitudes in self._events(event_turn):
+                elapsed = crank_phase - onset
+                if elapsed < 0.0 or elapsed >= attack + recovery:
+                    continue
+                if elapsed < attack:
+                    envelope = self._ease(elapsed / attack)
+                else:
+                    envelope = 1.0 - self._ease((elapsed - attack) / recovery)
+                for axis, amplitude in enumerate(amplitudes):
+                    pose[axis] += amplitude * envelope
+        return tuple(math.tanh(value) for value in pose)
+
+
 def _apply_capture_shake(
     frame: torch.Tensor,
     crank_phase: float,
     strength: float,
     base_grid: torch.Tensor | None = None,
+    motion: _CaptureCameraMotion | None = None,
 ) -> torch.Tensor:
-    """Apply small crank-locked image-plane camera translation and roll."""
+    """Apply seeded effort-driven camera translation and roll during exposure."""
     if strength <= 0.0:
         return frame
     height, width, channels = frame.shape
-    angle = math.tau * (crank_phase % 1.0)
-    shift_x = strength * 0.003 * width * (0.8 * math.sin(angle) + 0.2 * math.sin(2.0 * angle))
-    shift_y = strength * 0.002 * height * (0.8 * math.cos(angle) + 0.2 * math.sin(2.0 * angle))
-    roll = math.radians(0.08) * strength * math.sin(angle + math.pi / 4.0)
+    motion = motion if motion is not None else _CaptureCameraMotion(0)
+    horizontal, vertical, tilt = motion.pose(crank_phase)
+    shift_x = strength * 0.003 * width * horizontal
+    shift_y = strength * 0.002 * height * vertical
+    roll = math.radians(0.08) * strength * tilt
     if base_grid is None:
         identity = torch.eye(2, 3, device=frame.device, dtype=frame.dtype).unsqueeze(0)
         base_grid = F.affine_grid(identity, (1, channels, height, width), align_corners=False)
@@ -649,7 +715,7 @@ class VideoSilentFilmCadence:
                     "FLOAT",
                     {
                         "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01,
-                        "tooltip": "Только hand_crank. Покачивание камеры при съёмке, связанное с ручкой и учитываемое внутри экспозиции: 0 = выключено; 0.15–0.30 = небольшое; 1 = сильное. Не заменяет дрожание проектора gate_weave_px в Finish.",
+                        "tooltip": "Только hand_crank. Нерегулярные толчки, кивки и наклоны камеры от движения ручки, без повторяющейся синусоиды. Учитываются внутри экспозиции: 0 = выключено; 0.15–0.30 = небольшие; 1 = сильные. Рисунок задаётся seed; gate_weave_px в Finish — отдельное дрожание проектора.",
                     },
                 ),
                 "compute_device": (
@@ -744,6 +810,7 @@ class VideoSilentFilmCadence:
             _LOGGER.warning("[Silent Film Cadence] OpenCV недоступен: вместо flow_integrated используется simple.")
         actual_camera_shake = camera_shake_strength if cadence_model == "hand_crank" else 0.0
         initial_crank_phase = random.Random(int(seed)).random()
+        capture_motion = _CaptureCameraMotion(seed) if actual_camera_shake > 0.0 else None
         work_device = _select_compute_device(str(compute_device), images.size(1), images.size(2))
 
         def _prepare_sampling(device):
@@ -789,7 +856,7 @@ class VideoSilentFilmCadence:
             if actual_camera_shake > 0.0:
                 sample_time = (position + 0.5) / source_fps
                 crank_phase = _crank_phase_at_time(starts, sample_time, initial_crank_phase)
-                sample = _apply_capture_shake(sample, crank_phase, actual_camera_shake, capture_grid)
+                sample = _apply_capture_shake(sample, crank_phase, actual_camera_shake, capture_grid, capture_motion)
             return sample
         
         def _sample_group_frame(group_idx: int, phase: float) -> torch.Tensor:
