@@ -18,6 +18,7 @@ def launch_environment(tmp_path):
     (comfy / "custom_nodes" / ROOT.name).mkdir(parents=True)
     (comfy / "custom_nodes" / "ComfyUI-VideoHelperSuite").mkdir()
     (comfy / "custom_nodes" / "comfyui-manager").mkdir()
+    (comfy / "custom_nodes" / "ComfyUI-Crystools").mkdir()
     (comfy / "main.py").write_text("# Тестовая установка\n")
     recorder = tmp_path / "fake conda"
     recorder.write_text("#!/usr/bin/env python\nimport json,os,sys\nfrom pathlib import Path\nPath(os.environ['ALEXZ_TEST_RECORD']).write_text(json.dumps({'args':sys.argv[1:],'cwd':os.getcwd()}))\n")
@@ -40,7 +41,7 @@ def test_dev_command_limits_modules_and_preserves_arguments(launch_environment):
     command = json.loads(record.read_text())
     assert command["cwd"] == str(comfy)
     assert command["args"] == ["run", "--no-capture-output", "-n", "p313-torch214-cu132", "python", "-u", str(comfy / "main.py"),
-                               "--disable-all-custom-nodes", "--disable-partner-nodes", "--whitelist-custom-nodes", ROOT.name, "ComfyUI-VideoHelperSuite", "comfyui-manager",
+                               "--disable-all-custom-nodes", "--disable-partner-nodes", "--whitelist-custom-nodes", ROOT.name, "ComfyUI-VideoHelperSuite", "comfyui-manager", "ComfyUI-Crystools",
                                "--port", "8189", "--output-directory", "/tmp/video results"]
 
 

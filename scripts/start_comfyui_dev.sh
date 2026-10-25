@@ -8,7 +8,7 @@ Dev-запуск ComfyUI для ALEXZ_tools и Silent Film.
 Использование:
   bash scripts/start_comfyui_dev.sh [--dry-run] [--extra-node ИМЯ] [-- параметры ComfyUI]
 
-По умолчанию загружаются только ALEXZ_tools, ComfyUI-VideoHelperSuite и comfyui-manager.
+По умолчанию загружаются ALEXZ_tools, ComfyUI-VideoHelperSuite, comfyui-manager и ComfyUI-Crystools.
 Conda environment: p313-torch214-cu132. Порт ComfyUI по умолчанию: 8188.
 
 Примеры:
@@ -30,7 +30,7 @@ EOF
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 comfy_root="${ALEXZ_COMFY_ROOT:-$(cd -- "$project_root/../.." && pwd)}"
 project_name="$(basename -- "$project_root")"
-allowed_nodes=("$project_name" "ComfyUI-VideoHelperSuite" "comfyui-manager")
+allowed_nodes=("$project_name" "ComfyUI-VideoHelperSuite" "comfyui-manager" "ComfyUI-Crystools")
 comfy_args=()
 dry_run=false
 

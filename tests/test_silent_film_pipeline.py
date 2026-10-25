@@ -76,7 +76,7 @@ def test_stages_reject_wrong_metadata_and_bad_parameters(pipeline, stage):
     captured, meta = camera(pipeline)
     classes = {"negative": pipeline.VideoSilentFilmNegative, "print": pipeline.VideoSilentFilmPrint, "projector": pipeline.VideoSilentFilmProjector}
     node = classes[stage]()
-    for text in ("", "[]", "{}", '{"schema_name":"wrong"}'):
+    for text in ("not json", "[]", "{}", '{"schema_name":"wrong"}'):
         with pytest.raises(ValueError):
             node.apply(captured, text, compute_device="cpu")
     wrong = json.loads(meta)
@@ -88,6 +88,44 @@ def test_stages_reject_wrong_metadata_and_bad_parameters(pipeline, stage):
             node.apply(captured[:1], meta, compute_device="cpu")
         with pytest.raises(ValueError):
             node.apply(captured, meta, development_contrast=float("nan"), compute_device="cpu")
+
+
+@pytest.mark.parametrize("stage,previous_stage", [("negative", "camera"), ("print", "negative"), ("projector", "print")])
+def test_optional_metadata_preserves_stage_effects(pipeline, stage, previous_stage):
+    """Run disconnected inputs identically without inventing upstream history or cadence."""
+    classes = {"negative": pipeline.VideoSilentFilmNegative, "print": pipeline.VideoSilentFilmPrint, "projector": pipeline.VideoSilentFilmProjector}
+    node = classes[stage]()
+    specs = node.INPUT_TYPES()
+    assert "film_json" not in specs["required"]
+    assert specs["optional"]["film_json"][0] == "STRING"
+    assert specs["optional"]["film_json"][1]["forceInput"] is True
+    image = torch.rand((3, 17, 25, 4), generator=torch.Generator().manual_seed(42))
+    supplied = pipeline._write_film_meta({"history": [], "cadence": {"known": True}}, image, previous_stage, {})
+    expected = node.apply(image, supplied, compute_device="cpu", batch_size=2)
+    for kwargs in ({}, {"film_json": None}, {"film_json": ""}, {"film_json": "  \n"}):
+        result = node.apply(image, compute_device="cpu", batch_size=2, **kwargs)
+        torch.testing.assert_close(result[0], expected[0], atol=0, rtol=0)
+        torch.testing.assert_close(result[-1], expected[-1], atol=0, rtol=0)
+        data = json.loads(result[2 if stage == "projector" else 1])
+        assert data["schema_name"] == "alexz.silent_film_pipeline"
+        assert data["image_shape"] == list(image.shape)
+        assert data["stage"] == stage
+        assert [entry["stage"] for entry in data["history"]] == [stage]
+        assert data["cadence"] is None
+        if stage == "projector":
+            assert result[1] == expected[1] == 25
+
+
+def test_pipeline_can_continue_from_standalone_negative(pipeline):
+    """Forward newly generated metadata through later stages after a disconnected start."""
+    image = torch.rand((2, 17, 25, 3))
+    negative, meta, _ = pipeline.VideoSilentFilmNegative().apply(image, compute_device="cpu")
+    positive, meta, _ = pipeline.VideoSilentFilmPrint().apply(negative, meta, compute_device="cpu")
+    output, fps, meta, _ = pipeline.VideoSilentFilmProjector().apply(positive, meta, compute_device="cpu")
+    data = json.loads(meta)
+    assert data["cadence"] is None
+    assert [entry["stage"] for entry in data["history"]] == ["negative", "print", "projector"]
+    assert output.shape == image.shape and fps == 25
 
 
 def test_grain_chunks_and_devices(pipeline):
@@ -182,9 +220,14 @@ def test_staged_workflow_contract(pipeline):
         if not node["type"].startswith("VideoSilentFilm"):
             continue
         cls = getattr(pipeline, node["type"])
-        schema = cls.INPUT_TYPES()["required"]
+        inputs = cls.INPUT_TYPES()
+        schema = inputs["required"]
+        all_inputs = {**schema, **inputs.get("optional", {})}
         assert schema["seed"][1]["control_after_generate"] is True
-        assert [i["name"] for i in node["inputs"]] == list(schema)
+        # В сохранённом workflow необязательный разъём остаётся на прежнем месте.
+        names = [i["name"] for i in node["inputs"]]
+        assert len(names) == len(all_inputs) and set(names) == set(all_inputs)
+        assert [name for name in names if name in schema] == list(schema)
         widgets = iter(node["widgets_values"])
         for name, spec in schema.items():
             options = spec[1] if len(spec) > 1 else {}

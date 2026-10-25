@@ -23,6 +23,8 @@ import torch.nn.functional as F
 import psutil
 from tqdm import tqdm
 
+from ..utils.video_memory import allocate_video, release_video_pages, use_disk
+
 
 _LOGGER = logging.getLogger("VideoSilentFilmFinish")
 
@@ -484,8 +486,8 @@ def _available_finish_ram() -> int:
     return int(virtual_memory_available())
 
 
-def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int) -> tuple[torch.device, int, int]:
-    """Budget bounded CPU/CUDA chunks and reserve space for the required output batch."""
+def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int, *, label="Silent Film Finish") -> tuple[torch.device, int, int]:
+    """Budget working chunks independently of large disk-backed output storage."""
     if mode not in {"auto", "cpu", "cuda"}:
         raise ValueError(f"Unsupported compute_device: {mode}")
     if int(batch_size) != batch_size or not 1 <= batch_size <= 16:
@@ -494,20 +496,25 @@ def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int) ->
     output_bytes = frame_count * height * width * channels * 4
     reserve = 512 * 1024**2
     per_frame = height * width * 512
-    cpu_output_bytes = output_bytes if images.device.type == "cpu" else 0
-    cpu_budget = _available_finish_ram() - cpu_output_bytes - reserve
-    if cpu_budget < per_frame:
-        raise MemoryError(
-            "Silent Film Finish: недостаточно свободной RAM для выходного батча и одного рабочего кадра. "
-            "Уменьшите число кадров или разрешение либо освободите память ComfyUI."
-        )
-    cpu_batch = min(int(batch_size), max(1, cpu_budget // per_frame))
-    if mode == "cpu" or (mode == "auto" and height * width < 256 * 256):
+    ram = _available_finish_ram()
+    mapped = use_disk(images.shape, ram=ram)
+    cpu_output_bytes = output_bytes if images.device.type == "cpu" and not mapped else 0
+    cpu_budget = ram - cpu_output_bytes - reserve
+    cpu_batch = min(int(batch_size), max(0, cpu_budget // per_frame))
+    _LOGGER.info("[%s] Память: выход %.2f ГиБ (%s), свободно RAM %.2f ГиБ; рабочая оценка %.2f ГиБ/кадр.", label, output_bytes / 1024**3, "VRAM при наличии запаса, иначе диск" if mapped else images.device.type, ram / 1024**3, per_frame / 1024**3)
+
+    def cpu_plan():
+        """Require CPU workspace only if CPU execution is actually selected."""
+        if cpu_batch < 1:
+            raise MemoryError(f"{label}: недостаточно свободной RAM для одного рабочего кадра. Освободите память или используйте CUDA/меньшее разрешение.")
         return torch.device("cpu"), cpu_batch, cpu_batch
+
+    if mode == "cpu" or (mode == "auto" and height * width < 256 * 256):
+        return cpu_plan()
     if not torch.cuda.is_available():
         if mode == "cuda":
-            _LOGGER.warning("[Silent Film Finish] CUDA недоступна: используется CPU.")
-        return torch.device("cpu"), cpu_batch, cpu_batch
+            _LOGGER.warning("[%s] CUDA недоступна: используется CPU.", label)
+        return cpu_plan()
     try:
         from comfy import model_management
     except ImportError:
@@ -515,14 +522,19 @@ def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int) ->
     else:
         device = model_management.get_torch_device()
     if device.type != "cuda":
-        return torch.device("cpu"), cpu_batch, cpu_batch
+        return cpu_plan()
     free, _ = torch.cuda.mem_get_info(device)
     available = free + torch.cuda.memory_reserved(device) - torch.cuda.memory_allocated(device)
-    gpu_output_bytes = output_bytes if images.device == device else 0
-    gpu_batch = min(int(batch_size), (available - gpu_output_bytes - reserve) // per_frame)
+    # Если целый выход не помещается вместе с рабочим кадром, считаем на GPU,
+    # а результат отправляем на диск вместо необязательного CPU fallback.
+    output_fits = available - reserve - output_bytes >= per_frame
+    gpu_output_bytes = output_bytes if (mapped and output_fits) or (not mapped and images.device == device) else 0
+    host_per_frame = height * width * channels * 4 * 2
+    gpu_batch = min(int(batch_size), (available - gpu_output_bytes - reserve) // per_frame, max(0, cpu_budget // host_per_frame))
+    _LOGGER.info("[%s] VRAM доступно %.2f ГиБ; порция CUDA %d, предел batch_size=%d.", label, available / 1024**3, max(0, gpu_batch), batch_size)
     if gpu_batch < 1:
-        _LOGGER.warning("[Silent Film Finish] Недостаточно свободной VRAM: используется CPU.")
-        return torch.device("cpu"), cpu_batch, cpu_batch
+        _LOGGER.warning("[%s] Недостаточно свободной VRAM: используется CPU.", label)
+        return cpu_plan()
     return device, int(gpu_batch), cpu_batch
 
 
@@ -887,7 +899,8 @@ class VideoSilentFilmFinish:
             "vignette_strength": vignette_strength, "edge_softness": edge_softness, "edge_start": edge_start, "edge_end": edge_end,
         }
         # Один выходной батч вместо списка порций и последующего удвоения памяти через cat.
-        output = torch.empty(images.shape, dtype=torch.float32, device=images.device)
+        output = allocate_video(images.shape, device=images.device, label="Silent Film Finish", work_device=work_device,
+                                work_bytes=images.size(1) * images.size(2) * 512 * current_batch_size)
         start = 0
         chunk_count = 0
         _LOGGER.info( "[Silent Film Finish] Этап 3/7: оптика и дрожание проектора; в каждой порции.")
@@ -903,6 +916,8 @@ class VideoSilentFilmFinish:
                         images, start, end, work_device, gate_x, gate_y, focus_signal, exposure, parameters,
                     )
                     output[start:end].copy_(result)
+                    release_video_pages(output, start, end, written=True)
+                    release_video_pages(images, start, end)
                 except torch.OutOfMemoryError:
                     result = None
                     if work_device.type != "cuda":
@@ -911,6 +926,8 @@ class VideoSilentFilmFinish:
                         current_batch_size = max(1, current_batch_size // 2)
                         _log_during_progress(logging.WARNING, "[Silent Film Finish] VRAM закончилась: повтор порции с %d кадров, начиная с кадра %d.", current_batch_size, start + 1)
                     else:
+                        if cpu_batch_size < 1:
+                            raise MemoryError("Silent Film Finish: после CUDA OOM недостаточно RAM для безопасного CPU fallback.")
                         work_device = torch.device("cpu")
                         current_batch_size = cpu_batch_size
                         _log_during_progress(logging.WARNING, "[Silent Film Finish] Один кадр не помещается в VRAM: остаток батча рассчитывается на CPU.")

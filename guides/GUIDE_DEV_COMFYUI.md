@@ -2,7 +2,7 @@
 
 ## Назначение
 
-Скрипт [scripts/start_comfyui_dev.sh](../scripts/start_comfyui_dev.sh) запускает установленный ComfyUI с тремя разрешёнными custom-node пакетами: **ComfyUI_ALEXZ_tools**, **ComfyUI-VideoHelperSuite** и **comfyui-manager**. Этого достаточно для [поэтапного Silent Film workflow](../workflows/Видео-в-Хронику-по-этапам.json): общий seed и окна Preview Image входят в ComfyUI core.
+Скрипт [scripts/start_comfyui_dev.sh](../scripts/start_comfyui_dev.sh) запускает установленный ComfyUI с четырьмя разрешёнными custom-node пакетами: **ComfyUI_ALEXZ_tools**, **ComfyUI-VideoHelperSuite**, **comfyui-manager** и **ComfyUI-Crystools**. Этого достаточно для [поэтапного Silent Film workflow](../workflows/Видео-в-Хронику-по-этапам.json): общий seed и окна Preview Image входят в ComfyUI core. Crystools добавляет монитор CPU/GPU, RAM/VRAM, температуры GPU и диска.
 
 Профиль использует штатные флаги `--disable-all-custom-nodes --whitelist-custom-nodes`. В установленном ComfyUI они проверяются и в `main.py:execute_prestartup_script`, и в `nodes.py:init_external_custom_nodes`. Поэтому у исключённых пакетов не исполняются даже prestartup scripts. Отключается также загрузка партнёрских API-нод через `--disable-partner-nodes`; интернет-доступ frontend этим не блокируется.
 
@@ -15,6 +15,8 @@ ComfyUI core, обычный start_comfyui.sh, каталоги расширен
 - Сравнение поведения с обычным полным запуском.
 
 Если проверяете интеграцию с конкретным сторонним пакетом, добавьте его явно. Manager включён в базовый профиль для кнопки Restart. Его установленный обработчик `/manager/reboot` сохраняет `sys.argv` при перезапуске, поэтому порт и белый список не теряются. Кнопку Restart во время проверки скрипта автоматически не вызываем.
+
+При обновлении списка пакетов закройте текущий dev-процесс и запустите скрипт или ярлык заново: Restart уже работающего экземпляра сохраняет прежние аргументы. После запуска обновите страницу. Показатели и интервал монитора настраиваются в **Settings → Crystools**; `Refresh per second=0` отключает монитор (несмотря на название, значение задаёт интервал в секундах). Для разработки удобно 1–2 секунды. Числа относятся к машине сервера ComfyUI: RAM — системная занятость, GPU/VRAM — данные NVIDIA, а не только расход конкретной ноды. Для наблюдения за дисковым кэшем выберите в настройках HDD раздел, где находится `.alexz-video-cache/`. Ноду в workflow для отображения монитора добавлять не нужно.
 
 ## Минимальный сценарий (3 шага)
 
@@ -63,7 +65,7 @@ bash scripts/start_comfyui_dev.sh --extra-node was-node-suite-comfyui
 
 ## Decision helper
 
-- Работа с новым Silent Film Pipeline: обычный dev-профиль из трёх пакетов.
+- Работа с новым Silent Film Pipeline: обычный dev-профиль из четырёх пакетов.
 - Интеграция с одной дополнительной библиотекой нод: `--extra-node`.
 - Полная пользовательская сборка, поиск межпакетных конфликтов или управление установленными пакетами: прежний обычный запуск.
 
@@ -89,7 +91,7 @@ bash scripts/start_comfyui_dev.sh --extra-node was-node-suite-comfyui
 
 ## Производительность
 
-Экономится время импорта исключённых custom nodes и их prestartup scripts. Инициализация Python, PyTorch, ComfyUI core, GPU и трёх разрешённых пакетов остаётся. Конкретное ускорение зависит от установки; CPU-проверка старта не является замером времени полноценного GPU-запуска.
+Экономится время импорта исключённых custom nodes и их prestartup scripts. Инициализация Python, PyTorch, ComfyUI core, GPU и четырёх разрешённых пакетов остаётся. Конкретное ускорение зависит от установки; CPU-проверка старта не является замером времени полноценного GPU-запуска.
 
 Для проверки импорта без сервера и выделения GPU-памяти можно выполнить:
 

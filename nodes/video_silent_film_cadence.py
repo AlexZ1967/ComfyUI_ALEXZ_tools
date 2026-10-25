@@ -24,6 +24,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+
+from ..utils.video_memory import allocate_video, release_video_pages
 try:
     import cv2
 except Exception:  # pragma: no cover - runtime dependency check
@@ -36,7 +38,7 @@ _LOGGER = logging.getLogger("VideoSilentFilmCadence")
 
 
 def _validate_video_batch(images: torch.Tensor) -> torch.Tensor:
-    """Validate Comfy image batch contract and normalize dtype range assumptions."""
+    """Validate shape without copying the full clip; normalize individual sampled frames."""
     if not isinstance(images, torch.Tensor):
         raise TypeError("image must be a torch.Tensor batch in THWC layout.")
     if images.dim() != 4:
@@ -45,7 +47,7 @@ def _validate_video_batch(images: torch.Tensor) -> torch.Tensor:
         raise ValueError("Silent-film cadence emulation requires at least 2 frames.")
     if images.size(-1) not in (3, 4):
         raise ValueError(f"Expected 3 or 4 channels, got {images.size(-1)}.")
-    return images.detach().float().clamp(0.0, 1.0)
+    return images.detach()
 
 
 def _lerp_frame(images: torch.Tensor, position: float) -> torch.Tensor:
@@ -55,14 +57,15 @@ def _lerp_frame(images: torch.Tensor, position: float) -> torch.Tensor:
     left = int(math.floor(pos))
     right = min(frame_count - 1, left + 1)
     frac = pos - float(left)
+    left_frame = images[left].float().clamp(0.0, 1.0)
     if right == left or frac <= 1e-6:
-        return images[left]
-    return images[left] * (1.0 - frac) + images[right] * frac
+        return left_frame
+    return left_frame * (1.0 - frac) + images[right].float().clamp(0.0, 1.0) * frac
 
 
 def _frame_to_numpy(images: torch.Tensor, index: int) -> np.ndarray:
     """Convert one batched frame to float32 HWC numpy."""
-    return images[index].detach().cpu().contiguous().numpy().astype(np.float32, copy=False)
+    return images[index].detach().float().clamp(0.0, 1.0).cpu().contiguous().numpy()
 
 
 def _gray_u8_from_frame(frame_np: np.ndarray) -> np.ndarray:
@@ -157,7 +160,7 @@ def _lerp_frame_flow(
     right = min(frame_count - 1, left + 1)
     frac = pos - float(left)
     if right == left or frac <= 1e-6:
-        return images[left]
+        return images[left].float().clamp(0.0, 1.0)
     if left not in frame_cache:
         frame_cache[left] = _frame_to_numpy(images, left)
     if right not in frame_cache:
@@ -189,7 +192,7 @@ def _lerp_frame_flow(
     flow_blended = warped_left * (1.0 - frac) + warped_right * frac
     simple_blended = frame_cache[left] * (1.0 - frac) + frame_cache[right] * frac
     blended = flow_blended * confidence + simple_blended * (1.0 - confidence)
-    return torch.from_numpy(blended).to(device=images.device, dtype=images.dtype)
+    return torch.from_numpy(blended).to(device=images.device, dtype=torch.float32)
 
 
 def _temporal_exposure_sample(
@@ -275,7 +278,7 @@ class _TorchExposureSampler:
     def _frame(self, index):
         """Upload only a small window of source frames."""
         if index not in self.tensor_frames:
-            self.tensor_frames[index] = self.images[index].to(self.device).permute(2, 0, 1).unsqueeze(0)
+            self.tensor_frames[index] = self.images[index].to(device=self.device, dtype=torch.float32).clamp(0.0, 1.0).permute(2, 0, 1).unsqueeze(0)
             _trim_frame_caches(self.tensor_frames)
         return self.tensor_frames[index]
 
@@ -816,11 +819,11 @@ class VideoSilentFilmCadence:
         def _prepare_sampling(device):
             """Prepare only per-frame device storage, not the entire video batch."""
             sampler = _TorchExposureSampler(images, device, frame_cache, flow_cache, confidence_cache) if device.type == "cuda" else None
-            template = images[0].to(device)
+            template = images[0].to(device=device, dtype=torch.float32).clamp(0.0, 1.0)
             grid = None
             if actual_camera_shake > 0.0:
                 height, width, channels = images.shape[1:]
-                identity = torch.eye(2, 3, device=device, dtype=images.dtype).unsqueeze(0)
+                identity = torch.eye(2, 3, device=device, dtype=torch.float32).unsqueeze(0)
                 grid = F.affine_grid(identity, (1, channels, height, width), align_corners=False)
             return sampler, template, grid
 
@@ -896,14 +899,17 @@ class VideoSilentFilmCadence:
                 work_device = torch.device("cpu")
                 torch_sampler, frame_template, capture_grid = _prepare_sampling(work_device)
                 result = _sample_group_frame(group_idx, phase)
-            return result.to(images.device)
+            release_video_pages(images)
+            return result.to(device=output_frames.device, dtype=torch.float32).clamp_(0.0, 1.0)
 
         # Заполняем один батч сразу: список кадров плюс stack/clamp удваивали пиковую RAM.
-        output_frames = torch.empty((output_count, *images.shape[1:]), dtype=images.dtype, device=images.device)
+        output_frames = allocate_video((output_count, *images.shape[1:]), device=images.device, label="Silent Film Cadence",
+                                      work_device=work_device, work_bytes=images.size(1) * images.size(2) * 384)
         with tqdm(total=output_count, desc="[Silent Film Cadence] Экспозиция", unit="кадр", dynamic_ncols=True, mininterval=0.5) as progress:
             if playback_mode == "undercrank_projected_25fps":
                 for group_idx in range(len(starts) - 1):
                     output_frames[group_idx].copy_(_render_frame(group_idx, phase=0.5))
+                    release_video_pages(output_frames, group_idx, group_idx + 1, written=True)
                     progress.update(1)
                 intra_group_motion = 0.0
             else:
@@ -919,10 +925,11 @@ class VideoSilentFilmCadence:
                     phase = (t - start_t) / interval_duration
                     phase = 0.5 + (phase - 0.5) * intra_group_motion
                     output_frames[output_index].copy_(_render_frame(group_idx, phase=phase))
+                    release_video_pages(output_frames, output_index, output_index + 1, written=True)
                     progress.update(1)
 
         _LOGGER.info("[Silent Film Cadence] Этап 4/4: сборка выходного батча и cadence_json.")
-        output = output_frames.clamp_(0.0, 1.0)
+        output = output_frames
 
         avg_effective_fps = float((len(starts) - 1) / total_duration) if total_duration > 0 else 0.0
         output_duration_seconds = float(len(output_frames) / source_fps) if source_fps > 0 else 0.0

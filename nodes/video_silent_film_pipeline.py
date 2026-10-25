@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from .video_silent_film_cadence import VideoSilentFilmCadence
 from . import video_silent_film_finish as finish
+from ..utils.video_memory import allocate_video, release_video_pages
 
 _LOGGER = logging.getLogger("SilentFilmPipeline")
 _SCHEMA = "alexz.silent_film_pipeline"
@@ -49,7 +50,7 @@ def _runtime_inputs():
     required["seed"][1]["control_after_generate"] = True
     required["seed"][1]["tooltip"] = "Общий seed варианта. Этапы и эффекты получают отдельные воспроизводимые последовательности: одинаковое значение во всех четырёх нодах не синхронизирует камеру, зерно и проектор."
     required["compute_device"][1]["tooltip"] = "auto выбирает CPU/CUDA по размеру кадра и доступной памяти. CUDA ускоряет эффекты; Farneback в Camera остаётся на CPU. При OOM порция уменьшается, затем расчёт переходит на CPU. Начните с auto."
-    required["batch_size"][1]["tooltip"] = "Максимум кадров в рабочей порции, 1–16. Начните с 4; при дефиците VRAM используйте 1–2. Не меняет художественный результат и зерно. Полные промежуточные батчи остаются в RAM/VRAM: маленькая порция не устраняет их суммарный объём."
+    required["batch_size"][1]["tooltip"] = "Максимум кадров в рабочей порции, 1–16. Начните с 4; при дефиците VRAM используйте 1–2. Не меняет художественный результат и зерно. Крупный результат хранится в VRAM при достаточном рабочем запасе, иначе в дисковом IMAGE-кэше; маленький — в обычной памяти. В консоли видны расчёт памяти и выбранное хранение."
     return required
 
 
@@ -78,7 +79,10 @@ def _grain_inputs(default_strength):
 
 
 def _read_film_meta(text, images, expected_stage):
-    """Reject wrong-stage or stale metadata while allowing image-only defect inserts."""
+    """Start local history if metadata is absent; otherwise validate stage and image shape."""
+    if text is None or (isinstance(text, str) and not text.strip()):
+        _LOGGER.info("[Silent Film] film_json не передан: автономная обработка, история начинается с текущего этапа.")
+        return {"history": [], "cadence": None}
     try:
         data = json.loads(text)
     except (TypeError, ValueError) as exc:
@@ -116,10 +120,11 @@ def _stage_chunk(images, start, end, device, operation):
 
 def _run_stage(images, name, compute_device, batch_size, operation):
     """Apply a stage in bounded chunks with CUDA retry and CPU fallback."""
-    work_device, size, cpu_size = finish._finish_processing_plan(images, compute_device, batch_size)
+    work_device, size, cpu_size = finish._finish_processing_plan(images, compute_device, batch_size, label=name)
     started = perf_counter()
     _LOGGER.info("[%s] Расчёт: %d кадров, %dx%d; %s, порция %d.", name, len(images), images.size(2), images.size(1), work_device, size)
-    output = torch.empty(images.shape, dtype=torch.float32, device=images.device)
+    output = allocate_video(images.shape, device=images.device, label=name, work_device=work_device,
+                            work_bytes=images.size(1) * images.size(2) * 512 * size)
     start = 0
     with tqdm(total=len(images), desc=f"[{name}] Обработка", unit="кадр", dynamic_ncols=True, mininterval=0.5) as progress:
         while start < len(images):
@@ -127,6 +132,8 @@ def _run_stage(images, name, compute_device, batch_size, operation):
             try:
                 result = _stage_chunk(images, start, end, work_device, operation)
                 output[start:end].copy_(result)
+                release_video_pages(output, start, end, written=True)
+                release_video_pages(images, start, end)
                 del result
             except torch.OutOfMemoryError:
                 if work_device.type != "cuda":
@@ -134,6 +141,8 @@ def _run_stage(images, name, compute_device, batch_size, operation):
                 if size > 1:
                     size = max(1, size // 2)
                 else:
+                    if cpu_size < 1:
+                        raise MemoryError(f"{name}: после CUDA OOM недостаточно RAM для безопасного CPU fallback.")
                     work_device, size = torch.device("cpu"), cpu_size
                 with tqdm.external_write_mode():
                     _LOGGER.warning("[%s] Не хватает VRAM: повтор с кадра %d, устройство %s, порция %d.", name, start + 1, work_device, size)
@@ -291,13 +300,14 @@ class VideoSilentFilmNegative:
         """Define negative exposure, development, base fog, and independent grain."""
         return {"required": {
             "image": ("IMAGE", {"tooltip": 'Изображение после Camera, до проявки. Пыль съёмочного кадрового окна можно вставить сюда. Выход Negative будет пропусканием плёнки с инвертированной полярностью.'}),
-            "film_json": ("STRING", {"forceInput": True, "tooltip": "Подключите film_json из Camera. Содержит этап, размер и историю; число, порядок, размеры и каналы кадров должны совпадать с image. При вставке IMAGE-ноды дефектов пропустите метаданные напрямую."}),
             "exposure_ev": _float(0, -4, 4, "Экспозиция негатива в ступенях. 0 — старт; +1 удваивает условную экспозицию, делает негатив плотнее и обычно осветляет последующий позитив. Для деликатной настройки меняйте по 0.1–0.25. Не путайте с print_exposure_ev, где плюс затемняет копию."),
             "development_contrast": _float(1, 0.2, 3, "Контраст проявленного негатива. 1 — старт; 0.8–0.9 мягче, 1.1–1.2 выразительнее. Слишком высокий контраст теряет детали теней и светов при последующей печати. Сначала настройте exposure_ev, затем этот параметр."),
             "base_fog": _float(0.1, 0, 1, "Плотность подложки и вуали негатива, добавляемая ко всему кадру. Старт 0.1. Увеличение затемняет сам негатив и меняет экспозицию при печати; это не подъём чёрного готового видео. Обычно оставляйте исходное значение и настраивайте экспозицию отдельно."),
             "density_range": _float(2.2, 0.2, 3, "Размах плотности негативной эмульсии; старт 2.2. Увеличение усиливает различие прозрачных и плотных участков, влияет и на контраст, и на яркость последующей копии. Это расширенная настройка материала: сначала подберите exposure_ev и development_contrast."),
             "development_variation": _float(0.01, 0, 0.2, "Медленная межкадровая неравномерность плотности от проявки. 0 — ровная проявка, 0.005–0.01 — деликатно. Меняет негатив, поэтому эффект далее проходит печать. Пространственные пятна и потёки не добавляет; не дублируйте без необходимости exposure_variation и лампу.", step=0.005),
             **_grain_inputs(0.03), **_runtime_inputs(),
+        }, "optional": {
+            "film_json": ("STRING", {"forceInput": True, "tooltip": "Необязательный паспорт из Camera: каденс, этап, размер и история. Без него Negative работает по image и своим параметрам, начиная новую историю. При подключении этап и форма батча проверяются; после IMAGE-ноды дефектов передайте метаданные напрямую."}),
         }}
 
     RETURN_TYPES = ("IMAGE", "STRING", "IMAGE")
@@ -305,7 +315,7 @@ class VideoSilentFilmNegative:
     FUNCTION = "apply"
     CATEGORY = "video/stylize/silent_film"
 
-    def apply(self, image, film_json, exposure_ev=0, development_contrast=1, base_fog=0.1,
+    def apply(self, image, film_json=None, exposure_ev=0, development_contrast=1, base_fog=0.1,
               density_range=2.2, development_variation=0.01, grain_strength=0.03,
               grain_size=2, seed=1925, compute_device="auto", batch_size=4):
         """Develop log-exposure into optical density and emit normalized transmittance."""
@@ -340,7 +350,6 @@ class VideoSilentFilmPrint:
         """Define positive print exposure, density response, softness, tint, and grain."""
         return {"required": {
             "image": ("IMAGE", {"tooltip": 'Пропускание негатива из Negative, не его инвертированный preview. Изменения изображения, пыль и царапины действительно переносятся в позитив; скрытая исходная картинка не восстанавливается.'}),
-            "film_json": ("STRING", {"forceInput": True, "tooltip": "Подключите film_json из Negative. Содержит этап, размер и историю; число, порядок, размеры и каналы кадров должны совпадать с image. При вставке IMAGE-ноды дефектов пропустите метаданные напрямую."}),
             "print_exposure_ev": _float(0, -4, 4, "Экспозиция при печати позитива. 0 — старт; плюс даёт больше света позитивной эмульсии, плотнее и темнее готовую копию, минус осветляет. Меняйте по 0.1–0.25, оценивая выход Print. Направление противоположно exposure_ev негатива."),
             "print_contrast": _float(1, 0.2, 3, "Контраст позитивной эмульсии, дополнительно к уже проявленному негативу. 1 — старт; ниже мягче, выше выразительнее. Не повышайте одновременно оба контраста: при потере деталей сначала верните оба к 1 и настройте экспозиции."),
             "reference_density": _float(1.2, 0, 4, "Опорная плотность негатива для настройки печати. Старт 1.2 для base_fog=0.1 и density_range=2.2 у Negative. Больше затемняет позитив, меньше осветляет. Не подстраивается автоматически под изменённый материал; обычно сначала настройте print_exposure_ev."),
@@ -349,6 +358,8 @@ class VideoSilentFilmPrint:
             "print_softness": _float(0.05, 0, 1, "Дополнительная мягкость печати: размывает отпечатанное изображение и зерно негатива до добавления зерна позитивной эмульсии. 0 сохраняет резкость; 0.03–0.05 — деликатно. Если Camera уже мягкая, начните с 0."),
             "tone_mode": (["neutral_bw", "warm_print", "sepia_print", "cool_nitrate"], {"default": "neutral_bw", "tooltip": "Оттенок позитивной копии: neutral_bw — нейтральное ЧБ для настройки, warm_print — лёгкая теплота, sepia_print — выраженная сепия, cool_nitrate — холодная художественная тонировка. Не меняет скорость и размер зерна; начните с neutral_bw."}),
             **_grain_inputs(0.015), **_runtime_inputs(),
+        }, "optional": {
+            "film_json": ("STRING", {"forceInput": True, "tooltip": "Необязательный паспорт из Negative: каденс, этап, размер и история. Без него Print работает по image и своим параметрам, начиная новую историю; image по-прежнему должен быть негативом. При подключении этап и форма батча проверяются; после IMAGE-ноды дефектов передайте метаданные напрямую."}),
         }}
 
     RETURN_TYPES = ("IMAGE", "STRING", "IMAGE")
@@ -356,7 +367,7 @@ class VideoSilentFilmPrint:
     FUNCTION = "apply"
     CATEGORY = "video/stylize/silent_film"
 
-    def apply(self, image, film_json, print_exposure_ev=0, print_contrast=1, reference_density=1.2,
+    def apply(self, image, film_json=None, print_exposure_ev=0, print_contrast=1, reference_density=1.2,
               base_fog=0.02, density_range=2.2, print_softness=0.05, tone_mode="neutral_bw",
               grain_strength=0.015, grain_size=2, seed=1925, compute_device="auto", batch_size=4):
         """Expose positive stock through the actual negative, then tone the print."""
@@ -396,13 +407,14 @@ class VideoSilentFilmProjector:
         optics["softness"][1]["default"] = 0.03
         return {"required": {
             "image": ("IMAGE", {"tooltip": 'Позитивная копия из Print. Пыль и царапины на позитиве вставляйте перед этим входом: они должны двигаться вместе с плёнкой и проходить через объектив проектора.'}),
-            "film_json": ("STRING", {"forceInput": True, "tooltip": "Подключите film_json из Print. Содержит этап, размер и историю; число, порядок, размеры и каналы кадров должны совпадать с image. При вставке IMAGE-ноды дефектов пропустите метаданные напрямую."}),
             "projection_fps": _float(25.0, 1, 120, "Частота показа готовой копии. Начните с 25 и соедините выход fps с frame_rate в Video Combine. Больше — быстрее и короче результат. Кадры не интерполируются: длительность = число кадров / fps. Исходный source_fps задаётся только в Camera.", 0.1),
             "gate_weave_px": _float(0.8, 0, 8, "Дрожание плёнки при показе в выходных пикселях: 0 отключает, 0.5–1 — деликатно, 2 — выраженно. Сдвигает весь позитив вместе с зерном и дефектами перед неподвижной оптикой проектора. Не связано с покачиванием съёмочной камеры."),
             **optics,
             "lamp_flicker": _float(0.025, 0, 0.3, "Быстрое межкадровое колебание яркости лампы. 0 отключает, 0.02–0.035 — старт. Не меняет негатив или позитив; работает уже при показе и не связано с ручкой камеры. Это не субкадровое мерцание затвора.", step=0.005),
             "lamp_breathing": _float(0.01, 0, 0.2, "Медленное плавное изменение яркости лампы поверх быстрого lamp_flicker. 0 отключает, 0.01–0.015 — старт. Если яркость слишком нестабильна, сначала выключите его и добавляйте источники колебаний по одному.", step=0.005),
             **_runtime_inputs(),
+        }, "optional": {
+            "film_json": ("STRING", {"forceInput": True, "tooltip": "Необязательный паспорт из Print: каденс, этап, размер и история. Без него Projector работает по image и своим параметрам, начиная новую историю; image считается позитивом. projection_fps задаётся в самой ноде. При подключении этап и форма батча проверяются."}),
         }}
 
     RETURN_TYPES = ("IMAGE", "FLOAT", "STRING", "IMAGE")
@@ -410,7 +422,7 @@ class VideoSilentFilmProjector:
     FUNCTION = "apply"
     CATEGORY = "video/stylize/silent_film"
 
-    def apply(self, image, film_json, projection_fps=25, gate_weave_px=0.8, softness=0.03,
+    def apply(self, image, film_json=None, projection_fps=25, gate_weave_px=0.8, softness=0.03,
               vignette_strength=0, edge_softness=0, edge_start=0.6, edge_end=1,
               lamp_flicker=0.025, lamp_breathing=0.01, seed=1925, compute_device="auto", batch_size=4):
         """Move the film before stationary projection optics and lamp illumination."""
