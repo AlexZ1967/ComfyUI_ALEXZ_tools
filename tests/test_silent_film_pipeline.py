@@ -28,16 +28,16 @@ def camera(pipeline, image=None, batch_size=2, device="cpu"):
     return pipeline.VideoSilentFilmCamera().apply(
         image, source_fps=24, target_fps_min=16, target_fps_max=20, blur_mode="simple", blur_samples=3,
         camera_shake_strength=0.1, softness=0, focus_drift_strength=0, exposure_variation=0,
-        vignette_strength=0.12, edge_softness=0.2, compute_device=device, batch_size=batch_size)
+        vignette_strength=0.12, edge_softness=0.2, compute_device=device, batch_size=batch_size)[:2]
 
 
 def test_full_pipeline_contract_and_alpha(pipeline):
     """Preserve frame metadata and alpha through all four physical stages."""
     captured, meta = camera(pipeline)
     assert len(captured) < 8
-    negative, neg_meta = pipeline.VideoSilentFilmNegative().apply(captured, meta, compute_device="cpu")
-    positive, pos_meta = pipeline.VideoSilentFilmPrint().apply(negative, neg_meta, compute_device="cpu")
-    projected, fps, out_meta = pipeline.VideoSilentFilmProjector().apply(positive, pos_meta, gate_weave_px=0, softness=0, lamp_flicker=0, lamp_breathing=0, compute_device="cpu")
+    negative, neg_meta, *_preview = pipeline.VideoSilentFilmNegative().apply(captured, meta, compute_device="cpu")
+    positive, pos_meta, *_preview = pipeline.VideoSilentFilmPrint().apply(negative, neg_meta, compute_device="cpu")
+    projected, fps, out_meta, *_preview = pipeline.VideoSilentFilmProjector().apply(positive, pos_meta, gate_weave_px=0, softness=0, lamp_flicker=0, lamp_breathing=0, compute_device="cpu")
     assert fps == 25
     assert projected.shape == captured.shape
     for image in (negative, positive, projected):
@@ -54,19 +54,19 @@ def test_negative_inversion_print_response_and_defects(pipeline):
     """Invert scene values twice and carry a scratch through printing with correct polarity."""
     image = torch.linspace(0.01, 0.99, 49).view(1, 1, 49, 1).expand(4, 33, 49, 3).clone()
     captured, meta = camera(pipeline, image)
-    negative, neg_meta = pipeline.VideoSilentFilmNegative().apply(captured, meta, grain_strength=0, development_variation=0, compute_device="cpu")
+    negative, neg_meta, *_preview = pipeline.VideoSilentFilmNegative().apply(captured, meta, grain_strength=0, development_variation=0, compute_device="cpu")
     assert torch.all(torch.diff(negative[0, 16, :, 0]) <= 0)
     printer = pipeline.VideoSilentFilmPrint()
-    positive, _ = printer.apply(negative, neg_meta, grain_strength=0, print_softness=0, compute_device="cpu")
+    positive, _, *_preview = printer.apply(negative, neg_meta, grain_strength=0, print_softness=0, compute_device="cpu")
     assert torch.all(torch.diff(positive[0, 16, :, 0]) >= 0)
     scratched = negative.clone()
     scratched[:, :, 24:25, :3] = 1.0
-    defect, _ = printer.apply(scratched, neg_meta, grain_strength=0, print_softness=0, compute_device="cpu")
+    defect, _, *_preview = printer.apply(scratched, neg_meta, grain_strength=0, print_softness=0, compute_device="cpu")
     assert torch.all(defect[:, :, 24, :3] < positive[:, :, 24, :3])
     torch.testing.assert_close(defect[:, :, :24], positive[:, :, :24])
-    dense, _ = pipeline.VideoSilentFilmNegative().apply(captured, meta, exposure_ev=1, grain_strength=0, development_variation=0, compute_device="cpu")
+    dense, _, *_preview = pipeline.VideoSilentFilmNegative().apply(captured, meta, exposure_ev=1, grain_strength=0, development_variation=0, compute_device="cpu")
     assert dense[..., :3].mean() < negative[..., :3].mean()
-    darker_print, _ = printer.apply(negative, neg_meta, print_exposure_ev=1, grain_strength=0, print_softness=0, compute_device="cpu")
+    darker_print, _, *_preview = printer.apply(negative, neg_meta, print_exposure_ev=1, grain_strength=0, print_softness=0, compute_device="cpu")
     assert darker_print.mean() < positive.mean()
 
 
@@ -94,34 +94,34 @@ def test_grain_chunks_and_devices(pipeline):
     """Keep independent grain layers reproducible across chunk boundaries and real CUDA."""
     captured, meta = camera(pipeline)
     negative_node, print_node = pipeline.VideoSilentFilmNegative(), pipeline.VideoSilentFilmPrint()
-    negative, neg_meta = negative_node.apply(captured, meta, compute_device="cpu", batch_size=1)
-    positive, pos_meta = print_node.apply(negative, neg_meta, compute_device="cpu", batch_size=1)
+    negative, neg_meta, *_preview = negative_node.apply(captured, meta, compute_device="cpu", batch_size=1)
+    positive, pos_meta, *_preview = print_node.apply(negative, neg_meta, compute_device="cpu", batch_size=1)
     projector = pipeline.VideoSilentFilmProjector()
-    projected, _, _ = projector.apply(positive, pos_meta, compute_device="cpu", batch_size=1, vignette_strength=0.1, edge_softness=0.2)
+    projected, _, _, *_preview = projector.apply(positive, pos_meta, compute_device="cpu", batch_size=1, vignette_strength=0.1, edge_softness=0.2)
     devices = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
     for device in devices:
         for size in (2, 4):
-            actual, _ = negative_node.apply(captured, meta, compute_device=device, batch_size=size)
+            actual, _, *_preview = negative_node.apply(captured, meta, compute_device=device, batch_size=size)
             torch.testing.assert_close(actual, negative, atol=1e-4, rtol=1e-4)
-            actual, _ = print_node.apply(negative, neg_meta, compute_device=device, batch_size=size)
+            actual, _, *_preview = print_node.apply(negative, neg_meta, compute_device=device, batch_size=size)
             torch.testing.assert_close(actual, positive, atol=1e-4, rtol=1e-4)
-            actual, fps, _ = projector.apply(positive, pos_meta, compute_device=device, batch_size=size, vignette_strength=0.1, edge_softness=0.2)
+            actual, fps, _, *_preview = projector.apply(positive, pos_meta, compute_device=device, batch_size=size, vignette_strength=0.1, edge_softness=0.2)
             torch.testing.assert_close(actual, projected, atol=1e-4, rtol=1e-4)
             assert fps == 25
-    other_negative, _ = negative_node.apply(captured, meta, seed=11, compute_device="cpu")
+    other_negative, _, *_preview = negative_node.apply(captured, meta, seed=11, compute_device="cpu")
     assert (negative - other_negative).abs().mean() > 1e-5
-    other_print, _ = print_node.apply(negative, neg_meta, seed=11, compute_device="cpu")
+    other_print, _, *_preview = print_node.apply(negative, neg_meta, seed=11, compute_device="cpu")
     assert (positive - other_print).abs().mean() > 1e-5
 
 
 def test_projector_optics_are_stationary(pipeline):
     """Move the print and its defects before applying the fixed projector vignette."""
     captured, meta = camera(pipeline)
-    negative, meta = pipeline.VideoSilentFilmNegative().apply(captured, meta, compute_device="cpu")
-    positive, meta = pipeline.VideoSilentFilmPrint().apply(negative, meta, compute_device="cpu")
+    negative, meta, *_preview = pipeline.VideoSilentFilmNegative().apply(captured, meta, compute_device="cpu")
+    positive, meta, *_preview = pipeline.VideoSilentFilmPrint().apply(negative, meta, compute_device="cpu")
     positive = torch.full_like(positive, 0.6)
     positive[..., 3] = 0.7
-    actual, fps, _ = pipeline.VideoSilentFilmProjector().apply(positive, meta, projection_fps=18, gate_weave_px=3, softness=0,
+    actual, fps, _, *_preview = pipeline.VideoSilentFilmProjector().apply(positive, meta, projection_fps=18, gate_weave_px=3, softness=0,
                                                             vignette_strength=0.4, edge_softness=0, lamp_flicker=0, lamp_breathing=0, compute_device="cpu")
     mask = pipeline.finish._lens_edge_mask(33, 49, 0.6, torch.device("cpu"), torch.float32)
     torch.testing.assert_close(actual[..., :3], positive[..., :3] * (1 - 0.4 * mask))
@@ -260,9 +260,9 @@ def test_common_seed_uses_separate_effect_streams(pipeline):
          patch.object(pipeline, "_density_grain", side_effect=record_grain), \
          patch.object(pipeline.VideoSilentFilmCadence, "apply", autospec=True, side_effect=record_capture):
         image, meta = camera(pipeline)
-        image, meta = pipeline.VideoSilentFilmNegative().apply(image, meta, compute_device="cpu", batch_size=16)
-        image, meta = pipeline.VideoSilentFilmPrint().apply(image, meta, compute_device="cpu", batch_size=16)
-        _, _, meta = pipeline.VideoSilentFilmProjector().apply(image, meta, compute_device="cpu", batch_size=16)
+        image, meta, *_preview = pipeline.VideoSilentFilmNegative().apply(image, meta, compute_device="cpu", batch_size=16)
+        image, meta, *_preview = pipeline.VideoSilentFilmPrint().apply(image, meta, compute_device="cpu", batch_size=16)
+        _, _, meta, *_preview = pipeline.VideoSilentFilmProjector().apply(image, meta, compute_device="cpu", batch_size=16)
     assert len(capture_seeds) == 1 and len(temporal_seeds) == 7 and len(grain_seeds) == 2
     used = capture_seeds + temporal_seeds + grain_seeds
     assert len(set(used)) == len(used)
@@ -289,3 +289,88 @@ def test_workflow_has_one_common_fixed_seed():
         if node["type"].startswith("VideoSilentFilm"):
             slot = next(i for i, inp in enumerate(node["inputs"]) if inp["name"] == "seed")
             assert [node["inputs"][slot]["link"], seed["id"], 0, node["id"], slot, "INT"] in workflow["links"]
+
+
+def test_camera_full_preview_does_not_change_main_outputs(pipeline):
+    """Append a detached middle frame and preserve existing output slot indices."""
+    image = torch.rand((8, 33, 49, 3))
+    output, meta, preview = pipeline.VideoSilentFilmCamera().apply(image, blur_mode="simple", blur_samples=3, compute_device="cpu")
+    middle = len(output) // 2
+    torch.testing.assert_close(preview, output[middle:middle + 1])
+    original = output.clone()
+    preview.zero_()
+    torch.testing.assert_close(output, original)
+    assert pipeline.VideoSilentFilmCamera.RETURN_NAMES[:2] == ("image", "film_json")
+    assert pipeline.VideoSilentFilmProjector.RETURN_NAMES[:3] == ("image", "fps", "film_json")
+
+
+def test_frame_selection_counts_bounds_and_inclusive_range(pipeline):
+    """Expose true source counts and copy inclusive ranges without changing pixels."""
+    selector = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_select").VideoFrameSelect()
+    assert selector.OUTPUT_NODE is True
+    image = torch.rand((9, 7, 11, 4))
+    for mode, settings, start, end in (
+        ("full_video", {}, 0, 8), ("single_frame", {"frame_index": 4}, 4, 4),
+        ("frame_range", {"start_frame": 2, "end_frame": 5}, 2, 5),
+        ("frame_range", {"start_frame": 6, "end_frame": -1}, 6, 8),
+        ("frame_range", {"start_frame": 3, "end_frame": 3}, 3, 3),
+    ):
+        response = selector.select(image, mode, **settings)
+        selected, total, count, meta = response["result"]
+        torch.testing.assert_close(selected, image[start:end + 1], atol=0, rtol=0)
+        assert (selected.untyped_storage().data_ptr() == image.untyped_storage().data_ptr()) == (start == 0 and end == 8)
+        assert total == 9 and count == end - start + 1
+        data = json.loads(meta)
+        assert data["middle_source_frame"] == start + count // 2
+        assert str(total) in response["ui"]["text"][0]
+        assert response["ui"]["video_info"] == [{"total_frames": 9, "width": 11, "height": 7}]
+    for mode, settings in (
+        ("single_frame", {"frame_index": 9}), ("single_frame", {"frame_index": -1}),
+        ("single_frame", {"frame_index": 2.5}), ("single_frame", {"frame_index": True}),
+        ("frame_range", {"start_frame": 5, "end_frame": 2}),
+        ("frame_range", {"end_frame": 9}), ("frame_range", {"end_frame": -1.0}),
+        ("unknown", {}),
+    ):
+        with pytest.raises(ValueError):
+            selector.select(image, mode, **settings)
+
+
+def test_single_selected_frame_runs_entire_pipeline_without_mode(pipeline):
+    """Automatically handle one source frame and retain consistent middle previews."""
+    selector = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_select").VideoFrameSelect()
+    source = torch.rand((11, 33, 49, 4))
+    selected = selector.select(source, "single_frame", frame_index=5)["result"][0]
+    with patch.object(pipeline.VideoSilentFilmCadence, "apply", side_effect=AssertionError("single frame cannot run cadence")):
+        image, meta, preview = pipeline.VideoSilentFilmCamera().apply(selected, compute_device="cpu")
+    assert json.loads(meta)["cadence"]["single_frame"] is True
+    for cls in (pipeline.VideoSilentFilmNegative, pipeline.VideoSilentFilmPrint, pipeline.VideoSilentFilmProjector):
+        result = cls().apply(image, meta, compute_device="cpu")
+        image, preview = result[0], result[-1]
+        meta = result[2 if cls is pipeline.VideoSilentFilmProjector else 1]
+        assert len(image) == len(preview) == 1
+        torch.testing.assert_close(preview, image)
+        assert "processing_mode" not in cls.INPUT_TYPES()["required"]
+    assert "processing_mode" not in pipeline.VideoSilentFilmCamera.INPUT_TYPES()["required"]
+
+
+def test_selected_segment_midpoint_is_shared_by_stages(pipeline):
+    """Process the complete selected clip and preview its middle output exposure at every stage."""
+    selector = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_frame_select").VideoFrameSelect()
+    source = torch.rand((20, 33, 49, 3))
+    selected = selector.select(source, "frame_range", start_frame=4, end_frame=15)["result"][0]
+    assert len(selected) == 12
+    result = pipeline.VideoSilentFilmCamera().apply(selected, blur_mode="simple", blur_samples=3, compute_device="cpu")
+    image, meta, preview = result
+    count = len(image)
+    torch.testing.assert_close(preview, image[count // 2:count // 2 + 1])
+    for cls in (pipeline.VideoSilentFilmNegative, pipeline.VideoSilentFilmPrint, pipeline.VideoSilentFilmProjector):
+        result = cls().apply(image, meta, compute_device="cpu")
+        image, preview = result[0], result[-1]
+        meta = result[2 if cls is pipeline.VideoSilentFilmProjector else 1]
+        assert len(image) == count
+        torch.testing.assert_close(preview, image[count // 2:count // 2 + 1])
+    workflow = json.loads((Path(__file__).resolve().parents[1] / "workflows/Видео-в-Хронику-по-этапам.json").read_text())
+    by_id = {n["id"]: n for n in workflow["nodes"]}
+    camera_node = next(n for n in workflow["nodes"] if n["type"] == "VideoSilentFilmCamera")
+    camera_link = next(l for l in workflow["links"] if l[3] == camera_node["id"] and l[4] == 0)
+    assert by_id[camera_link[1]]["type"] == "VideoFrameSelect"

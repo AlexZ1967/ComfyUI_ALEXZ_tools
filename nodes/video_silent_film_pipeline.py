@@ -94,6 +94,12 @@ def _read_film_meta(text, images, expected_stage):
     return data
 
 
+def _preview_frame(images):
+    """Return an independent one-frame batch without retaining the full video storage."""
+    index = len(images) // 2
+    return images[index:index + 1].clone()
+
+
 def _write_film_meta(previous, images, stage, parameters):
     """Append a stage record without duplicating tensors or cadence arrays."""
     data = copy.deepcopy(previous)
@@ -224,8 +230,8 @@ class VideoSilentFilmCamera:
         required.update(_runtime_inputs())
         return {"required": required}
 
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("image", "film_json")
+    RETURN_TYPES = ("IMAGE", "STRING", "IMAGE")
+    RETURN_NAMES = ("image", "film_json", "preview")
     FUNCTION = "apply"
     CATEGORY = "video/stylize/silent_film"
 
@@ -241,12 +247,18 @@ class VideoSilentFilmCamera:
         _validate_optics(settings)
         focus_drift_strength = _number("focus_drift_strength", focus_drift_strength, 0, 0.5)
         exposure_variation = _number("exposure_variation", exposure_variation, 0, 0.3)
-        # Сохраняем существующий расчёт экспозиций, но не привязываем съёмку к проектору.
-        captured, cadence_text = VideoSilentFilmCadence().apply(
-            image, source_fps, "undercrank_projected_25fps", target_fps_min, target_fps_max,
-            fps_drift_strength, shutter_fraction, motion_blur_strength, blur_mode, blur_samples, _effect_seed(seed, "camera", "capture"),
-            cadence_model="hand_crank", crank_irregularity=crank_irregularity,
-            camera_shake_strength=camera_shake_strength, compute_device=compute_device)
+        source = finish._validate_video_batch(image, normalize=False)
+        if len(source) == 1:
+            captured = source
+            cadence_text = json.dumps({"single_frame": True, "source_frame_count": 1})
+            _LOGGER.info("[Silent Film Camera] Один входной кадр: статическая оптика без каденса, optical flow и движения камеры.")
+        else:
+            # Сохраняем существующий расчёт экспозиций, но не привязываем съёмку к проектору.
+            captured, cadence_text = VideoSilentFilmCadence().apply(
+                image, source_fps, "undercrank_projected_25fps", target_fps_min, target_fps_max,
+                fps_drift_strength, shutter_fraction, motion_blur_strength, blur_mode, blur_samples, _effect_seed(seed, "camera", "capture"),
+                cadence_model="hand_crank", crank_irregularity=crank_irregularity,
+                camera_shake_strength=camera_shake_strength, compute_device=compute_device)
         focus = torch.tanh(finish._temporal_signal(len(captured), _effect_seed(seed, "camera", "focus"), 1.0, 0.48, torch.device("cpu"), torch.float32))
         exposure = finish._temporal_signal(len(captured), _effect_seed(seed, "camera", "exposure"), exposure_variation, 0.55, torch.device("cpu"), torch.float32)
         masks = {}
@@ -254,7 +266,7 @@ class VideoSilentFilmCamera:
         def operation(chunk, start, end):
             """Apply optics and capture instability without monochrome conversion or grain."""
             rgb = _optics(chunk[..., :3], settings, masks)
-            if focus_drift_strength:
+            if focus_drift_strength and len(captured) > 1:
                 focus_mask = ((focus[start:end].to(chunk.device) + 1) * 0.5).view(-1, 1, 1, 1)
                 rgb = finish._apply_variable_lens_blur(rgb, focus_mask, rgb.size(2) / 1920.0 * focus_drift_strength * 8.0)
             rgb = (rgb * (1 + exposure[start:end].to(chunk.device).view(-1, 1, 1, 1))).clamp(0, 1)
@@ -268,7 +280,7 @@ class VideoSilentFilmCamera:
                           blur_mode=blur_mode, blur_samples=int(blur_samples), camera_shake_strength=float(camera_shake_strength),
                           focus_drift_strength=focus_drift_strength, exposure_variation=exposure_variation, seed=int(seed), **settings)
         meta = {"history": [], "cadence": json.loads(cadence_text)}
-        return output, _write_film_meta(meta, output, "camera", parameters)
+        return output, _write_film_meta(meta, output, "camera", parameters), _preview_frame(output)
 
 
 class VideoSilentFilmNegative:
@@ -288,8 +300,8 @@ class VideoSilentFilmNegative:
             **_grain_inputs(0.03), **_runtime_inputs(),
         }}
 
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("negative", "film_json")
+    RETURN_TYPES = ("IMAGE", "STRING", "IMAGE")
+    RETURN_NAMES = ("negative", "film_json", "preview")
     FUNCTION = "apply"
     CATEGORY = "video/stylize/silent_film"
 
@@ -317,7 +329,7 @@ class VideoSilentFilmNegative:
         _LOGGER.info("[Silent Film Negative] План: экспозиция → характеристическая кривая и проявка → зерно негатива.")
         output = _run_stage(images, "Silent Film Negative", compute_device, batch_size, operation)
         settings["seed"] = int(seed)
-        return output, _write_film_meta(meta, output, "negative", settings)
+        return output, _write_film_meta(meta, output, "negative", settings), _preview_frame(output)
 
 
 class VideoSilentFilmPrint:
@@ -339,8 +351,8 @@ class VideoSilentFilmPrint:
             **_grain_inputs(0.015), **_runtime_inputs(),
         }}
 
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("positive", "film_json")
+    RETURN_TYPES = ("IMAGE", "STRING", "IMAGE")
+    RETURN_NAMES = ("positive", "film_json", "preview")
     FUNCTION = "apply"
     CATEGORY = "video/stylize/silent_film"
 
@@ -371,7 +383,7 @@ class VideoSilentFilmPrint:
         _LOGGER.info("[Silent Film Print] План: печать через негатив → позитивная эмульсия → зерно и тонировка копии.")
         output = _run_stage(images, "Silent Film Print", compute_device, batch_size, operation)
         settings.update(seed=int(seed), tone_mode=tone_mode)
-        return output, _write_film_meta(meta, output, "print", settings)
+        return output, _write_film_meta(meta, output, "print", settings), _preview_frame(output)
 
 
 class VideoSilentFilmProjector:
@@ -393,8 +405,8 @@ class VideoSilentFilmProjector:
             **_runtime_inputs(),
         }}
 
-    RETURN_TYPES = ("IMAGE", "FLOAT", "STRING")
-    RETURN_NAMES = ("image", "fps", "film_json")
+    RETURN_TYPES = ("IMAGE", "FLOAT", "STRING", "IMAGE")
+    RETURN_NAMES = ("image", "fps", "film_json", "preview")
     FUNCTION = "apply"
     CATEGORY = "video/stylize/silent_film"
 
@@ -427,4 +439,4 @@ class VideoSilentFilmProjector:
         _LOGGER.info("[Silent Film Projector] План: кадровое окно → неподвижная оптика проектора → лампа; показ %.2f fps.", projection_fps)
         output = _run_stage(images, "Silent Film Projector", compute_device, batch_size, operation)
         settings.update(projection_fps=projection_fps, gate_weave_px=gate_weave_px, lamp_flicker=lamp_flicker, lamp_breathing=lamp_breathing, seed=int(seed))
-        return output, projection_fps, _write_film_meta(meta, output, "projector", settings)
+        return output, projection_fps, _write_film_meta(meta, output, "projector", settings), _preview_frame(output)

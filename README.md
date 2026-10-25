@@ -264,11 +264,27 @@ Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADEN
 
 ---
 
+## Сохранение workflows
+
+В левой панели **Save Workflow** кнопки **«Сохранить как…»** и **«Сохранить»** записывают граф в файл, выбранный через системный диалог браузера, с возможностью выбрать любую доступную папку. Отдельная кнопка **«Сохранить в workflows проекта»** сохраняет активный граф напрямую в `workflows/` ALEXZ_tools: новый файл или выбранный существующий JSON. Версия файла проверяется перед перезаписью. Стандартные Save / Ctrl+S и экспорт остаются отдельными действиями.
+
+Инструкция: [GUIDE_PROJECT_WORKFLOWS.md](guides/GUIDE_PROJECT_WORKFLOWS.md).
+
+## Select Video Frames
+
+Нода `VideoFrameSelect` выбирает весь входной ролик, отдельный кадр или диапазон с нумерацией от нуля и включительным концом. Кнопка Load and calculate frame запускает только загрузчик и селектор; информация о ролике видна сверху, ниже показываются только параметры выбранного режима. Выходы: `image`, `total_frames`, `selected_frames`, `selection_json`. Используется перед Camera в поэтапном workflow.
+
+Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md).
+
 ## Silent Film Pipeline
+
+Для быстрого запуска ComfyUI с ALEXZ_tools, VideoHelperSuite и Manager: `bash scripts/start_comfyui_dev.sh`. Подробности, порты и дополнительные пакеты — в [гайде dev-запуска](guides/GUIDE_DEV_COMFYUI.md). Обычный запуск и установка расширений не меняются.
 
 Поэтапный процесс: **Silent Film Camera → Silent Film Negative → Silent Film Print → Silent Film Projector**. Съёмка и оптика отделены от проявленного негатива, печати позитива и финальной проекции. Зерно двух эмульсий независимо, дефекты можно вставлять в IMAGE-связи между этапами. В примере один общий seed управляет всеми этапами; случайные последовательности разделены по этапу и эффекту. `film_json` сохраняет этап и сведения о кадрах; `Projector.fps` подключается к `Video Combine.frame_rate`.
 
 Негатив представлен пропусканием плёнки, позитив действительно печатается с этого изображения. Модель художественная; отдельные ноды пыли и царапин пока не добавлены. Кэш нескольких IMAGE-батчей требует больше RAM, чем компактные Cadence + Finish. Старые ноды и workflow сохранены.
+
+Каждый этап выдаёт `preview` со средним обработанным кадром выбранного отрезка. Для статической настройки выберите один кадр в Select Video Frames перед Camera; для динамики — диапазон. Переключателей processing_mode в этапах нет.
 
 Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md). Пример: [Видео-в-Хронику-по-этапам.json](workflows/Видео-в-Хронику-по-этапам.json).
 

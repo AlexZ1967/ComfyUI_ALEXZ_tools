@@ -4,6 +4,7 @@ await esbuild.build({
   entryPoints: [
     "frontend/src/hello.ts",
     "frontend/src/module_updates.ts",
+    "frontend/src/project_workflows.ts",
   ],
 
   bundle: true,

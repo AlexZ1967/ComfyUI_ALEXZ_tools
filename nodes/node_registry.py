@@ -44,6 +44,7 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("VideoCutMatch", "Match Video Cut Point", ".video_cut_match", "VideoCutMatch"),
     NodeSpec("VideoSilentFilmCadence", "Silent Film Cadence", ".video_silent_film_cadence", "VideoSilentFilmCadence"),
     NodeSpec("VideoSilentFilmFinish", "Silent Film Finish", ".video_silent_film_finish", "VideoSilentFilmFinish"),
+    NodeSpec("VideoFrameSelect", "Select Video Frames", ".video_frame_select", "VideoFrameSelect"),
     NodeSpec("VideoSilentFilmCamera", "Silent Film Camera", ".video_silent_film_pipeline", "VideoSilentFilmCamera"),
     NodeSpec("VideoSilentFilmNegative", "Silent Film Negative", ".video_silent_film_pipeline", "VideoSilentFilmNegative"),
     NodeSpec("VideoSilentFilmPrint", "Silent Film Print", ".video_silent_film_pipeline", "VideoSilentFilmPrint"),
@@ -65,24 +66,29 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
 
 
 NODE_UI_METADATA = {
+    "VideoFrameSelect": {
+        "description": "Выбирает весь ролик, отдельный кадр или диапазон включительно; показывает исходное и выбранное число кадров.",
+        "output_tooltips": ["Выбранные кадры для Camera или другой обработки.", "Общее число кадров входного батча.", "Число выбранных кадров.", "Границы выбора и номер среднего исходного кадра."],
+        "search_aliases": ["video", "frame", "select", "trim", "range", "кадр", "отрезок"],
+    },
     "VideoSilentFilmCamera": {
         "description": "Съёмочный аппарат: ручной каденс, экспозиция, движение камеры и съёмочная оптика.",
-        "output_tooltips": ["Изображение после съёмки.", "Метаданные этапа camera и виртуальных кадров."],
+        "output_tooltips": ["Изображение после съёмки.", "Метаданные этапа camera и виртуальных кадров.", "Один средний обработанный кадр для Preview Image; для ускорения выберите кадр или короткий отрезок через Select Video Frames перед Camera."],
         "search_aliases": ["silent film", "pipeline", "camera"],
     },
     "VideoSilentFilmNegative": {
         "description": "Негатив: экспозиция и проявка, оптическая плотность и зерно съёмочной плёнки.",
-        "output_tooltips": ["Негатив как пропускание плёнки, не позитивный preview.", "Метаданные этапа negative."],
+        "output_tooltips": ["Негатив как пропускание плёнки, не позитивный preview.", "Метаданные этапа negative.", "Один средний обработанный кадр для Preview Image; для ускорения выберите кадр или короткий отрезок через Select Video Frames перед Camera."],
         "search_aliases": ["silent film", "pipeline", "negative"],
     },
     "VideoSilentFilmPrint": {
         "description": "Печать позитива через негатив: отдельная эмульсия, зерно и тонировка.",
-        "output_tooltips": ["Позитивная копия.", "Метаданные этапа print."],
+        "output_tooltips": ["Позитивная копия.", "Метаданные этапа print.", "Один средний обработанный кадр для Preview Image; для ускорения выберите кадр или короткий отрезок через Select Video Frames перед Camera."],
         "search_aliases": ["silent film", "pipeline", "print"],
     },
     "VideoSilentFilmProjector": {
         "description": "Показ позитивной копии: кадровое окно, оптика проектора, лампа и частота показа.",
-        "output_tooltips": ["Проекция позитивной копии.", "Подключите к frame_rate в Video Combine.", "Метаданные этапа projector."],
+        "output_tooltips": ["Проекция позитивной копии.", "Подключите к frame_rate в Video Combine.", "Метаданные этапа projector.", "Один средний обработанный кадр для Preview Image; для ускорения выберите кадр или короткий отрезок через Select Video Frames перед Camera."],
         "search_aliases": ["silent film", "pipeline", "projector"],
     },
     "ImagePrepare_for_QwenEdit_outpaint": {

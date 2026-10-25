@@ -24,6 +24,17 @@ const CONVERTED_WIDGET_TYPE = "converted-widget";
  */
 const VISIBILITY_PROFILES = [
     {
+        id: "video_frame_selection_params",
+        targetNodes: ["VideoFrameSelect"],
+        controllerWidget: "selection_mode",
+        groups: { frame: ["frame_index"], range: ["start_frame", "end_frame"] },
+        modes: {
+            full_video: { showGroups: [] },
+            single_frame: { showGroups: ["frame"] },
+            frame_range: { showGroups: ["range"] },
+        },
+    },
+    {
         id: "silent_film_capture_params",
         targetNodes: ["VideoSilentFilmCadence", "Silent Film Cadence"],
         controllerWidget: "cadence_model",

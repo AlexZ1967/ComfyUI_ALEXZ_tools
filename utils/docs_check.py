@@ -24,6 +24,7 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 NODE_REGISTRY = ROOT / "nodes" / "node_registry.py"
 
 NODE_DOCS = [
+    {"file": "nodes/video_frame_select.py", "class": "VideoFrameSelect", "guide": "guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md", "readme_heading": "## Select Video Frames"},
     {
         "file": "nodes/image_prepare.py",
         "class": "ImagePrepareForQwenEditOutpaint",
@@ -188,6 +189,8 @@ TEMPLATE_SECTIONS = [
 ]
 
 EXTRA_GUIDES = [
+    "guides/GUIDE_PROJECT_WORKFLOWS.md",
+    "guides/GUIDE_DEV_COMFYUI.md",
     "guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md",
     "guides/GUIDE_COLOR_MATCH.md",
 ]
