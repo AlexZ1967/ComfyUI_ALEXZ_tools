@@ -31,6 +31,33 @@ def camera(pipeline, image=None, batch_size=2, device="cpu"):
         vignette_strength=0.12, edge_softness=0.2, compute_device=device, batch_size=batch_size)[:2]
 
 
+@pytest.mark.parametrize("frame_count", [1, 5])
+@pytest.mark.parametrize("channels", [3, 4])
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA hardware required"))])
+def test_camera_captures_color_as_monochrome(pipeline, frame_count, channels, device):
+    """Record color patches as distinct neutral grays in stills and clips, preserving alpha."""
+    colors = torch.tensor([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]).repeat_interleave(3, dim=0)
+    source = colors.view(1, 1, 9, 3).expand(frame_count, 7, 9, 3).clone()
+    if channels == 4:
+        alpha = torch.linspace(0.2, 0.8, 9).view(1, 1, 9, 1).expand(frame_count, 7, 9, 1)
+        source = torch.cat((source, alpha), dim=-1)
+    original = source.clone()
+    output, meta, preview = pipeline.VideoSilentFilmCamera().apply(
+        source, source_fps=24, target_fps_min=24, target_fps_max=24,
+        motion_blur_strength=0, camera_shake_strength=0, blur_mode="simple",
+        softness=0, vignette_strength=0, edge_softness=0,
+        focus_drift_strength=0, exposure_variation=0, compute_device=device, batch_size=2)
+    expected = torch.tensor([0.299, 0.587, 0.114]).repeat_interleave(3).view(1, 1, 9)
+    torch.testing.assert_close(output[..., 0], expected.expand(len(output), 7, 9), atol=1e-6, rtol=0)
+    torch.testing.assert_close(output[..., 0], output[..., 1], atol=0, rtol=0)
+    torch.testing.assert_close(output[..., 1], output[..., 2], atol=0, rtol=0)
+    if channels == 4:
+        torch.testing.assert_close(output[..., 3], original[:1, ..., 3].expand(len(output), 7, 9), atol=1e-6, rtol=0)
+    torch.testing.assert_close(preview, output[len(output)//2:len(output)//2+1], atol=0, rtol=0)
+    torch.testing.assert_close(source, original, atol=0, rtol=0)
+    assert json.loads(meta)["history"][-1]["parameters"]["capture_color_mode"] == "monochrome_luma"
+
+
 def test_full_pipeline_contract_and_alpha(pipeline):
     """Preserve frame metadata and alpha through all four physical stages."""
     captured, meta = camera(pipeline)
@@ -114,6 +141,87 @@ def test_optional_metadata_preserves_stage_effects(pipeline, stage, previous_sta
         assert data["cadence"] is None
         if stage == "projector":
             assert result[1] == expected[1] == 25
+
+
+@pytest.mark.parametrize("use_negative,use_print", [(False, False), (True, False), (False, True)])
+def test_bypassed_stages_preserve_cadence_and_real_history(pipeline, use_negative, use_print, caplog):
+    """Forward bypassed metadata without inventing film effects or missing history entries."""
+    image, meta = camera(pipeline)
+    original_cadence = json.loads(meta)["cadence"]
+    stages = ["camera"]
+    with caplog.at_level("INFO", logger="SilentFilmPipeline"):
+        if use_negative:
+            image, meta, _ = pipeline.VideoSilentFilmNegative().apply(image, meta, compute_device="cpu")
+            stages.append("negative")
+        if use_print:
+            image, meta, _ = pipeline.VideoSilentFilmPrint().apply(image, meta, compute_device="cpu")
+            stages.append("print")
+        settings = dict(gate_weave_px=0, softness=0, lamp_flicker=0, lamp_breathing=0, compute_device="cpu")
+        projected, fps, final_meta, preview = pipeline.VideoSilentFilmProjector().apply(image, meta, **settings)
+    torch.testing.assert_close(projected, image, atol=0, rtol=0)
+    torch.testing.assert_close(preview, projected[len(projected)//2:len(projected)//2+1])
+    data = json.loads(final_meta)
+    assert data["cadence"] == original_cadence
+    assert [entry["stage"] for entry in data["history"]] == stages + ["projector"]
+    assert fps == 25 and "Пропуск этапов" in caplog.text
+
+
+def test_bypass_metadata_still_rejects_stale_shapes_and_unknown_stages(pipeline):
+    """Keep genuine metadata failures visible even when forward-stage skipping is allowed."""
+    image, meta = camera(pipeline)
+    projector = pipeline.VideoSilentFilmProjector()
+    with pytest.raises(ValueError, match="image_shape"):
+        projector.apply(image[:1], meta, compute_device="cpu")
+    data = json.loads(meta)
+    data["stage"] = "unknown"
+    with pytest.raises(ValueError, match="Expected film stage"):
+        projector.apply(image, json.dumps(data), compute_device="cpu")
+
+
+@pytest.mark.parametrize("bypass_mask", range(16))
+def test_all_stage_bypass_combinations(pipeline, bypass_mask):
+    """Run every subset of four film stages, including no Camera and all stages bypassed."""
+    source = torch.rand((7, 25, 33, 4), generator=torch.Generator().manual_seed(7))
+    image, meta, stages = source, None, []
+    if not bypass_mask & 1:
+        image, meta = camera(pipeline, source)
+        stages.append("camera")
+    for bit, cls, stage in ((2, pipeline.VideoSilentFilmNegative, "negative"),
+                            (4, pipeline.VideoSilentFilmPrint, "print"),
+                            (8, pipeline.VideoSilentFilmProjector, "projector")):
+        if bypass_mask & bit:
+            continue
+        result = cls().apply(image, meta, compute_device="cpu")
+        image = result[0]
+        meta = result[2 if stage == "projector" else 1]
+        stages.append(stage)
+        torch.testing.assert_close(result[-1], image[len(image)//2:len(image)//2+1])
+    assert torch.isfinite(image).all() and image.shape[1:] == source.shape[1:]
+    if stages:
+        data = json.loads(meta)
+        assert [entry["stage"] for entry in data["history"]] == stages
+        assert (data["cadence"] is None) == bool(bypass_mask & 1)
+    else:
+        assert image is source and meta is None
+    torch.testing.assert_close(source, torch.rand(source.shape, generator=torch.Generator().manual_seed(7)), atol=0, rtol=0)
+
+
+@pytest.mark.parametrize("count", [1, 4, 5])
+def test_preview_frame_encodes_one_middle_frame_and_forwards_full_batch(pipeline, count):
+    """Keep a preview branch bounded after bypass while retaining core IMAGE pass-through."""
+    module = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_preview")
+    image = torch.rand((count, 7, 11, 3))
+    calls = []
+    class CorePreview:
+        def save_images(self, images, **kwargs):
+            """Record the real core-preview call contract without writing PNG fixtures."""
+            calls.append(images)
+            return {"ui": {"images": [{"filename": "middle.png", "type": "temp"}]}, "result": (images,)}
+    with patch.dict(sys.modules, {"nodes": types.SimpleNamespace(PreviewImage=CorePreview)}):
+        result = module.VideoPreviewFrame().save_images(image)
+    assert result["result"][0] is image
+    assert len(result["ui"]["images"]) == len(calls[0]) == 1
+    torch.testing.assert_close(calls[0], image[count//2:count//2+1])
 
 
 def test_pipeline_can_continue_from_standalone_negative(pipeline):
@@ -416,4 +524,4 @@ def test_selected_segment_midpoint_is_shared_by_stages(pipeline):
     by_id = {n["id"]: n for n in workflow["nodes"]}
     camera_node = next(n for n in workflow["nodes"] if n["type"] == "VideoSilentFilmCamera")
     camera_link = next(l for l in workflow["links"] if l[3] == camera_node["id"] and l[4] == 0)
-    assert by_id[camera_link[1]]["type"] == "VideoFrameSelect"
+    assert by_id[camera_link[1]]["type"] == "VideoLoadSource"

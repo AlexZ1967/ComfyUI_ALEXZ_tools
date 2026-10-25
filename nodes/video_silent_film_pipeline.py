@@ -19,6 +19,7 @@ from ..utils.video_memory import allocate_video, release_video_pages
 _LOGGER = logging.getLogger("SilentFilmPipeline")
 _SCHEMA = "alexz.silent_film_pipeline"
 _SEED_SCHEME = "blake2b_stage_effect_v1"
+_FILM_STAGES = ("camera", "negative", "print", "projector")
 
 
 def _effect_seed(seed, stage, effect):
@@ -79,7 +80,7 @@ def _grain_inputs(default_strength):
 
 
 def _read_film_meta(text, images, expected_stage):
-    """Start local history if metadata is absent; otherwise validate stage and image shape."""
+    """Allow forward-stage bypasses while validating metadata schema and image shape."""
     if text is None or (isinstance(text, str) and not text.strip()):
         _LOGGER.info("[Silent Film] film_json не передан: автономная обработка, история начинается с текущего этапа.")
         return {"history": [], "cadence": None}
@@ -89,12 +90,18 @@ def _read_film_meta(text, images, expected_stage):
         raise ValueError("film_json must contain pipeline metadata.") from exc
     if not isinstance(data, dict) or data.get("schema_name") != _SCHEMA or data.get("schema_version") != 1:
         raise ValueError("Unsupported film_json schema.")
-    if data.get("stage") != expected_stage:
-        raise ValueError(f"Expected film stage {expected_stage}, got {data.get('stage')}.")
+    expected_index = _FILM_STAGES.index(expected_stage)
+    stage = data.get("stage")
+    if stage not in _FILM_STAGES[:expected_index + 1]:
+        raise ValueError(f"Expected film stage at or before {expected_stage}, got {stage}.")
     if data.get("image_shape") != list(images.shape):
         raise ValueError("film_json image_shape does not match image; preserve frame count, dimensions and channels between stages.")
     if not isinstance(data.get("history"), list):
         raise ValueError("film_json history must be a list.")
+    if stage != expected_stage:
+        skipped = _FILM_STAGES[_FILM_STAGES.index(stage) + 1:expected_index + 1]
+        _LOGGER.info("[Silent Film %s] Пропуск этапов: %s. Входное изображение обрабатывается как есть.",
+                     _FILM_STAGES[expected_index + 1].title(), ", ".join(skipped))
     return data
 
 
@@ -203,7 +210,7 @@ def _validate_optics(settings):
 
 
 class VideoSilentFilmCamera:
-    """Capture a moving source with hand-cranked exposure timing and camera optics."""
+    """Capture a monochrome source response with hand-cranked timing and camera optics."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -217,7 +224,7 @@ class VideoSilentFilmCamera:
                                motion_blur_strength=0.8, blur_samples=9, camera_shake_strength=0.25).items():
             required[key][1]["default"] = value
         capture_tooltips = {
-            'image': 'Исходная движущаяся сцена, RGB/RGBA-батч кадров. Отдельный первый проектор и экран не моделируются. Выход Camera — ещё не плёнка: передайте image и film_json в Negative.',
+            'image': 'Исходная движущаяся сцена, цветной или ЧБ RGB/RGBA-батч. Camera выдаёт нейтральное ЧБ-изображение с сохранением альфы. Negative затем формирует плотность и зерно плёнки; тонировка выполняется в Print.',
             'source_fps': 'Частота интерпретации исходных кадров, а не частота выходного файла. Выше — короче виртуальная сцена и меньше снятых кадров. Для обычного видео укажите его fps; для материала, замедленного вдвое, удвойте fps интерпретации. 36 — сохранённая настройка данного workflow, не универсальный стандарт.',
             'target_fps_min': 'Нижняя граница скорости ручной съёмки. Начните с 16 при верхней 20. Вместе с верхней границей и fps_drift_strength задаёт ускорения движения; равные границы дают ровную частоту. Скорость показа задаётся отдельно в Projector.',
             'target_fps_max': 'Верхняя граница частоты ручной съёмки, не ниже target_fps_min. Старт 20 при нижней 16. Выше средняя частота — больше кадров плёнки и длиннее результат при том же projection_fps. Шире диапазон — заметнее неравномерность движения.',
@@ -251,7 +258,7 @@ class VideoSilentFilmCamera:
               edge_softness=0.15, edge_start=0.6, edge_end=1.0,
               focus_drift_strength=0.03, exposure_variation=0.02,
               seed=1925, compute_device="auto", batch_size=4):
-        """Capture one output frame per virtual film exposure and apply acquisition optics."""
+        """Capture virtual exposures, apply acquisition optics, and emit neutral monochrome RGB."""
         settings = dict(softness=softness, vignette_strength=vignette_strength, edge_softness=edge_softness, edge_start=edge_start, edge_end=edge_end)
         _validate_optics(settings)
         focus_drift_strength = _number("focus_drift_strength", focus_drift_strength, 0, 0.5)
@@ -273,21 +280,23 @@ class VideoSilentFilmCamera:
         masks = {}
 
         def operation(chunk, start, end):
-            """Apply optics and capture instability without monochrome conversion or grain."""
+            """Apply capture optics and instability, then emit a monochrome response without grain."""
             rgb = _optics(chunk[..., :3], settings, masks)
             if focus_drift_strength and len(captured) > 1:
                 focus_mask = ((focus[start:end].to(chunk.device) + 1) * 0.5).view(-1, 1, 1, 1)
                 rgb = finish._apply_variable_lens_blur(rgb, focus_mask, rgb.size(2) / 1920.0 * focus_drift_strength * 8.0)
             rgb = (rgb * (1 + exposure[start:end].to(chunk.device).view(-1, 1, 1, 1))).clamp(0, 1)
-            return _rgb_alpha(rgb, chunk)
+            gray = _luma(rgb)
+            return _rgb_alpha(gray.expand(-1, -1, -1, 3), chunk)
 
-        _LOGGER.info("[Silent Film Camera] План: экспозиции и ручка → съёмочная оптика, фокус и экспозиция.")
+        _LOGGER.info("[Silent Film Camera] План: экспозиции и ручка → съёмочная оптика, фокус и экспозиция → ЧБ-отклик.")
         output = _run_stage(captured, "Silent Film Camera", compute_device, batch_size, operation)
         parameters = dict(source_fps=float(source_fps), target_fps_min=float(target_fps_min), target_fps_max=float(target_fps_max),
                           fps_drift_strength=float(fps_drift_strength), crank_irregularity=float(crank_irregularity),
                           shutter_fraction=float(shutter_fraction), motion_blur_strength=float(motion_blur_strength),
                           blur_mode=blur_mode, blur_samples=int(blur_samples), camera_shake_strength=float(camera_shake_strength),
-                          focus_drift_strength=focus_drift_strength, exposure_variation=exposure_variation, seed=int(seed), **settings)
+                          focus_drift_strength=focus_drift_strength, exposure_variation=exposure_variation, seed=int(seed),
+                          capture_color_mode="monochrome_luma", **settings)
         meta = {"history": [], "cadence": json.loads(cadence_text)}
         return output, _write_film_meta(meta, output, "camera", parameters), _preview_frame(output)
 
@@ -359,7 +368,7 @@ class VideoSilentFilmPrint:
             "tone_mode": (["neutral_bw", "warm_print", "sepia_print", "cool_nitrate"], {"default": "neutral_bw", "tooltip": "Оттенок позитивной копии: neutral_bw — нейтральное ЧБ для настройки, warm_print — лёгкая теплота, sepia_print — выраженная сепия, cool_nitrate — холодная художественная тонировка. Не меняет скорость и размер зерна; начните с neutral_bw."}),
             **_grain_inputs(0.015), **_runtime_inputs(),
         }, "optional": {
-            "film_json": ("STRING", {"forceInput": True, "tooltip": "Необязательный паспорт из Negative: каденс, этап, размер и история. Без него Print работает по image и своим параметрам, начиная новую историю; image по-прежнему должен быть негативом. При подключении этап и форма батча проверяются; после IMAGE-ноды дефектов передайте метаданные напрямую."}),
+            "film_json": ("STRING", {"forceInput": True, "tooltip": "Необязательный паспорт из Negative или Camera при bypass Negative. Каденс и история сохраняются; пропущенные операции не выполняются. Print трактует поданный image как негатив, даже если Negative пропущен. Проверяются схема, направление этапов и форма батча. Без паспорта начинается новая история."}),
         }}
 
     RETURN_TYPES = ("IMAGE", "STRING", "IMAGE")
@@ -414,7 +423,7 @@ class VideoSilentFilmProjector:
             "lamp_breathing": _float(0.01, 0, 0.2, "Медленное плавное изменение яркости лампы поверх быстрого lamp_flicker. 0 отключает, 0.01–0.015 — старт. Если яркость слишком нестабильна, сначала выключите его и добавляйте источники колебаний по одному.", step=0.005),
             **_runtime_inputs(),
         }, "optional": {
-            "film_json": ("STRING", {"forceInput": True, "tooltip": "Необязательный паспорт из Print: каденс, этап, размер и история. Без него Projector работает по image и своим параметрам, начиная новую историю; image считается позитивом. projection_fps задаётся в самой ноде. При подключении этап и форма батча проверяются."}),
+            "film_json": ("STRING", {"forceInput": True, "tooltip": "Необязательный паспорт из Print, Negative или Camera: можно включать bypass предыдущих этапов. Projector проецирует image как есть, без автоматической инверсии или восстановления пропущенных эффектов. Проверяются схема, направление этапов и форма батча. Без паспорта начинается новая история; projection_fps задаётся здесь."}),
         }}
 
     RETURN_TYPES = ("IMAGE", "FLOAT", "STRING", "IMAGE")

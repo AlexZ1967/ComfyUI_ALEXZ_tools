@@ -2,7 +2,7 @@
 
 ## Назначение
 
-Скрипт [scripts/start_comfyui_dev.sh](../scripts/start_comfyui_dev.sh) запускает установленный ComfyUI с четырьмя разрешёнными custom-node пакетами: **ComfyUI_ALEXZ_tools**, **ComfyUI-VideoHelperSuite**, **comfyui-manager** и **ComfyUI-Crystools**. Этого достаточно для [поэтапного Silent Film workflow](../workflows/Видео-в-Хронику-по-этапам.json): общий seed и окна Preview Image входят в ComfyUI core. Crystools добавляет монитор CPU/GPU, RAM/VRAM, температуры GPU и диска.
+Скрипт [scripts/start_comfyui_dev.sh](../scripts/start_comfyui_dev.sh) запускает установленный ComfyUI с четырьмя разрешёнными custom-node пакетами: **ComfyUI_ALEXZ_tools**, **ComfyUI-VideoHelperSuite**, **comfyui-manager** и **ComfyUI-Crystools**. Этого достаточно для [поэтапного Silent Film workflow](../workflows/Видео-в-Хронику-по-этапам.json): общий seed и окна Preview Image входят в ComfyUI core. Новый поэтапный workflow использует собственные Load Source Video и Save Final Video; VideoHelperSuite оставлен для прежних workflow. Crystools добавляет монитор CPU/GPU, RAM/VRAM, температуры GPU и диска.
 
 Профиль использует штатные флаги `--disable-all-custom-nodes --whitelist-custom-nodes`. В установленном ComfyUI они проверяются и в `main.py:execute_prestartup_script`, и в `nodes.py:init_external_custom_nodes`. Поэтому у исключённых пакетов не исполняются даже prestartup scripts. Отключается также загрузка партнёрских API-нод через `--disable-partner-nodes`; интернет-доступ frontend этим не блокируется.
 

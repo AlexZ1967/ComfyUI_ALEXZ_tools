@@ -5,6 +5,7 @@ await esbuild.build({
     "frontend/src/hello.ts",
     "frontend/src/module_updates.ts",
     "frontend/src/project_workflows.ts",
+    "frontend/src/video_io.ts",
   ],
 
   bundle: true,
@@ -18,6 +19,7 @@ await esbuild.build({
   external: [
     "../../../scripts/app.js",
     "../../../scripts/api.js",
+    "../../../scripts/widgets.js",
   ],
 
   outdir: "web/generated",

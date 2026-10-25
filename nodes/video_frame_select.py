@@ -5,6 +5,31 @@ import json
 from .video_silent_film_finish import _validate_video_batch
 
 
+def selection_bounds(total, selection_mode, frame_index=0, start_frame=0, end_frame=-1):
+    """Resolve the shared zero-based inclusive selection used by loader and selector."""
+    if total < 1:
+        raise ValueError("Видео не содержит кадров.")
+    if selection_mode not in ("full_video", "single_frame", "frame_range"):
+        raise ValueError("Unknown selection_mode.")
+
+    def index(name, value):
+        """Reject fractional and out-of-range frame indices."""
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value < total:
+            raise ValueError(f"{name} must be an integer between 0 and {total - 1}.")
+        return value
+
+    if selection_mode == "full_video":
+        return 0, total - 1
+    if selection_mode == "single_frame":
+        frame = index("frame_index", frame_index)
+        return frame, frame
+    start = index("start_frame", start_frame)
+    end = total - 1 if end_frame == -1 and type(end_frame) is int else index("end_frame", end_frame)
+    if end < start:
+        raise ValueError("end_frame must be greater than or equal to start_frame.")
+    return start, end
+
+
 class VideoFrameSelect:
     """Select source frames before processing and report source/selection counts."""
 
@@ -29,22 +54,7 @@ class VideoFrameSelect:
         """Reuse full batches or copy smaller selections without resampling or color changes."""
         images = _validate_video_batch(image, normalize=False)
         total = len(images)
-        if selection_mode not in ("full_video", "single_frame", "frame_range"):
-            raise ValueError("Unknown selection_mode.")
-        def index(name, value, minimum=0):
-            """Reject fractional or invalid indices instead of silently changing the selection."""
-            if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value < total:
-                raise ValueError(f"{name} must be an integer between {minimum} and {total - 1}.")
-            return value
-        if selection_mode == "full_video":
-            start, end = 0, total - 1
-        elif selection_mode == "single_frame":
-            start = end = index("frame_index", frame_index)
-        else:
-            start = index("start_frame", start_frame)
-            end = total - 1 if end_frame == -1 and type(end_frame) is int else index("end_frame", end_frame)
-            if end < start:
-                raise ValueError("end_frame must be greater than or equal to start_frame.")
+        start, end = selection_bounds(total, selection_mode, frame_index, start_frame, end_frame)
         selected = images if start == 0 and end == total - 1 else images[start:end + 1].clone()
         count = len(selected)
         data = {"schema_name": "alexz.video_frame_selection", "schema_version": 1, "selection_mode": selection_mode,

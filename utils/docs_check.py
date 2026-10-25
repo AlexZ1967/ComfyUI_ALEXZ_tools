@@ -24,6 +24,9 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 NODE_REGISTRY = ROOT / "nodes" / "node_registry.py"
 
 NODE_DOCS = [
+    {"file": "nodes/video_preview.py", "class": "VideoPreviewFrame", "guide": "guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md", "readme_heading": "## Preview Middle Frame (ALEXZ)"},
+    {"file": "nodes/video_io.py", "class": "VideoLoadSource", "guide": "guides/GUIDE_VIDEO_IO.md", "readme_heading": "## Load Source Video (ALEXZ)"},
+    {"file": "nodes/video_io.py", "class": "VideoSaveFinal", "guide": "guides/GUIDE_VIDEO_IO.md", "readme_heading": "## Save Final Video (ALEXZ)"},
     {"file": "nodes/video_frame_select.py", "class": "VideoFrameSelect", "guide": "guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md", "readme_heading": "## Select Video Frames"},
     {
         "file": "nodes/image_prepare.py",

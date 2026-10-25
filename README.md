@@ -270,9 +270,33 @@ Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADEN
 
 Инструкция: [GUIDE_PROJECT_WORKFLOWS.md](guides/GUIDE_PROJECT_WORKFLOWS.md).
 
+## Load Source Video (ALEXZ)
+
+Собственный загрузчик FFmpeg с поддержкой MOV/ProRes, MXF и MP4. Встроены full_video, single_frame и frame_range; информация и число кадров доступны до запуска пайплайна. Декодируются только выбранные выходные кадры в 16-битный RGB/RGBA → float32, без полного исходника в RAM. Файл можно открыть по абсолютному пути либо выбрать стандартным диалогом с потоковой загрузкой в input.
+
+Выходы: `image`, `fps`, `total_frames`, `selected_frames`, `video_json`, `preview`.
+
+Guide: [GUIDE_VIDEO_IO.md](guides/GUIDE_VIDEO_IO.md).
+
+## Save Final Video (ALEXZ)
+
+Порционная запись IMAGE в ProRes MOV (Proxy/LT/422/HQ/4444/XQ) или H.264 MP4, с уникальным номером и MP4-превью для браузера. Кадры читаются по одному из RAM, VRAM или дискового кэша. Подключите Projector.fps к frame_rate. Ноды ввода/вывода работают без звука.
+
+Выходы: `video_path`, `video_json`.
+
+Guide: [GUIDE_VIDEO_IO.md](guides/GUIDE_VIDEO_IO.md).
+
 ## Select Video Frames
 
+Для чтения файла с выбором диапазона используйте новый Load Source Video (ALEXZ). Эта отдельная нода остаётся для выбора из уже готового IMAGE-батча.
+
 Нода `VideoFrameSelect` выбирает весь входной ролик, отдельный кадр или диапазон с нумерацией от нуля и включительным концом. Кнопка Load and calculate frame запускает только загрузчик и селектор; информация о ролике видна сверху, ниже показываются только параметры выбранного режима. Выходы: `image`, `total_frames`, `selected_frames`, `selection_json`. Используется перед Camera в поэтапном workflow.
+
+Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md).
+
+## Preview Middle Frame (ALEXZ)
+
+Показывает один средний кадр входного видео. Выход `images` передаёт весь батч без изменения. Обычные Preview Image, подключённые к выходам preview этапов Silent Film, автоматически используют этот режим: при bypass показывается кадр предыдущей работающей обработки, а не галерея всех кадров.
 
 Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md).
 
@@ -280,13 +304,15 @@ Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPE
 
 Для быстрого запуска ComfyUI с ALEXZ_tools, VideoHelperSuite, Manager и монитором ресурсов Crystools: `bash scripts/start_comfyui_dev.sh`. Подробности, порты и дополнительные пакеты — в [гайде dev-запуска](guides/GUIDE_DEV_COMFYUI.md). Обычный запуск и установка расширений не меняются.
 
-Поэтапный процесс: **Silent Film Camera → Silent Film Negative → Silent Film Print → Silent Film Projector**. Съёмка и оптика отделены от проявленного негатива, печати позитива и финальной проекции. Зерно двух эмульсий независимо, дефекты можно вставлять в IMAGE-связи между этапами. В примере один общий seed управляет всеми этапами; случайные последовательности разделены по этапу и эффекту. `film_json` сохраняет этап и сведения о кадрах; `Projector.fps` подключается к `Video Combine.frame_rate`.
+Поэтапный процесс: **Silent Film Camera → Silent Film Negative → Silent Film Print → Silent Film Projector**. Съёмка и оптика отделены от проявленного негатива, печати позитива и финальной проекции. Зерно двух эмульсий независимо, дефекты можно вставлять в IMAGE-связи между этапами. В примере один общий seed управляет всеми этапами; случайные последовательности разделены по этапу и эффекту. `film_json` сохраняет этап и сведения о кадрах; `Projector.fps` подключается к `Save Final Video.frame_rate`.
 
-Негатив представлен пропусканием плёнки, позитив действительно печатается с этого изображения. Модель художественная; отдельные ноды пыли и царапин пока не добавлены. Крупные IMAGE-батчи хранятся в свободной VRAM с запасом для вычислений либо во временном дисковом кэше `.alexz-video-cache/`; эффекты читают кадры порциями. Исходный загрузчик и сторонние ноды всё ещё могут требовать полного батча в RAM. Старые ноды и workflow сохранены.
+Негатив представлен пропусканием плёнки, позитив действительно печатается с этого изображения. Модель художественная; отдельные ноды пыли и царапин пока не добавлены. Крупные IMAGE-батчи хранятся в свободной VRAM с запасом для вычислений либо во временном дисковом кэше `.alexz-video-cache/`; эффекты читают кадры порциями. Сторонние загрузчики и ноды всё ещё могут требовать полного батча в RAM. Старые ноды и workflow сохранены.
 
 `film_json` у Negative, Print и Projector необязателен: без него этап работает по изображению и своим параметрам, начиная новую историю без сведений о каденсе Camera. Подключённый паспорт проверяется на соответствие этапу и форме батча.
 
-Каждый этап выдаёт `preview` со средним обработанным кадром выбранного отрезка. Для статической настройки выберите один кадр в Select Video Frames перед Camera; для динамики — диапазон. Переключателей processing_mode в этапах нет.
+Camera переводит цветной исходник в нейтральное ЧБ уже при съёмке, с сохранением альфы. Negative формирует плотность и зерно плёнки; тонировка остаётся в Print. Поэтому при bypass Negative и Print выход Camera остаётся чёрно-белым.
+
+Каждый этап выдаёт `preview` со средним обработанным кадром выбранного отрезка. Для статической настройки выберите один кадр в Load Source Video перед Camera; для динамики — диапазон. Переключателей processing_mode в этапах нет.
 
 Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md). Пример: [Видео-в-Хронику-по-этапам.json](workflows/Видео-в-Хронику-по-этапам.json).
 

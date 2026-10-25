@@ -4,177 +4,26 @@
   "nodes": [
     {
       "id": 1,
-      "type": "VHS_LoadVideo",
+      "type": "VideoLoadSource",
       "pos": [
         0,
         0
       ],
       "size": [
-        394.1050131297303,
-        605.0789002391824
+        430,
+        360
       ],
       "flags": {},
       "order": 1,
       "mode": 0,
       "inputs": [
         {
-          "localized_name": "meta_batch",
-          "name": "meta_batch",
-          "shape": 7,
-          "type": "VHS_BatchManager",
-          "link": null
-        },
-        {
-          "localized_name": "vae",
-          "name": "vae",
-          "shape": 7,
-          "type": "VAE",
-          "link": null
-        },
-        {
-          "localized_name": "video",
-          "name": "video",
-          "type": "COMBO",
+          "name": "video_path",
+          "type": "STRING",
           "widget": {
-            "name": "video"
+            "name": "video_path"
           },
           "link": null
-        },
-        {
-          "localized_name": "force_rate",
-          "name": "force_rate",
-          "type": "FLOAT",
-          "widget": {
-            "name": "force_rate"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "custom_width",
-          "name": "custom_width",
-          "type": "INT",
-          "widget": {
-            "name": "custom_width"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "custom_height",
-          "name": "custom_height",
-          "type": "INT",
-          "widget": {
-            "name": "custom_height"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "frame_load_cap",
-          "name": "frame_load_cap",
-          "type": "INT",
-          "widget": {
-            "name": "frame_load_cap"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "skip_first_frames",
-          "name": "skip_first_frames",
-          "type": "INT",
-          "widget": {
-            "name": "skip_first_frames"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "select_every_nth",
-          "name": "select_every_nth",
-          "type": "INT",
-          "widget": {
-            "name": "select_every_nth"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "format",
-          "name": "format",
-          "shape": 7,
-          "type": "COMBO",
-          "widget": {
-            "name": "format"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "localized_name": "IMAGE",
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            1
-          ]
-        },
-        {
-          "localized_name": "frame_count",
-          "name": "frame_count",
-          "type": "INT",
-          "links": null
-        },
-        {
-          "localized_name": "audio",
-          "name": "audio",
-          "type": "AUDIO",
-          "links": null
-        },
-        {
-          "localized_name": "video_info",
-          "name": "video_info",
-          "type": "VHS_VIDEOINFO",
-          "links": null
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-videohelpersuite",
-        "ver": "4d907bee61e92c2e65af3bd6383a4e4d356126d1",
-        "Node name for S&R": "VHS_LoadVideo",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.8"
-        }
-      },
-      "widgets_values": {
-        "video": "kling_20261024_VIDEO_Use__Image_2219_0.mp4",
-        "force_rate": 0,
-        "custom_width": 0,
-        "custom_height": 0,
-        "frame_load_cap": 0,
-        "skip_first_frames": 0,
-        "select_every_nth": 1,
-        "format": "AnimateDiff",
-        "choose video to upload": "image"
-      }
-    },
-    {
-      "id": 12,
-      "type": "VideoFrameSelect",
-      "pos": [
-        470,
-        0
-      ],
-      "size": [
-        410,
-        330
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "title": "Выбор исходных кадров",
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 1
         },
         {
           "name": "selection_mode",
@@ -219,34 +68,56 @@
           ]
         },
         {
-          "name": "total_frames",
-          "type": "INT",
+          "name": "fps",
+          "type": "FLOAT",
           "slot_index": 1,
           "links": null
         },
         {
-          "name": "selected_frames",
+          "name": "total_frames",
           "type": "INT",
           "slot_index": 2,
           "links": null
         },
         {
-          "name": "selection_json",
-          "type": "STRING",
+          "name": "selected_frames",
+          "type": "INT",
           "slot_index": 3,
+          "links": null
+        },
+        {
+          "name": "video_json",
+          "type": "STRING",
+          "slot_index": 4,
+          "links": null
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 5,
           "links": null
         }
       ],
       "properties": {
-        "Node name for S&R": "VideoFrameSelect"
+        "cnr_id": "comfyui-videohelpersuite",
+        "ver": "4d907bee61e92c2e65af3bd6383a4e4d356126d1",
+        "Node name for S&R": "VHS_LoadVideo",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
       },
       "widgets_values": [
+        "kling_20261024_VIDEO_Use__Image_2219_0.mp4",
         "full_video",
         120,
         0,
         -1
       ],
+      "title": "Исходное видео и выбор кадров",
       "widgets_values_named": {
+        "video_path": "kling_20261024_VIDEO_Use__Image_2219_0.mp4",
         "selection_mode": "full_video",
         "frame_index": 120,
         "start_frame": 0,
@@ -257,7 +128,7 @@
       "id": 2,
       "type": "VideoSilentFilmCamera",
       "pos": [
-        940,
+        470,
         0
       ],
       "size": [
@@ -515,7 +386,7 @@
       "id": 3,
       "type": "VideoSilentFilmNegative",
       "pos": [
-        1410,
+        940,
         0
       ],
       "size": [
@@ -678,7 +549,7 @@
       "id": 4,
       "type": "VideoSilentFilmPrint",
       "pos": [
-        1880,
+        1410,
         0
       ],
       "size": [
@@ -861,7 +732,7 @@
       "id": 5,
       "type": "VideoSilentFilmProjector",
       "pos": [
-        2350,
+        1880,
         0
       ],
       "size": [
@@ -1048,48 +919,25 @@
     },
     {
       "id": 6,
-      "type": "VHS_VideoCombine",
+      "type": "VideoSaveFinal",
       "pos": [
-        2820,
+        2350,
         0
       ],
       "size": [
-        476.66668701171875,
-        690.5000152587891
+        430,
+        540
       ],
       "flags": {},
       "order": 6,
       "mode": 0,
       "inputs": [
         {
-          "localized_name": "images",
-          "name": "images",
+          "name": "image",
           "type": "IMAGE",
           "link": 8
         },
         {
-          "localized_name": "audio",
-          "name": "audio",
-          "shape": 7,
-          "type": "AUDIO",
-          "link": null
-        },
-        {
-          "localized_name": "meta_batch",
-          "name": "meta_batch",
-          "shape": 7,
-          "type": "VHS_BatchManager",
-          "link": null
-        },
-        {
-          "localized_name": "vae",
-          "name": "vae",
-          "shape": 7,
-          "type": "VAE",
-          "link": null
-        },
-        {
-          "localized_name": "frame_rate",
           "name": "frame_rate",
           "type": "FLOAT",
           "widget": {
@@ -1098,16 +946,6 @@
           "link": 9
         },
         {
-          "localized_name": "loop_count",
-          "name": "loop_count",
-          "type": "INT",
-          "widget": {
-            "name": "loop_count"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "filename_prefix",
           "name": "filename_prefix",
           "type": "STRING",
           "widget": {
@@ -1116,40 +954,10 @@
           "link": null
         },
         {
-          "localized_name": "format",
           "name": "format",
           "type": "COMBO",
           "widget": {
             "name": "format"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "pingpong",
-          "name": "pingpong",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "pingpong"
-          },
-          "link": null
-        },
-        {
-          "localized_name": "save_output",
-          "name": "save_output",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "save_output"
-          },
-          "link": null
-        },
-        {
-          "name": "pix_fmt",
-          "type": [
-            "yuv420p",
-            "yuv420p10le"
-          ],
-          "widget": {
-            "name": "pix_fmt"
           },
           "link": null
         },
@@ -1162,27 +970,25 @@
           "link": null
         },
         {
-          "name": "save_metadata",
+          "name": "create_preview",
           "type": "BOOLEAN",
           "widget": {
-            "name": "save_metadata"
-          },
-          "link": null
-        },
-        {
-          "name": "trim_to_audio",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "trim_to_audio"
+            "name": "create_preview"
           },
           "link": null
         }
       ],
       "outputs": [
         {
-          "localized_name": "Filenames",
-          "name": "Filenames",
-          "type": "VHS_FILENAMES",
+          "name": "video_path",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": null
+        },
+        {
+          "name": "video_json",
+          "type": "STRING",
+          "slot_index": 1,
           "links": null
         }
       ],
@@ -1197,24 +1003,27 @@
           "version": "7.8"
         }
       },
-      "widgets_values": {
+      "widgets_values": [
+        25,
+        "ALEXZ/SilentFilm",
+        "prores_422_hq",
+        19,
+        true
+      ],
+      "title": "Финальная сборка ProRes / MP4",
+      "widgets_values_named": {
         "frame_rate": 25,
-        "loop_count": 0,
-        "filename_prefix": "AnimateDiff",
-        "format": "video/h264-mp4",
-        "pix_fmt": "yuv420p",
+        "filename_prefix": "ALEXZ/SilentFilm",
+        "format": "prores_422_hq",
         "crf": 19,
-        "save_metadata": true,
-        "trim_to_audio": false,
-        "pingpong": false,
-        "save_output": true
+        "create_preview": true
       }
     },
     {
       "id": 7,
       "type": "PrimitiveInt",
       "pos": [
-        940,
+        470,
         -230
       ],
       "size": [
@@ -1264,7 +1073,7 @@
       "id": 8,
       "type": "PreviewImage",
       "pos": [
-        940,
+        470,
         1020
       ],
       "size": [
@@ -1292,7 +1101,7 @@
       "id": 9,
       "type": "PreviewImage",
       "pos": [
-        1410,
+        940,
         1020
       ],
       "size": [
@@ -1320,7 +1129,7 @@
       "id": 10,
       "type": "PreviewImage",
       "pos": [
-        1880,
+        1410,
         1020
       ],
       "size": [
@@ -1348,7 +1157,7 @@
       "id": 11,
       "type": "PreviewImage",
       "pos": [
-        2350,
+        1880,
         1020
       ],
       "size": [
@@ -1374,14 +1183,6 @@
     }
   ],
   "links": [
-    [
-      1,
-      1,
-      0,
-      12,
-      0,
-      "IMAGE"
-    ],
     [
       2,
       2,
@@ -1443,7 +1244,7 @@
       5,
       1,
       6,
-      4,
+      1,
       "FLOAT"
     ],
     [
@@ -1512,7 +1313,7 @@
     ],
     [
       18,
-      12,
+      1,
       0,
       2,
       0,
@@ -1528,7 +1329,8 @@
         80,
         80
       ]
-    }
+    },
+    "alexz_project_workflow": "Видео-в-Хронику-по-этапам.json"
   },
   "version": 0.4
 }

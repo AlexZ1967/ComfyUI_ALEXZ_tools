@@ -25,13 +25,25 @@ const CONVERTED_WIDGET_TYPE = "converted-widget";
 const VISIBILITY_PROFILES = [
     {
         id: "video_frame_selection_params",
-        targetNodes: ["VideoFrameSelect"],
+        targetNodes: ["VideoFrameSelect", "VideoLoadSource"],
         controllerWidget: "selection_mode",
         groups: { frame: ["frame_index"], range: ["start_frame", "end_frame"] },
         modes: {
             full_video: { showGroups: [] },
             single_frame: { showGroups: ["frame"] },
             frame_range: { showGroups: ["range"] },
+        },
+    },
+    {
+        id: "video_export_crf",
+        targetNodes: ["VideoSaveFinal"],
+        controllerWidget: "format",
+        groups: { h264: ["crf"] },
+        modes: {
+            h264_mp4: { showGroups: ["h264"] },
+            prores_422_hq: { showGroups: [] }, prores_422: { showGroups: [] },
+            prores_422_lt: { showGroups: [] }, prores_422_proxy: { showGroups: [] },
+            prores_4444: { showGroups: [] }, prores_4444_xq: { showGroups: [] },
         },
     },
     {

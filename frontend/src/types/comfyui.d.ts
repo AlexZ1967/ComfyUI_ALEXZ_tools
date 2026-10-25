@@ -24,3 +24,7 @@ declare module "*scripts/api.js" {
     [key: string]: unknown;
   };
 }
+
+declare module "*scripts/widgets.js" {
+  export const ComfyWidgets: unknown;
+}
