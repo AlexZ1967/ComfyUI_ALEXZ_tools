@@ -13,7 +13,11 @@ function isFilmPreview(node) {
         const source = node.graph?.getNodeById(link.origin_id);
         if (!source || seen.has(source.id)) return false;
         seen.add(source.id);
-        if (FILM_STAGES.has(source.comfyClass ?? source.type)) return source.outputs?.[link.origin_slot]?.name === "preview";
+        const sourceType = source.comfyClass ?? source.type;
+        if (FILM_STAGES.has(sourceType)) {
+            const outputName = source.outputs?.[link.origin_slot]?.name;
+            return outputName === "preview" || (sourceType === "VideoSilentFilmNegative" && outputName === "preview_positive");
+        }
         if (source.type !== "Reroute") return false;
         link = source.getInputLink?.(0);
     }

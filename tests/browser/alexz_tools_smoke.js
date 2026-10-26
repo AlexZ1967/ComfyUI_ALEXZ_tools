@@ -1,5 +1,10 @@
 /** Run read-only frontend smoke checks using the Page supplied by Playwright MCP. */
-async (page) => {
+async (sharedPage) => {
+    // Каждая проверка получает чистое хранилище браузера и не оставляет вкладки workflow.
+    const isolatedContext = await sharedPage.context().browser().newContext();
+    let result;
+    try {
+        result = await (async (page) => {
     const baseURL = "http://127.0.0.1:8188";
     const extensionPath = "/extensions/ComfyUI_ALEXZ_tools/";
     const moduleName = "ComfyUI_ALEXZ_tools";
@@ -134,7 +139,7 @@ async (page) => {
             const pickerButton = page.getByTestId("alexz-module-nodes-tab-button");
             const nodesMapButton = page.getByRole("button", { name: "NodesMap", exact: true });
             const pngInfoButton = page.getByRole("button", { name: "PNG Info", exact: true });
-            const appsButton = page.getByRole("button", { name: "Apps", exact: true });
+            const appsButton = page.getByTestId("apps-tab-button");
             const doctorButton = page.getByTestId("comfyui-doctor-tab-button");
             const picker = page.locator(".alexz-mod-picker");
             const nodesMap = page.locator(".comfyui-easyuse-map");
@@ -274,4 +279,11 @@ async (page) => {
     report.backgroundErrors = report.backgroundErrors.slice(0, 5);
     report.extensionFiles = report.extensionFiles?.length || 0;
     return report;
+        })(await isolatedContext.newPage());
+    } finally {
+        await isolatedContext.close();
+    }
+    result.browserContextClosed = true;
+    await sharedPage.evaluate(report => console.log("ALEXZ_BROWSER_SMOKE " + JSON.stringify(report)), result);
+    return result;
 }

@@ -23,6 +23,7 @@ js-check-all:
 
 js-test:
 	$(CONDA_RUN) node tests/js/test_silent_film_preview.mjs
+	$(CONDA_RUN) node tests/js/test_silent_film_emulsion.mjs
 	$(CONDA_RUN) node tests/js/test_video_io.mjs
 	$(CONDA_RUN) node tests/js/test_workflow_file_save.mjs
 	$(CONDA_RUN) node tests/js/test_video_frame_select.mjs
