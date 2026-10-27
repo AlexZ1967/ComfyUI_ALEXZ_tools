@@ -78,13 +78,18 @@ var fileSaver = new WorkflowFileSaver({
   }
 });
 var nativeStatus = null;
+var nativeStatusText = "\u041F\u043E\u0441\u043B\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0444\u0430\u0439\u043B \u043D\u0443\u0436\u043D\u043E \u0432\u044B\u0431\u0440\u0430\u0442\u044C \u0437\u0430\u043D\u043E\u0432\u043E. \u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u0432 workflows \u043F\u0440\u043E\u0435\u043A\u0442\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E \u043D\u0438\u0436\u0435.";
+function setNativeStatus(text) {
+  nativeStatusText = text;
+  if (nativeStatus?.isConnected) nativeStatus.textContent = text;
+}
 async function saveNative(saveAs) {
   try {
     const result = await fileSaver.save(saveAs);
-    if (nativeStatus?.isConnected) nativeStatus.textContent = result.cancelled ? "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E, \u0444\u0430\u0439\u043B\u044B \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u044B." : `\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E: ${result.filename}`;
+    setNativeStatus(result.cancelled ? "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043E\u0442\u043C\u0435\u043D\u0435\u043D\u043E, \u0444\u0430\u0439\u043B\u044B \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u044B." : `\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E: ${result.filename}`);
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
-    if (nativeStatus?.isConnected) nativeStatus.textContent = text;
+    if (nativeStatus?.isConnected) setNativeStatus(text);
     else window.alert(text);
   }
 }
@@ -263,7 +268,7 @@ app.registerExtension({
         const status = document.createElement("p");
         status.setAttribute("role", "status");
         status.setAttribute("aria-live", "polite");
-        status.textContent = "\u041F\u043E\u0441\u043B\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0444\u0430\u0439\u043B \u043D\u0443\u0436\u043D\u043E \u0432\u044B\u0431\u0440\u0430\u0442\u044C \u0437\u0430\u043D\u043E\u0432\u043E. \u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u0432 workflows \u043F\u0440\u043E\u0435\u043A\u0442\u0430 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E \u043D\u0438\u0436\u0435.";
+        status.textContent = nativeStatusText;
         nativeStatus = status;
         const button = document.createElement("button");
         button.type = "button";

@@ -31,15 +31,22 @@ const fileSaver = new WorkflowFileSaver({
     },
 });
 let nativeStatus: HTMLElement | null = null;
+let nativeStatusText = "После обновления страницы файл нужно выбрать заново. Сохранение в workflows проекта доступно отдельно ниже.";
+
+/** Keep the selected file status when ComfyUI recreates the sidebar panel. */
+function setNativeStatus(text: string): void {
+    nativeStatusText = text;
+    if (nativeStatus?.isConnected) nativeStatus.textContent = text;
+}
 
 /** Keep the native picker in the original click handler, before any asynchronous preparation. */
 async function saveNative(saveAs: boolean): Promise<void> {
     try {
         const result = await fileSaver.save(saveAs);
-        if (nativeStatus?.isConnected) nativeStatus.textContent = result.cancelled ? "Сохранение отменено, файлы не изменены." : `Сохранено: ${result.filename}`;
+        setNativeStatus(result.cancelled ? "Сохранение отменено, файлы не изменены." : `Сохранено: ${result.filename}`);
     } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
-        if (nativeStatus?.isConnected) nativeStatus.textContent = text;
+        if (nativeStatus?.isConnected) setNativeStatus(text);
         else window.alert(text);
     }
 }
@@ -215,7 +222,7 @@ app.registerExtension({
                 const status = document.createElement("p");
                 status.setAttribute("role", "status");
                 status.setAttribute("aria-live", "polite");
-                status.textContent = "После обновления страницы файл нужно выбрать заново. Сохранение в workflows проекта доступно отдельно ниже.";
+                status.textContent = nativeStatusText;
                 nativeStatus = status;
                 const button = document.createElement("button");
                 button.type = "button";

@@ -56,6 +56,11 @@ await saver.save(true);
 assert.equal(calls[2].startIn, files[0]);
 assert.equal(calls[2].suggestedName, "Фильм.json");
 assert.equal(JSON.parse(files[2].state.text).nodes[0].value, 2);
+value = 3;
+await saver.save();
+assert.equal(calls.length, 3);
+assert.equal(JSON.parse(files[2].state.text).nodes[0].value, 3);
+assert.equal(files[0].state.text, "external");
 
 let serializeCount = 0;
 const cancelled = new WorkflowFileSaver({
