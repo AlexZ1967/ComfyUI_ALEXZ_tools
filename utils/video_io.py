@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from fractions import Fraction
 from functools import lru_cache
 import json
+import logging
 import math
 from pathlib import Path
 import shutil
@@ -17,6 +18,7 @@ from tqdm import tqdm
 
 from .video_memory import allocate_video, release_video_pages
 
+_LOGGER = logging.getLogger("ALEXZ.VideoIO")
 PRORES_PROFILES = {"prores_422_proxy": 0, "prores_422_lt": 1, "prores_422": 2,
                    "prores_422_hq": 3, "prores_4444": 4, "prores_4444_xq": 5}
 VIDEO_FORMATS = ["prores_422_hq", "prores_422", "prores_422_lt", "prores_422_proxy", "prores_4444", "prores_4444_xq", "h264_mp4"]
@@ -192,6 +194,22 @@ def check_interrupt():
     throw_exception_if_processing_interrupted()
 
 
+@lru_cache(maxsize=1)
+def _h264_nvenc_available():
+    """Check that FFmpeg can initialize the installed NVIDIA H.264 encoder."""
+    if not torch.cuda.is_available():
+        return False
+    command = [tool("ffmpeg"), "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+               "color=c=black:s=64x64:d=0.04", "-frames:v", "1", "-c:v", "h264_nvenc",
+               "-preset", "p5", "-f", "null", "-"]
+    try:
+        result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
 def decode_frames(path, info, start, end):
     """Decode only the selected output frames into a bounded ordinary IMAGE destination."""
     count, height, width, channels = end - start + 1, info["height"], info["width"], info["channels"]
@@ -217,7 +235,7 @@ def decode_frames(path, info, start, end):
 
 
 def encode_frames(images, path, fps, video_format, crf=18):
-    """Write one CPU frame at a time without copying an entire CUDA or mapped batch."""
+    """Stream frames to FFmpeg, using NVENC for CUDA-resident H.264 when available."""
     if video_format not in VIDEO_FORMATS:
         raise ValueError("Неизвестный формат видео.")
     height, width, channels = images.shape[1:]
@@ -228,8 +246,17 @@ def encode_frames(images, path, fps, video_format, crf=18):
     rate = str(Fraction(str(float(fps))).limit_denominator(1001000))
     arguments = ["-y", "-f", "rawvideo", "-pixel_format", pixel_format, "-video_size", f"{width}x{height}", "-framerate", rate, "-i", "pipe:0", "-an"]
     if video_format == "h264_mp4":
-        arguments += ["-c:v", "libx264", "-preset", "medium", "-crf", str(crf), "-pix_fmt", "yuv420p", "-f", "mp4"]
+        use_nvenc = images.device.type == "cuda" and _h264_nvenc_available()
+        if use_nvenc:
+            _LOGGER.info("[Save Final Video] H.264: NVENC на GPU; кадры передаются FFmpeg по одному.")
+            arguments += ["-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq", "-rc", "vbr",
+                          "-cq", str(crf), "-b:v", "0", "-pix_fmt", "yuv420p", "-f", "mp4"]
+        else:
+            if images.device.type == "cuda":
+                _LOGGER.info("[Save Final Video] NVENC недоступен; H.264 кодируется на CPU через libx264.")
+            arguments += ["-c:v", "libx264", "-preset", "medium", "-crf", str(crf), "-pix_fmt", "yuv420p", "-f", "mp4"]
     else:
+        _LOGGER.info("[Save Final Video] ProRes кодируется на CPU через prores_ks.")
         arguments += ["-c:v", "prores_ks", "-profile:v", str(PRORES_PROFILES[video_format]), "-pix_fmt", "yuva444p10le" if preserve_alpha else "yuv444p10le" if PRORES_PROFILES[video_format] >= 4 else "yuv422p10le", "-vendor", "apl0", "-f", "mov"]
     arguments += ["-vf", "scale=in_range=full:out_range=tv:out_color_matrix=bt709", "-threads", "4", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", "-movflags", "+faststart", str(path)]
     with ffmpeg_process(arguments, writing=True) as process:
@@ -248,7 +275,13 @@ def encode_frames(images, path, fps, video_format, crf=18):
 
 def make_preview(path, target):
     """Create a browser-playable MP4 proxy without changing the ProRes master file."""
-    arguments = ["-y", "-threads", "2", "-i", str(path), "-map", "0:v:0", "-an", "-vf", "scale=trunc(min(960\\,iw)/2)*2:-2",
-                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-threads", "2", "-movflags", "+faststart", str(target)]
+    arguments = ["-y", "-threads", "2", "-i", str(path), "-map", "0:v:0", "-an",
+                 "-vf", "scale=trunc(min(960\\,iw)/2)*2:-2"]
+    if _h264_nvenc_available():
+        _LOGGER.info("[Save Final Video] MP4-превью кодируется NVENC на GPU.")
+        arguments += ["-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq", "-rc", "vbr", "-cq", "23", "-b:v", "0"]
+    else:
+        arguments += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"]
+    arguments += ["-pix_fmt", "yuv420p", "-threads", "2", "-movflags", "+faststart", str(target)]
     with ffmpeg_process(arguments, writing=True):
         pass

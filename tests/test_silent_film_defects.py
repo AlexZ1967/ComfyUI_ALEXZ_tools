@@ -42,7 +42,9 @@ def test_disabled_effect_reuses_batch_and_preserves_material(defects, name):
     assert output[0].data_ptr() == source.data_ptr()
     assert torch.equal(output[0], source)
     assert output[2].shape == (1, 17, 29, 4)
+    assert output[2].untyped_storage().data_ptr() == source.untyped_storage().data_ptr()
     assert output[3].shape == (1, 17, 29, 3) and output[3].count_nonzero() == 0
+    assert output[3].untyped_storage().nbytes() == torch.empty((), dtype=torch.float32).element_size()
     data = json.loads(output[1])
     assert data["stage"] == "camera" and data["history"] == json.loads(meta)["history"]
     assert data["defect_history"][-1]["enabled"] is False

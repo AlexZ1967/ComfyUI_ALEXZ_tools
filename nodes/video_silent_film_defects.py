@@ -35,15 +35,22 @@ def _read_metadata(text, images):
     return data
 
 
+def _validate_frame_ids(meta, count, screen_space=False):
+    """Validate optional cadence identities without allocating a per-frame list."""
+    cadence = meta.get("cadence") if meta else None
+    ids = cadence.get("output_group_ids") if isinstance(cadence, dict) and not screen_space else None
+    if ids is not None and (not isinstance(ids, list) or len(ids) != count
+                            or any(type(value) is not int or value < 0 for value in ids)):
+        raise ValueError("film_json: output_group_ids должны содержать номер каждого физического кадра.")
+
+
 def _frame_ids(meta, count, offset, screen_space=False):
     """Reuse physical film identities for repeated frames and local indices otherwise."""
+    _validate_frame_ids(meta, count, screen_space)
     cadence = meta.get("cadence") if meta else None
     ids = cadence.get("output_group_ids") if isinstance(cadence, dict) and not screen_space else None
     if ids is None:
         ids = range(count)
-    elif (not isinstance(ids, list) or len(ids) != count
-          or any(type(value) is not int or value < 0 for value in ids)):
-        raise ValueError("film_json: output_group_ids должны содержать номер каждого физического кадра.")
     return [value + offset for value in ids]
 
 
@@ -131,60 +138,68 @@ class _DefectNode:
             raise ValueError("image: ширина и высота должны быть положительными.")
         meta = _read_metadata(film_json, images)
         settings = _validate_parameters(type(self), parameters)
-        frames = _frame_ids(meta, len(images), settings["frame_offset"], self.MATERIAL == "projector")
-        seed = pipeline._effect_seed(settings["seed"], "defects", type(self).__name__)
         negative = self.MATERIAL in ("negative", "printing")
-        transfer = "linear" if negative else pipeline._projection_transfer(meta or {"history": []})
         middle = len(images) // 2
-        mask_preview = torch.zeros((1, images.size(1), images.size(2), 1), dtype=torch.float32)
         enabled = settings["strength"] > 0 and settings.get("amount", 1) > 0
-
-        def operation(chunk, start, end):
-            """Build only current-frame masks and preserve the original alpha channel."""
-            nonlocal mask_preview
-            result = torch.empty_like(chunk)
-            for local, index in enumerate(range(start, end)):
-                pipeline.check_interrupt()
-                rgb = chunk[local:local + 1, ..., :3]
-                height, width = rgb.shape[1:3]
-                linear = sensitometry.decode_transfer(rgb, transfer)
-                if self.KIND == "development":
-                    field = masks.development_field(height, width, frames[index], seed, settings["pattern"],
-                        settings["size"], settings["persistence_frames"], settings["irregularity"], chunk.device)
-                    density = settings["strength"] * (0.35 * field + 0.3 * settings["fog_strength"] * (field + 1) / 2)
-                    linear = linear * torch.pow(10.0, -density[None, ..., None])
-                    coverage = density.abs().clamp(0, 1)
-                else:
-                    layers = masks.surface_masks(height, width, frames[index], seed, settings["pattern"],
-                        settings["amount"], settings["size"], settings["persistence_frames"],
-                        settings["irregularity"], settings["edge_bias"], self.KIND == "gate", chunk.device)
-                    combined = torch.stack(tuple(layers.values())).amax(0)
-                    coverage = combined * settings["strength"]
-                    if self.KIND == "gate":
-                        if settings.get("softness", 0):
-                            coverage = projection_glow(coverage[None, ..., None], 1, settings["softness"])[0, ..., 0].clamp(0, 1)
-                        linear = linear * (1 - coverage[None, ..., None])
-                    elif settings["damage_type"] == "emulsion_loss":
-                        loss = torch.maximum(layers["scratches"], layers["stains"])[None, ..., None] * settings["strength"]
-                        clear = 10 ** -sensitometry.NEGATIVE_BASE if negative else 1.0
-                        linear = linear + (linear.clamp_min(clear) - linear) * loss
-                        linear = linear * (1 - layers["dust"][None, ..., None] * settings["strength"])
-                    else:
-                        density_scale = 1.5 if settings["damage_type"] == "dirty" else 0.65
-                        linear = linear * torch.pow(10.0, -density_scale * coverage[None, ..., None])
-                rgb = sensitometry.encode_transfer(linear.clamp(0, 1), transfer).clamp(0, 1)
-                result[local:local + 1] = pipeline._rgb_alpha(rgb, chunk[local:local + 1])
-                if index == middle:
-                    mask_preview = coverage.detach().to(device="cpu")[None, ..., None].clone()
-            return result
+        if not enabled:
+            _validate_frame_ids(meta, len(images), self.MATERIAL == "projector")
 
         if enabled:
+            frames = _frame_ids(meta, len(images), settings["frame_offset"], self.MATERIAL == "projector")
+            seed = pipeline._effect_seed(settings["seed"], "defects", type(self).__name__)
+            transfer = "linear" if negative else pipeline._projection_transfer(meta or {"history": []})
+            mask_preview = torch.zeros((1, images.size(1), images.size(2), 1), dtype=torch.float32)
+
+            def operation(chunk, start, end):
+                """Build only current-frame masks and preserve the original alpha channel."""
+                nonlocal mask_preview
+                result = torch.empty_like(chunk)
+                for local, index in enumerate(range(start, end)):
+                    pipeline.check_interrupt()
+                    rgb = chunk[local:local + 1, ..., :3]
+                    height, width = rgb.shape[1:3]
+                    linear = sensitometry.decode_transfer(rgb, transfer)
+                    if self.KIND == "development":
+                        field = masks.development_field(height, width, frames[index], seed, settings["pattern"],
+                            settings["size"], settings["persistence_frames"], settings["irregularity"], chunk.device)
+                        density = settings["strength"] * (0.35 * field + 0.3 * settings["fog_strength"] * (field + 1) / 2)
+                        linear = linear * torch.pow(10.0, -density[None, ..., None])
+                        coverage = density.abs().clamp(0, 1)
+                    else:
+                        layers = masks.surface_masks(height, width, frames[index], seed, settings["pattern"],
+                            settings["amount"], settings["size"], settings["persistence_frames"],
+                            settings["irregularity"], settings["edge_bias"], self.KIND == "gate", chunk.device)
+                        combined = torch.stack(tuple(layers.values())).amax(0)
+                        coverage = combined * settings["strength"]
+                        if self.KIND == "gate":
+                            if settings.get("softness", 0):
+                                coverage = projection_glow(coverage[None, ..., None], 1, settings["softness"])[0, ..., 0].clamp(0, 1)
+                            linear = linear * (1 - coverage[None, ..., None])
+                        elif settings["damage_type"] == "emulsion_loss":
+                            loss = torch.maximum(layers["scratches"], layers["stains"])[None, ..., None] * settings["strength"]
+                            clear = 10 ** -sensitometry.NEGATIVE_BASE if negative else 1.0
+                            linear = linear + (linear.clamp_min(clear) - linear) * loss
+                            linear = linear * (1 - layers["dust"][None, ..., None] * settings["strength"])
+                        else:
+                            density_scale = 1.5 if settings["damage_type"] == "dirty" else 0.65
+                            linear = linear * torch.pow(10.0, -density_scale * coverage[None, ..., None])
+                    rgb = sensitometry.encode_transfer(linear.clamp(0, 1), transfer).clamp(0, 1)
+                    result[local:local + 1] = pipeline._rgb_alpha(rgb, chunk[local:local + 1])
+                    if index == middle:
+                        mask_preview = coverage.detach().to(device="cpu")[None, ..., None].clone()
+                return result
+
             _LOGGER.info("[%s] План: рисунок дефектов → материал %s → средний кадр; сила %.3f, масштаб %.3f%% ширины.",
                          self.LABEL, self.MATERIAL, settings["strength"], settings["size"])
             output = pipeline._run_stage(images, self.LABEL, settings["compute_device"], settings["batch_size"], operation)
+            preview = pipeline._preview_frame(output)
+            mask_output = mask_preview.expand(-1, -1, -1, 3)
         else:
             _LOGGER.info("[%s] Выключено: передача входного батча без обработки.", self.LABEL)
             output = images
+            # Bypass returns the source storage and a view of its middle frame.
+            preview = images[middle:middle + 1]
+            mask_output = torch.zeros((1, 1, 1, 1), dtype=torch.float32).expand(1, images.size(1), images.size(2), 3)
         if meta is not None:
             meta = copy.deepcopy(meta)
             meta.setdefault("defect_history", []).append({"node": type(self).__name__, "model": _MODEL,
@@ -192,8 +207,7 @@ class _DefectNode:
             output_meta = json.dumps(meta, ensure_ascii=False)
         else:
             output_meta = ""
-        preview = pipeline._preview_frame(output)
-        values = (output, output_meta, preview, mask_preview.expand(-1, -1, -1, 3))
+        values = (output, output_meta, preview, mask_output)
         if negative:
             display_transfer = pipeline._print_transfer("from_negative", meta or {"history": []})
             positive = sensitometry.reference_positive(preview[..., :3].clamp(0, 1), display_transfer)
