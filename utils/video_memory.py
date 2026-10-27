@@ -16,9 +16,19 @@ _LOGGER = logging.getLogger("SilentFilmMemory")
 DISK_THRESHOLD = 256 * 1024**2
 RAM_RESERVE = 512 * 1024**2
 HOST_RESERVE = 4 * 1024**3
+RESERVATION_CHUNK_BYTES = 64 * 1024**2
 CACHE_DIRECTORY = Path(os.environ.get("ALEXZ_VIDEO_CACHE_DIR", str(
-    (Path("/mnt/work") if Path("/mnt/work").is_dir() else Path(tempfile.gettempdir())) / "alexz-video-cache"))).expanduser()
+    (Path("/mnt/comfy") if Path("/mnt/comfy").is_dir() else Path(tempfile.gettempdir())) / "alexz-video-cache"))).expanduser()
 _MAPPINGS = {}
+
+
+def check_interrupt():
+    """Honor the installed ComfyUI cancellation flag between bounded operations."""
+    try:
+        from comfy.model_management import throw_exception_if_processing_interrupted
+    except ImportError:
+        return
+    throw_exception_if_processing_interrupted()
 
 
 def available_ram():
@@ -48,6 +58,15 @@ def available_vram(device):
     return free + torch.cuda.memory_reserved(device) - torch.cuda.memory_allocated(device)
 
 
+def host_work_bytes(shape, work_device, work_bytes):
+    """Reserve CPU workspace or CUDA transfer windows without counting GPU buffers twice."""
+    if work_device is not None and torch.device(work_device).type == "cuda":
+        frame = video_bytes(shape[1:])
+        frames = max(1, math.ceil(work_bytes / max(1, math.prod(shape[1:3]) * 512)))
+        return min(shape[0], frames) * frame * 2
+    return work_bytes
+
+
 def _forget_mapping(address, reference):
     """Avoid retaining mappings after the last tensor or storage alias is released."""
     if _MAPPINGS.get(address) is reference:
@@ -59,7 +78,10 @@ def _reserve_file(file, size):
     reserve = getattr(os, "posix_fallocate", None)
     if reserve is not None:
         try:
-            reserve(file.fileno(), 0, size)
+            for offset in range(0, size, RESERVATION_CHUNK_BYTES):
+                check_interrupt()
+                reserve(file.fileno(), offset, min(RESERVATION_CHUNK_BYTES, size - offset))
+            check_interrupt()
             return
         except OSError as exc:
             if exc.errno not in {errno.EINVAL, errno.ENOSYS, errno.EOPNOTSUPP}:
@@ -67,13 +89,16 @@ def _reserve_file(file, size):
     block = bytes(min(size, 8 * 1024**2))
     remaining = size
     while remaining:
+        check_interrupt()
         remaining -= file.write(block[:min(remaining, len(block))])
     file.flush()
+    check_interrupt()
 
 
 def allocate_video(shape, *, dtype=torch.float32, device="cpu", label="Silent Film", work_device=None, work_bytes=0):
     """Prefer spare VRAM, then available host RAM, reserving disk only for the remainder."""
     device = torch.device(device)
+    check_interrupt()
     size = video_bytes(shape, dtype)
     target = torch.device(work_device) if work_device is not None else device
     if target.type == "cuda" and (size >= DISK_THRESHOLD or device.type == "cuda"):
@@ -84,12 +109,15 @@ def allocate_video(shape, *, dtype=torch.float32, device="cpu", label="Silent Fi
                 return output
             except torch.OutOfMemoryError:
                 _LOGGER.warning("[%s] VRAM изменилась при выделении выхода: проверяется RAM и дисковый кэш.", label)
-    if not use_disk(shape, dtype, work_bytes=work_bytes):
+    host_bytes = host_work_bytes(shape, target, work_bytes)
+    if not use_disk(shape, dtype, work_bytes=host_bytes):
         output = torch.empty(shape, dtype=dtype, device="cpu")
-        if size >= DISK_THRESHOLD:
+        if size >= 1024**2:
             _LOGGER.info("[%s] Выход: %.2f ГиБ в RAM; запас для системы и расчёта %.2f ГиБ.",
-                         label, size / 1024**3, max(HOST_RESERVE, work_bytes + RAM_RESERVE) / 1024**3)
+                         label, size / 1024**3, max(HOST_RESERVE, host_bytes + RAM_RESERVE) / 1024**3)
         return output
+    _LOGGER.info("[%s] Диск необходим: выход %.2f ГиБ, доступно RAM %.2f ГиБ, запас RAM %.2f ГиБ; подходящего места в VRAM нет.",
+                 label, size / 1024**3, available_ram() / 1024**3, max(HOST_RESERVE, host_bytes + RAM_RESERVE) / 1024**3)
     CACHE_DIRECTORY.mkdir(parents=True, exist_ok=True)
     free = shutil.disk_usage(CACHE_DIRECTORY).free
     if free < size + RAM_RESERVE:

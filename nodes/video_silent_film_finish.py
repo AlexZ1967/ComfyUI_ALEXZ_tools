@@ -23,7 +23,7 @@ import torch.nn.functional as F
 import psutil
 from tqdm import tqdm
 
-from ..utils.video_memory import allocate_video, release_video_pages, use_disk
+from ..utils.video_memory import allocate_video, release_video_pages, use_disk, check_interrupt
 
 
 _LOGGER = logging.getLogger("VideoSilentFilmFinish")
@@ -165,6 +165,7 @@ def _apply_variable_lens_blur(rgb, mask, maximum_sigma):
     levels.append(maximum_sigma)
     output = torch.zeros_like(rgb)
     for index, sigma in enumerate(levels):
+        check_interrupt()
         if index == 0:
             weight = (1.0 - sigma_map / levels[1]).clamp(0.0, 1.0)
         else:
@@ -493,6 +494,7 @@ def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int, *,
     if int(batch_size) != batch_size or not 1 <= batch_size <= 16:
         raise ValueError("batch_size must be an integer between 1 and 16.")
     frame_count, height, width, channels = images.shape
+    batch_size = min(int(batch_size), frame_count)
     output_bytes = frame_count * height * width * channels * 4
     reserve = 512 * 1024**2
     per_frame = height * width * 512
@@ -536,6 +538,14 @@ def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int, *,
         _LOGGER.warning("[%s] Недостаточно свободной VRAM: используется CPU.", label)
         return cpu_plan()
     return device, int(gpu_batch), cpu_batch
+
+
+def _cpu_fallback_size(images, requested):
+    """Recheck CPU workspace after an output may have consumed host RAM."""
+    size = min(requested, len(images), max(0, (_available_finish_ram() - 512 * 1024**2) // (images.size(1) * images.size(2) * 512)))
+    if size < 1:
+        raise MemoryError("Silent Film: после CUDA OOM недостаточно RAM для безопасного CPU fallback.")
+    return int(size)
 
 
 def _finish_chunk(images, gate_x, gate_y, focus_signal, exposure, parameters, frame_offset):
@@ -909,6 +919,7 @@ class VideoSilentFilmFinish:
         _LOGGER.info( "[Silent Film Finish] Этап 6/7: зерно %s; в каждой порции.", parameters["grain_mode"])
         with tqdm(total=frame_count, desc="[Silent Film Finish] Обработка", unit="кадр", dynamic_ncols=True, mininterval=0.5) as progress:
             while start < frame_count:
+                check_interrupt()
                 end = min(frame_count, start + current_batch_size)
                 result = None
                 try:
@@ -916,6 +927,7 @@ class VideoSilentFilmFinish:
                         images, start, end, work_device, gate_x, gate_y, focus_signal, exposure, parameters,
                     )
                     output[start:end].copy_(result)
+                    check_interrupt()
                     release_video_pages(output, start, end, written=True)
                     release_video_pages(images, start, end)
                 except torch.OutOfMemoryError:
@@ -929,7 +941,7 @@ class VideoSilentFilmFinish:
                         if cpu_batch_size < 1:
                             raise MemoryError("Silent Film Finish: после CUDA OOM недостаточно RAM для безопасного CPU fallback.")
                         work_device = torch.device("cpu")
-                        current_batch_size = cpu_batch_size
+                        current_batch_size = _cpu_fallback_size(images, cpu_batch_size)
                         _log_during_progress(logging.WARNING, "[Silent Film Finish] Один кадр не помещается в VRAM: остаток батча рассчитывается на CPU.")
                     continue
                 del result

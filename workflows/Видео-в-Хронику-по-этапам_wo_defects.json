@@ -1,0 +1,1133 @@
+{
+  "id": "d0e56323-234b-4727-b92b-a887019d0cd1",
+  "revision": 0,
+  "last_node_id": 17,
+  "last_link_id": 23,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "VideoLoadSource",
+      "pos": [
+        -153.16697695054012,
+        7.755286938874519
+      ],
+      "size": [
+        268.62693655187127,
+        429.9842608726607
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            18
+          ]
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "slot_index": 1,
+          "links": null
+        },
+        {
+          "name": "total_frames",
+          "type": "INT",
+          "slot_index": 2,
+          "links": null
+        },
+        {
+          "name": "selected_frames",
+          "type": "INT",
+          "slot_index": 3,
+          "links": null
+        },
+        {
+          "name": "video_json",
+          "type": "STRING",
+          "slot_index": 4,
+          "links": null
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 5,
+          "links": null
+        }
+      ],
+      "title": "Исходное видео и выбор кадров",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "4d907bee61e92c2e65af3bd6383a4e4d356126d1",
+        "Node name for S&R": "VHS_LoadVideo",
+        "cnr_id": "comfyui-videohelpersuite",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "alexz_video/Damy_na_skachkah_1.mp4",
+        "full_video",
+        110,
+        0,
+        -1
+      ],
+      "widgets_values_named": {
+        "video_path": "alexz_video/Damy_na_skachkah_1.mp4",
+        "selection_mode": "full_video",
+        "frame_index": 110,
+        "start_frame": 0,
+        "end_frame": -1
+      }
+    },
+    {
+      "id": 2,
+      "type": "VideoSilentFilmCamera",
+      "pos": [
+        224.02610770437323,
+        5.8164851734120475
+      ],
+      "size": [
+        410.0000124742286,
+        654.7388382968211
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 18
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            2
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            3
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            14
+          ]
+        }
+      ],
+      "title": "1. Съёмка — Camera",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "9898672d1f4c71731b5018b57174ac856b3d53f9",
+        "Node name for S&R": "VideoSilentFilmCamera"
+      },
+      "widgets_values": [
+        36,
+        16,
+        24,
+        1,
+        0.5,
+        0.65,
+        0.5,
+        "flow_integrated",
+        9,
+        0.5,
+        0,
+        0.4,
+        0.05,
+        0.6,
+        1.3,
+        0.015,
+        0.5,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "source_fps": 36,
+        "target_fps_min": 16,
+        "target_fps_max": 24,
+        "fps_drift_strength": 1,
+        "crank_irregularity": 0.5,
+        "shutter_fraction": 0.65,
+        "motion_blur_strength": 0.5,
+        "blur_mode": "flow_integrated",
+        "blur_samples": 9,
+        "camera_shake_strength": 0.5,
+        "softness": 0,
+        "vignette_strength": 0.4,
+        "edge_softness": 0.05,
+        "edge_start": 0.6,
+        "edge_end": 1.3,
+        "focus_drift_strength": 0.015,
+        "exposure_variation": 0.5,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      }
+    },
+    {
+      "id": 3,
+      "type": "VideoSilentFilmNegative",
+      "pos": [
+        786.8331428649967,
+        5.81645854773717
+      ],
+      "size": [
+        416.6878654581461,
+        658.5529875194463
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 2
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 3
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 22
+        }
+      ],
+      "outputs": [
+        {
+          "name": "negative",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            5
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "links": [
+            19
+          ]
+        }
+      ],
+      "title": "2. Негатив и проявка — Negative",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "9898672d1f4c71731b5018b57174ac856b3d53f9",
+        "Node name for S&R": "VideoSilentFilmNegative",
+        "alexz_emulsion_model": "alexz.neutral_bw_halation_v2"
+      },
+      "widgets_values": [
+        "linear",
+        0,
+        0.03,
+        0.15,
+        1,
+        0.1,
+        0,
+        0,
+        0.01,
+        0.01,
+        2,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "input_transfer": "linear",
+        "exposure_ev": 0,
+        "halation_strength": 0.03,
+        "halation_size": 0.15,
+        "development_contrast": 1,
+        "shadow_softness": 0.1,
+        "highlight_softness": 0,
+        "fog_strength": 0,
+        "development_variation": 0.01,
+        "grain_strength": 0.01,
+        "grain_size": 2,
+        "seed": 1925,
+        "compute_device": "auto",
+        "batch_size": 10
+      }
+    },
+    {
+      "id": 4,
+      "type": "VideoSilentFilmPrint",
+      "pos": [
+        1402.244473430052,
+        9.694088704336991
+      ],
+      "size": [
+        420.7332453539955,
+        668.9825306144559
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 4
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 5
+        },
+        {
+          "name": "fog_strength",
+          "type": "FLOAT",
+          "widget": {
+            "name": "fog_strength"
+          },
+          "link": 20
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 23
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            7
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            16
+          ]
+        }
+      ],
+      "title": "3. Позитивная копия — Print",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "9898672d1f4c71731b5018b57174ac856b3d53f9",
+        "Node name for S&R": "VideoSilentFilmPrint",
+        "alexz_emulsion_model": "alexz.neutral_bw_halation_v2"
+      },
+      "widgets_values": [
+        "from_negative",
+        0,
+        0.03,
+        0.15,
+        1,
+        0,
+        0,
+        0,
+        0,
+        "neutral_bw",
+        0.01,
+        2,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "output_transfer": "from_negative",
+        "print_exposure_ev": 0,
+        "halation_strength": 0.03,
+        "halation_size": 0.15,
+        "print_contrast": 1,
+        "shadow_softness": 0,
+        "highlight_softness": 0,
+        "fog_strength": 0,
+        "print_softness": 0,
+        "tone_mode": "neutral_bw",
+        "grain_strength": 0.01,
+        "grain_size": 2,
+        "seed": 1925,
+        "compute_device": "auto",
+        "batch_size": 10
+      }
+    },
+    {
+      "id": 5,
+      "type": "VideoSilentFilmProjector",
+      "pos": [
+        1996.329277457443,
+        7.755286938874519
+      ],
+      "size": [
+        418.5303594951131,
+        667.7251277945879
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 7
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 21
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            8
+          ]
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "slot_index": 1,
+          "links": [
+            9
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 2,
+          "links": null
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": [
+            17
+          ]
+        }
+      ],
+      "title": "4. Проекция — Projector",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "9898672d1f4c71731b5018b57174ac856b3d53f9",
+        "Node name for S&R": "VideoSilentFilmProjector",
+        "alexz_projection_model": "alexz.projection_glow_v1"
+      },
+      "widgets_values": [
+        25,
+        2,
+        0,
+        0.3,
+        0.5,
+        0,
+        0,
+        0.6,
+        1,
+        0,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "projection_fps": 25,
+        "gate_weave_px": 2,
+        "softness": 0,
+        "glow_strength": 0.3,
+        "glow_size": 0.5,
+        "vignette_strength": 0,
+        "edge_softness": 0,
+        "edge_start": 0.6,
+        "edge_end": 1,
+        "lamp_flicker": 0,
+        "lamp_breathing": 0,
+        "seed": 1925,
+        "compute_device": "auto",
+        "batch_size": 10
+      }
+    },
+    {
+      "id": 6,
+      "type": "VideoSaveFinal",
+      "pos": [
+        2588.4750933396476,
+        7.755286938874519
+      ],
+      "size": [
+        400,
+        440
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 8
+        },
+        {
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "widget": {
+            "name": "frame_rate"
+          },
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video_path",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": null
+        },
+        {
+          "name": "video_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "title": "Финальная сборка ProRes / MP4",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "2984ec4c4b93292421888f38db74a5e8802a8ff8",
+        "Node name for S&R": "VHS_VideoCombine",
+        "cnr_id": "comfyui-videohelpersuite",
+        "__aun_vhs_saved_height": 690.5000152587891,
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        25,
+        "ALEXZ/SilentFilm",
+        "prores_422_hq",
+        14,
+        false
+      ],
+      "widgets_values_named": {
+        "frame_rate": 25,
+        "filename_prefix": "ALEXZ/SilentFilm",
+        "format": "prores_422_hq",
+        "crf": 14,
+        "create_preview": false
+      }
+    },
+    {
+      "id": 7,
+      "type": "PrimitiveInt",
+      "pos": [
+        -216.81650542932425,
+        -255.2080329944198
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            10
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1925,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1925,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 8,
+      "type": "PreviewImage",
+      "pos": [
+        470,
+        1020
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Camera",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 9,
+      "type": "PreviewImage",
+      "pos": [
+        940,
+        1020
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Negative",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 10,
+      "type": "PreviewImage",
+      "pos": [
+        1410,
+        1020
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Print",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 11,
+      "type": "PreviewImage",
+      "pos": [
+        1880,
+        1020
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Projector",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 13,
+      "type": "PreviewImage",
+      "pos": [
+        1296.793023054585,
+        -476.41831513751873
+      ],
+      "size": [
+        140,
+        26
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 19
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 14,
+      "type": "Reroute",
+      "pos": [
+        1232.244473430052,
+        208.47491718213368
+      ],
+      "size": [
+        75,
+        26
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "*",
+          "links": [
+            20
+          ]
+        }
+      ],
+      "properties": {
+        "showOutputText": false,
+        "horizontal": false
+      }
+    },
+    {
+      "id": 15,
+      "type": "PrimitiveInt",
+      "pos": [
+        1530.2463381331454,
+        -209.5539115754358
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            21
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1926,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1926,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 16,
+      "type": "PrimitiveInt",
+      "pos": [
+        352.68465736768223,
+        -281.656865863486
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            22
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1924,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1924,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 17,
+      "type": "PrimitiveInt",
+      "pos": [
+        812.5482842135439,
+        -264.758619401173
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            23
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1927,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1927,
+        "fixed": "fixed"
+      }
+    }
+  ],
+  "links": [
+    [
+      2,
+      2,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ],
+    [
+      3,
+      2,
+      1,
+      3,
+      1,
+      "STRING"
+    ],
+    [
+      4,
+      3,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      5,
+      3,
+      1,
+      4,
+      1,
+      "STRING"
+    ],
+    [
+      6,
+      4,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      7,
+      4,
+      1,
+      5,
+      1,
+      "STRING"
+    ],
+    [
+      10,
+      7,
+      0,
+      2,
+      1,
+      "INT"
+    ],
+    [
+      14,
+      2,
+      2,
+      8,
+      0,
+      "IMAGE"
+    ],
+    [
+      15,
+      3,
+      2,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      16,
+      4,
+      2,
+      10,
+      0,
+      "IMAGE"
+    ],
+    [
+      17,
+      5,
+      3,
+      11,
+      0,
+      "IMAGE"
+    ],
+    [
+      18,
+      1,
+      0,
+      2,
+      0,
+      "IMAGE"
+    ],
+    [
+      19,
+      3,
+      3,
+      13,
+      0,
+      "IMAGE"
+    ],
+    [
+      20,
+      14,
+      0,
+      4,
+      2,
+      "FLOAT"
+    ],
+    [
+      21,
+      15,
+      0,
+      5,
+      2,
+      "INT"
+    ],
+    [
+      22,
+      16,
+      0,
+      3,
+      2,
+      "INT"
+    ],
+    [
+      23,
+      17,
+      0,
+      4,
+      3,
+      "INT"
+    ],
+    [
+      8,
+      5,
+      0,
+      6,
+      0,
+      "IMAGE"
+    ],
+    [
+      9,
+      5,
+      1,
+      6,
+      1,
+      "FLOAT"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.5209868481924461,
+      "offset": [
+        778.3596475053778,
+        700.4161786247623
+      ]
+    },
+    "alexz_project_workflow": "Видео-в-Хронику-по-этапам.json",
+    "frontendVersion": "1.55.18",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

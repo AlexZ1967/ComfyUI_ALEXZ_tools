@@ -22,7 +22,8 @@ def estimate_graph(info, count, prompt=None, source_id=None, *, selective=True):
     source_id = str(source_id)
     source_shape = (count, info["height"], info["width"], info["channels"])
     allocations = [{"node": source_id, "kind": "VideoLoadSource", "shape": source_shape,
-                    "bytes": memory.video_bytes(source_shape), "gpu": False}]
+                    "bytes": memory.video_bytes(source_shape), "gpu": False,
+                    "work_bytes": info["height"] * info["width"] * 64}]
     shapes = {(source_id, 0): source_shape, (source_id, 5): (1, *source_shape[1:])}
     visiting, done, unknown = set(), {source_id}, set()
     scratch, work = 0, info["height"] * info["width"] * 64
@@ -101,9 +102,11 @@ def estimate_graph(info, count, prompt=None, source_id=None, *, selective=True):
         # Выключенный дефект возвращает исходный storage, но создаёт маленькие превью.
         bypass = issubclass(cls, defects._DefectNode) and parameters.get("strength") == 0
         if not bypass:
+            item_work = image_shape[1] * image_shape[2] * 512 * min(image_shape[0], int(parameters.get("batch_size") or 16))
             allocations.append({"node": node_id, "kind": kind, "shape": output_shape,
-                                "bytes": memory.video_bytes(output_shape), "gpu": parameters.get("compute_device") != "cpu"})
-            work = max(work, image_shape[1] * image_shape[2] * 512 * int(parameters.get("batch_size") or 16))
+                                "bytes": memory.video_bytes(output_shape), "gpu": parameters.get("compute_device") != "cpu",
+                                "work_bytes": item_work})
+            work = max(work, item_work)
         for socket, name in enumerate(cls.RETURN_NAMES):
             if cls.RETURN_TYPES[socket] == "IMAGE":
                 is_preview = "preview" in name
@@ -145,7 +148,6 @@ def check_resources(plan):
     """Log conservative placement and verify disk fallback before the expensive render."""
     ram_free = memory.available_ram()
     work = plan["work_bytes"]
-    ram_budget = max(0, ram_free - max(memory.HOST_RESERVE, work + memory.RAM_RESERVE))
     vram_free = 0
     if torch.cuda.is_available():
         try:
@@ -155,11 +157,15 @@ def check_resources(plan):
             device = torch.device("cuda", torch.cuda.current_device())
         if device.type == "cuda":
             vram_free = memory.available_vram(device)
-    vram_budget = max(0, vram_free - work - memory.RAM_RESERVE)
+    host_work = max((memory.host_work_bytes(item["shape"], "cuda" if item["gpu"] and vram_free else "cpu", item["work_bytes"])
+                     for item in plan["storage_allocations"]), default=0)
+    ram_budget = max(0, ram_free - max(memory.HOST_RESERVE, host_work + memory.RAM_RESERVE))
+    vram_budget = max(0, vram_free - memory.RAM_RESERVE)
     placements = {"ram": 0, "vram": 0, "disk": 0}
     for item in plan["storage_allocations"]:
         size = item["bytes"]
-        if item["gpu"] and size >= memory.DISK_THRESHOLD and size <= vram_budget:
+        minimum_work = item["shape"][1] * item["shape"][2] * 512
+        if item["gpu"] and size + minimum_work <= vram_budget:
             vram_budget -= size
             placements["vram"] += size
         elif size <= ram_budget:
@@ -167,8 +173,10 @@ def check_resources(plan):
             placements["ram"] += size
         else:
             placements["disk"] += size
-    # Временный каденс Camera и превью учитываем дополнительно, не обещаем точный пик.
-    disk_estimate = placements["disk"] + plan["scratch_bytes"] + plan["preview_bytes"]
+    # Дополнительный запас не означает обязательную запись этих данных на диск.
+    extra = plan["scratch_bytes"] + plan["preview_bytes"]
+    extra_disk = max(0, extra - ram_budget - max(0, vram_budget - min(work, vram_free)))
+    disk_estimate = placements["disk"] + extra_disk
     memory.CACHE_DIRECTORY.mkdir(parents=True, exist_ok=True)
     disk_free = shutil.disk_usage(memory.CACHE_DIRECTORY).free
     result = {**plan, "estimated_placement": placements, "disk_estimate_bytes": disk_estimate,

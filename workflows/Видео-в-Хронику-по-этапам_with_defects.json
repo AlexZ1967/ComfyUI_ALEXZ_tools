@@ -1,0 +1,3401 @@
+{
+  "id": "f726b853-474b-424c-bea8-b4ed1419ce4b",
+  "revision": 0,
+  "last_node_id": 43,
+  "last_link_id": 81,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "VideoLoadSource",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        251.4751941326656,
+        400.23165486255283
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            18
+          ]
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "slot_index": 1,
+          "links": null
+        },
+        {
+          "name": "total_frames",
+          "type": "INT",
+          "slot_index": 2,
+          "links": null
+        },
+        {
+          "name": "selected_frames",
+          "type": "INT",
+          "slot_index": 3,
+          "links": null
+        },
+        {
+          "name": "video_json",
+          "type": "STRING",
+          "slot_index": 4,
+          "links": null
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 5,
+          "links": null
+        }
+      ],
+      "title": "Исходное видео и выбор кадров",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "4d907bee61e92c2e65af3bd6383a4e4d356126d1",
+        "Node name for S&R": "VHS_LoadVideo",
+        "cnr_id": "comfyui-videohelpersuite",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "alexz_video/Damy_na_skachkah_1_2.mp4",
+        "full_video",
+        120,
+        0,
+        -1
+      ],
+      "widgets_values_named": {
+        "video_path": "alexz_video/Damy_na_skachkah_1_2.mp4",
+        "selection_mode": "full_video",
+        "frame_index": 120,
+        "start_frame": 0,
+        "end_frame": -1
+      }
+    },
+    {
+      "id": 2,
+      "type": "VideoSilentFilmCamera",
+      "pos": [
+        480,
+        0
+      ],
+      "size": [
+        410,
+        900
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 18
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            20
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            21
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            14
+          ]
+        }
+      ],
+      "title": "1. Съёмка — Camera",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmCamera"
+      },
+      "widgets_values": [
+        24,
+        16,
+        20,
+        1,
+        0.5,
+        0.5,
+        0.5,
+        "flow_integrated",
+        9,
+        0.5,
+        0.15,
+        0.6,
+        0.2,
+        0.8,
+        1.3,
+        0.04,
+        1,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "source_fps": 24,
+        "target_fps_min": 16,
+        "target_fps_max": 20,
+        "fps_drift_strength": 1,
+        "crank_irregularity": 0.5,
+        "shutter_fraction": 0.5,
+        "motion_blur_strength": 0.5,
+        "blur_mode": "flow_integrated",
+        "blur_samples": 9,
+        "camera_shake_strength": 0.5,
+        "softness": 0.15,
+        "vignette_strength": 0.6,
+        "edge_softness": 0.2,
+        "edge_start": 0.8,
+        "edge_end": 1.3,
+        "focus_drift_strength": 0.04,
+        "exposure_variation": 1,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      }
+    },
+    {
+      "id": 3,
+      "type": "VideoSilentFilmNegative",
+      "pos": [
+        1440,
+        0
+      ],
+      "size": [
+        410,
+        640
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 22
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 23
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "negative",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            24
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            25
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": [
+            19
+          ]
+        }
+      ],
+      "title": "2. Негатив и проявка — Negative",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmNegative",
+        "alexz_emulsion_model": "alexz.neutral_bw_halation_v2"
+      },
+      "widgets_values": [
+        "srgb",
+        0,
+        0,
+        0.15,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0.01,
+        2,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "input_transfer": "srgb",
+        "exposure_ev": 0,
+        "halation_strength": 0,
+        "halation_size": 0.15,
+        "development_contrast": 1,
+        "shadow_softness": 0,
+        "highlight_softness": 0,
+        "fog_strength": 0,
+        "development_variation": 0,
+        "grain_strength": 0.01,
+        "grain_size": 2,
+        "seed": 1925,
+        "compute_device": "auto",
+        "batch_size": 10
+      }
+    },
+    {
+      "id": 4,
+      "type": "VideoSilentFilmPrint",
+      "pos": [
+        3360,
+        0
+      ],
+      "size": [
+        410,
+        640
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 30
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 31
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            32
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            33
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            16
+          ]
+        }
+      ],
+      "title": "3. Позитивная копия — Print",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmPrint",
+        "alexz_emulsion_model": "alexz.neutral_bw_halation_v2"
+      },
+      "widgets_values": [
+        "from_negative",
+        0,
+        0,
+        0.15,
+        1,
+        0,
+        0,
+        0,
+        0,
+        "neutral_bw",
+        0,
+        2,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "output_transfer": "from_negative",
+        "print_exposure_ev": 0,
+        "halation_strength": 0,
+        "halation_size": 0.15,
+        "print_contrast": 1,
+        "shadow_softness": 0,
+        "highlight_softness": 0,
+        "fog_strength": 0,
+        "print_softness": 0,
+        "tone_mode": "neutral_bw",
+        "grain_strength": 0,
+        "grain_size": 2,
+        "seed": 1925,
+        "compute_device": "auto",
+        "batch_size": 10
+      }
+    },
+    {
+      "id": 5,
+      "type": "VideoSilentFilmProjector",
+      "pos": [
+        4800,
+        0
+      ],
+      "size": [
+        410,
+        640
+      ],
+      "flags": {},
+      "order": 36,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 79
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 80
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            38
+          ]
+        },
+        {
+          "name": "fps",
+          "type": "FLOAT",
+          "slot_index": 1,
+          "links": [
+            9
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 2,
+          "links": [
+            39
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": [
+            17
+          ]
+        }
+      ],
+      "title": "4. Проекция — Projector",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmProjector",
+        "alexz_projection_model": "alexz.projection_glow_v1"
+      },
+      "widgets_values": [
+        25,
+        2,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0.6,
+        1,
+        0.035,
+        0.015,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "projection_fps": 25,
+        "gate_weave_px": 2,
+        "softness": 0,
+        "glow_strength": 0,
+        "glow_size": 1,
+        "vignette_strength": 0,
+        "edge_softness": 0,
+        "edge_start": 0.6,
+        "edge_end": 1,
+        "lamp_flicker": 0.035,
+        "lamp_breathing": 0.015,
+        "seed": 1925,
+        "compute_device": "auto",
+        "batch_size": 10
+      }
+    },
+    {
+      "id": 6,
+      "type": "VideoSaveFinal",
+      "pos": [
+        5760,
+        0
+      ],
+      "size": [
+        400,
+        440
+      ],
+      "flags": {},
+      "order": 39,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 40
+        },
+        {
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "widget": {
+            "name": "frame_rate"
+          },
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video_path",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": null
+        },
+        {
+          "name": "video_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "title": "Финальная сборка ProRes / MP4",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "2984ec4c4b93292421888f38db74a5e8802a8ff8",
+        "Node name for S&R": "VHS_VideoCombine",
+        "cnr_id": "comfyui-videohelpersuite",
+        "__aun_vhs_saved_height": 690.5000152587891,
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        25,
+        "ALEXZ/SilentFilm",
+        "prores_422_hq",
+        19,
+        true
+      ],
+      "widgets_values_named": {
+        "frame_rate": 25,
+        "filename_prefix": "ALEXZ/SilentFilm",
+        "format": "prores_422_hq",
+        "crf": 19,
+        "create_preview": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "PrimitiveInt",
+      "pos": [
+        423.79495478021045,
+        -564.1067396645531
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            10,
+            11,
+            12,
+            13,
+            41,
+            47,
+            49,
+            53
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1925,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1925,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 8,
+      "type": "PreviewImage",
+      "pos": [
+        480,
+        1020
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Camera",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 9,
+      "type": "PreviewImage",
+      "pos": [
+        1440,
+        1020
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Negative",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 10,
+      "type": "PreviewImage",
+      "pos": [
+        3360,
+        1020
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 28,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Print",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 11,
+      "type": "PreviewImage",
+      "pos": [
+        4800,
+        1020
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 38,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Projector",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 13,
+      "type": "PreviewImage",
+      "pos": [
+        1440,
+        1450
+      ],
+      "size": [
+        410,
+        340
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 19
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Контроль негатива — позитивная инверсия",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 14,
+      "type": "VideoSilentFilmCaptureDirt",
+      "pos": [
+        939.5344810679314,
+        2.407719779619299
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 20
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 21
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 41
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            22
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            23
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            42
+          ]
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": null
+        }
+      ],
+      "title": "1а. Загрязнение при съёмке",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmCaptureDirt"
+      },
+      "widgets_values": [
+        0,
+        "dust",
+        10,
+        0.2,
+        48,
+        1,
+        0.7,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "dust",
+        "amount": 10,
+        "size": 0.2,
+        "persistence_frames": 48,
+        "irregularity": 1,
+        "edge_bias": 0.7,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 21,
+      "type": "PreviewImage",
+      "pos": [
+        960,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 42
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Загрязнение при съёмке",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 15,
+      "type": "VideoSilentFilmNegativeDevelopment",
+      "pos": [
+        1920,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 24
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 25
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 60
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            26
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            27
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": null
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": null
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 4,
+          "links": [
+            44
+          ]
+        }
+      ],
+      "title": "2а. Неравномерность проявки негатива",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmNegativeDevelopment"
+      },
+      "widgets_values": [
+        0.1,
+        "mottling",
+        15,
+        0.15,
+        48,
+        0.6,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0.1,
+        "pattern": "mottling",
+        "size": 15,
+        "fog_strength": 0.15,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 22,
+      "type": "PreviewImage",
+      "pos": [
+        1920,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 20,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 44
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Неравномерность проявки негатива",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 16,
+      "type": "VideoSilentFilmNegativeDamage",
+      "pos": [
+        1967.6426000601195,
+        -761.9572945346054
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 26
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 27
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 61
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            62
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            63
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": null
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": null
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 4,
+          "links": [
+            46
+          ]
+        }
+      ],
+      "title": "2б. Повреждения негатива",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmNegativeDamage"
+      },
+      "widgets_values": [
+        0.3,
+        "dust",
+        "dirty",
+        3,
+        0.3,
+        24,
+        0.6,
+        0,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0.3,
+        "pattern": "dust",
+        "damage_type": "dirty",
+        "amount": 3,
+        "size": 0.3,
+        "persistence_frames": 24,
+        "irregularity": 0.6,
+        "edge_bias": 0,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 23,
+      "type": "PreviewImage",
+      "pos": [
+        2400,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 22,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 46
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Повреждения негатива",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 17,
+      "type": "VideoSilentFilmPrintingDirt",
+      "pos": [
+        2880,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 24,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 66
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 67
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 47
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            30
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            31
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": null
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": null
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 4,
+          "links": [
+            48
+          ]
+        }
+      ],
+      "title": "2в. Загрязнение при печати",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmPrintingDirt"
+      },
+      "widgets_values": [
+        0,
+        "dust",
+        10,
+        0.12,
+        48,
+        0.6,
+        0.35,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "dust",
+        "amount": 10,
+        "size": 0.12,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "edge_bias": 0.35,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 24,
+      "type": "PreviewImage",
+      "pos": [
+        2880,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 26,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 48
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Загрязнение при печати",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 18,
+      "type": "VideoSilentFilmPositiveDevelopment",
+      "pos": [
+        3840,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 27,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 32
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 33
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 49
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            34
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            35
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            50
+          ]
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": null
+        }
+      ],
+      "title": "3а. Неравномерность проявки позитива",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmPositiveDevelopment"
+      },
+      "widgets_values": [
+        0,
+        "streaks",
+        8,
+        0.15,
+        48,
+        0.6,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "streaks",
+        "size": 8,
+        "fog_strength": 0.15,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 25,
+      "type": "PreviewImage",
+      "pos": [
+        3840,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 30,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 50
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Неравномерность проявки позитива",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 19,
+      "type": "VideoSilentFilmPositiveDamage",
+      "pos": [
+        3812.546264814469,
+        -696.5978956633832
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 29,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 34
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 35
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 81
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            55
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            56
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            52
+          ]
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": null
+        }
+      ],
+      "title": "3б. Износ позитивной копии",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmPositiveDamage"
+      },
+      "widgets_values": [
+        0.03,
+        "scratches",
+        "emulsion_loss",
+        2,
+        0.07,
+        10,
+        0.6,
+        0.7,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0.03,
+        "pattern": "scratches",
+        "damage_type": "emulsion_loss",
+        "amount": 2,
+        "size": 0.07,
+        "persistence_frames": 10,
+        "irregularity": 0.6,
+        "edge_bias": 0.7,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 26,
+      "type": "PreviewImage",
+      "pos": [
+        4320,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 32,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 52
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Износ позитивной копии",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 20,
+      "type": "VideoSilentFilmProjectorDirt",
+      "pos": [
+        5280,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 37,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 38
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 39
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 53
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            40
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": null
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": [
+            54
+          ]
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": null
+        }
+      ],
+      "title": "4а. Загрязнение окна проектора",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmProjectorDirt"
+      },
+      "widgets_values": [
+        0,
+        "dust",
+        5,
+        0.3,
+        48,
+        0.6,
+        0.5,
+        0.2,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "dust",
+        "amount": 5,
+        "size": 0.3,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "edge_bias": 0.5,
+        "softness": 0.2,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 27,
+      "type": "PreviewImage",
+      "pos": [
+        5280,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 40,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 54
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "title": "Превью — Загрязнение окна проектора",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PreviewImage"
+      }
+    },
+    {
+      "id": 28,
+      "type": "VideoSilentFilmPositiveDamage",
+      "pos": [
+        4392.114806031224,
+        -686.9807721436961
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 31,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 55
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 56
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 59
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            77
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            78
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": []
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": []
+        }
+      ],
+      "title": "3б. Износ позитивной копии",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmPositiveDamage"
+      },
+      "widgets_values": [
+        0.03,
+        "scratches",
+        "dirty",
+        1.5,
+        0.12,
+        20,
+        0.5,
+        1,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0.03,
+        "pattern": "scratches",
+        "damage_type": "dirty",
+        "amount": 1.5,
+        "size": 0.12,
+        "persistence_frames": 20,
+        "irregularity": 0.5,
+        "edge_bias": 1,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 29,
+      "type": "PrimitiveInt",
+      "pos": [
+        3845.961953333438,
+        -1016.7270385705394
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            59
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        2022,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 2022,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 30,
+      "type": "PrimitiveInt",
+      "pos": [
+        1459.445441614039,
+        -296.87659224971605
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            60
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1924,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1924,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 31,
+      "type": "PrimitiveInt",
+      "pos": [
+        1411.1963044375777,
+        -992.7760419000316
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            61
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1923,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1923,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 32,
+      "type": "VideoSilentFilmNegativeDamage",
+      "pos": [
+        2454.7369255498716,
+        -753.3327957552524
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 62
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 63
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 68
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            64
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            65
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": []
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": []
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 4,
+          "links": []
+        }
+      ],
+      "title": "2б. Повреждения негатива",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmNegativeDamage"
+      },
+      "widgets_values": [
+        0.5,
+        "dust",
+        "emulsion_loss",
+        7,
+        0.15,
+        24,
+        0.6,
+        0,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0.5,
+        "pattern": "dust",
+        "damage_type": "emulsion_loss",
+        "amount": 7,
+        "size": 0.15,
+        "persistence_frames": 24,
+        "irregularity": 0.6,
+        "edge_bias": 0,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 33,
+      "type": "VideoSilentFilmNegativeDamage",
+      "pos": [
+        2907.9860908531155,
+        -751.725591474941
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 64
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 65
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 69
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            66
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            67
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": []
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": []
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 4,
+          "links": []
+        }
+      ],
+      "title": "2б. Повреждения негатива",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmNegativeDamage"
+      },
+      "widgets_values": [
+        1,
+        "dust",
+        "surface",
+        10,
+        0.1,
+        24,
+        0.6,
+        0,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 1,
+        "pattern": "dust",
+        "damage_type": "surface",
+        "amount": 10,
+        "size": 0.1,
+        "persistence_frames": 24,
+        "irregularity": 0.6,
+        "edge_bias": 0,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 34,
+      "type": "PrimitiveInt",
+      "pos": [
+        2017.6133583971575,
+        -1037.3586381029845
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            68
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1922,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1922,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 35,
+      "type": "PrimitiveInt",
+      "pos": [
+        2505.8440979909733,
+        -1040.883780632325
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            69
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1921,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1921,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 36,
+      "type": "PrimitiveInt",
+      "pos": [
+        5060.656381692844,
+        -1364.7809016088447
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            73
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1918,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1918,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 37,
+      "type": "PrimitiveInt",
+      "pos": [
+        5548.88712128666,
+        -1368.3060441381851
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            76
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1917,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1917,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 38,
+      "type": "PrimitiveInt",
+      "pos": [
+        4454.239327733264,
+        -1320.1983054058917
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            70
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1919,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1919,
+        "fixed": "fixed"
+      }
+    },
+    {
+      "id": 39,
+      "type": "VideoSilentFilmNegativeDamage",
+      "pos": [
+        5010.685623355806,
+        -1089.3795580404656
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 33,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 77
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 78
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 70
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            71
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            72
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": []
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": []
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 4,
+          "links": []
+        }
+      ],
+      "title": "2б. Повреждения негатива",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmNegativeDamage"
+      },
+      "widgets_values": [
+        0.1,
+        "dust",
+        "dirty",
+        3,
+        0.3,
+        24,
+        0.6,
+        0,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0.1,
+        "pattern": "dust",
+        "damage_type": "dirty",
+        "amount": 3,
+        "size": 0.3,
+        "persistence_frames": 24,
+        "irregularity": 0.6,
+        "edge_bias": 0,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 40,
+      "type": "VideoSilentFilmNegativeDamage",
+      "pos": [
+        5497.779948845558,
+        -1080.7550592611126
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 34,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 71
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 72
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 73
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            74
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            75
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": []
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": []
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 4,
+          "links": []
+        }
+      ],
+      "title": "2б. Повреждения негатива",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmNegativeDamage"
+      },
+      "widgets_values": [
+        0.3,
+        "dust",
+        "emulsion_loss",
+        7,
+        0.15,
+        24,
+        0.6,
+        0,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0.3,
+        "pattern": "dust",
+        "damage_type": "emulsion_loss",
+        "amount": 7,
+        "size": 0.15,
+        "persistence_frames": 24,
+        "irregularity": 0.6,
+        "edge_bias": 0,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 41,
+      "type": "VideoSilentFilmNegativeDamage",
+      "pos": [
+        5951.029114148801,
+        -1079.1478549808012
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 35,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 74
+        },
+        {
+          "name": "film_json",
+          "shape": 7,
+          "type": "STRING",
+          "link": 75
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": 76
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            79
+          ]
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            80
+          ]
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "slot_index": 2,
+          "links": []
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "slot_index": 3,
+          "links": []
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "slot_index": 4,
+          "links": []
+        }
+      ],
+      "title": "2б. Повреждения негатива",
+      "properties": {
+        "aux_id": "AlexZ1967/ComfyUI_ALEXZ_tools",
+        "ver": "d286cdf57c6fedfd624a305ed8a706d459291d90",
+        "Node name for S&R": "VideoSilentFilmNegativeDamage"
+      },
+      "widgets_values": [
+        0.5,
+        "dust",
+        "surface",
+        10,
+        0.1,
+        24,
+        0.6,
+        0,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0.5,
+        "pattern": "dust",
+        "damage_type": "surface",
+        "amount": 10,
+        "size": 0.1,
+        "persistence_frames": 24,
+        "irregularity": 0.6,
+        "edge_bias": 0,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 42,
+      "type": "PrimitiveInt",
+      "pos": [
+        3352.3834184144307,
+        -856.0961706876278
+      ],
+      "size": [
+        410,
+        110
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            81
+          ]
+        }
+      ],
+      "title": "Общий seed варианта — меняйте здесь",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.42.1",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        1930,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 1930,
+        "fixed": "fixed"
+      }
+    }
+  ],
+  "links": [
+    [
+      10,
+      7,
+      0,
+      2,
+      1,
+      "INT"
+    ],
+    [
+      11,
+      7,
+      0,
+      3,
+      2,
+      "INT"
+    ],
+    [
+      12,
+      7,
+      0,
+      4,
+      2,
+      "INT"
+    ],
+    [
+      13,
+      7,
+      0,
+      5,
+      2,
+      "INT"
+    ],
+    [
+      14,
+      2,
+      2,
+      8,
+      0,
+      "IMAGE"
+    ],
+    [
+      15,
+      3,
+      2,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      16,
+      4,
+      2,
+      10,
+      0,
+      "IMAGE"
+    ],
+    [
+      17,
+      5,
+      3,
+      11,
+      0,
+      "IMAGE"
+    ],
+    [
+      18,
+      1,
+      0,
+      2,
+      0,
+      "IMAGE"
+    ],
+    [
+      19,
+      3,
+      3,
+      13,
+      0,
+      "IMAGE"
+    ],
+    [
+      20,
+      2,
+      0,
+      14,
+      0,
+      "IMAGE"
+    ],
+    [
+      21,
+      2,
+      1,
+      14,
+      1,
+      "STRING"
+    ],
+    [
+      22,
+      14,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ],
+    [
+      23,
+      14,
+      1,
+      3,
+      1,
+      "STRING"
+    ],
+    [
+      24,
+      3,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      25,
+      3,
+      1,
+      15,
+      1,
+      "STRING"
+    ],
+    [
+      26,
+      15,
+      0,
+      16,
+      0,
+      "IMAGE"
+    ],
+    [
+      27,
+      15,
+      1,
+      16,
+      1,
+      "STRING"
+    ],
+    [
+      30,
+      17,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      31,
+      17,
+      1,
+      4,
+      1,
+      "STRING"
+    ],
+    [
+      32,
+      4,
+      0,
+      18,
+      0,
+      "IMAGE"
+    ],
+    [
+      33,
+      4,
+      1,
+      18,
+      1,
+      "STRING"
+    ],
+    [
+      34,
+      18,
+      0,
+      19,
+      0,
+      "IMAGE"
+    ],
+    [
+      35,
+      18,
+      1,
+      19,
+      1,
+      "STRING"
+    ],
+    [
+      38,
+      5,
+      0,
+      20,
+      0,
+      "IMAGE"
+    ],
+    [
+      39,
+      5,
+      2,
+      20,
+      1,
+      "STRING"
+    ],
+    [
+      41,
+      7,
+      0,
+      14,
+      2,
+      "INT"
+    ],
+    [
+      42,
+      14,
+      2,
+      21,
+      0,
+      "IMAGE"
+    ],
+    [
+      44,
+      15,
+      4,
+      22,
+      0,
+      "IMAGE"
+    ],
+    [
+      46,
+      16,
+      4,
+      23,
+      0,
+      "IMAGE"
+    ],
+    [
+      47,
+      7,
+      0,
+      17,
+      2,
+      "INT"
+    ],
+    [
+      48,
+      17,
+      4,
+      24,
+      0,
+      "IMAGE"
+    ],
+    [
+      49,
+      7,
+      0,
+      18,
+      2,
+      "INT"
+    ],
+    [
+      50,
+      18,
+      2,
+      25,
+      0,
+      "IMAGE"
+    ],
+    [
+      52,
+      19,
+      2,
+      26,
+      0,
+      "IMAGE"
+    ],
+    [
+      53,
+      7,
+      0,
+      20,
+      2,
+      "INT"
+    ],
+    [
+      54,
+      20,
+      2,
+      27,
+      0,
+      "IMAGE"
+    ],
+    [
+      55,
+      19,
+      0,
+      28,
+      0,
+      "IMAGE"
+    ],
+    [
+      56,
+      19,
+      1,
+      28,
+      1,
+      "STRING"
+    ],
+    [
+      59,
+      29,
+      0,
+      28,
+      2,
+      "INT"
+    ],
+    [
+      60,
+      30,
+      0,
+      15,
+      2,
+      "INT"
+    ],
+    [
+      61,
+      31,
+      0,
+      16,
+      2,
+      "INT"
+    ],
+    [
+      62,
+      16,
+      0,
+      32,
+      0,
+      "IMAGE"
+    ],
+    [
+      63,
+      16,
+      1,
+      32,
+      1,
+      "STRING"
+    ],
+    [
+      64,
+      32,
+      0,
+      33,
+      0,
+      "IMAGE"
+    ],
+    [
+      65,
+      32,
+      1,
+      33,
+      1,
+      "STRING"
+    ],
+    [
+      66,
+      33,
+      0,
+      17,
+      0,
+      "IMAGE"
+    ],
+    [
+      67,
+      33,
+      1,
+      17,
+      1,
+      "STRING"
+    ],
+    [
+      68,
+      34,
+      0,
+      32,
+      2,
+      "INT"
+    ],
+    [
+      69,
+      35,
+      0,
+      33,
+      2,
+      "INT"
+    ],
+    [
+      70,
+      38,
+      0,
+      39,
+      2,
+      "INT"
+    ],
+    [
+      71,
+      39,
+      0,
+      40,
+      0,
+      "IMAGE"
+    ],
+    [
+      72,
+      39,
+      1,
+      40,
+      1,
+      "STRING"
+    ],
+    [
+      73,
+      36,
+      0,
+      40,
+      2,
+      "INT"
+    ],
+    [
+      74,
+      40,
+      0,
+      41,
+      0,
+      "IMAGE"
+    ],
+    [
+      75,
+      40,
+      1,
+      41,
+      1,
+      "STRING"
+    ],
+    [
+      76,
+      37,
+      0,
+      41,
+      2,
+      "INT"
+    ],
+    [
+      77,
+      28,
+      0,
+      39,
+      0,
+      "IMAGE"
+    ],
+    [
+      78,
+      28,
+      1,
+      39,
+      1,
+      "STRING"
+    ],
+    [
+      79,
+      41,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      80,
+      41,
+      1,
+      5,
+      1,
+      "STRING"
+    ],
+    [
+      40,
+      20,
+      0,
+      6,
+      0,
+      "IMAGE"
+    ],
+    [
+      9,
+      5,
+      1,
+      6,
+      1,
+      "FLOAT"
+    ],
+    [
+      81,
+      42,
+      0,
+      19,
+      2,
+      "INT"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "1. Съёмка и загрязнение",
+      "bounding": [
+        460,
+        -60,
+        950,
+        1470
+      ],
+      "color": "#44635a",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "2. Негатив, проявка и печатное окно",
+      "bounding": [
+        1420,
+        -60,
+        1910,
+        1900
+      ],
+      "color": "#665640",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "3. Позитив и износ копии",
+      "bounding": [
+        3340,
+        -60,
+        1430,
+        1470
+      ],
+      "color": "#5b4b67",
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "4. Проектор и его окно",
+      "bounding": [
+        4780,
+        -60,
+        950,
+        1470
+      ],
+      "color": "#405c70",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.32349184307607515,
+      "offset": [
+        405.2254187471848,
+        1674.7999830715364
+      ]
+    },
+    "alexz_project_workflow": "Видео-в-Хронику-по-этапам.json",
+    "frontendVersion": "1.55.18",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

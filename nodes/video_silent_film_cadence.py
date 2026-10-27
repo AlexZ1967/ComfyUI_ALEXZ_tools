@@ -25,7 +25,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from ..utils.video_memory import allocate_video, release_video_pages
+from ..utils.video_memory import allocate_video, release_video_pages, check_interrupt
 try:
     import cv2
 except Exception:  # pragma: no cover - runtime dependency check
@@ -848,6 +848,7 @@ class VideoSilentFilmCadence:
         )
 
         def _sample_position(position: float) -> torch.Tensor:
+            check_interrupt()
             if torch_sampler is not None:
                 sample = torch_sampler.sample(position, actual_blur_mode == "flow_integrated")
             elif actual_blur_mode == "flow_integrated":
@@ -889,6 +890,7 @@ class VideoSilentFilmCadence:
         def _render_frame(group_idx, phase):
             """Retry only the current exposure on CPU after a CUDA allocation failure."""
             nonlocal work_device, torch_sampler, frame_template, capture_grid
+            check_interrupt()
             try:
                 result = _sample_group_frame(group_idx, phase)
             except torch.OutOfMemoryError:

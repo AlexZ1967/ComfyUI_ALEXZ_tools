@@ -144,6 +144,7 @@ class _DefectNode:
             nonlocal mask_preview
             result = torch.empty_like(chunk)
             for local, index in enumerate(range(start, end)):
+                pipeline.check_interrupt()
                 rgb = chunk[local:local + 1, ..., :3]
                 height, width = rgb.shape[1:3]
                 linear = sensitometry.decode_transfer(rgb, transfer)

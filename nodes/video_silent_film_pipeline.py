@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from .video_silent_film_cadence import VideoSilentFilmCadence
 from . import video_silent_film_finish as finish
-from ..utils.video_memory import allocate_video, release_video_pages
+from ..utils.video_memory import allocate_video, release_video_pages, check_interrupt
 from ..utils import film_sensitometry as sensitometry
 from ..utils.film_optics import projection_glow
 
@@ -137,9 +137,11 @@ def _run_stage(images, name, compute_device, batch_size, operation):
     start = 0
     with tqdm(total=len(images), desc=f"[{name}] Обработка", unit="кадр", dynamic_ncols=True, mininterval=0.5) as progress:
         while start < len(images):
+            check_interrupt()
             end = min(len(images), start + size)
             try:
                 result = _stage_chunk(images, start, end, work_device, operation)
+                check_interrupt()
                 output[start:end].copy_(result)
                 release_video_pages(output, start, end, written=True)
                 release_video_pages(images, start, end)
@@ -152,7 +154,7 @@ def _run_stage(images, name, compute_device, batch_size, operation):
                 else:
                     if cpu_size < 1:
                         raise MemoryError(f"{name}: после CUDA OOM недостаточно RAM для безопасного CPU fallback.")
-                    work_device, size = torch.device("cpu"), cpu_size
+                    work_device, size = torch.device("cpu"), finish._cpu_fallback_size(images, cpu_size)
                 with tqdm.external_write_mode():
                     _LOGGER.warning("[%s] Не хватает VRAM: повтор с кадра %d, устройство %s, порция %d.", name, start + 1, work_device, size)
                 continue

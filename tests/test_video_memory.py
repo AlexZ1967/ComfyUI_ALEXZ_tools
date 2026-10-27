@@ -71,6 +71,27 @@ def test_video_memory_reservation_failure_and_portable_fallback(memory, tmp_path
         torch.testing.assert_close(output, torch.full(output.shape, 0.5))
 
 
+@pytest.mark.parametrize("fallocate", [True, False])
+def test_video_memory_reservation_cancellation_releases_file(memory, tmp_path, monkeypatch, fallocate):
+    """Poll cancellation during reservation and close the partially allocated file."""
+    class Cancelled(Exception):
+        pass
+    calls = []
+    def check():
+        """Cancel after reservation has started."""
+        calls.append(1)
+        if len(calls) == 4:
+            raise Cancelled()
+    monkeypatch.setattr(memory, "check_interrupt", check)
+    monkeypatch.setattr(memory, "use_disk", lambda *args, **kwargs: True)
+    monkeypatch.setattr(memory, "RESERVATION_CHUNK_BYTES", 4096)
+    monkeypatch.setattr(memory.os, "posix_fallocate", (lambda *args: None) if fallocate else None)
+    # Для ветки write размер превышает два блока по 8 МиБ.
+    with pytest.raises(Cancelled):
+        memory.allocate_video((3, 1024, 1024, 3))
+    assert len(calls) == 4 and not list(tmp_path.iterdir())
+
+
 @pytest.mark.parametrize("blur_mode", ["simple", "flow_integrated"])
 def test_video_memory_pipeline_and_cadence_match_ram(memory, blur_mode):
     """Process the same seeded clip through every stage in RAM and on disk."""
@@ -152,6 +173,45 @@ def test_video_memory_host_budget_includes_workspace(memory):
     assert not memory.use_disk(shape, ram=24 * 1024**3, work_bytes=10 * 1024**3)
     assert memory.use_disk(shape, ram=12 * 1024**3, work_bytes=10 * 1024**3)
     assert memory.use_disk(shape, ram=8 * 1024**3)
+
+
+def test_video_memory_cuda_workspace_is_not_reserved_in_ram(memory, monkeypatch):
+    """Keep a host output when only the duplicated GPU budget would force a disk spill."""
+    monkeypatch.setattr(memory, "available_vram", lambda device: 0)
+    monkeypatch.setattr(memory, "available_ram", lambda: 8 * 1024**3)
+    monkeypatch.setattr(memory, "_reserve_file", lambda *args: pytest.fail("Unexpected disk allocation"))
+    output = memory.allocate_video((1, 24, 32, 3), work_device="cuda:0", work_bytes=10 * 1024**3)
+    assert output.device.type == "cpu" and not memory.disk_backed(output)
+    assert memory.host_work_bytes((1, 2160, 3840, 3), "cuda:0", 20 * 1024**3) == 2160 * 3840 * 3 * 4 * 2
+
+
+def test_video_memory_single_uhd_frame_has_single_frame_workspace(memory, monkeypatch):
+    """Do not reserve five or ten working frames for a one-frame preview."""
+    finish = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+    images = types.SimpleNamespace(shape=(1, 2160, 3840, 3), device=torch.device("cpu"))
+    monkeypatch.setattr(finish, "_available_finish_ram", lambda: 18 * 1024**3)
+    device, size, cpu_size = finish._finish_processing_plan(images, "cpu", 10)
+    assert size == cpu_size == 1
+    comfy = types.ModuleType("comfy")
+    comfy.model_management = types.SimpleNamespace(get_torch_device=lambda: torch.device("cuda:0"))
+    monkeypatch.setitem(sys.modules, "comfy", comfy)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "mem_get_info", lambda device: (22 * 1024**3, 24 * 1024**3))
+    monkeypatch.setattr(torch.cuda, "memory_reserved", lambda device: 0)
+    monkeypatch.setattr(torch.cuda, "memory_allocated", lambda device: 0)
+    device, size, cpu_size = finish._finish_processing_plan(images, "cuda", 10)
+    assert device.type == "cuda" and size == cpu_size == 1
+
+
+def test_video_memory_cpu_fallback_uses_current_ram(memory, monkeypatch):
+    """Shrink a CPU fallback after allocating the output in host RAM."""
+    finish = importlib.import_module("ComfyUI_ALEXZ_tools.nodes.video_silent_film_finish")
+    images = torch.empty(1, 1, 1, 3).expand(10, 2160, 3840, 3)
+    monkeypatch.setattr(finish, "_available_finish_ram", lambda: 5 * 1024**3)
+    assert finish._cpu_fallback_size(images, 10) == 1
+    monkeypatch.setattr(finish, "_available_finish_ram", lambda: 512 * 1024**2)
+    with pytest.raises(MemoryError, match="CPU fallback"):
+        finish._cpu_fallback_size(images, 10)
 
 
 def test_video_memory_uses_ram_when_vram_is_full(memory, monkeypatch):
