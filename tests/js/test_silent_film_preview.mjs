@@ -30,7 +30,10 @@ assert.equal(detached.comfyClass, "PreviewImage");
 extension.afterConfigureGraph();
 assert.equal(preview.comfyClass, "VideoPreviewFrame");
 assert.equal(preview.type, "PreviewImage", "Saved workflow node type must stay unchanged");
-for (const [type, slot, outputName = "preview"] of [["VideoSilentFilmCamera", 2], ["VideoSilentFilmNegative", 2], ["VideoSilentFilmPrint", 2], ["VideoSilentFilmProjector", 3], ["VideoSilentFilmNegative", 3, "preview_positive"]]) {
+const defectPreviews = ["CaptureDirt", "NegativeDevelopment", "NegativeDamage", "PrintingDirt", "PositiveDevelopment", "PositiveDamage", "ProjectorDirt"]
+    .flatMap(name => [[`VideoSilentFilm${name}`, 2, "preview"], [`VideoSilentFilm${name}`, 3, "mask_preview"],
+        ...(["NegativeDevelopment", "NegativeDamage", "PrintingDirt"].includes(name) ? [[`VideoSilentFilm${name}`, 4, "preview_positive"]] : [])]);
+for (const [type, slot, outputName = "preview"] of [...defectPreviews, ["VideoSilentFilmCamera", 2], ["VideoSilentFilmNegative", 2], ["VideoSilentFilmPrint", 2], ["VideoSilentFilmProjector", 3], ["VideoSilentFilmNegative", 3, "preview_positive"]]) {
     const outputs = Array.from({ length: slot + 1 }, (_, index) => ({ name: index === slot ? outputName : "image" }));
     nodes.set(2, { id: 2, type, mode: 4, outputs });
     preview.link.origin_slot = slot;

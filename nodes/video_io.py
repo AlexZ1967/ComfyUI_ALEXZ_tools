@@ -10,6 +10,8 @@ import tempfile
 from .video_frame_select import VideoFrameSelect, selection_bounds
 from .video_silent_film_finish import _validate_video_batch
 from ..utils.video_io import VIDEO_FORMATS, check_interrupt, decode_frames, encode_frames, make_preview, probe_video, resolve_video_path
+from ..utils.video_memory_plan import estimate_graph, check_resources
+from ..utils.video_cache import enabled as selective_cache_enabled
 
 _LOGGER = logging.getLogger("ALEXZ.VideoIO")
 
@@ -24,7 +26,7 @@ class VideoLoadSource:
         return {"required": {
             "video_path": ("STRING", {"default": "", "tooltip": "Абсолютный путь к локальному видео или имя в ComfyUI/input. Поддерживаются MOV/ProRes, MP4, MXF и другие форматы FFmpeg. Кнопка выбора загружает файл в input; для большого ProRes удобнее указать существующий путь без копирования."}),
             **{name: selection[name] for name in ("selection_mode", "frame_index", "start_frame", "end_frame")},
-        }}
+        }, "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"}}
 
     RETURN_TYPES = ("IMAGE", "FLOAT", "INT", "INT", "STRING", "IMAGE")
     RETURN_NAMES = ("image", "fps", "total_frames", "selected_frames", "video_json", "preview")
@@ -38,12 +40,13 @@ class VideoLoadSource:
         stat = path.stat()
         return f"{path}:{stat.st_size}:{stat.st_mtime_ns}"
 
-    def load(self, video_path, selection_mode="full_video", frame_index=0, start_frame=0, end_frame=-1):
+    def load(self, video_path, selection_mode="full_video", frame_index=0, start_frame=0, end_frame=-1, prompt=None, unique_id=None):
         """Probe the source then decode only the requested output frames into IMAGE storage."""
         path = resolve_video_path(video_path)
         _LOGGER.info("[Load Source Video] Этап 1/2: информация о файле %s.", path.name)
         info = probe_video(path)
         start, end = selection_bounds(info["total_frames"], selection_mode, frame_index, start_frame, end_frame)
+        memory_plan = check_resources(estimate_graph(info, end - start + 1, prompt, unique_id, selective=selective_cache_enabled()))
         _LOGGER.info("[Load Source Video] %s, %s, %dx%d, %.6f fps; всего %d, выбрано %d–%d (%d кадров).", info["codec"], info["pixel_format"], info["width"], info["height"], info["fps"], info["total_frames"], start, end, end - start + 1)
         _LOGGER.info("[Load Source Video] Этап 2/2: потоковое декодирование выбранных кадров в 16-битный RGB/RGBA → float32.")
         image = decode_frames(path, info, start, end)
@@ -51,7 +54,8 @@ class VideoLoadSource:
         metadata = {**info, "schema_name": "alexz.video_source", "schema_version": 1,
                     "selection_mode": selection_mode, "start_frame": start, "end_frame": end,
                     "selected_frames": count, "middle_source_frame": start + count // 2,
-                    "numbering": "zero_based_inclusive", "timing": "frames_at_source_average_fps", "audio_loaded": False}
+                    "numbering": "zero_based_inclusive", "timing": "frames_at_source_average_fps", "audio_loaded": False,
+                    "memory_plan": memory_plan}
         preview = image[count // 2:count // 2 + 1].clone()
         return {"ui": {"video_info": [metadata]}, "result": (image, info["fps"], info["total_frames"], count, json.dumps(metadata, ensure_ascii=False), preview)}
 

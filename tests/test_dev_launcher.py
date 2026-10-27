@@ -51,7 +51,20 @@ def test_dev_dry_run_does_not_execute_conda(launch_environment):
     result = launch(env, "--dry-run")
     assert result.returncode == 0
     assert "--whitelist-custom-nodes" in result.stdout
+    assert "--cache-none" not in result.stdout
     assert not record.exists()
+
+
+@pytest.mark.parametrize("arguments", [("--cache-none",), ("--cache-classic",), ("--cache-lru", "2"),
+                                       ("--cache-lru=2",), ("--cache-ram",), ("--cache-ram", "4", "8"), ("--cache-ram=4",)])
+def test_dev_explicit_cache_mode_is_forwarded(launch_environment, arguments):
+    """Avoid conflicting cache flags and preserve an explicit cache budget."""
+    _, env, record = launch_environment
+    result = launch(env, "--", "--port", "8189", *arguments)
+    assert result.returncode == 0, result.stderr
+    command = json.loads(record.read_text())["args"]
+    assert [arg for arg in command if arg.startswith("--cache-")] == [arguments[0]]
+    assert command[-len(arguments):] == list(arguments)
 
 
 def test_dev_extra_node_is_explicit_and_checked(launch_environment):

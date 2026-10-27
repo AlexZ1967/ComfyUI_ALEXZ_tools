@@ -26,7 +26,7 @@ def memory(tmp_path):
 
 def test_video_memory_mapping_views_and_cleanup(memory, tmp_path):
     """Keep bytes valid through eviction and aliases, then release the mapping completely."""
-    with patch.object(memory, "DISK_THRESHOLD", 1):
+    with patch.object(memory, "use_disk", return_value=True):
         output = memory.allocate_video((5, 11, 17, 3))
     address = output.untyped_storage().data_ptr()
     expected = torch.rand(output.shape)
@@ -51,8 +51,8 @@ def test_video_memory_disk_admission_and_small_ram_output(memory, tmp_path):
     small = memory.allocate_video((2, 3, 4, 3))
     assert not memory.disk_backed(small)
     assert memory.video_bytes((145, 1440, 1920, 3)) == 4810752000
-    assert memory.use_disk((145, 1440, 1920, 3), ram=32 * 1024**3)
-    with patch.object(memory, "DISK_THRESHOLD", 1), patch.object(memory.shutil, "disk_usage", return_value=types.SimpleNamespace(free=0)):
+    assert not memory.use_disk((145, 1440, 1920, 3), ram=32 * 1024**3)
+    with patch.object(memory, "use_disk", return_value=True), patch.object(memory.shutil, "disk_usage", return_value=types.SimpleNamespace(free=0)):
         with pytest.raises(MemoryError, match="дисковому кэшу"):
             memory.allocate_video((2, 3, 4, 3))
     assert list(tmp_path.iterdir()) == []
@@ -60,11 +60,11 @@ def test_video_memory_disk_admission_and_small_ram_output(memory, tmp_path):
 
 def test_video_memory_reservation_failure_and_portable_fallback(memory, tmp_path):
     """Remove failed temporary files and reserve bounded blocks without fallocate."""
-    with patch.object(memory, "DISK_THRESHOLD", 1), patch.object(memory.os, "posix_fallocate", side_effect=OSError(errno.ENOSPC, "disk full"), create=True):
+    with patch.object(memory, "use_disk", return_value=True), patch.object(memory.os, "posix_fallocate", side_effect=OSError(errno.ENOSPC, "disk full"), create=True):
         with pytest.raises(MemoryError, match="не удалось зарезервировать"):
             memory.allocate_video((3, 11, 17, 3))
     assert list(tmp_path.iterdir()) == []
-    with patch.object(memory, "DISK_THRESHOLD", 1), patch.object(memory.os, "posix_fallocate", None, create=True):
+    with patch.object(memory, "use_disk", return_value=True), patch.object(memory.os, "posix_fallocate", None, create=True):
         output = memory.allocate_video((3, 11, 17, 3))
         output.fill_(0.5)
         memory.release_video_pages(output, written=True)
@@ -90,7 +90,7 @@ def test_video_memory_pipeline_and_cadence_match_ram(memory, blur_mode):
 
     with patch.object(memory, "DISK_THRESHOLD", 2**60):
         ram = run()
-    with patch.object(memory, "DISK_THRESHOLD", 1):
+    with patch.object(memory, "use_disk", return_value=True):
         disk = run()
     for expected, actual in zip(ram, disk):
         assert memory.disk_backed(actual[0])
@@ -108,7 +108,7 @@ def test_video_memory_finish_matches_ram(memory):
     parameters = {name: spec[1]["default"] for name, spec in finish.VideoSilentFilmFinish.INPUT_TYPES()["required"].items() if name != "image"}
     parameters.update(compute_device="cpu", batch_size=2)
     expected, _ = finish.VideoSilentFilmFinish().apply(image, **parameters)
-    with patch.object(memory, "DISK_THRESHOLD", 1):
+    with patch.object(memory, "use_disk", return_value=True):
         actual, _ = finish.VideoSilentFilmFinish().apply(image, **parameters)
     assert memory.disk_backed(actual)
     torch.testing.assert_close(actual, expected, atol=0, rtol=0)
@@ -116,7 +116,7 @@ def test_video_memory_finish_matches_ram(memory):
 
 def test_video_memory_spills_gpu_output_when_storage_budget_is_insufficient(memory):
     """Use CPU mapped storage instead of exhausting CUDA with another full video batch."""
-    with patch.object(memory, "DISK_THRESHOLD", 1), patch.object(memory, "available_vram", return_value=0):
+    with patch.object(memory, "use_disk", return_value=True), patch.object(memory, "available_vram", return_value=0):
         output = memory.allocate_video((3, 11, 17, 3), device="cuda:0", work_device="cuda:0", work_bytes=1024**3)
     assert output.device.type == "cpu" and memory.disk_backed(output)
 
@@ -144,6 +144,41 @@ def test_video_memory_gpu_plan_does_not_require_full_cpu_workspace(memory):
         assert device.type == "cuda" and 1 <= size <= 10 and cpu_size == 0
         with pytest.raises(MemoryError, match="Silent Film Projector.*RAM"):
             finish._finish_processing_plan(image, "cpu", 10, label="Silent Film Projector")
+
+
+def test_video_memory_host_budget_includes_workspace(memory):
+    """Keep a large cached batch in RAM unless it would consume reserved working memory."""
+    shape = (181, 1248, 1660, 3)
+    assert not memory.use_disk(shape, ram=24 * 1024**3, work_bytes=10 * 1024**3)
+    assert memory.use_disk(shape, ram=12 * 1024**3, work_bytes=10 * 1024**3)
+    assert memory.use_disk(shape, ram=8 * 1024**3)
+
+
+def test_video_memory_uses_ram_when_vram_is_full(memory, monkeypatch):
+    """Use available host RAM before allocating another disk mapping."""
+    monkeypatch.setattr(memory, "DISK_THRESHOLD", 1)
+    monkeypatch.setattr(memory, "available_vram", lambda device: 0)
+    monkeypatch.setattr(memory, "available_ram", lambda: 8 * 1024**3)
+    output = memory.allocate_video((3, 11, 17, 3), device="cuda:0", work_device="cuda:0")
+    assert output.device.type == "cpu" and not memory.disk_backed(output)
+    output.fill_(0.25)
+    torch.testing.assert_close(output, torch.full(output.shape, 0.25))
+
+
+def test_video_memory_cuda_allocation_race_falls_back_to_ram(memory, monkeypatch):
+    """Preserve a useful RAM tier if another process consumes the observed VRAM headroom."""
+    original_empty = torch.empty
+    def empty(*args, **kwargs):
+        """Simulate an allocation-time CUDA OOM without requiring a GPU."""
+        if torch.device(kwargs.get("device", "cpu")).type == "cuda":
+            raise torch.OutOfMemoryError("simulated allocation race")
+        return original_empty(*args, **kwargs)
+    monkeypatch.setattr(memory, "DISK_THRESHOLD", 1)
+    monkeypatch.setattr(memory, "available_vram", lambda device: 8 * 1024**3)
+    monkeypatch.setattr(memory, "available_ram", lambda: 8 * 1024**3)
+    monkeypatch.setattr(torch, "empty", empty)
+    output = memory.allocate_video((3, 11, 17, 3), work_device="cuda:0")
+    assert output.device.type == "cpu" and not memory.disk_backed(output)
 
 
 def test_video_memory_gpu_computes_when_only_disk_output_fits(memory):

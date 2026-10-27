@@ -36,6 +36,9 @@ if (_module_node_browser_api.PromptServer is not None and _module_node_browser_a
         finalize_tracking=_module_node_browser_api._finalize_module_update_tracking,
     )
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+from .utils.video_cache import install as _install_video_cache
+
+_install_video_cache()
 
 WEB_DIRECTORY = "./web"
 

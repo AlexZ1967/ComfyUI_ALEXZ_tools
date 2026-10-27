@@ -52,6 +52,13 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
     NodeSpec("VideoSilentFilmNegative", "Silent Film Negative", ".video_silent_film_pipeline", "VideoSilentFilmNegative"),
     NodeSpec("VideoSilentFilmPrint", "Silent Film Print", ".video_silent_film_pipeline", "VideoSilentFilmPrint"),
     NodeSpec("VideoSilentFilmProjector", "Silent Film Projector", ".video_silent_film_pipeline", "VideoSilentFilmProjector"),
+    NodeSpec("VideoSilentFilmCaptureDirt", "Silent Film Capture Dirt", ".video_silent_film_defects", "VideoSilentFilmCaptureDirt"),
+    NodeSpec("VideoSilentFilmNegativeDevelopment", "Silent Film Negative Development", ".video_silent_film_defects", "VideoSilentFilmNegativeDevelopment"),
+    NodeSpec("VideoSilentFilmNegativeDamage", "Silent Film Negative Damage", ".video_silent_film_defects", "VideoSilentFilmNegativeDamage"),
+    NodeSpec("VideoSilentFilmPrintingDirt", "Silent Film Printing Dirt", ".video_silent_film_defects", "VideoSilentFilmPrintingDirt"),
+    NodeSpec("VideoSilentFilmPositiveDevelopment", "Silent Film Positive Development", ".video_silent_film_defects", "VideoSilentFilmPositiveDevelopment"),
+    NodeSpec("VideoSilentFilmPositiveDamage", "Silent Film Positive Damage", ".video_silent_film_defects", "VideoSilentFilmPositiveDamage"),
+    NodeSpec("VideoSilentFilmProjectorDirt", "Silent Film Projector Dirt", ".video_silent_film_defects", "VideoSilentFilmProjectorDirt"),
     NodeSpec("ImageDifference", "Image Difference", ".image_difference", "ImageDifference"),
     NodeSpec("ImageWaveformScope", "Image Waveform Scope", ".image_scopes", "ImageWaveformScope"),
     NodeSpec("ImageHistogramScope", "Image Histogram Scope", ".image_scopes", "ImageHistogramScope"),
@@ -69,6 +76,41 @@ NODE_SPECS: tuple[NodeSpec, ...] = (
 
 
 NODE_UI_METADATA = {
+    "VideoSilentFilmCaptureDirt": {
+        "description": "Самостоятельное загрязнение кадрового окна съёмки: после Camera, перед Negative. Пыль затеняет линейную экспозицию; исходные ноды не меняются.",
+        "output_tooltips": ["Полный батч после загрязнения съёмки.", "Паспорт без смены основного этапа; без входного паспорта пустая строка.", "Один средний обработанный кадр.", "Маска силы дефектов среднего кадра; чёрная при strength=0."],
+        "search_aliases": ["silent film", "dust", "hair", "пыль", "съёмка"],
+    },
+    "VideoSilentFilmNegativeDevelopment": {
+        "description": "Неравномерность проявки после Negative: связанные пятна, полосы и локальная добавочная плотность. Самостоятельная нода.",
+        "output_tooltips": ["Пропускание негатива с дефектами проявки.", "Исходный этап и история дефектов.", "Средний кадр негатива.", "Модуль изменения плотности среднего кадра.", "Эталонная нейтральная печать среднего повреждённого негатива."],
+        "search_aliases": ["silent film", "development", "проявка", "пятна"],
+    },
+    "VideoSilentFilmNegativeDamage": {
+        "description": "Пыль, царапины и пятна на проявленном негативе перед Print. Утрата эмульсии и непрозрачная грязь имеют разную полярность после печати.",
+        "output_tooltips": ["Повреждённый негатив для Print.", "Исходный этап и история дефектов.", "Средний кадр негатива.", "Маска повреждений среднего кадра.", "Эталонная нейтральная печать повреждённого негатива."],
+        "search_aliases": ["silent film", "scratches", "negative", "царапины"],
+    },
+    "VideoSilentFilmPrintingDirt": {
+        "description": "Пыль и волоски при печати: перед Print, отдельно от постоянных повреждений негатива. Ослабление печатной экспозиции даёт светлые следы на позитиве.",
+        "output_tooltips": ["Негатив с затенением печатного света.", "Исходный этап и история дефектов.", "Средний кадр перед печатью.", "Маска загрязнения среднего кадра.", "Контроль эффекта через эталонную печать."],
+        "search_aliases": ["silent film", "printing", "dust", "печать"],
+    },
+    "VideoSilentFilmPositiveDevelopment": {
+        "description": "Приближение пятнистой проявки позитива после Print в линейном свете. Не восстанавливает плотность эмульсии, уже потерянную при экранном преобразовании.",
+        "output_tooltips": ["Позитив с неравномерностью проявки.", "Исходный этап и история дефектов.", "Один средний обработанный кадр.", "Модуль изменения условной плотности среднего кадра."],
+        "search_aliases": ["silent film", "development", "positive", "проявка"],
+    },
+    "VideoSilentFilmPositiveDamage": {
+        "description": "Износ копии между Print и Projector: царапины, пыль, пятна. Приближение по готовому позитиву; затем проходит движение и оптику Projector.",
+        "output_tooltips": ["Повреждённая позитивная копия.", "Исходный этап и история дефектов.", "Один средний обработанный кадр.", "Маска повреждений среднего кадра."],
+        "search_aliases": ["silent film", "scratches", "positive", "износ"],
+    },
+    "VideoSilentFilmProjectorDirt": {
+        "description": "Приближение пыли окна после Projector: неподвижная тень с отдельной мягкостью. Умножает уже освещённое изображение без повторного мерцания или glow.",
+        "output_tooltips": ["Проекция с загрязнением окна для Save Final Video.", "Исходный этап projector и история дефектов.", "Один средний обработанный кадр.", "Маска тени среднего кадра."],
+        "search_aliases": ["silent film", "projector", "dust", "проектор"],
+    },
     "VideoPreviewFrame": {
         "description": "Показывает один средний кадр видео; передаёт весь входной батч дальше. Безопасное превью при bypass этапов Silent Film.",
         "output_tooltips": ["Весь исходный IMAGE-батч без обрезки; в интерфейсе показан только средний кадр."],

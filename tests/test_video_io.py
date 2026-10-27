@@ -62,7 +62,7 @@ def test_video_io_prores_probe_selection_and_disk_cache(io, source, monkeypatch)
     full = nodes.VideoLoadSource().load(source.name)["result"][0]
     assert full.shape == (6, 24, 32, 3) and full.dtype == torch.float32
     assert torch.abs(full * 255 - (full * 255).round()).max() > 0.01
-    monkeypatch.setattr(memory, "DISK_THRESHOLD", 1)
+    monkeypatch.setattr(memory, "use_disk", lambda *args, **kwargs: True)
     for mode, arguments, start, end in (
         ("frame_range", {"start_frame": 2, "end_frame": 4}, 2, 4),
         ("single_frame", {"frame_index": 5}, 5, 5),
@@ -89,6 +89,31 @@ def test_video_io_counts_frames_without_container_counter(io, source):
     assert info["total_frames"] == 6 and info["count_source"] == "decoded_count" and info["count_is_exact"]
     image = nodes.VideoLoadSource().load(str(target), "frame_range", start_frame=4, end_frame=5)["result"][0]
     assert len(image) == 2
+
+
+def test_video_io_preflight_runs_before_decode_and_preserves_widgets(io, source, monkeypatch):
+    """Pass hidden graph context without changing serialized source selection controls."""
+    nodes, _, _, _, _ = io
+    schema = nodes.VideoLoadSource.INPUT_TYPES()
+    assert schema["hidden"] == {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"}
+    assert list(schema["required"]) == ["video_path", "selection_mode", "frame_index", "start_frame", "end_frame"]
+    prompt = {"2": {"class_type": "VideoSilentFilmNegative", "inputs": {"image": ["1", 0]}}}
+    observed = []
+    original_decode, original_check = nodes.decode_frames, nodes.check_resources
+    def check(plan):
+        """Record preflight order before any frame storage is allocated."""
+        observed.append("plan")
+        return original_check(plan)
+    def decode(*args):
+        """Verify the memory plan was available before decoding begins."""
+        assert observed == ["plan"]
+        return original_decode(*args)
+    monkeypatch.setattr(nodes, "check_resources", check)
+    monkeypatch.setattr(nodes, "decode_frames", decode)
+    result = nodes.VideoLoadSource().load(source.name, prompt=prompt, unique_id="1")
+    plan = json.loads(result["result"][4])["memory_plan"]
+    assert len(plan["allocations"]) == 2
+    assert not plan["unknown_nodes"]
 
 
 @pytest.mark.parametrize("video_format,codec", [("prores_422_hq", "prores"), ("prores_4444", "prores"), ("h264_mp4", "h264")])

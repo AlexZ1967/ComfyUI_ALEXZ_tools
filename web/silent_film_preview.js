@@ -1,6 +1,7 @@
 import { app } from "../../../scripts/app.js";
 
 const FILM_STAGES = new Set(["VideoSilentFilmCamera", "VideoSilentFilmNegative", "VideoSilentFilmPrint", "VideoSilentFilmProjector"]);
+const FILM_DEFECTS = new Set(["VideoSilentFilmCaptureDirt", "VideoSilentFilmNegativeDevelopment", "VideoSilentFilmNegativeDamage", "VideoSilentFilmPrintingDirt", "VideoSilentFilmPositiveDevelopment", "VideoSilentFilmPositiveDamage", "VideoSilentFilmProjectorDirt"]);
 const redirected = new WeakSet();
 let helperAvailable = false;
 
@@ -14,8 +15,9 @@ function isFilmPreview(node) {
         if (!source || seen.has(source.id)) return false;
         seen.add(source.id);
         const sourceType = source.comfyClass ?? source.type;
-        if (FILM_STAGES.has(sourceType)) {
+        if (FILM_STAGES.has(sourceType) || FILM_DEFECTS.has(sourceType)) {
             const outputName = source.outputs?.[link.origin_slot]?.name;
+            if (FILM_DEFECTS.has(sourceType)) return ["preview", "preview_positive", "mask_preview"].includes(outputName);
             return outputName === "preview" || (sourceType === "VideoSilentFilmNegative" && outputName === "preview_positive");
         }
         if (source.type !== "Reroute") return false;

@@ -608,7 +608,7 @@ def test_staged_workflow_contract(pipeline):
     for node in nodes.values():
         if not node["type"].startswith("VideoSilentFilm"):
             continue
-        cls = getattr(pipeline, node["type"])
+        cls = importlib.import_module("ComfyUI_ALEXZ_tools.nodes").NODE_CLASS_MAPPINGS[node["type"]]
         inputs = cls.INPUT_TYPES()
         schema = inputs["required"]
         all_inputs = {**schema, **inputs.get("optional", {})}

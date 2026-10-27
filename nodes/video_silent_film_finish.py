@@ -497,11 +497,11 @@ def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int, *,
     reserve = 512 * 1024**2
     per_frame = height * width * 512
     ram = _available_finish_ram()
-    mapped = use_disk(images.shape, ram=ram)
+    mapped = use_disk(images.shape, ram=ram, work_bytes=per_frame * int(batch_size))
     cpu_output_bytes = output_bytes if images.device.type == "cpu" and not mapped else 0
     cpu_budget = ram - cpu_output_bytes - reserve
     cpu_batch = min(int(batch_size), max(0, cpu_budget // per_frame))
-    _LOGGER.info("[%s] Память: выход %.2f ГиБ (%s), свободно RAM %.2f ГиБ; рабочая оценка %.2f ГиБ/кадр.", label, output_bytes / 1024**3, "VRAM при наличии запаса, иначе диск" if mapped else images.device.type, ram / 1024**3, per_frame / 1024**3)
+    _LOGGER.info("[%s] Память: выход %.2f ГиБ (VRAM → RAM → диск), свободно RAM %.2f ГиБ; рабочая оценка %.2f ГиБ/кадр.", label, output_bytes / 1024**3, ram / 1024**3, per_frame / 1024**3)
 
     def cpu_plan():
         """Require CPU workspace only if CPU execution is actually selected."""
@@ -526,9 +526,9 @@ def _finish_processing_plan(images: torch.Tensor, mode: str, batch_size: int, *,
     free, _ = torch.cuda.mem_get_info(device)
     available = free + torch.cuda.memory_reserved(device) - torch.cuda.memory_allocated(device)
     # Если целый выход не помещается вместе с рабочим кадром, считаем на GPU,
-    # а результат отправляем на диск вместо необязательного CPU fallback.
+    # а результат отправляем в RAM/на диск вместо необязательного CPU fallback.
     output_fits = available - reserve - output_bytes >= per_frame
-    gpu_output_bytes = output_bytes if (mapped and output_fits) or (not mapped and images.device == device) else 0
+    gpu_output_bytes = output_bytes if output_fits else 0
     host_per_frame = height * width * channels * 4 * 2
     gpu_batch = min(int(batch_size), (available - gpu_output_bytes - reserve) // per_frame, max(0, cpu_budget // host_per_frame))
     _LOGGER.info("[%s] VRAM доступно %.2f ГиБ; порция CUDA %d, предел batch_size=%d.", label, available / 1024**3, max(0, gpu_batch), batch_size)
@@ -666,7 +666,7 @@ class VideoSilentFilmFinish:
                     "FLOAT",
                     {
                         "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01,
-                        "tooltip": "Расфокус по краям: маска задаёт локальный радиус размытия, edge_softness — максимальный радиус. 0 = выключено, 0.15 = лёгкий, 0.5 = заметный, 1 = сильный (радиус sigma около 42 px при ширине 1664). Для широкой области уменьшите edge_start до 0.35–0.45. Центр и альфа-канал сохраняются; зерно добавляется после оптики.",
+                        "tooltip": "Расфокус относительно ширины: максимальная sigma = ширина × 0.025 × edge_softness; локально умножается на маску. 0 выключает, 0.02–0.04 — деликатный старт, 0.15 уже заметно (7.2 px при 1920; 14.4 px при 3840), 0.5–1 — сильный. Сравнивайте кадры при одинаковом размере показа. Область задаётся edge_start/end. Центр и альфа сохраняются; зерно добавляется после оптики.",
                     },
                 ),
                 "edge_start": (

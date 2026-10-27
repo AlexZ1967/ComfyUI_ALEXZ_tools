@@ -10,6 +10,8 @@ Dev-запуск ComfyUI для ALEXZ_tools и Silent Film.
 
 По умолчанию загружаются ALEXZ_tools, ComfyUI-VideoHelperSuite, comfyui-manager и ComfyUI-Crystools.
 Conda environment: p313-torch214-cu132. Порт ComfyUI по умолчанию: 8188.
+Silent Film кэширует загрузчик и Camera; быстрые этапы пересчитываются.
+Видеобатчи распределяются между VRAM, RAM и диском.
 
 Примеры:
   bash scripts/start_comfyui_dev.sh --dry-run

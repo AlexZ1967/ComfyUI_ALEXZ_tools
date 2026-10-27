@@ -1,4 +1,4 @@
-"""Allocate large IMAGE tensors on disk while keeping ordinary torch.Tensor contracts."""
+"""Allocate cached IMAGE tensors across VRAM, RAM and disk without changing tensor contracts."""
 
 import logging
 import errno
@@ -15,7 +15,9 @@ import torch
 _LOGGER = logging.getLogger("SilentFilmMemory")
 DISK_THRESHOLD = 256 * 1024**2
 RAM_RESERVE = 512 * 1024**2
-CACHE_DIRECTORY = Path(__file__).resolve().parents[1] / ".alexz-video-cache"
+HOST_RESERVE = 4 * 1024**3
+CACHE_DIRECTORY = Path(os.environ.get("ALEXZ_VIDEO_CACHE_DIR", str(
+    (Path("/mnt/work") if Path("/mnt/work").is_dir() else Path(tempfile.gettempdir())) / "alexz-video-cache"))).expanduser()
 _MAPPINGS = {}
 
 
@@ -34,10 +36,10 @@ def video_bytes(shape, dtype=torch.float32):
     return math.prod(shape) * torch.empty((), dtype=dtype).element_size()
 
 
-def use_disk(shape, dtype=torch.float32, ram=None):
-    """Spill large outputs early, before downstream cached stages exhaust system RAM."""
+def use_disk(shape, dtype=torch.float32, ram=None, work_bytes=0):
+    """Use host RAM while preserving system headroom and the planned working portion."""
     size = video_bytes(shape, dtype)
-    return size >= DISK_THRESHOLD or size * 2 + RAM_RESERVE > (available_ram() if ram is None else ram)
+    return size + max(HOST_RESERVE, work_bytes + RAM_RESERVE) > (available_ram() if ram is None else ram)
 
 
 def available_vram(device):
@@ -70,21 +72,24 @@ def _reserve_file(file, size):
 
 
 def allocate_video(shape, *, dtype=torch.float32, device="cpu", label="Silent Film", work_device=None, work_bytes=0):
-    """Keep large outputs in spare VRAM, otherwise reserve real disk-backed storage."""
+    """Prefer spare VRAM, then available host RAM, reserving disk only for the remainder."""
     device = torch.device(device)
     size = video_bytes(shape, dtype)
-    large = use_disk(shape, dtype)
-    if large and work_device is not None and torch.device(work_device).type == "cuda":
-        target = torch.device(work_device)
+    target = torch.device(work_device) if work_device is not None else device
+    if target.type == "cuda" and (size >= DISK_THRESHOLD or device.type == "cuda"):
         if available_vram(target) >= size + work_bytes + RAM_RESERVE:
             try:
                 output = torch.empty(shape, dtype=dtype, device=target)
                 _LOGGER.info("[%s] Выход: %.2f ГиБ в VRAM; рабочий запас %.2f ГиБ сохранён.", label, size / 1024**3, (work_bytes + RAM_RESERVE) / 1024**3)
                 return output
             except torch.OutOfMemoryError:
-                _LOGGER.warning("[%s] VRAM изменилась при выделении выхода: используется дисковый кэш.", label)
-    if not large:
-        return torch.empty(shape, dtype=dtype, device=device)
+                _LOGGER.warning("[%s] VRAM изменилась при выделении выхода: проверяется RAM и дисковый кэш.", label)
+    if not use_disk(shape, dtype, work_bytes=work_bytes):
+        output = torch.empty(shape, dtype=dtype, device="cpu")
+        if size >= DISK_THRESHOLD:
+            _LOGGER.info("[%s] Выход: %.2f ГиБ в RAM; запас для системы и расчёта %.2f ГиБ.",
+                         label, size / 1024**3, max(HOST_RESERVE, work_bytes + RAM_RESERVE) / 1024**3)
+        return output
     CACHE_DIRECTORY.mkdir(parents=True, exist_ok=True)
     free = shutil.disk_usage(CACHE_DIRECTORY).free
     if free < size + RAM_RESERVE:

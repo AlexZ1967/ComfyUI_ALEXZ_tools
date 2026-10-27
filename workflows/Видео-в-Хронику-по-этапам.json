@@ -1,6 +1,6 @@
 {
-  "last_node_id": 13,
-  "last_link_id": 19,
+  "last_node_id": 27,
+  "last_link_id": 54,
   "nodes": [
     {
       "id": 1,
@@ -14,7 +14,7 @@
         360
       ],
       "flags": {},
-      "order": 1,
+      "order": 0,
       "mode": 0,
       "inputs": [
         {
@@ -128,7 +128,7 @@
       "id": 2,
       "type": "VideoSilentFilmCamera",
       "pos": [
-        470,
+        480,
         0
       ],
       "size": [
@@ -136,7 +136,7 @@
         900
       ],
       "flags": {},
-      "order": 2,
+      "order": 1,
       "mode": 0,
       "inputs": [
         {
@@ -310,7 +310,7 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            2
+            20
           ],
           "slot_index": 0
         },
@@ -318,7 +318,7 @@
           "name": "film_json",
           "type": "STRING",
           "links": [
-            3
+            21
           ],
           "slot_index": 1
         },
@@ -386,7 +386,7 @@
       "id": 3,
       "type": "VideoSilentFilmNegative",
       "pos": [
-        940,
+        1440,
         0
       ],
       "size": [
@@ -400,12 +400,12 @@
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 2
+          "link": 22
         },
         {
           "name": "film_json",
           "type": "STRING",
-          "link": 3
+          "link": 23
         },
         {
           "name": "input_transfer",
@@ -525,7 +525,7 @@
           "name": "negative",
           "type": "IMAGE",
           "links": [
-            4
+            24
           ],
           "slot_index": 0
         },
@@ -533,7 +533,7 @@
           "name": "film_json",
           "type": "STRING",
           "links": [
-            5
+            25
           ],
           "slot_index": 1
         },
@@ -598,7 +598,7 @@
       "id": 4,
       "type": "VideoSilentFilmPrint",
       "pos": [
-        1410,
+        3360,
         0
       ],
       "size": [
@@ -606,18 +606,18 @@
         640
       ],
       "flags": {},
-      "order": 4,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 4
+          "link": 30
         },
         {
           "name": "film_json",
           "type": "STRING",
-          "link": 5
+          "link": 31
         },
         {
           "name": "output_transfer",
@@ -745,7 +745,7 @@
           "name": "positive",
           "type": "IMAGE",
           "links": [
-            6
+            32
           ],
           "slot_index": 0
         },
@@ -753,7 +753,7 @@
           "name": "film_json",
           "type": "STRING",
           "links": [
-            7
+            33
           ],
           "slot_index": 1
         },
@@ -812,7 +812,7 @@
       "id": 5,
       "type": "VideoSilentFilmProjector",
       "pos": [
-        1880,
+        4800,
         0
       ],
       "size": [
@@ -820,18 +820,18 @@
         640
       ],
       "flags": {},
-      "order": 5,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 6
+          "link": 36
         },
         {
           "name": "film_json",
           "type": "STRING",
-          "link": 7
+          "link": 37
         },
         {
           "name": "projection_fps",
@@ -951,7 +951,7 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            8
+            38
           ],
           "slot_index": 0
         },
@@ -966,7 +966,9 @@
         {
           "name": "film_json",
           "type": "STRING",
-          "links": null,
+          "links": [
+            39
+          ],
           "slot_index": 2
         },
         {
@@ -1022,7 +1024,7 @@
       "id": 6,
       "type": "VideoSaveFinal",
       "pos": [
-        2350,
+        5760,
         0
       ],
       "size": [
@@ -1030,13 +1032,13 @@
         540
       ],
       "flags": {},
-      "order": 6,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 8
+          "link": 40
         },
         {
           "name": "frame_rate",
@@ -1124,7 +1126,7 @@
       "id": 7,
       "type": "PrimitiveInt",
       "pos": [
-        470,
+        480,
         -230
       ],
       "size": [
@@ -1132,7 +1134,7 @@
         110
       ],
       "flags": {},
-      "order": 0,
+      "order": 13,
       "mode": 0,
       "title": "Общий seed варианта — меняйте здесь",
       "inputs": [
@@ -1153,7 +1155,14 @@
             10,
             11,
             12,
-            13
+            13,
+            41,
+            43,
+            45,
+            47,
+            49,
+            51,
+            53
           ],
           "slot_index": 0
         }
@@ -1174,7 +1183,7 @@
       "id": 8,
       "type": "PreviewImage",
       "pos": [
-        470,
+        480,
         1020
       ],
       "size": [
@@ -1182,7 +1191,7 @@
         340
       ],
       "flags": {},
-      "order": 7,
+      "order": 14,
       "mode": 0,
       "title": "Превью — Camera",
       "inputs": [
@@ -1202,7 +1211,7 @@
       "id": 9,
       "type": "PreviewImage",
       "pos": [
-        940,
+        1440,
         1020
       ],
       "size": [
@@ -1210,7 +1219,7 @@
         340
       ],
       "flags": {},
-      "order": 8,
+      "order": 15,
       "mode": 0,
       "title": "Превью — Negative",
       "inputs": [
@@ -1230,7 +1239,7 @@
       "id": 10,
       "type": "PreviewImage",
       "pos": [
-        1410,
+        3360,
         1020
       ],
       "size": [
@@ -1238,7 +1247,7 @@
         340
       ],
       "flags": {},
-      "order": 9,
+      "order": 16,
       "mode": 0,
       "title": "Превью — Print",
       "inputs": [
@@ -1258,7 +1267,7 @@
       "id": 11,
       "type": "PreviewImage",
       "pos": [
-        1880,
+        4800,
         1020
       ],
       "size": [
@@ -1266,7 +1275,7 @@
         340
       ],
       "flags": {},
-      "order": 10,
+      "order": 17,
       "mode": 0,
       "title": "Превью — Projector",
       "inputs": [
@@ -1286,7 +1295,7 @@
       "id": 13,
       "type": "PreviewImage",
       "pos": [
-        940,
+        1440,
         1450
       ],
       "size": [
@@ -1294,7 +1303,7 @@
         340
       ],
       "flags": {},
-      "order": 11,
+      "order": 18,
       "mode": 0,
       "title": "Контроль негатива — позитивная инверсия",
       "inputs": [
@@ -1309,65 +1318,1498 @@
         "Node name for S&R": "PreviewImage"
       },
       "widgets_values": []
+    },
+    {
+      "id": 14,
+      "type": "VideoSilentFilmCaptureDirt",
+      "pos": [
+        960,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 20
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "link": 21
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "strength"
+          }
+        },
+        {
+          "name": "pattern",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "pattern"
+          }
+        },
+        {
+          "name": "amount",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "amount"
+          }
+        },
+        {
+          "name": "size",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "size"
+          }
+        },
+        {
+          "name": "persistence_frames",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "persistence_frames"
+          }
+        },
+        {
+          "name": "irregularity",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "irregularity"
+          }
+        },
+        {
+          "name": "edge_bias",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "edge_bias"
+          }
+        },
+        {
+          "name": "frame_offset",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "frame_offset"
+          }
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 41,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "compute_device",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "compute_device"
+          }
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            22
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "links": [
+            23
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": [
+            42
+          ],
+          "slot_index": 2
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 3
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VideoSilentFilmCaptureDirt"
+      },
+      "widgets_values": [
+        0,
+        "mixed",
+        3,
+        0.12,
+        48,
+        0.6,
+        0.35,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "mixed",
+        "amount": 3,
+        "size": 0.12,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "edge_bias": 0.35,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "title": "1а. Загрязнение при съёмке",
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 21,
+      "type": "PreviewImage",
+      "pos": [
+        960,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 42
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "Превью — Загрязнение при съёмке"
+    },
+    {
+      "id": 15,
+      "type": "VideoSilentFilmNegativeDevelopment",
+      "pos": [
+        1920,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 24
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "link": 25
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "strength"
+          }
+        },
+        {
+          "name": "pattern",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "pattern"
+          }
+        },
+        {
+          "name": "size",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "size"
+          }
+        },
+        {
+          "name": "fog_strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "fog_strength"
+          }
+        },
+        {
+          "name": "persistence_frames",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "persistence_frames"
+          }
+        },
+        {
+          "name": "irregularity",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "irregularity"
+          }
+        },
+        {
+          "name": "frame_offset",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "frame_offset"
+          }
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 43,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "compute_device",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "compute_device"
+          }
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            26
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "links": [
+            27
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 2
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 3
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "links": [
+            44
+          ],
+          "slot_index": 4
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VideoSilentFilmNegativeDevelopment"
+      },
+      "widgets_values": [
+        0,
+        "mixed",
+        8,
+        0.15,
+        48,
+        0.6,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "mixed",
+        "size": 8,
+        "fog_strength": 0.15,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "title": "2а. Неравномерность проявки негатива",
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 22,
+      "type": "PreviewImage",
+      "pos": [
+        1920,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 44
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "Превью — Неравномерность проявки негатива"
+    },
+    {
+      "id": 16,
+      "type": "VideoSilentFilmNegativeDamage",
+      "pos": [
+        2400,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 26
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "link": 27
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "strength"
+          }
+        },
+        {
+          "name": "pattern",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "pattern"
+          }
+        },
+        {
+          "name": "damage_type",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "damage_type"
+          }
+        },
+        {
+          "name": "amount",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "amount"
+          }
+        },
+        {
+          "name": "size",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "size"
+          }
+        },
+        {
+          "name": "persistence_frames",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "persistence_frames"
+          }
+        },
+        {
+          "name": "irregularity",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "irregularity"
+          }
+        },
+        {
+          "name": "edge_bias",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "edge_bias"
+          }
+        },
+        {
+          "name": "frame_offset",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "frame_offset"
+          }
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 45,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "compute_device",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "compute_device"
+          }
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            28
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "links": [
+            29
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 2
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 3
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "links": [
+            46
+          ],
+          "slot_index": 4
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VideoSilentFilmNegativeDamage"
+      },
+      "widgets_values": [
+        0,
+        "mixed",
+        "surface",
+        3,
+        0.06,
+        24,
+        0.6,
+        0.35,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "mixed",
+        "damage_type": "surface",
+        "amount": 3,
+        "size": 0.06,
+        "persistence_frames": 24,
+        "irregularity": 0.6,
+        "edge_bias": 0.35,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "title": "2б. Повреждения негатива",
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 23,
+      "type": "PreviewImage",
+      "pos": [
+        2400,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 46
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "Превью — Повреждения негатива"
+    },
+    {
+      "id": 17,
+      "type": "VideoSilentFilmPrintingDirt",
+      "pos": [
+        2880,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 28
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "link": 29
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "strength"
+          }
+        },
+        {
+          "name": "pattern",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "pattern"
+          }
+        },
+        {
+          "name": "amount",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "amount"
+          }
+        },
+        {
+          "name": "size",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "size"
+          }
+        },
+        {
+          "name": "persistence_frames",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "persistence_frames"
+          }
+        },
+        {
+          "name": "irregularity",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "irregularity"
+          }
+        },
+        {
+          "name": "edge_bias",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "edge_bias"
+          }
+        },
+        {
+          "name": "frame_offset",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "frame_offset"
+          }
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 47,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "compute_device",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "compute_device"
+          }
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            30
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "links": [
+            31
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 2
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 3
+        },
+        {
+          "name": "preview_positive",
+          "type": "IMAGE",
+          "links": [
+            48
+          ],
+          "slot_index": 4
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VideoSilentFilmPrintingDirt"
+      },
+      "widgets_values": [
+        0,
+        "mixed",
+        3,
+        0.12,
+        48,
+        0.6,
+        0.35,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "mixed",
+        "amount": 3,
+        "size": 0.12,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "edge_bias": 0.35,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "title": "2в. Загрязнение при печати",
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 24,
+      "type": "PreviewImage",
+      "pos": [
+        2880,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 22,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 48
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "Превью — Загрязнение при печати"
+    },
+    {
+      "id": 18,
+      "type": "VideoSilentFilmPositiveDevelopment",
+      "pos": [
+        3840,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 32
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "link": 33
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "strength"
+          }
+        },
+        {
+          "name": "pattern",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "pattern"
+          }
+        },
+        {
+          "name": "size",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "size"
+          }
+        },
+        {
+          "name": "fog_strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "fog_strength"
+          }
+        },
+        {
+          "name": "persistence_frames",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "persistence_frames"
+          }
+        },
+        {
+          "name": "irregularity",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "irregularity"
+          }
+        },
+        {
+          "name": "frame_offset",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "frame_offset"
+          }
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 49,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "compute_device",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "compute_device"
+          }
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            34
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "links": [
+            35
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": [
+            50
+          ],
+          "slot_index": 2
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 3
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VideoSilentFilmPositiveDevelopment"
+      },
+      "widgets_values": [
+        0,
+        "mixed",
+        8,
+        0.15,
+        48,
+        0.6,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "mixed",
+        "size": 8,
+        "fog_strength": 0.15,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "title": "3а. Неравномерность проявки позитива",
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 25,
+      "type": "PreviewImage",
+      "pos": [
+        3840,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 50
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "Превью — Неравномерность проявки позитива"
+    },
+    {
+      "id": 19,
+      "type": "VideoSilentFilmPositiveDamage",
+      "pos": [
+        4320,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 34
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "link": 35
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "strength"
+          }
+        },
+        {
+          "name": "pattern",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "pattern"
+          }
+        },
+        {
+          "name": "damage_type",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "damage_type"
+          }
+        },
+        {
+          "name": "amount",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "amount"
+          }
+        },
+        {
+          "name": "size",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "size"
+          }
+        },
+        {
+          "name": "persistence_frames",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "persistence_frames"
+          }
+        },
+        {
+          "name": "irregularity",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "irregularity"
+          }
+        },
+        {
+          "name": "edge_bias",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "edge_bias"
+          }
+        },
+        {
+          "name": "frame_offset",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "frame_offset"
+          }
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 51,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "compute_device",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "compute_device"
+          }
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            36
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "links": [
+            37
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": [
+            52
+          ],
+          "slot_index": 2
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 3
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VideoSilentFilmPositiveDamage"
+      },
+      "widgets_values": [
+        0,
+        "mixed",
+        "surface",
+        3,
+        0.06,
+        24,
+        0.6,
+        0.35,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "mixed",
+        "damage_type": "surface",
+        "amount": 3,
+        "size": 0.06,
+        "persistence_frames": 24,
+        "irregularity": 0.6,
+        "edge_bias": 0.35,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "title": "3б. Износ позитивной копии",
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 26,
+      "type": "PreviewImage",
+      "pos": [
+        4320,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 24,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 52
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "Превью — Износ позитивной копии"
+    },
+    {
+      "id": 20,
+      "type": "VideoSilentFilmProjectorDirt",
+      "pos": [
+        5280,
+        0
+      ],
+      "size": [
+        430,
+        650
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 38
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "link": 39
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "strength"
+          }
+        },
+        {
+          "name": "pattern",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "pattern"
+          }
+        },
+        {
+          "name": "amount",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "amount"
+          }
+        },
+        {
+          "name": "size",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "size"
+          }
+        },
+        {
+          "name": "persistence_frames",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "persistence_frames"
+          }
+        },
+        {
+          "name": "irregularity",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "irregularity"
+          }
+        },
+        {
+          "name": "edge_bias",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "edge_bias"
+          }
+        },
+        {
+          "name": "softness",
+          "type": "FLOAT",
+          "link": null,
+          "widget": {
+            "name": "softness"
+          }
+        },
+        {
+          "name": "frame_offset",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "frame_offset"
+          }
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 53,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "compute_device",
+          "type": "COMBO",
+          "link": null,
+          "widget": {
+            "name": "compute_device"
+          }
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "batch_size"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            40
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "film_json",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 1
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": [
+            54
+          ],
+          "slot_index": 2
+        },
+        {
+          "name": "mask_preview",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 3
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VideoSilentFilmProjectorDirt"
+      },
+      "widgets_values": [
+        0,
+        "mixed",
+        3,
+        0.12,
+        48,
+        0.6,
+        0.35,
+        0.05,
+        0,
+        1925,
+        "fixed",
+        "auto",
+        10
+      ],
+      "widgets_values_named": {
+        "strength": 0,
+        "pattern": "mixed",
+        "amount": 3,
+        "size": 0.12,
+        "persistence_frames": 48,
+        "irregularity": 0.6,
+        "edge_bias": 0.35,
+        "softness": 0.05,
+        "frame_offset": 0,
+        "seed": 1925,
+        "control_after_generate": "fixed",
+        "compute_device": "auto",
+        "batch_size": 10
+      },
+      "title": "4а. Загрязнение окна проектора",
+      "color": "#343124",
+      "bgcolor": "#514a32"
+    },
+    {
+      "id": 27,
+      "type": "PreviewImage",
+      "pos": [
+        5280,
+        1020
+      ],
+      "size": [
+        430,
+        340
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 54
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "Превью — Загрязнение окна проектора"
     }
   ],
   "links": [
-    [
-      2,
-      2,
-      0,
-      3,
-      0,
-      "IMAGE"
-    ],
-    [
-      3,
-      2,
-      1,
-      3,
-      1,
-      "STRING"
-    ],
-    [
-      4,
-      3,
-      0,
-      4,
-      0,
-      "IMAGE"
-    ],
-    [
-      5,
-      3,
-      1,
-      4,
-      1,
-      "STRING"
-    ],
-    [
-      6,
-      4,
-      0,
-      5,
-      0,
-      "IMAGE"
-    ],
-    [
-      7,
-      4,
-      1,
-      5,
-      1,
-      "STRING"
-    ],
-    [
-      8,
-      5,
-      0,
-      6,
-      0,
-      "IMAGE"
-    ],
     [
       9,
       5,
@@ -1455,16 +2897,345 @@
       13,
       0,
       "IMAGE"
+    ],
+    [
+      20,
+      2,
+      0,
+      14,
+      0,
+      "IMAGE"
+    ],
+    [
+      21,
+      2,
+      1,
+      14,
+      1,
+      "STRING"
+    ],
+    [
+      22,
+      14,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ],
+    [
+      23,
+      14,
+      1,
+      3,
+      1,
+      "STRING"
+    ],
+    [
+      24,
+      3,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      25,
+      3,
+      1,
+      15,
+      1,
+      "STRING"
+    ],
+    [
+      26,
+      15,
+      0,
+      16,
+      0,
+      "IMAGE"
+    ],
+    [
+      27,
+      15,
+      1,
+      16,
+      1,
+      "STRING"
+    ],
+    [
+      28,
+      16,
+      0,
+      17,
+      0,
+      "IMAGE"
+    ],
+    [
+      29,
+      16,
+      1,
+      17,
+      1,
+      "STRING"
+    ],
+    [
+      30,
+      17,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      31,
+      17,
+      1,
+      4,
+      1,
+      "STRING"
+    ],
+    [
+      32,
+      4,
+      0,
+      18,
+      0,
+      "IMAGE"
+    ],
+    [
+      33,
+      4,
+      1,
+      18,
+      1,
+      "STRING"
+    ],
+    [
+      34,
+      18,
+      0,
+      19,
+      0,
+      "IMAGE"
+    ],
+    [
+      35,
+      18,
+      1,
+      19,
+      1,
+      "STRING"
+    ],
+    [
+      36,
+      19,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      37,
+      19,
+      1,
+      5,
+      1,
+      "STRING"
+    ],
+    [
+      38,
+      5,
+      0,
+      20,
+      0,
+      "IMAGE"
+    ],
+    [
+      39,
+      5,
+      2,
+      20,
+      1,
+      "STRING"
+    ],
+    [
+      40,
+      20,
+      0,
+      6,
+      0,
+      "IMAGE"
+    ],
+    [
+      41,
+      7,
+      0,
+      14,
+      10,
+      "INT"
+    ],
+    [
+      42,
+      14,
+      2,
+      21,
+      0,
+      "IMAGE"
+    ],
+    [
+      43,
+      7,
+      0,
+      15,
+      9,
+      "INT"
+    ],
+    [
+      44,
+      15,
+      4,
+      22,
+      0,
+      "IMAGE"
+    ],
+    [
+      45,
+      7,
+      0,
+      16,
+      11,
+      "INT"
+    ],
+    [
+      46,
+      16,
+      4,
+      23,
+      0,
+      "IMAGE"
+    ],
+    [
+      47,
+      7,
+      0,
+      17,
+      10,
+      "INT"
+    ],
+    [
+      48,
+      17,
+      4,
+      24,
+      0,
+      "IMAGE"
+    ],
+    [
+      49,
+      7,
+      0,
+      18,
+      9,
+      "INT"
+    ],
+    [
+      50,
+      18,
+      2,
+      25,
+      0,
+      "IMAGE"
+    ],
+    [
+      51,
+      7,
+      0,
+      19,
+      11,
+      "INT"
+    ],
+    [
+      52,
+      19,
+      2,
+      26,
+      0,
+      "IMAGE"
+    ],
+    [
+      53,
+      7,
+      0,
+      20,
+      11,
+      "INT"
+    ],
+    [
+      54,
+      20,
+      2,
+      27,
+      0,
+      "IMAGE"
     ]
   ],
-  "groups": [],
+  "groups": [
+    {
+      "title": "1. Съёмка и загрязнение",
+      "bounding": [
+        460,
+        -60,
+        950,
+        1470
+      ],
+      "color": "#44635a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "2. Негатив, проявка и печатное окно",
+      "bounding": [
+        1420,
+        -60,
+        1910,
+        1900
+      ],
+      "color": "#665640",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "3. Позитив и износ копии",
+      "bounding": [
+        3340,
+        -60,
+        1430,
+        1470
+      ],
+      "color": "#5b4b67",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "title": "4. Проектор и его окно",
+      "bounding": [
+        4780,
+        -60,
+        950,
+        1470
+      ],
+      "color": "#405c70",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.65,
+      "scale": 0.5,
       "offset": [
         80,
-        80
+        270
       ]
     },
     "alexz_project_workflow": "Видео-в-Хронику-по-этапам.json"
