@@ -1,0 +1,47 @@
+{
+  "folders": [
+    {
+      "name": "ALEXZ_tools",
+      "path": "."
+    },
+    {
+      "name": "ALEXZ_SilentFilm",
+      "path": "../ComfyUI_ALEXZ_SilentFilm"
+    },
+    {
+      "name": "ComfyUI_REFERENCE",
+      "path": "../.."
+    }
+  ],
+  "settings": {
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python.defaultInterpreterPath": "/home/alex/miniconda3/envs/p313-torch214-cu132/bin/python",
+    "python.terminal.activateEnvironment": true,
+
+    "http.proxy": "http://127.0.0.1:10808",
+    "http.proxySupport": "override",
+    "http.proxyStrictSSL": false,
+
+
+    "terminal.integrated.profiles.linux": {
+      "ALEXZ p313-torch214-cu132": {
+        "path": "/bin/bash",
+        "args": [
+          "-c",
+          "source /home/alex/miniconda3/etc/profile.d/conda.sh && conda activate p313-torch214-cu132 && exec bash"
+        ]
+      }
+    },
+    "terminal.integrated.defaultProfile.linux": "ALEXZ p313-torch214-cu132",
+    "terminal.integrated.cwd": "/mnt/comfy/ComfyUI/custom_nodes/ComfyUI_ALEXZ_tools",
+
+    "files.readonlyInclude": {
+      "/mnt/comfy/ComfyUI/**/*": true
+    },
+    "files.readonlyExclude": {
+      "/mnt/comfy/ComfyUI/custom_nodes/ComfyUI_ALEXZ_tools/**/*": true,
+      "/mnt/comfy/ComfyUI/custom_nodes/ComfyUI_ALEXZ_SilentFilm/**/*": true
+    }
+  }
+}

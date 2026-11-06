@@ -1,8 +1,8 @@
-# Dev-запуск ComfyUI для ALEXZ_tools
+# Dev-запуск ComfyUI для ALEXZ_tools и SilentFilm
 
 ## Назначение
 
-Скрипт [scripts/start_comfyui_dev.sh](../scripts/start_comfyui_dev.sh) запускает установленный ComfyUI с четырьмя разрешёнными custom-node пакетами: **ComfyUI_ALEXZ_tools**, **ComfyUI-VideoHelperSuite**, **comfyui-manager** и **ComfyUI-Crystools**. Этого достаточно для [поэтапного Silent Film workflow](../workflows/Видео-в-Хронику-по-этапам.json): общий seed и окна Preview Image входят в ComfyUI core. Новый поэтапный workflow использует собственные Load Source Video и Save Final Video; VideoHelperSuite оставлен для прежних workflow. Crystools добавляет монитор CPU/GPU, RAM/VRAM, температуры GPU и диска.
+Скрипт [scripts/start_comfyui_dev.sh](../scripts/start_comfyui_dev.sh) запускает установленный ComfyUI с пятью разрешёнными custom-node пакетами: **ComfyUI_ALEXZ_tools**, **ComfyUI_ALEXZ_SilentFilm**, **ComfyUI-VideoHelperSuite**, **comfyui-manager** и **ComfyUI-Crystools**. Этого достаточно для поэтапного Silent Film workflow из `ComfyUI_ALEXZ_SilentFilm/workflows/`: общий seed и окна Preview Image входят в ComfyUI core. Новый поэтапный workflow использует собственные Load Source Video и Save Final Video; VideoHelperSuite оставлен для прежних workflow. Crystools добавляет монитор CPU/GPU, RAM/VRAM, температуры GPU и диска.
 
 Профиль использует штатные флаги `--disable-all-custom-nodes --whitelist-custom-nodes`. В установленном ComfyUI они проверяются и в `main.py:execute_prestartup_script`, и в `nodes.py:init_external_custom_nodes`. Поэтому у исключённых пакетов не исполняются даже prestartup scripts. Отключается также загрузка партнёрских API-нод через `--disable-partner-nodes`; интернет-доступ frontend этим не блокируется.
 
@@ -61,7 +61,7 @@ conda run -n p313-torch214-cu132 python tests/check_video_cache_lifecycle.py
 
 ## Ярлык рабочего стола
 
-На текущей машине установлен ярлык **«ComfyUI Dev — ALEXZ_tools»** в системной папке рабочего стола. Он открывает GNOME Terminal, активирует `p313-torch214-cu132` и запускает этот скрипт с `--port 8189`. Интерфейс: `http://127.0.0.1:8189`. Терминал остаётся открытым после завершения процесса, чтобы видеть ошибки.
+На текущей машине установлен ярлык **«ComfyUI Dev — ALEXZ_tools + SilentFilm»** в системной папке рабочего стола. Он открывает GNOME Terminal, активирует `p313-torch214-cu132` и запускает этот скрипт с `--port 8189`. Интерфейс: `http://127.0.0.1:8189`. Терминал остаётся открытым после завершения процесса, чтобы видеть ошибки.
 
 Ярлык не меняет обычный ярлык ComfyUI. Он содержит локальные пути этой машины и не включается в переносимый исходный код проекта. Для работы на 8188 используйте команду без --port из терминала либо отредактируйте локальный ярлык. Одновременно занятый порт другой экземпляр использовать не сможет.
 
@@ -92,7 +92,7 @@ bash scripts/start_comfyui_dev.sh --extra-node was-node-suite-comfyui
 
 ## Decision helper
 
-- Работа с новым Silent Film Pipeline: обычный dev-профиль из четырёх пакетов.
+- Работа с новым Silent Film Pipeline: обычный dev-профиль из пяти пакетов.
 - Интеграция с одной дополнительной библиотекой нод: `--extra-node`.
 - Полная пользовательская сборка, поиск межпакетных конфликтов или управление установленными пакетами: прежний обычный запуск.
 
@@ -118,7 +118,7 @@ bash scripts/start_comfyui_dev.sh --extra-node was-node-suite-comfyui
 
 ## Производительность
 
-Экономится время импорта исключённых custom nodes и их prestartup scripts. Инициализация Python, PyTorch, ComfyUI core, GPU и четырёх разрешённых пакетов остаётся. Конкретное ускорение зависит от установки; CPU-проверка старта не является замером времени полноценного GPU-запуска.
+Экономится время импорта исключённых custom nodes и их prestartup scripts. Инициализация Python, PyTorch, ComfyUI core, GPU и пяти разрешённых пакетов остаётся. Конкретное ускорение зависит от установки; CPU-проверка старта не является замером времени полноценного GPU-запуска.
 
 Для проверки импорта без сервера и выделения GPU-памяти можно выполнить:
 
