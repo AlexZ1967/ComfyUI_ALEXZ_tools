@@ -5,8 +5,6 @@ await esbuild.build({
     "frontend/src/hello.ts",
     "frontend/src/module_updates.ts",
     "frontend/src/project_workflows.ts",
-    "frontend/src/video_io.ts",
-    "frontend/src/silent_film_emulsion.ts",
   ],
 
   bundle: true,

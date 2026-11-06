@@ -3,7 +3,7 @@
 Version: 0.44.0
 
 ## Overview
-Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, видео-инструменты, waveform/histogram анализ, генерация QR-кода и отображение/сохранение JSON.
+Набор кастомных нод для ComfyUI: подготовка под Qwen Outpaint, выравнивание оверлея, цветокоррекция по референсу, инструменты анализа изображений и видео, генерация QR-кода, Module Node Picker и отображение/сохранение JSON. Silent Film вынесен в отдельный пакет.
 
 Changelog: [CHANGELOG.md](CHANGELOG.md)
 Проверка обновлений и зависимостей в Module Node Picker: [GUIDE_MODULE_UPDATES.md](guides/GUIDE_MODULE_UPDATES.md).
@@ -17,6 +17,8 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 3. Если вам нужны `lpips_*` метрики в `Color Match To Reference`, `Find Closest Video Frame` или `Match Video Cut Point`, дополнительно установите:
    `pip install lpips`
 4. Перезапустите ComfyUI.
+
+Silent Film устанавливается отдельно как `ComfyUI_ALEXZ_SilentFilm` рядом с ALEXZ_tools. Для его workflows нужны оба пакета. Отдельный пакет пока не опубликован в Registry; инструкции по установке и валидации находятся в его `README.md`.
 
 ### Git checkout (full-feature local install)
 1. Клонируйте в `ComfyUI/custom_nodes/`:  
@@ -75,8 +77,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
 - [Seam Match To Reference (Legacy)](#seam-match-to-reference-legacy)
 - [Find Closest Video Frame](#find-closest-video-frame)
 - [Match Video Cut Point](#match-video-cut-point)
-- [Silent Film Cadence](#silent-film-cadence)
-- [Silent Film Finish](#silent-film-finish)
+- [Silent Film (отдельный модуль)](#silent-film-отдельный-модуль)
 - [Image Difference](#image-difference)
 - [Generate QR Code](#generate-qr-code)
 - [Download DZI Tiles Image](#download-dzi-tiles-image)
@@ -246,21 +247,11 @@ Guide: [GUIDE_VIDEO_CUT_MATCH.md](guides/GUIDE_VIDEO_CUT_MATCH.md)
 
 ---
 
-## Silent Film Cadence
-Моделирует виртуальную съёмку с пониженным fps и экспозиционным motion blur. Может сохранять число кадров или возвращать укороченный батч для ускоренной проекции.
+## Silent Film (отдельный модуль)
 
-- Display name: Silent Film Cadence
-- Type name: VideoSilentFilmCadence
-- Category: video/stylize
+Все ноды плёночного пайплайна, загрузка/сохранение видео, выбор кадров, превью, memory management, cache и frontend вынесены в самостоятельный custom node package `ComfyUI_ALEXZ_SilentFilm`. Установите его рядом с `ComfyUI_ALEXZ_tools`, если нужны Silent Film-ноды или workflow из `workflows/Видео-в-Хронику*.json`. Идентификаторы нод сохранены для существующих графов.
 
-Ключевые входы: `image`, `source_fps`, `playback_mode`, `target_fps_min`, `target_fps_max`, `fps_drift_strength`, `shutter_fraction`, `motion_blur_strength`, `blur_mode`, `blur_samples`, `seed`. Дополнительные настройки ручки: `cadence_model`, `crank_irregularity`, `camera_shake_strength`.
-`playback_mode=preserve_duration_25fps` сохраняет длину клипа и только меняет пластику движения. `playback_mode=undercrank_projected_25fps` делает аутентичное ускорение движения и возвращает более короткий батч, который нужно собирать в `Video Combine` на `25 fps`.
-`blur_mode=simple` быстрее и подходит для preview. `blur_mode=flow_integrated` использует optical-flow-based motion-compensated smear и заметно лучше имитирует длинную экспозицию, уменьшая сдвоенность/строенность.
-Для циклической модели ручки выберите `cadence_model=hand_crank`: скорость пульсирует по фазе оборота, а не по случайному таймеру. Старт: `crank_irregularity=0.15`, `fps_drift_strength=0.65`, `camera_shake_strength=0.25`; диапазон `target_fps_min/max` задаёт границы скорости. `crank_irregularity=0` даёт точно повторяющиеся обороты. Передаточное отношение фиксировано: 8 кадров на оборот. Покачивание камеры рассчитывается внутри экспозиции по той же фазе ручки; `gate_weave_px` в Finish независимо моделирует проекцию. Прежний `legacy_random` остаётся по умолчанию для совместимости workflow, покачивание в нём отключено.
-`compute_device=auto` ускоряет деформации и экспозиционное смешивание крупных кадров на CUDA; Farneback остаётся на CPU. Доступны `cpu` и `cuda`, при нехватке VRAM используется CPU. Этап экспозиции отображается в консоли обновляемой полосой прогресса со скоростью и оставшимся временем.
-Покачивание камеры строится из нерегулярных усилий на ручке и плавных поправок положения, а не из повторяющейся синусоиды. Сила задаётся прежним `camera_shake_strength`, рисунок — seed; скорость ручки при этом может оставаться строго циклической.
-Выходы: `image`, `cadence_json` (`actual_blur_mode`, `average_effective_fps`, `group_count`, `output_duration_seconds`, `group_sizes_preview`, `fps_values_preview`).
-Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADENCE.md)
+Полные инструкции и примеры находятся в репозитории `ComfyUI_ALEXZ_SilentFilm`: `guides/` и `workflows/`. Основной ALEXZ_tools больше не регистрирует Silent Film и не устанавливает связанные frontend/API-компоненты.
 
 ---
 
@@ -270,74 +261,6 @@ Guide: [GUIDE_VIDEO_SILENT_FILM_CADENCE.md](guides/GUIDE_VIDEO_SILENT_FILM_CADEN
 
 Инструкция: [GUIDE_PROJECT_WORKFLOWS.md](guides/GUIDE_PROJECT_WORKFLOWS.md).
 
-## Load Source Video (ALEXZ)
-
-Собственный загрузчик FFmpeg с поддержкой MOV/ProRes, MXF и MP4. Встроены full_video, single_frame и frame_range; информация и число кадров доступны до запуска пайплайна. Декодируются только выбранные выходные кадры в 16-битный RGB/RGBA → float32, без полного исходника в RAM. Файл можно открыть по абсолютному пути либо выбрать стандартным диалогом с потоковой загрузкой в input.
-
-Выходы: `image`, `fps`, `total_frames`, `selected_frames`, `video_json`, `preview`.
-
-Guide: [GUIDE_VIDEO_IO.md](guides/GUIDE_VIDEO_IO.md).
-
-## Save Final Video (ALEXZ)
-
-Порционная запись IMAGE в ProRes MOV (Proxy/LT/422/HQ/4444/XQ) или H.264 MP4, с уникальным номером и MP4-превью для браузера. Кадры читаются по одному из RAM, VRAM или дискового кэша. Подключите Projector.fps к frame_rate. Ноды ввода/вывода работают без звука.
-
-Выходы: `video_path`, `video_json`.
-
-Guide: [GUIDE_VIDEO_IO.md](guides/GUIDE_VIDEO_IO.md).
-
-## Select Video Frames
-
-Для чтения файла с выбором диапазона используйте новый Load Source Video (ALEXZ). Эта отдельная нода остаётся для выбора из уже готового IMAGE-батча.
-
-Нода `VideoFrameSelect` выбирает весь входной ролик, отдельный кадр или диапазон с нумерацией от нуля и включительным концом. Кнопка Load and calculate frame запускает только загрузчик и селектор; информация о ролике видна сверху, ниже показываются только параметры выбранного режима. Выходы: `image`, `total_frames`, `selected_frames`, `selection_json`. Используется перед Camera в поэтапном workflow.
-
-Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md).
-
-## Preview Middle Frame (ALEXZ)
-
-Показывает один средний кадр входного видео. Выход `images` передаёт весь батч без изменения. Обычные Preview Image, подключённые к выходам preview этапов Silent Film, автоматически используют этот режим: при bypass показывается кадр предыдущей работающей обработки, а не галерея всех кадров.
-
-Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md).
-
-## Silent Film Pipeline
-
-Для быстрого запуска ComfyUI с ALEXZ_tools, VideoHelperSuite, Manager и монитором ресурсов Crystools: `bash scripts/start_comfyui_dev.sh`. Подробности, порты и дополнительные пакеты — в [гайде dev-запуска](guides/GUIDE_DEV_COMFYUI.md). Обычный запуск и установка расширений не меняются.
-
-Поэтапный процесс: **Silent Film Camera → Silent Film Negative → Silent Film Print → Silent Film Projector**. Съёмка и оптика отделены от проявленного негатива, печати позитива и финальной проекции. Зерно двух эмульсий независимо, дефекты можно вставлять в IMAGE-связи между этапами. В примере один общий seed управляет всеми этапами; случайные последовательности разделены по этапу и эффекту. `film_json` сохраняет этап и сведения о кадрах; `Projector.fps` подключается к `Save Final Video.frame_rate`.
-
-Негатив представлен пропусканием плёнки, позитив действительно печатается с этого изображения. Модель художественная. Крупные IMAGE-батчи хранятся в свободной VRAM с запасом для вычислений либо во временном дисковом кэше `.alexz-video-cache/`; эффекты читают кадры порциями. Сторонние загрузчики и ноды всё ещё могут требовать полного батча в RAM.
-
-Добавлены самостоятельные **Capture Dirt, Negative Development, Negative Damage, Printing Dirt, Positive Development, Positive Damage и Projector Dirt**. Они подключены в поэтапном workflow с общим seed и средними превью; начальная сила равна 0. Основные Camera/Negative/Print/Projector не изменены. Дефекты позитива и окна проектора используют описанные в гайде приближения.
-
-Guide: [GUIDE_VIDEO_SILENT_FILM_DEFECTS.md](guides/GUIDE_VIDEO_SILENT_FILM_DEFECTS.md).
-
-`film_json` у Negative, Print и Projector необязателен: без него этап работает по изображению и своим параметрам, начиная новую историю без сведений о каденсе Camera. Подключённый паспорт проверяется на соответствие этапу и форме батча.
-
-Camera переводит цветной исходник в нейтральное ЧБ уже при съёмке, с сохранением альфы. Negative формирует плотность и зерно плёнки; тонировка остаётся в Print. Поэтому при bypass Negative и Print выход Camera остаётся чёрно-белым.
-
-Каждый этап выдаёт `preview` со средним обработанным кадром выбранного отрезка. Для статической настройки выберите один кадр в Load Source Video перед Camera; для динамики — диапазон. Переключателей processing_mode в этапах нет.
-
-Guide: [GUIDE_VIDEO_SILENT_FILM_PIPELINE.md](guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md). Пример: [Видео-в-Хронику-по-этапам.json](workflows/Видео-в-Хронику-по-этапам.json).
-
-## Silent Film Finish
-Финальный слой под немое кино: перевод в ЧБ или легкую тонировку, глобальный flicker, медленное exposure breathing, gate weave, мягкость и умеренное зерно. Нода рассчитана как пост-процесс после `Silent Film Cadence`, но может использоваться и отдельно.
-
-- Display name: Silent Film Finish
-- Type name: VideoSilentFilmFinish
-- Category: video/stylize
-
-Ключевые входы: `image`, `tone_mode`, `contrast`, `midtone_gamma`, `black_lift`, `highlight_rolloff`, `softness`, `focus_drift_strength`, `flicker_strength`, `breathing_strength`, `gate_weave_px`, `grain_mode`, `grain_strength`, `grain_size`, `seed`.
-Опционально можно подать `cadence_json` из `Silent Film Cadence`: тогда `flicker`, `gate weave` и легкое гуляние фокуса будут синхронизированы с виртуальной скоростью ручной съемки и фазами low-fps интервалов, а не наложены как независимый шум.
-`compute_device=auto` включает порционную CUDA-обработку, `batch_size=4` ограничивает рабочую порцию. При нехватке VRAM размер уменьшается вплоть до перехода на CPU. Выходной батч заполняется постепенно без множества полноразмерных копий; зерно и синхронизация не зависят от размера порции. В консоли показывается полоса прогресса.
-Опциональная постоянная оптика перед проекцией и зерном: `vignette_strength` затемняет углы, `edge_softness` смягчает края, `edge_start` и `edge_end` задают начало и конец кругового перехода относительно половины ширины кадра. Маска задаёт локальный радиус расфокуса. Деликатный старт — `0.12 / 0.03 / 0.6 / 1.0`. По умолчанию оба эффекта выключены; центр и альфа-канал не затрагиваются оптическим блоком.
-`grain_size_mode=relative_width` масштабирует зерно относительно ширины 1920 px, сохраняя дробный размер и ослабляя субпиксельное зерно. Режим `pixels` оставлен по умолчанию. Параметры Finish сгруппированы по назначению; старые workflow требуют переноса значений widgets в новый порядок.
-`grain_mode=emulsion_luma` делает зерно ближе к реальной пленке: multi-scale clumpy структура, зависимость от яркости и небольшая потеря микродетали вместо простого noise overlay.
-Типовой старт для 1920s finish: `tone_mode=neutral_bw`, `contrast=0.97`, `midtone_gamma=0.94`, `black_lift=0.03`, `highlight_rolloff=0.36`, `softness=0.26`, `focus_drift_strength=0.09`, `flicker_strength=0.055`, `breathing_strength=0.022`, `gate_weave_px=1.05`, `grain_mode=emulsion_luma`, `grain_strength=0.032`.
-Выходы: `image`, `finish_json` (`sync_mode`, `focus_preview`, `gate_x_preview`, `gate_y_preview`, `exposure_preview`, `grain_mode`).
-Guide: [GUIDE_VIDEO_SILENT_FILM_FINISH.md](guides/GUIDE_VIDEO_SILENT_FILM_FINISH.md)
-
----
 
 ## Image Difference
 Абсолютная разница между двумя картинками. Если размеры различаются, меньшая автоматически приводится к большей (по площади).

@@ -16,6 +16,7 @@ def launch_environment(tmp_path):
     """Provide an isolated installation and a Conda recorder for command-contract checks."""
     comfy = tmp_path / "ComfyUI с пробелами"
     (comfy / "custom_nodes" / ROOT.name).mkdir(parents=True)
+    (comfy / "custom_nodes" / "ComfyUI_ALEXZ_SilentFilm").mkdir()
     (comfy / "custom_nodes" / "ComfyUI-VideoHelperSuite").mkdir()
     (comfy / "custom_nodes" / "comfyui-manager").mkdir()
     (comfy / "custom_nodes" / "ComfyUI-Crystools").mkdir()
@@ -41,7 +42,7 @@ def test_dev_command_limits_modules_and_preserves_arguments(launch_environment):
     command = json.loads(record.read_text())
     assert command["cwd"] == str(comfy)
     assert command["args"] == ["run", "--no-capture-output", "-n", "p313-torch214-cu132", "python", "-u", str(comfy / "main.py"),
-                               "--disable-all-custom-nodes", "--disable-partner-nodes", "--whitelist-custom-nodes", ROOT.name, "ComfyUI-VideoHelperSuite", "comfyui-manager", "ComfyUI-Crystools",
+                               "--disable-all-custom-nodes", "--disable-partner-nodes", "--whitelist-custom-nodes", ROOT.name, "ComfyUI_ALEXZ_SilentFilm", "ComfyUI-VideoHelperSuite", "comfyui-manager", "ComfyUI-Crystools",
                                "--port", "8189", "--output-directory", "/tmp/video results"]
 
 

@@ -24,10 +24,6 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 NODE_REGISTRY = ROOT / "nodes" / "node_registry.py"
 
 NODE_DOCS = [
-    {"file": "nodes/video_preview.py", "class": "VideoPreviewFrame", "guide": "guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md", "readme_heading": "## Preview Middle Frame (ALEXZ)"},
-    {"file": "nodes/video_io.py", "class": "VideoLoadSource", "guide": "guides/GUIDE_VIDEO_IO.md", "readme_heading": "## Load Source Video (ALEXZ)"},
-    {"file": "nodes/video_io.py", "class": "VideoSaveFinal", "guide": "guides/GUIDE_VIDEO_IO.md", "readme_heading": "## Save Final Video (ALEXZ)"},
-    {"file": "nodes/video_frame_select.py", "class": "VideoFrameSelect", "guide": "guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md", "readme_heading": "## Select Video Frames"},
     {
         "file": "nodes/image_prepare.py",
         "class": "ImagePrepareForQwenEditOutpaint",
@@ -81,18 +77,6 @@ NODE_DOCS = [
         "class": "VideoCutMatch",
         "guide": "guides/GUIDE_VIDEO_CUT_MATCH.md",
         "readme_heading": "## Match Video Cut Point",
-    },
-    {
-        "file": "nodes/video_silent_film_cadence.py",
-        "class": "VideoSilentFilmCadence",
-        "guide": "guides/GUIDE_VIDEO_SILENT_FILM_CADENCE.md",
-        "readme_heading": "## Silent Film Cadence",
-    },
-    {
-        "file": "nodes/video_silent_film_finish.py",
-        "class": "VideoSilentFilmFinish",
-        "guide": "guides/GUIDE_VIDEO_SILENT_FILM_FINISH.md",
-        "readme_heading": "## Silent Film Finish",
     },
     {
         "file": "nodes/image_difference.py",
@@ -194,7 +178,6 @@ TEMPLATE_SECTIONS = [
 EXTRA_GUIDES = [
     "guides/GUIDE_PROJECT_WORKFLOWS.md",
     "guides/GUIDE_DEV_COMFYUI.md",
-    "guides/GUIDE_VIDEO_SILENT_FILM_PIPELINE.md",
     "guides/GUIDE_COLOR_MATCH.md",
 ]
 

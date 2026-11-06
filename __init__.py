@@ -19,11 +19,9 @@ _LOGGER.info("ALEXZ_tools loading...")
 from .utils import module_node_browser_api as _module_node_browser_api  # noqa: F401
 from .utils.module_updates.service import register_routes as _register_update_routes
 from .utils.project_workflows import register_routes as _register_project_workflow_routes
-from .utils.video_io_api import register_routes as _register_video_io_routes
 
 if (_module_node_browser_api.PromptServer is not None and _module_node_browser_api.web is not None
         and getattr(_module_node_browser_api.PromptServer, "instance", None) is not None):
-    _register_video_io_routes(_module_node_browser_api.PromptServer, _module_node_browser_api.web)
     _project_workflow_store = _register_project_workflow_routes(
         _module_node_browser_api.PromptServer, _module_node_browser_api.web, Path(__file__).resolve().parent,
     )
@@ -36,9 +34,6 @@ if (_module_node_browser_api.PromptServer is not None and _module_node_browser_a
         finalize_tracking=_module_node_browser_api._finalize_module_update_tracking,
     )
 from .nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
-from .utils.video_cache import install as _install_video_cache
-
-_install_video_cache()
 
 WEB_DIRECTORY = "./web"
 

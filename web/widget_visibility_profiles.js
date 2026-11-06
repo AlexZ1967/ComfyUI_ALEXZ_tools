@@ -24,42 +24,6 @@ const CONVERTED_WIDGET_TYPE = "converted-widget";
  */
 const VISIBILITY_PROFILES = [
     {
-        id: "video_frame_selection_params",
-        targetNodes: ["VideoFrameSelect", "VideoLoadSource"],
-        controllerWidget: "selection_mode",
-        groups: { frame: ["frame_index"], range: ["start_frame", "end_frame"] },
-        modes: {
-            full_video: { showGroups: [] },
-            single_frame: { showGroups: ["frame"] },
-            frame_range: { showGroups: ["range"] },
-        },
-    },
-    {
-        id: "video_export_crf",
-        targetNodes: ["VideoSaveFinal"],
-        controllerWidget: "format",
-        groups: { h264: ["crf"] },
-        modes: {
-            h264_mp4: { showGroups: ["h264"] },
-            prores_422_hq: { showGroups: [] }, prores_422: { showGroups: [] },
-            prores_422_lt: { showGroups: [] }, prores_422_proxy: { showGroups: [] },
-            prores_4444: { showGroups: [] }, prores_4444_xq: { showGroups: [] },
-        },
-    },
-    {
-        id: "silent_film_capture_params",
-        targetNodes: ["VideoSilentFilmCadence", "Silent Film Cadence"],
-        controllerWidget: "cadence_model",
-        groups: {
-            crank: ["crank_irregularity", "camera_shake_strength"],
-            compatibility: ["crank_frames_per_turn"],
-        },
-        modes: {
-            legacy_random: { showGroups: [] },
-            hand_crank: { showGroups: ["crank"] },
-        },
-    },
-    {
         id: "seam_match_model_params",
         targetNodes: ["ImageSeamMatchToReference", "Seam Match To Reference"],
         controllerWidget: "seam_model",
