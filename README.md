@@ -18,7 +18,7 @@ Look Match roadmap (RU): [ROADMAP_LOOK_MATCH_0_22_RU.md](refactoring_plan/ROADMA
    `pip install lpips`
 4. Перезапустите ComfyUI.
 
-Silent Film устанавливается отдельно как `ComfyUI_ALEXZ_SilentFilm` рядом с ALEXZ_tools. Для его workflows нужны оба пакета. Отдельный пакет пока не опубликован в Registry; инструкции по установке и валидации находятся в его `README.md`.
+Silent Film устанавливается отдельно как [ComfyUI_ALEXZ_SilentFilm](https://github.com/AlexZ1967/ComfyUI_ALEXZ_SilentFilm) рядом с ALEXZ_tools. Для его workflows нужны оба пакета. Отдельный пакет пока не опубликован в Registry; инструкции по установке и валидации находятся в его `README.md`.
 
 ### Git checkout (full-feature local install)
 1. Клонируйте в `ComfyUI/custom_nodes/`:  
